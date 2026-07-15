@@ -12,6 +12,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { loadRoot, parseContainer, decodeType, DEF_TYPE } from './lib/proto.mjs';
@@ -213,6 +214,7 @@ function main() {
   // Resolve everything ------------------------------------------------------
   log('[recipes] resolving recipes ...');
   const manifestPaintkits = [];
+  const paintIconRefByKit = new Map(); // paintkit id -> representative pattern texture ref
   const weaponRegistry = new Map(); // weaponKey -> { key, name, itemDefIndex, modelPath }
   const allTextureRefs = new Set();
   const recipesToWrite = []; // { relPath, tree }
@@ -297,6 +299,8 @@ function main() {
       weapons: [...kitWeapons].sort(),
       ...(Object.keys(kitMaterialOverrides).length ? { materialOverrides: kitMaterialOverrides } : {}),
     });
+    const firstTree = kitRecipes[0]?.trees.find((t) => t);
+    if (firstTree) paintIconRefByKit.set(id, pickPaintIconRef(firstTree));
   }
 
   manifestPaintkits.sort((a, b) => a.id - b.id);
@@ -330,6 +334,7 @@ function main() {
   let collectionIcons = {};
   if (run('icons') || run('manifest')) {
     collectionIcons = extractIcons(itemsGame, weaponRegistry, machineByDisplay);
+    generatePaintIcons(manifestPaintkits, paintIconRefByKit);
   }
 
   // Manifest ----------------------------------------------------------------
@@ -535,6 +540,58 @@ function resolveWeaponMaterials(weaponRegistry, allTextureRefs, weaponModels, ma
     }
   }
   return overrides;
+}
+
+// ---------------------------------------------------------------------------
+// Paintkit thumbnails: the game renders war paint icons live, so there is no
+// static image to extract. The most distinctive pattern texture of the kit's
+// recipe makes a recognizable swatch instead.
+// ---------------------------------------------------------------------------
+
+// Shared overlays that appear in nearly every recipe and say nothing about
+// the specific paint.
+const PAINT_ICON_JUNK = /blank_|paint_dirt|paint_blood|paint_scratches|_wearblend|_ao\.|_albedo\./;
+
+function pickPaintIconRef(tree) {
+  const ordered = [];
+  (function walk(n) {
+    if (!n || typeof n !== 'object') return;
+    if (n.type === 'texture_lookup' && n.texture) ordered.push(n.texture);
+    if (Array.isArray(n.nodes)) n.nodes.forEach(walk);
+  })(tree);
+  const patterns = ordered.filter((r) => r.startsWith('textures/patterns/') && !PAINT_ICON_JUNK.test(r));
+  // Solid color fills are a last resort; a real pattern identifies the paint.
+  return patterns.find((r) => !/\/solid_/.test(r)) || patterns[0] || null;
+}
+
+// Downscale each kit's representative pattern PNG to a 96px swatch with
+// ImageMagick (already a dev dependency of this machine's pipeline; skipped
+// gracefully when unavailable).
+function generatePaintIcons(manifestPaintkits, paintIconRefByKit) {
+  const probe = spawnSync('magick', ['-version'], { stdio: 'ignore', shell: false });
+  if (probe.error || probe.status !== 0) {
+    log('[icons] ImageMagick (magick) not found; skipping paintkit thumbnails');
+    return;
+  }
+  const outDir = path.join(PUBLIC_DATA, 'icons', 'paints');
+  ensureDir(outDir);
+  let ok = 0;
+  let miss = 0;
+  for (const kit of manifestPaintkits) {
+    const ref = paintIconRefByKit.get(kit.id);
+    if (!ref) { miss++; continue; }
+    const src = path.join(PUBLIC_DATA, ref);
+    if (!fs.existsSync(src)) { miss++; continue; }
+    const outRel = `icons/paints/${kit.id}.png`;
+    const res = spawnSync('magick', [src, '-resize', '96x96^', '-gravity', 'center', '-extent', '96x96', path.join(PUBLIC_DATA, outRel)], { stdio: 'ignore', shell: false });
+    if (res.status === 0) {
+      kit.icon = outRel;
+      ok++;
+    } else {
+      miss++;
+    }
+  }
+  log(`[icons] wrote ${ok} paintkit thumbnails, ${miss} without one`);
 }
 
 // ---------------------------------------------------------------------------

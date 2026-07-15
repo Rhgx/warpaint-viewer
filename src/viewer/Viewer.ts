@@ -423,8 +423,19 @@ vec3 outgoingLight = reflectedLight.directDiffuse + tf2AmbientDiffuse + reflecte
     box.getSize(size);
     box.getCenter(center);
     const radius = Math.max(size.x, size.y, size.z) * 0.5;
-    const fov = (this.camera.fov * Math.PI) / 180;
-    const dist = (radius / Math.sin(fov / 2)) * 1.5;
+    // The inspect pose keeps a weapon's longest axis mostly horizontal, so fit
+    // that axis against the horizontal fov and the next-largest against the
+    // vertical one. Fitting everything against the vertical fov (the old
+    // sphere fit) framed long weapons far too small on wide canvases.
+    const dims = [size.x, size.y, size.z].sort((a, b) => b - a);
+    const vHalf = (this.camera.fov * Math.PI) / 360;
+    const hHalf = Math.atan(Math.tan(vHalf) * Math.max(1, this.camera.aspect));
+    const margin = 1.35; // headroom for the angled default view direction
+    const dist = Math.max(
+      (dims[0] * 0.5 * margin) / Math.tan(hHalf),
+      (dims[1] * 0.5 * margin) / Math.tan(vHalf),
+      radius * 1.6, // keep the camera outside the model with room to orbit
+    );
 
     // Center the mesh at the origin; the controls own modelGroup's transform.
     this.centerGroup.position.set(-center.x, -center.y, -center.z);

@@ -36,9 +36,9 @@ export function AssetIcon({ src, size = 24, className }: { src?: string | null; 
 }
 
 // A labelled control row used throughout the controls bar.
-export function Control({ label, children }: { label: string; children: ReactNode }) {
+export function Control({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <label className="control">
+    <label className={`control${className ? ` ${className}` : ''}`}>
       <span className="control-label">{label}</span>
       {children}
     </label>
@@ -179,11 +179,13 @@ export function WearSliderField({
       >
         <Slider.Control className="wear-slider-control">
           <Slider.Track className="wear-slider-track">
+            <Slider.Indicator className="wear-slider-fill" />
             {WEAR_COLORS.map((color, index) => (
               <span
                 key={color}
                 className="wear-slider-stop"
                 data-selected={index === selected || undefined}
+                data-reached={index <= selected || undefined}
                 style={{ left: `${index * 25}%`, backgroundColor: color }}
               />
             ))}
@@ -191,8 +193,19 @@ export function WearSliderField({
           </Slider.Track>
         </Slider.Control>
       </Slider.Root>
-      <div className="wear-slider-labels" aria-hidden="true">
-        {WEAR_SHORT.map((label, index) => <span key={label} data-selected={index === selected || undefined}>{label}</span>)}
+      <div className="wear-slider-labels">
+        {WEAR_SHORT.map((label, index) => (
+          <button
+            type="button"
+            key={label}
+            data-selected={index === selected || undefined}
+            title={names[index] ?? label}
+            aria-label={names[index] ?? label}
+            onClick={() => onChange(index)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );

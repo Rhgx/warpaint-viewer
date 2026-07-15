@@ -34,6 +34,7 @@ export interface PaintkitEntry {
   id: number;
   name: string;
   collection: string | null;
+  icon?: string; // pattern swatch PNG relative to public/data, e.g. "icons/paints/431.png"
   hasTeamTextures: boolean;
   weapons: string[]; // weapon keys this kit can render on
   perWear?: boolean; // if true, recipe files are split per wear level

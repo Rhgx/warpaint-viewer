@@ -22,16 +22,21 @@ export function WarpaintList({
   selectedId,
   onSelect,
   collectionIcons,
+  paintIcons,
 }: {
   paintkits: PaintkitEntry[];
   selectedId: number | null;
   onSelect: (id: number) => void;
   collectionIcons: Record<string, string>;
+  paintIcons: Record<number, string>;
 }) {
   const [filter, setFilter] = useState('');
-  const [reversed, setReversed] = useState(
-    () => new URLSearchParams(window.location.search).get('sortdesc') === '1',
-  );
+  const [reversed, setReversed] = useState(() => {
+    // Newest first by default (proxy: descending collection release order).
+    // ?sortdesc=0 forces oldest first; ?sortdesc=1 is redundant but honored.
+    const param = new URLSearchParams(window.location.search).get('sortdesc');
+    return param === null ? true : param === '1';
+  });
   const [activeCollection, setActiveCollection] = useState<string | null>(null);
 
   const collections = useMemo<CollectionRow[]>(() => {
@@ -122,7 +127,7 @@ export function WarpaintList({
                   aria-pressed={activeCollection === c.name}
                 >
                   <span className="collection-row-icon-slot">
-                    <AssetIcon src={collectionIcons[c.name]} size={28} />
+                    <AssetIcon src={collectionIcons[c.name]} size={34} />
                   </span>
                   <span className="collection-row-name">{c.name}</span>
                   <span className="collection-row-count">{c.count}</span>
@@ -155,8 +160,10 @@ export function WarpaintList({
                     className={`warpaint-item${kit.id === selectedId ? ' selected' : ''}`}
                     onClick={() => onSelect(kit.id)}
                   >
+                    <span className="warpaint-item-icon">
+                      <AssetIcon src={paintIcons[kit.id]} size={42} />
+                    </span>
                     <span className="warpaint-item-name">{kit.name}</span>
-                    <span className="warpaint-item-id">#{kit.id}</span>
                   </button>
                 ))}
               </div>

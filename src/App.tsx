@@ -382,6 +382,12 @@ function MainApp() {
     }
   }
 
+  const paintIcons: Record<number, string> = {};
+  for (const kit of data.manifest.paintkits) {
+    const url = kit.icon ? data.getAssetUrl(kit.icon) : null;
+    if (url) paintIcons[kit.id] = url;
+  }
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -390,14 +396,15 @@ function MainApp() {
           selectedId={selectedKitId}
           onSelect={onSelectKit}
           collectionIcons={collectionIcons}
+          paintIcons={paintIcons}
         />
       </aside>
       <main className="stage">
         <div className="canvas-wrap">
           <canvas ref={canvasRef} className="viewer-canvas" />
           {composing && <div className="composing-badge">compositing...</div>}
+          <div className="canvas-hint">drag to rotate, scroll to zoom, right-drag to pan, double-click to reset</div>
         </div>
-        <div className="canvas-hint">drag to rotate, scroll to zoom, right-drag to pan, double-click to reset</div>
         <ControlsBar
           manifest={data.manifest}
           weaponOptions={weaponOptions}

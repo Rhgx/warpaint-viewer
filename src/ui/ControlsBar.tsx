@@ -1,3 +1,4 @@
+import { Dices, RotateCcw } from 'lucide-react';
 import { Control, IconSelectField, NumberFieldControl, SelectField, TeamToggle, WearSliderField } from './components';
 import type { IconOption } from './components';
 import { LIGHTING_PRESETS } from '../viewer/lighting';
@@ -64,8 +65,8 @@ export function ControlsBar({
             max={4294967295}
             onChange={(v) => onChange({ seed: Math.max(0, Math.floor(v)) })}
           />
-          <button type="button" className="btn" onClick={onRandomizeSeed}>
-            Randomize
+          <button type="button" className="btn btn-icon" title="Randomize seed" aria-label="Randomize seed" onClick={onRandomizeSeed}>
+            <Dices size={15} />
           </button>
         </div>
       </Control>
@@ -80,7 +81,8 @@ export function ControlsBar({
 
       <Control label="View">
         <button type="button" className="btn" onClick={onResetView}>
-          Reset view
+          <RotateCcw size={13} />
+          <span>Reset</span>
         </button>
       </Control>
     </div>

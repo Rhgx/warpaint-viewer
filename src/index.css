@@ -84,6 +84,7 @@ button {
 .btn {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-height: var(--control-h);
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -213,21 +214,29 @@ button {
 
 /* ---------- Five-detent wear control ---------- */
 .wear-slider {
-  width: 210px;
+  width: 250px;
   padding: 1px 5px 0;
 }
 .wear-slider-control {
   display: flex;
   align-items: center;
-  height: 20px;
+  height: 22px;
   cursor: pointer;
   touch-action: none;
 }
 .wear-slider-track {
   position: relative;
   width: 100%;
-  height: 2px;
-  background: var(--border-strong);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+/* Filled portion takes the wear color of the current stop. */
+.wear-slider-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--wear-color);
+  transition: width 140ms ease, background-color 140ms ease;
 }
 .wear-slider-stop {
   position: absolute;
@@ -238,20 +247,25 @@ button {
   border-radius: 50%;
   box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 32%, transparent);
   transform: translate(-50%, -50%);
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+.wear-slider-stop:not([data-reached]) {
+  opacity: 0.55;
 }
 .wear-slider-stop[data-selected] {
   box-shadow: 0 0 0 2px var(--text), 0 0 0 4px var(--panel);
-  transform: translate(-50%, -50%) scale(1.08);
+  transform: translate(-50%, -50%) scale(1.12);
+  opacity: 1;
 }
 .wear-slider-thumb {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   border: 2px solid var(--panel);
   border-radius: 50%;
-  background: transparent;
+  background: var(--wear-color);
   box-shadow: 0 0 0 2px var(--text);
   outline: none;
+  transition: background-color 140ms ease;
 }
 .wear-slider-thumb:focus-visible {
   box-shadow: 0 0 0 2px var(--text), 0 0 0 5px color-mix(in srgb, var(--wear-color) 48%, transparent);
@@ -259,14 +273,28 @@ button {
 .wear-slider-labels {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  margin: 2px -9px 0;
+  margin: 3px -9px 0;
+}
+.wear-slider-labels button {
+  padding: 2px 0;
+  background: none;
+  border: none;
+  border-radius: 3px;
   color: var(--text-dim);
   font-size: 9px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.3px;
   text-align: center;
+  cursor: pointer;
 }
-.wear-slider-labels span[data-selected] {
+.wear-slider-labels button:hover {
+  color: var(--text);
+}
+.wear-slider-labels button:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.wear-slider-labels button[data-selected] {
   color: var(--text);
   font-weight: 700;
 }
