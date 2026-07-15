@@ -1,0 +1,4 @@
+- [] Continue your current workload whereever you left off.
+- [] Fix all models being oriented 90 degrees upward at default position for no reason.
+- [] Fix all weapons having no textures despite selecting a weapon
+- [] Optimize the shit out of the app in general.

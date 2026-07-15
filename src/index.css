@@ -1,0 +1,337 @@
+:root {
+  /* Light theme (default) */
+  --bg: #f4f5f6;
+  --panel: #ffffff;
+  --panel-2: #eceef0;
+  --text: #16181c;
+  --text-dim: #5b6470;
+  --border: #c9ced4;
+  --border-strong: #9aa2ab;
+  --accent: #2f6fdb;
+  --accent-text: #ffffff;
+  --red: #b8383b;
+  --blu: #3a6ea5;
+  --pass: #1f8a4c;
+  --fail: #c23b3b;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181c;
+    --panel: #1d2025;
+    --panel-2: #23272d;
+    --text: #e7eaee;
+    --text-dim: #9aa2ab;
+    --border: #33383f;
+    --border-strong: #4a515a;
+    --accent: #4c8dff;
+    --accent-text: #0b0d10;
+    --red: #d24b4e;
+    --blu: #5a8fd0;
+    --pass: #46c07a;
+    --fail: #e06060;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2 {
+  font-weight: 600;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.loading,
+.fatal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-dim);
+}
+.fatal {
+  color: var(--fail);
+}
+
+/* ---------- generic flat button ---------- */
+.btn {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: var(--border-strong);
+}
+.btn:active {
+  background: var(--border);
+}
+
+/* ---------- Base UI: Select ---------- */
+.ui-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 150px;
+  padding: 5px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.ui-select-trigger:hover {
+  border-color: var(--border-strong);
+}
+.ui-select-icon {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.ui-select-positioner {
+  z-index: 50;
+}
+.ui-select-popup {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 3px;
+  max-height: 320px;
+  overflow: auto;
+  min-width: 150px;
+}
+.ui-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+.ui-select-item[data-highlighted] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.ui-select-indicator {
+  font-size: 11px;
+}
+
+/* ---------- Base UI: Slider ---------- */
+.ui-slider-control {
+  display: flex;
+  align-items: center;
+  width: 150px;
+  height: 18px;
+}
+.ui-slider-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+}
+.ui-slider-indicator {
+  position: absolute;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.ui-slider-thumb {
+  width: 13px;
+  height: 13px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+}
+.ui-slider-thumb:hover {
+  border-color: var(--accent);
+}
+
+/* ---------- Base UI: NumberField ---------- */
+.ui-numfield {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.ui-num-btn {
+  width: 24px;
+  background: var(--panel-2);
+  border: none;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+}
+.ui-num-btn:last-child {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+.ui-num-btn:hover {
+  background: var(--border);
+}
+.ui-num-input {
+  width: 92px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 5px 8px;
+  text-align: center;
+  outline: none;
+}
+
+/* ---------- Base UI: Input ---------- */
+.ui-input {
+  width: 100%;
+  padding: 5px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: inherit;
+  outline: none;
+}
+.ui-input:focus {
+  border-color: var(--accent);
+}
+
+/* ---------- Team toggle ---------- */
+.ui-team-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ui-team-btn {
+  padding: 5px 12px;
+  background: var(--panel);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.ui-team-btn[data-side='red'] {
+  border-right: 1px solid var(--border);
+}
+.ui-team-btn[data-side='red'][data-pressed] {
+  background: var(--red);
+  color: #fff;
+}
+.ui-team-btn[data-side='blu'][data-pressed] {
+  background: var(--blu);
+  color: #fff;
+}
+
+/* ---------- Base UI: Switch ---------- */
+.ui-switch {
+  width: 34px;
+  height: 18px;
+  background: var(--border);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  padding: 1px;
+  cursor: pointer;
+}
+.ui-switch[data-checked] {
+  background: var(--accent);
+}
+.ui-switch-thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.12s;
+}
+.ui-switch[data-checked] .ui-switch-thumb {
+  transform: translateX(16px);
+}
+
+/* ---------- Base UI: ScrollArea ---------- */
+.ui-scroll-root {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.ui-scroll-viewport {
+  height: 100%;
+  overflow-y: auto;
+}
+.ui-scrollbar {
+  display: flex;
+  justify-content: center;
+  width: 8px;
+  padding: 2px;
+}
+.ui-scrollbar-thumb {
+  width: 100%;
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+
+/* ---------- Self test ---------- */
+.selftest {
+  max-width: 760px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+.selftest-status {
+  display: inline-block;
+  padding: 6px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.selftest-status.pass {
+  background: var(--pass);
+  color: #fff;
+}
+.selftest-status.fail {
+  background: var(--fail);
+  color: #fff;
+}
+.selftest-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.selftest-table th,
+.selftest-table td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.selftest-table tr.pass td:nth-child(2) {
+  color: var(--pass);
+  font-weight: 700;
+}
+.selftest-table tr.fail td:nth-child(2) {
+  color: var(--fail);
+  font-weight: 700;
+}
