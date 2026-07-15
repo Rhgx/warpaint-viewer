@@ -33,6 +33,31 @@ export function makeEnvCube(sky: THREE.ColorRepresentation, ground: THREE.ColorR
   ];
   void horizon;
   const tex = new THREE.CubeTexture(sides as unknown as HTMLImageElement[]);
+  tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
   return tex;
+}
+
+// TF2's CMDLPanel binds materials/editor/cubemap for item previews. The
+// extraction pipeline writes its VTF faces in the order CubeTextureLoader
+// expects, so reflections use the same image data as the game.
+export function loadEditorEnvCube(
+  onLoad: (texture: THREE.CubeTexture) => void,
+  onError?: (error: unknown) => void,
+): void {
+  const root = '/data/env/editor-cubemap/';
+  new THREE.CubeTextureLoader().setPath(root).load(
+    ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png'],
+    (texture) => {
+      // skin_dx9_helper.cpp only enables sRGB reads on the envmap sampler when
+      // HDR_TYPE_NONE; TF2 runs HDR and editor/cubemap is an LDR texture, so
+      // the game feeds its stored gamma values straight into lighting math.
+      // Decoding to linear here made reflections ~5x too dim on metal.
+      texture.colorSpace = THREE.NoColorSpace;
+      texture.needsUpdate = true;
+      onLoad(texture);
+    },
+    undefined,
+    onError,
+  );
 }

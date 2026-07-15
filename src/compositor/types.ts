@@ -5,7 +5,7 @@
 // Notes on values (pre-transformed by the pipeline, do NOT re-transform):
 //   - adjustBlack / adjustOffset are already divided by 255 (0..1 shader space).
 //   - adjustGamma is already inverted (1/x).
-//   - flipU / flipV are plain booleans (separate proto fields), seed-independent.
+//   - flipU / flipV mean that a seeded flip is allowed, not that it is forced.
 //   - select values are raw 0..255 group ids; the shader compares them with the
 //     fxc's 1/16 bucketing (cFac in compositor.cpp).
 
@@ -15,7 +15,7 @@ export type Range = [number, number];
 // (CMsgPaintKit_Operation_TextureStage / _CombineStage carry the same set).
 export interface StageTransform {
   adjustBlack?: Range;
-  adjustOffset?: Range; // white point
+  adjustOffset?: Range; // offset added to the sampled black point to get white
   adjustGamma?: Range;
   rotation?: Range; // degrees
   translateU?: Range;

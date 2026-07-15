@@ -1,4 +1,5 @@
-import { Control, NumberFieldControl, SelectField, SliderField, TeamToggle } from './components';
+import { Control, IconSelectField, NumberFieldControl, SelectField, TeamToggle, WearSliderField } from './components';
+import type { IconOption } from './components';
 import { LIGHTING_PRESETS } from '../viewer/lighting';
 import type { Manifest, Team } from '../data/types';
 
@@ -8,47 +9,51 @@ export interface ControlsState {
   team: Team;
   seed: number;
   preset: string;
-  exposure: number;
 }
 
 export function ControlsBar({
   manifest,
   weaponOptions,
+  hasTeamTextures,
   state,
   onChange,
   onRandomizeSeed,
   onResetView,
 }: {
   manifest: Manifest;
-  weaponOptions: { value: string; label: string }[];
+  weaponOptions: IconOption[];
+  hasTeamTextures: boolean;
   state: ControlsState;
   onChange: (patch: Partial<ControlsState>) => void;
   onRandomizeSeed: () => void;
   onResetView: () => void;
 }) {
-  const wearOptions = manifest.wearNames.map((name, i) => ({ value: String(i), label: name }));
   const presetOptions = LIGHTING_PRESETS.map((p) => ({ value: p.id, label: p.label }));
 
   return (
     <div className="controls-bar">
       <Control label="Weapon">
-        <SelectField
+        <IconSelectField
           value={state.weaponKey}
           onChange={(v) => onChange({ weaponKey: v })}
           options={weaponOptions}
         />
       </Control>
 
-      <Control label="Wear">
-        <SelectField
-          value={String(state.wearIndex)}
-          onChange={(v) => onChange({ wearIndex: Number(v) })}
-          options={wearOptions}
+      <Control label={`Wear - ${manifest.wearNames[state.wearIndex] ?? ''}`}>
+        <WearSliderField
+          value={state.wearIndex}
+          names={manifest.wearNames}
+          onChange={(wearIndex) => onChange({ wearIndex })}
         />
       </Control>
 
       <Control label="Team">
-        <TeamToggle team={state.team} onChange={(t) => onChange({ team: t })} />
+        <TeamToggle
+          team={state.team}
+          disabled={!hasTeamTextures}
+          onChange={(t) => onChange({ team: t })}
+        />
       </Control>
 
       <Control label="Seed">
@@ -70,16 +75,6 @@ export function ControlsBar({
           value={state.preset}
           onChange={(v) => onChange({ preset: v })}
           options={presetOptions}
-        />
-      </Control>
-
-      <Control label={`Exposure ${state.exposure.toFixed(2)}`}>
-        <SliderField
-          value={state.exposure}
-          min={0.1}
-          max={3}
-          step={0.05}
-          onChange={(v) => onChange({ exposure: v })}
         />
       </Control>
 

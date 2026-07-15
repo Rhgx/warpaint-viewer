@@ -10,8 +10,10 @@ export interface DataSource {
   resolveTexture: TextureResolver;
   // Load and parse a recipe stage tree; null if none exists for this combo.
   getRecipe(kit: PaintkitEntry, weaponKey: string, team: Team, wearIndex: number): Promise<RecipeNode | null>;
-  // Absolute URL of a weapon GLB, or null when absent (app uses placeholder).
+  // Absolute URL of a weapon GLB, or null when the stage should remain empty.
   getModelUrl(weaponKey: string): string | null;
+  // Absolute URL for a manifest-relative asset (icons, etc.), or null when unavailable.
+  getAssetUrl(rel: string): string | null;
 }
 
 const DATA_ROOT = '/data';
@@ -34,6 +36,10 @@ class RealDataSource implements DataSource {
   getModelUrl(weaponKey: string): string | null {
     const w = this.manifest.weapons.find((x) => x.key === weaponKey);
     return w ? joinData(w.model) : null;
+  }
+
+  getAssetUrl(rel: string): string | null {
+    return joinData(rel);
   }
 
   private async fetchRecipe(url: string): Promise<RecipeNode | null> {
@@ -81,7 +87,11 @@ class MockDataSource implements DataSource {
   };
 
   getModelUrl(): string | null {
-    return null; // always placeholder mesh in mock mode
+    return null;
+  }
+
+  getAssetUrl(): string | null {
+    return null;
   }
 
   async getRecipe(kit: PaintkitEntry, weaponKey: string, team: Team): Promise<RecipeNode | null> {
@@ -90,25 +100,17 @@ class MockDataSource implements DataSource {
   }
 }
 
-// Chooses the data source. ?data=mock (or ?mock=1) forces mock; ?data=real forces
-// real; otherwise it tries real and automatically falls back to mock on a failed
-// manifest fetch.
+// The normal app is real-data only. Mock mode remains an explicit developer
+// harness for compositor tests and is never selected as a startup fallback.
 export async function loadDataSource(): Promise<DataSource> {
   const params = new URLSearchParams(window.location.search);
   const mode = params.get('data') ?? (params.get('mock') === '1' ? 'mock' : null);
 
   if (mode === 'mock') return new MockDataSource();
 
-  try {
-    const res = await fetch(`${DATA_ROOT}/manifest.json`);
-    if (!res.ok) throw new Error(`manifest ${res.status}`);
-    const manifest = (await res.json()) as Manifest;
-    if (!manifest.paintkits?.length) throw new Error('empty manifest');
-    return new RealDataSource(manifest);
-  } catch (err) {
-    if (mode === 'real') throw err;
-    // Automatic fallback for local dev before the pipeline has produced data.
-    console.info('[warpaint-viewer] no /data/manifest.json; using mock data.', err);
-    return new MockDataSource();
-  }
+  const res = await fetch(`${DATA_ROOT}/manifest.json`);
+  if (!res.ok) throw new Error(`manifest ${res.status}`);
+  const manifest = (await res.json()) as Manifest;
+  if (!manifest.paintkits?.length) throw new Error('empty manifest');
+  return new RealDataSource(manifest);
 }

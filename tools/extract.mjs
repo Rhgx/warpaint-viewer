@@ -18,9 +18,9 @@ import { loadRoot, parseContainer, decodeType, DEF_TYPE } from './lib/proto.mjs'
 import { parseKV, kvGet } from './lib/kv.mjs';
 import { loadLocalization, locLookup } from './lib/localization.mjs';
 import {
-  buildIndex, resolveRecipe, WEAPON_SLOTS, textureVpkPath, texturePublicPath,
+  buildIndex, resolveRecipe, WEAPON_SLOTS, texturePublicPath,
 } from './lib/resolve.mjs';
-import { decodeVTF } from './lib/vtf.mjs';
+import { decodeVTF, decodeVTFCubemap } from './lib/vtf.mjs';
 import { encodePNG } from './lib/png.mjs';
 import { listVPK, extractBatch, TEXTURES_VPK, MISC_VPK } from './lib/vpk.mjs';
 
@@ -67,6 +67,7 @@ function loadItemsGame() {
 // Collection items may be listed directly or nested under rarity grade keys; each item name maps
 // to an item def whose static_attrs (or attributes) carry paintkit_proto_def_index.
 function buildCollectionMap(itemsGame, locEnglish, locProto) {
+  const machineByDisplay = new Map(); // display name -> items_game collection machine name
   const byName = new Map();
   for (const it of Object.values(itemsGame.items)) {
     if (it && typeof it === 'object' && typeof it.name === 'string') byName.set(it.name, it);
@@ -102,6 +103,7 @@ function buildCollectionMap(itemsGame, locEnglish, locProto) {
     if (kvGet(entry, 'is_reference_collection')) continue; // master collections list dummies only
     const nameToken = kvGet(entry, 'name');
     const displayName = locLookup(locEnglish, nameToken) || locLookup(locProto, nameToken) || machineName;
+    if (!machineByDisplay.has(displayName)) machineByDisplay.set(displayName, machineName);
     const itemsBlock = kvGet(entry, 'items');
     if (!itemsBlock || typeof itemsBlock !== 'object') continue;
     for (const itemName of leafNames(itemsBlock, [])) {
@@ -116,7 +118,7 @@ function buildCollectionMap(itemsGame, locEnglish, locProto) {
       map.set(pk, displayName);
     }
   }
-  return map;
+  return { byPaintkit: map, machineByDisplay };
 }
 
 // Resolve a scalar field on an item, following its prefab chain (first prefab wins, recursive).
@@ -205,7 +207,7 @@ function main() {
   const locProto = loadLocalization(LOC_PROTO);
   const locEnglish = loadLocalization(LOC_ENGLISH);
 
-  const collectionByPaintkit = buildCollectionMap(itemsGame, locEnglish, locProto);
+  const { byPaintkit: collectionByPaintkit, machineByDisplay } = buildCollectionMap(itemsGame, locEnglish, locProto);
   log(`[collections] mapped ${collectionByPaintkit.size} paintkits to collections`);
 
   // Resolve everything ------------------------------------------------------
@@ -226,6 +228,7 @@ function main() {
     const teams = hasTeam ? ['red', 'blu'] : ['red'];
 
     const kitWeapons = new Set();
+    const kitMaterialOverrides = {};
     const kitTextureRefs = new Set();
     let kitPerWear = false;
     const kitRecipes = []; // { weaponKey, team, trees:[per wear] }
@@ -245,6 +248,10 @@ function main() {
         weaponRegistry.set(weaponKey, { key: weaponKey, name: wName, itemDefIndex, modelPath });
       }
       kitWeapons.add(weaponKey);
+      const materialOverride = slot.data?.material_override;
+      if (typeof materialOverride === 'string' && materialOverride) {
+        kitMaterialOverrides[weaponKey] = materialOverride.toLowerCase();
+      }
 
       const nWear = (itemDef.definition || []).length || 1;
       for (const team of teams) {
@@ -288,6 +295,7 @@ function main() {
       hasTeamTextures: hasTeam,
       perWear: kitPerWear,
       weapons: [...kitWeapons].sort(),
+      ...(Object.keys(kitMaterialOverrides).length ? { materialOverrides: kitMaterialOverrides } : {}),
     });
   }
 
@@ -307,14 +315,21 @@ function main() {
 
   // Weapons + material params -----------------------------------------------
   const weaponModels = {};
+  let materialOverrides = {};
   if (run('weapons') || run('manifest') || run('textures')) {
     log('[weapons] resolving weapon material params ...');
-    resolveWeaponMaterials(weaponRegistry, allTextureRefs, weaponModels);
+    materialOverrides = resolveWeaponMaterials(weaponRegistry, allTextureRefs, weaponModels, manifestPaintkits);
   }
 
   // Textures ----------------------------------------------------------------
   if (run('textures')) {
     extractAndDecodeTextures(allTextureRefs);
+  }
+
+  // Backpack icons ------------------------------------------------------------
+  let collectionIcons = {};
+  if (run('icons') || run('manifest')) {
+    collectionIcons = extractIcons(itemsGame, weaponRegistry, machineByDisplay);
   }
 
   // Manifest ----------------------------------------------------------------
@@ -325,12 +340,15 @@ function main() {
         key: w.key,
         name: w.name,
         model: `models/${w.key}.glb`,
+        ...(w.icon ? { icon: w.icon } : {}),
         material: w.material || { phongExponent: null, phongBoost: 1, envmapTint: [0, 0, 0], normalMap: null },
       }));
     const manifest = {
       generatedAt: new Date().toISOString(),
       paintkits: manifestPaintkits,
       weapons,
+      materials: materialOverrides,
+      collectionIcons,
       wearLevels: WEAR_LEVELS,
       wearNames: WEAR_NAMES,
     };
@@ -363,12 +381,63 @@ function parseVmtVec(str) {
   return nums.length ? nums : null;
 }
 
-function resolveWeaponMaterials(weaponRegistry, allTextureRefs, weaponModels) {
+function vmtBool(body, key, fallback = false) {
+  const value = parseVmtVec(kvGet(body, key));
+  return value ? value[0] !== 0 : fallback;
+}
+
+function vmtColor(body, key, fallback = null) {
+  const value = parseVmtVec(kvGet(body, key));
+  if (!value) return fallback;
+  if (value.length === 1) return [value[0], value[0], value[0]];
+  return value.length >= 3 ? [value[0], value[1], value[2]] : fallback;
+}
+
+function parseOverrideMaterial(full, allTextureRefs) {
+  const kv = parseKV(fs.readFileSync(full, 'utf8'));
+  const body = kv[Object.keys(kv)[0]] || {};
+  const phongExp = parseVmtVec(kvGet(body, '$phongexponent'));
+  const phongBoost = parseVmtVec(kvGet(body, '$phongboost'));
+  const phongFactor = parseVmtVec(kvGet(body, '$phongexponentfactor'));
+  const rimExponent = parseVmtVec(kvGet(body, '$rimlightexponent'));
+  const rimBoost = parseVmtVec(kvGet(body, '$rimlightboost'));
+  const bump = kvGet(body, '$bumpmap');
+  const exponentTexture = kvGet(body, '$phongexponenttexture');
+  const lightwarpTexture = kvGet(body, '$lightwarptexture');
+  const material = {
+    phongExponent: phongExp ? phongExp[0] : null,
+    phongBoost: phongBoost ? phongBoost[0] : 1,
+    envmapTint: vmtColor(body, '$envmaptint', [0, 0, 0]),
+    normalMap: bump ? texturePublicPath(bump) : null,
+    phong: vmtBool(body, '$phong'),
+    phongExponentFactor: phongFactor ? phongFactor[0] : null,
+    phongExponentTexture: exponentTexture ? texturePublicPath(exponentTexture) : null,
+    lightwarpTexture: lightwarpTexture ? texturePublicPath(lightwarpTexture) : null,
+    halfLambert: vmtBool(body, '$halflambert'),
+    baseMapAlphaPhongMask: vmtBool(body, '$basemapalphaphongmask'),
+    baseMapAlphaEnvmapMask: vmtBool(body, '$basealphaenvmapmask'),
+    normalMapAlphaEnvmapMask: vmtBool(body, '$normalmapalphaenvmapmask'),
+    phongAlbedoTint: vmtBool(body, '$phongalbedotint'),
+    phongTint: vmtColor(body, '$phongtint'),
+    phongFresnelRanges: vmtColor(body, '$phongfresnelranges', [0, 0.5, 1]),
+    rimLight: vmtBool(body, '$rimlight'),
+    rimLightExponent: rimExponent ? rimExponent[0] : 4,
+    rimLightBoost: rimBoost ? rimBoost[0] : 1,
+    rimMask: vmtBool(body, '$rimmask'),
+  };
+  if (material.normalMap) allTextureRefs.add(material.normalMap);
+  if (material.phongExponentTexture) allTextureRefs.add(material.phongExponentTexture);
+  if (material.lightwarpTexture) allTextureRefs.add(material.lightwarpTexture);
+  return material;
+}
+
+function resolveWeaponMaterials(weaponRegistry, allTextureRefs, weaponModels, manifestPaintkits) {
   const misc = miscList();
   const vmtDir = path.join(STAGING, 'vmt');
   ensureDir(vmtDir);
   const toExtract = [];
   const weaponVmt = new Map();
+  const overrideVmt = new Map();
 
   for (const w of weaponRegistry.values()) {
     // model_player: models/.../c_foo.mdl  ->  materials/models/.../c_foo.vmt
@@ -386,11 +455,29 @@ function resolveWeaponMaterials(weaponRegistry, allTextureRefs, weaponModels) {
     if (found) { weaponVmt.set(w.key, found); toExtract.push(found); }
   }
 
+  for (const kit of manifestPaintkits) {
+    for (const materialId of Object.values(kit.materialOverrides || {})) {
+      const vmtPath = `materials/${materialId.replace(/\.vmt$/i, '')}.vmt`.toLowerCase();
+      if (misc.has(vmtPath)) {
+        overrideVmt.set(materialId, vmtPath);
+        toExtract.push(vmtPath);
+      }
+    }
+  }
+
   extractBatch(MISC_VPK, toExtract, vmtDir);
 
   for (const w of weaponRegistry.values()) {
     const vmtRel = weaponVmt.get(w.key);
-    let material = { phongExponent: null, phongBoost: 1, envmapTint: [0, 0, 0], normalMap: null, phong: false, phongExponentFactor: null };
+    let material = {
+      phongExponent: null, phongBoost: 1, envmapTint: [0, 0, 0], normalMap: null,
+      phong: false, phongExponentFactor: null, phongExponentTexture: null,
+      lightwarpTexture: null, baseMapAlphaPhongMask: false,
+      baseMapAlphaEnvmapMask: false, halfLambert: false,
+      normalMapAlphaEnvmapMask: false, phongAlbedoTint: false, phongTint: null,
+      phongFresnelRanges: [0, 0.5, 1], rimLight: false, rimLightExponent: 4,
+      rimLightBoost: 1, rimMask: false,
+    };
     if (vmtRel) {
       const full = path.join(vmtDir, vmtRel);
       if (fs.existsSync(full)) {
@@ -400,18 +487,37 @@ function resolveWeaponMaterials(weaponRegistry, allTextureRefs, weaponModels) {
           const body = kv[shaderKey] || {};
           const phongExp = parseVmtVec(kvGet(body, '$phongexponent'));
           const phongBoost = parseVmtVec(kvGet(body, '$phongboost'));
-          const envTint = parseVmtVec(kvGet(body, '$envmaptint'));
           const phongFactor = parseVmtVec(kvGet(body, '$phongexponentfactor'));
+          const phongFresnel = vmtColor(body, '$phongfresnelranges', [0, 0.5, 1]);
+          const rimExponent = parseVmtVec(kvGet(body, '$rimlightexponent'));
+          const rimBoost = parseVmtVec(kvGet(body, '$rimlightboost'));
           const bump = kvGet(body, '$bumpmap');
+          const exponentTexture = kvGet(body, '$phongexponenttexture');
+          const lightwarpTexture = kvGet(body, '$lightwarptexture');
           material = {
             phongExponent: phongExp ? phongExp[0] : null,
             phongBoost: phongBoost ? phongBoost[0] : 1,
-            envmapTint: envTint && envTint.length >= 3 ? [envTint[0], envTint[1], envTint[2]] : (envTint && envTint.length === 1 ? [envTint[0], envTint[0], envTint[0]] : [0, 0, 0]),
+            envmapTint: vmtColor(body, '$envmaptint', [0, 0, 0]),
             normalMap: bump ? texturePublicPath(bump) : null,
-            phong: !!parseVmtVec(kvGet(body, '$phong')),
+            phong: vmtBool(body, '$phong'),
             phongExponentFactor: phongFactor ? phongFactor[0] : null,
+            phongExponentTexture: exponentTexture ? texturePublicPath(exponentTexture) : null,
+            lightwarpTexture: lightwarpTexture ? texturePublicPath(lightwarpTexture) : null,
+            halfLambert: vmtBool(body, '$halflambert'),
+            baseMapAlphaPhongMask: vmtBool(body, '$basemapalphaphongmask'),
+            baseMapAlphaEnvmapMask: vmtBool(body, '$basealphaenvmapmask'),
+            normalMapAlphaEnvmapMask: vmtBool(body, '$normalmapalphaenvmapmask'),
+            phongAlbedoTint: vmtBool(body, '$phongalbedotint'),
+            phongTint: vmtColor(body, '$phongtint'),
+            phongFresnelRanges: phongFresnel,
+            rimLight: vmtBool(body, '$rimlight'),
+            rimLightExponent: rimExponent ? rimExponent[0] : 4,
+            rimLightBoost: rimBoost ? rimBoost[0] : 1,
+            rimMask: vmtBool(body, '$rimmask'),
           };
           if (material.normalMap) allTextureRefs.add(material.normalMap);
+          if (material.phongExponentTexture) allTextureRefs.add(material.phongExponentTexture);
+          if (material.lightwarpTexture) allTextureRefs.add(material.lightwarpTexture);
         } catch (e) {
           log(`[weapons] failed to parse VMT ${vmtRel}: ${e.message}`);
         }
@@ -419,6 +525,107 @@ function resolveWeaponMaterials(weaponRegistry, allTextureRefs, weaponModels) {
     }
     w.material = material;
   }
+
+  const overrides = {};
+  for (const [materialId, vmtRel] of overrideVmt) {
+    try {
+      overrides[materialId] = parseOverrideMaterial(path.join(vmtDir, vmtRel), allTextureRefs);
+    } catch (e) {
+      log(`[weapons] failed to parse override VMT ${vmtRel}: ${e.message}`);
+    }
+  }
+  return overrides;
+}
+
+// ---------------------------------------------------------------------------
+// Backpack icons: per-weapon inventory images and per-collection case images.
+// ---------------------------------------------------------------------------
+
+let texListCacheIcons = null;
+function texListShared() {
+  if (!texListCacheIcons) texListCacheIcons = listVPK(TEXTURES_VPK);
+  return texListCacheIcons;
+}
+
+function slugify(s) {
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+// Weapon icons come from each item def's image_inventory (prefab-aware).
+// Collection icons come from the case item whose collection_reference names the
+// collection; older collections without such a case simply get no icon and the
+// UI falls back to text-only rendering. Prefers the _large icon variant.
+function extractIcons(itemsGame, weaponRegistry, machineByDisplay) {
+  const tex = texListShared();
+  const misc = miscList();
+  const stagingDir = path.join(STAGING, 'extracted');
+  ensureDir(stagingDir);
+
+  const jobs = []; // { outRel, candidates, vpkSource?, vpkPath?, assign }
+  for (const w of weaponRegistry.values()) {
+    const gameItem = kvGet(itemsGame.items, String(w.itemDefIndex));
+    const img = gameItem ? resolveItemField(itemsGame, gameItem, 'image_inventory') : null;
+    if (!img) continue;
+    const base = String(img).replace(/\\/g, '/').toLowerCase();
+    jobs.push({
+      outRel: `icons/weapons/${w.key}.png`,
+      candidates: [`materials/${base}_large.vtf`, `materials/${base}.vtf`],
+      assign: (rel) => { w.icon = rel; },
+    });
+  }
+
+  // Map collection machine name -> case image_inventory.
+  const machineToImage = new Map();
+  for (const it of Object.values(itemsGame.items)) {
+    if (!it || typeof it !== 'object') continue;
+    const ref = resolveItemField(itemsGame, it, 'collection_reference');
+    if (!ref) continue;
+    const img = resolveItemField(itemsGame, it, 'image_inventory');
+    if (!img) continue;
+    const key = String(ref).toLowerCase();
+    if (!machineToImage.has(key)) machineToImage.set(key, String(img).replace(/\\/g, '/').toLowerCase());
+  }
+
+  const collectionIcons = {};
+  for (const [displayName, machineName] of machineByDisplay) {
+    const img = machineToImage.get(String(machineName).toLowerCase());
+    if (!img) continue;
+    jobs.push({
+      outRel: `icons/collections/${slugify(machineName)}.png`,
+      candidates: [`materials/${img}_large.vtf`, `materials/${img}.vtf`],
+      assign: (rel) => { collectionIcons[displayName] = rel; },
+    });
+  }
+
+  const fromTex = [];
+  const fromMisc = [];
+  for (const job of jobs) {
+    job.vpkPath = job.candidates.find((c) => tex.has(c)) || null;
+    if (job.vpkPath) { fromTex.push(job.vpkPath); continue; }
+    job.vpkPath = job.candidates.find((c) => misc.has(c)) || null;
+    if (job.vpkPath) fromMisc.push(job.vpkPath);
+  }
+  extractBatch(TEXTURES_VPK, fromTex, stagingDir);
+  extractBatch(MISC_VPK, fromMisc, stagingDir);
+
+  let ok = 0;
+  let fail = 0;
+  for (const job of jobs) {
+    if (!job.vpkPath) { fail++; continue; }
+    try {
+      const dec = decodeVTF(fs.readFileSync(path.join(stagingDir, job.vpkPath)));
+      const outPath = path.join(PUBLIC_DATA, job.outRel);
+      ensureDir(path.dirname(outPath));
+      fs.writeFileSync(outPath, encodePNG(dec.rgba, dec.width, dec.height));
+      job.assign(job.outRel);
+      ok++;
+    } catch (e) {
+      fail++;
+      log(`[icons] failed ${job.outRel}: ${e.message}`);
+    }
+  }
+  log(`[icons] wrote ${ok} icons (${Object.keys(collectionIcons).length} collections), ${fail} unavailable`);
+  return collectionIcons;
 }
 
 // ---------------------------------------------------------------------------
@@ -475,6 +682,25 @@ function extractAndDecodeTextures(allTextureRefs) {
   if (failList.length) {
     fs.writeFileSync(path.join(STAGING, 'texture_failures.json'), JSON.stringify(failList, null, 1));
     log(`[textures] failure details -> staging/texture_failures.json`);
+  }
+
+  // CMDLPanel (and therefore TF2's item inspection panel) always binds
+  // materials/editor/cubemap as its local reflection cubemap. Keep the six
+  // faces as a first-class viewer asset instead of synthesizing a gradient.
+  const editorCubeVpk = 'materials/editor/cubemap.vtf';
+  const editorCubeStage = path.join(stagingMat, editorCubeVpk);
+  try {
+    extractBatch(TEXTURES_VPK, [editorCubeVpk], stagingMat);
+    const faces = decodeVTFCubemap(fs.readFileSync(editorCubeStage));
+    const names = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
+    const outDir = path.join(PUBLIC_DATA, 'env', 'editor-cubemap');
+    ensureDir(outDir);
+    faces.forEach((face, i) => {
+      fs.writeFileSync(path.join(outDir, `${names[i]}.png`), encodePNG(face.rgba, face.width, face.height));
+    });
+    log('[textures] decoded TF2 editor cubemap (6 faces)');
+  } catch (e) {
+    log(`[textures] failed to decode TF2 editor cubemap: ${e.message}`);
   }
 }
 

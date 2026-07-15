@@ -62,6 +62,7 @@ export function parseVTFHeader(buf) {
   const height = buf.readUInt16LE(18);
   const flags = buf.readUInt32LE(20);
   const frames = buf.readUInt16LE(24);
+  const firstFrame = buf.readUInt16LE(26);
   const highResFormat = buf.readUInt32LE(52);
   const mipCount = buf.readUInt8(56);
   let depth = 1;
@@ -84,8 +85,12 @@ export function parseVTFHeader(buf) {
     }
   }
 
-  const faces = flags & FLAG_ENVMAP ? 6 : 1;
-  return { verMajor, verMinor, headerSize, width, height, flags, frames, highResFormat, mipCount, depth, faces, imageDataOffset };
+  // Pre-7.5 environment maps with a non-0xffff first frame contain a seventh
+  // legacy spheremap face after the six cubemap faces. It participates in the
+  // byte layout even though modern renderers never sample it.
+  const legacySphereFace = (flags & FLAG_ENVMAP) && (verMajor < 7 || (verMajor === 7 && verMinor < 5)) && firstFrame !== 0xffff;
+  const faces = flags & FLAG_ENVMAP ? (legacySphereFace ? 7 : 6) : 1;
+  return { verMajor, verMinor, headerSize, width, height, flags, frames, firstFrame, highResFormat, mipCount, depth, faces, imageDataOffset };
 }
 
 // Locate the offset of the largest mip (mip 0, frame 0, face 0, slice 0).
@@ -100,6 +105,19 @@ function largestMipOffset(hdr) {
     offset += mipByteSize(fmt, w, h) * frames * faces * d;
   }
   return offset;
+}
+
+function decodeLargestMipAt(buf, hdr, off) {
+  const { highResFormat: fmt, width, height } = hdr;
+  const size = mipByteSize(fmt, width, height);
+  if (off + size > buf.length) throw new Error(`VTF mip data out of range (off=${off} size=${size} len=${buf.length}, fmt=${fmt})`);
+  const src = buf.subarray(off, off + size);
+  const rgba = Buffer.alloc(width * height * 4);
+  const info = formatBlockSize(fmt);
+  if (!info) throw new Error(`Unsupported VTF format ${fmt}`);
+  if (info.block) decodeDXT(fmt, src, width, height, rgba);
+  else decodeUncompressed(fmt, src, width, height, rgba);
+  return { width, height, rgba, format: fmt };
 }
 
 // ---- pixel decoders -> write RGBA into out ----
@@ -138,19 +156,23 @@ function decodeUncompressed(fmt, src, w, h, out) {
   }
 }
 
-function decodeDXTColorBlock(src, o, colors) {
+function decodeDXTColorBlock(src, o, colors, useDxt1Palette, exposeOneBitAlpha) {
   const c0 = src[o] | (src[o + 1] << 8);
   const c1 = src[o + 2] | (src[o + 3] << 8);
   const r0 = ((c0 >> 11) & 0x1f) * 255 / 31, g0 = ((c0 >> 5) & 0x3f) * 255 / 63, b0 = (c0 & 0x1f) * 255 / 31;
   const r1 = ((c1 >> 11) & 0x1f) * 255 / 31, g1 = ((c1 >> 5) & 0x3f) * 255 / 63, b1 = (c1 & 0x1f) * 255 / 31;
   colors[0] = [r0, g0, b0, 255];
   colors[1] = [r1, g1, b1, 255];
-  if (c0 > c1) {
+  // BC1/DXT1 changes to its three-color palette whenever c0 <= c1, regardless
+  // of whether the VTF exposes one-bit alpha. Opaque TF2 wear masks deliberately
+  // use that midpoint palette but avoid selector 3. DXT3/5, whose alpha lives in
+  // a separate block, always retain the four-color palette.
+  if (!useDxt1Palette || c0 > c1) {
     colors[2] = [(2 * r0 + r1) / 3, (2 * g0 + g1) / 3, (2 * b0 + b1) / 3, 255];
     colors[3] = [(r0 + 2 * r1) / 3, (g0 + 2 * g1) / 3, (b0 + 2 * b1) / 3, 255];
   } else {
     colors[2] = [(r0 + r1) / 2, (g0 + g1) / 2, (b0 + b1) / 2, 255];
-    colors[3] = [0, 0, 0, 0]; // transparent for DXT1 1-bit alpha
+    colors[3] = [0, 0, 0, exposeOneBitAlpha ? 0 : 255];
   }
   return c0 <= c1;
 }
@@ -200,7 +222,13 @@ function decodeDXT(fmt, src, w, h, out) {
         };
         colorOff = blockOff + 8;
       }
-      decodeDXTColorBlock(src, colorOff, colors);
+      decodeDXTColorBlock(
+        src,
+        colorOff,
+        colors,
+        isDXT1,
+        fmt === VTF_FORMAT.DXT1_ONEBITALPHA,
+      );
       const lookup = src[colorOff + 4] | (src[colorOff + 5] << 8) | (src[colorOff + 6] << 16) | (src[colorOff + 7] << 24);
       for (let py = 0; py < 4; py++) {
         for (let px = 0; px < 4; px++) {
@@ -222,16 +250,17 @@ function decodeDXT(fmt, src, w, h, out) {
 // Decode a VTF buffer to { width, height, rgba (Buffer length w*h*4) } using the largest mip.
 export function decodeVTF(buf) {
   const hdr = parseVTFHeader(buf);
-  const { highResFormat: fmt, width, height } = hdr;
+  const { width, height } = hdr;
   if (width === 0 || height === 0) throw new Error('VTF has zero dimension');
-  const off = largestMipOffset(hdr);
-  const size = mipByteSize(fmt, width, height);
-  if (off + size > buf.length) throw new Error(`VTF mip data out of range (off=${off} size=${size} len=${buf.length}, fmt=${fmt})`);
-  const src = buf.subarray(off, off + size);
-  const rgba = Buffer.alloc(width * height * 4);
-  const info = formatBlockSize(fmt);
-  if (!info) throw new Error(`Unsupported VTF format ${fmt}`);
-  if (info.block) decodeDXT(fmt, src, width, height, rgba);
-  else decodeUncompressed(fmt, src, width, height, rgba);
-  return { width, height, rgba, format: fmt };
+  return decodeLargestMipAt(buf, hdr, largestMipOffset(hdr));
+}
+
+// Decode the six largest cubemap faces in Valve/DirectX order:
+// +X, -X, +Y, -Y, +Z, -Z. This is also the order expected by THREE.CubeTexture.
+export function decodeVTFCubemap(buf) {
+  const hdr = parseVTFHeader(buf);
+  if (hdr.faces < 6) throw new Error('VTF is not a six-face environment map');
+  const first = largestMipOffset(hdr);
+  const faceSize = mipByteSize(hdr.highResFormat, hdr.width, hdr.height);
+  return Array.from({ length: 6 }, (_, face) => decodeLargestMipAt(buf, hdr, first + face * faceSize));
 }

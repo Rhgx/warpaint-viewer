@@ -147,11 +147,14 @@ function convert(vpkRel) {
       // Global VVD index base for this mesh.
       const meshVertBase = model.vertexStart + mesh.vertexoffset;
 
-      // Emit triangles; dedupe (origMeshVertID) within this material group.
+      // Emit triangles; dedupe by the global VVD vertex index. VTX's
+      // origMeshVertID restarts at zero for every mesh/bodypart, so using it as
+      // the material-wide key welded Medigun's separate hose onto vertices 0..
+      // of the gun body (and can corrupt any repeated-material bodypart).
       const localOf = (orig) => {
-        let li = g.vmap.get(orig);
-        if (li !== undefined) return li;
         const globalIdx = meshVertBase + orig;
+        let li = g.vmap.get(globalIdx);
+        if (li !== undefined) return li;
         const vert = vvd.verts[globalIdx];
         if (!vert) {
           throw new Error(
@@ -165,7 +168,7 @@ function convert(vpkRel) {
         g.positions.push(p[0], p[1], p[2]);
         g.normals.push(nn[0], nn[1], nn[2]);
         g.uvs.push(vert.uv[0], vert.uv[1]);
-        g.vmap.set(orig, li);
+        g.vmap.set(globalIdx, li);
         return li;
       };
 

@@ -1,13 +1,9 @@
-// Pre-pass that walks the recipe tree and resolves every seeded [min,max] range
-// into a concrete value, so GL evaluation is a pure function of the resolved
-// tree. Traversal is depth-first PRE-ORDER: a node's own ranges are drawn first
-// (fixed field order: adjustBlack, adjustOffset, adjustGamma, rotation,
-// translateU, translateV, scaleUV), then its children in order. flipU/flipV are
-// plain booleans in the data and consume no draws. Select is a leaf and consumes
-// none. See rng.ts for the fidelity caveat about the generator itself.
+// Resolve seeded values exactly in the order used by TF2's compositor stages.
+// A stage consumes several values from the current CUniformRandomStream, then
+// advances to the other stream before its children are visited depth-first.
 
-import type { Rng } from './rng';
-import { mulberry32, resolveRange } from './rng';
+import type { PaintkitRandomState, UniformRandomStream } from './rng';
+import { advancePaintkitStream, createPaintkitRandomState, resolveRange } from './rng';
 import type { RecipeNode, StageTransform } from './types';
 
 export interface ResolvedTransform {
@@ -68,44 +64,63 @@ export function isIdentityTransform(t: ResolvedTransform): boolean {
   );
 }
 
-function resolveTransform(node: StageTransform, rng: Rng): ResolvedTransform {
-  // Fixed draw order; keep in sync with the header comment.
-  const black = resolveRange(rng, node.adjustBlack, 0);
-  const white = resolveRange(rng, node.adjustOffset, 1);
-  const gamma = resolveRange(rng, node.adjustGamma, 1);
-  const rotationDeg = resolveRange(rng, node.rotation, 0);
+function resolveTextureTransform(node: StageTransform, rng: UniformRandomStream): ResolvedTransform {
+  // TextureStage::ComputeRandomValuesThis: optional flips first, followed by UV
+  // placement, then Photoshop levels.
+  const flipU = node.flipU ? rng.randomInt(0, 1) !== 0 : false;
+  const flipV = node.flipV ? rng.randomInt(0, 1) !== 0 : false;
   const translateU = resolveRange(rng, node.translateU, 0);
   const translateV = resolveRange(rng, node.translateV, 0);
+  const rotationDeg = resolveRange(rng, node.rotation, 0);
   const scale = resolveRange(rng, node.scaleUV, 1);
+  const black = resolveRange(rng, node.adjustBlack, 0);
+  const offset = resolveRange(rng, node.adjustOffset, 1);
+  const gamma = resolveRange(rng, node.adjustGamma, 1);
   return {
     black,
-    white,
+    white: black + offset,
     gamma,
     rotationDeg,
     translateU,
     translateV,
     scale: scale === 0 ? 1 : scale,
-    flipU: node.flipU === true,
-    flipV: node.flipV === true,
+    flipU,
+    flipV,
   };
 }
 
-function resolveNode(node: RecipeNode, rng: Rng): ResolvedNode {
+function resolveCombineTransform(node: StageTransform, rng: UniformRandomStream): ResolvedTransform {
+  const black = resolveRange(rng, node.adjustBlack, 0);
+  const offset = resolveRange(rng, node.adjustOffset, 1);
+  const gamma = resolveRange(rng, node.adjustGamma, 1);
+  return {
+    black, white: black + offset, gamma,
+    rotationDeg: 0, translateU: 0, translateV: 0, scale: 1,
+    flipU: false, flipV: false,
+  };
+}
+
+function resolveNode(node: RecipeNode, state: PaintkitRandomState): ResolvedNode {
+  const rng = state.streams[state.current];
   switch (node.type) {
-    case 'texture_lookup':
+    case 'texture_lookup': {
+      const transform = resolveTextureTransform(node, rng);
+      advancePaintkitStream(state);
       return {
         type: 'texture_lookup',
         texture: node.texture,
-        ...resolveTransform(node, rng),
+        ...transform,
       };
+    }
     case 'combine_multiply':
     case 'combine_add':
     case 'combine_lerp': {
-      const transform = resolveTransform(node, rng);
+      const transform = resolveCombineTransform(node, rng);
+      advancePaintkitStream(state);
       return {
         type: node.type,
         ...transform,
-        nodes: node.nodes.map((n) => resolveNode(n, rng)),
+        nodes: node.nodes.map((n) => resolveNode(n, state)),
       };
     }
     case 'select':
@@ -120,21 +135,23 @@ function resolveNode(node: RecipeNode, rng: Rng): ResolvedNode {
         }),
       };
     case 'apply_sticker': {
-      const black = resolveRange(rng, node.adjustBlack, 0);
-      const white = resolveRange(rng, node.adjustOffset, 1);
-      const gamma = resolveRange(rng, node.adjustGamma, 1);
       // Pick a sticker weighted by weight, consuming one draw.
       const stickers = node.stickers ?? [];
       const total = stickers.reduce((s, x) => s + (x.weight ?? 1), 0) || 1;
-      let pick = rng() * total;
+      let pick = rng.randomFloat(0, total);
       let chosen = stickers[0];
       for (const s of stickers) {
-        pick -= s.weight ?? 1;
-        if (pick <= 0) {
+        const weight = s.weight ?? 1;
+        if (pick < weight) {
           chosen = s;
           break;
         }
+        pick -= weight;
       }
+      const black = resolveRange(rng, node.adjustBlack, 0);
+      const offset = resolveRange(rng, node.adjustOffset, 1);
+      const gamma = resolveRange(rng, node.adjustGamma, 1);
+      advancePaintkitStream(state);
       return {
         type: 'apply_sticker',
         base: chosen ? chosen.base : '',
@@ -145,15 +162,14 @@ function resolveNode(node: RecipeNode, rng: Rng): ResolvedNode {
         destTr: node.destTr ?? [1, 0],
         destBl: node.destBl ?? [0, 1],
         black,
-        white,
+        white: black + offset,
         gamma,
-        nodes: node.nodes.map((n) => resolveNode(n, rng)),
+        nodes: node.nodes.map((n) => resolveNode(n, state)),
       };
     }
   }
 }
 
 export function resolveRecipe(root: RecipeNode, seed: number): ResolvedNode {
-  const rng = mulberry32(seed >>> 0);
-  return resolveNode(root, rng);
+  return resolveNode(root, createPaintkitRandomState(seed));
 }

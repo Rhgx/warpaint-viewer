@@ -21,9 +21,9 @@ void main() {
 }
 `;
 
-// All math is done in LINEAR space inside float render targets. Source PNGs are
-// sRGB-encoded, so texture_lookup decodes them (uSrgb* = 1). Intermediate render
-// targets already hold linear values, so combines read them raw (uSrgb* = 0).
+// Source enables sRGB reads and writes around almost every compositor pass.
+// Shader math is linear, but the 8-bit intermediate targets store sRGB values;
+// this matters because quantizing linear RGB produced visibly wrong dark wear.
 // AdjustLevels replicates the fxc: Photoshop levels performed in sRGB space
 // (convert linear->sRGB, level, convert back), which is what TF2 does.
 export const FRAG = /* glsl */ `
@@ -65,6 +65,10 @@ vec4 samp(sampler2D t, vec2 uvc, float srgb) {
   return c;
 }
 
+void writeLinear(vec4 c) {
+  fragColor = vec4(lin2srgb(clamp(c.rgb, 0.0, 1.0)), clamp(c.a, 0.0, 1.0));
+}
+
 // Photoshop levels, as compositor_ps2x.fxc AdjustLevels(float4). Real recipes
 // carry degenerate ranges (white == black, e.g. adjustOffset [0,0]); HLSL's
 // saturate(inf/NaN) turns that into a threshold at the black point, which we
@@ -86,7 +90,7 @@ vec4 adjustLevels(vec4 src, vec3 bwg) {
 void main() {
   if (uMode == ${MODE_TEXTURE}) {
     vec2 uvc = (uUv0 * vec3(vUv, 1.0)).xy;
-    fragColor = adjustLevels(samp(uTex0, uvc, uSrgb0), uAdjust0);
+    writeLinear(adjustLevels(samp(uTex0, uvc, uSrgb0), uAdjust0));
     return;
   }
   if (uMode == ${MODE_SELECT}) {
@@ -99,31 +103,31 @@ void main() {
       if (i >= uNumSelect) break;
       if (uSelect[i] != 0.0 && floor(uSelect[i] + 0.5) == testColor) matched = true;
     }
-    fragColor = matched ? vec4(1.0) : vec4(0.0);
+    writeLinear(matched ? vec4(1.0) : vec4(0.0));
     return;
   }
   if (uMode == ${MODE_MULTIPLY}) {
     vec4 c0 = adjustLevels(samp(uTex0, vUv, uSrgb0), uAdjust0);
     vec4 c1 = adjustLevels(samp(uTex1, vUv, uSrgb1), uAdjust1);
-    fragColor = c0 * c1;
+    writeLinear(c0 * c1);
     return;
   }
   if (uMode == ${MODE_ADD}) {
     vec4 c0 = adjustLevels(samp(uTex0, vUv, uSrgb0), uAdjust0);
     vec4 c1 = adjustLevels(samp(uTex1, vUv, uSrgb1), uAdjust1);
-    fragColor = c0 + c1;
+    writeLinear(c0 + c1);
     return;
   }
   if (uMode == ${MODE_LERP}) {
     vec4 c0 = adjustLevels(samp(uTex0, vUv, uSrgb0), uAdjust0);
     vec4 c1 = adjustLevels(samp(uTex1, vUv, uSrgb1), uAdjust1);
     vec4 sel = adjustLevels(samp(uTex2, vUv, uSrgb2), uAdjust2);
-    fragColor = mix(c0, c1, sel.x); // lerp(color0, color1, colSel.xxxx)
+    writeLinear(mix(c0, c1, sel.x)); // lerp(color0, color1, colSel.xxxx)
     return;
   }
   if (uMode == ${MODE_BLEND}) {
     // Sticker blend. tex0 = surface so far, tex1 = sticker mapped onto the
-    // parallelogram TL/TR/BL (the proto's dest corners).
+    // parallelogram TL/TR/BL, tex2 = the optional grayscale specular map.
     vec4 c0 = samp(uTex0, vUv, uSrgb0);
     vec2 U = uDestTr - uDestTl;
     vec2 V = uDestBl - uDestTl;
@@ -136,12 +140,13 @@ void main() {
     // upload unflipped (flipY=false), so image top is v=0 and (a, b) samples
     // the sticker upright in the v-down composite space.
     vec4 c1 = adjustLevels(samp(uTex1, vec2(a, b), uSrgb1), uAdjust1);
+    float stickerSpec = samp(uTex2, vec2(a, b), uSrgb2).r;
     float alpha = c1.a * inside;
     vec3 col = (1.0 - alpha) * c0.rgb + alpha * c1.rgb;
-    float spec = (1.0 - alpha) * c0.a + alpha * 1.0;
-    fragColor = vec4(col, spec);
+    float spec = (1.0 - alpha) * c0.a + alpha * stickerSpec;
+    writeLinear(vec4(col, spec));
     return;
   }
-  fragColor = vec4(0.0, 1.0, 0.0, 1.0); // cErrColor
+  writeLinear(vec4(0.0, 1.0, 0.0, 1.0)); // cErrColor
 }
 `;

@@ -1,4 +1,5 @@
-- [] Continue your current workload whereever you left off.
-- [] Fix all models being oriented 90 degrees upward at default position for no reason.
-- [] Fix all weapons having no textures despite selecting a weapon
-- [] Optimize the shit out of the app in general.
+---
+
+
+
+Also, tell me the few maps we will use, i'll go grab a screenshot of each one of those maps in a neutral spot to use as a background for the world space. (you can even give me tp commands so i can use exact positions.)

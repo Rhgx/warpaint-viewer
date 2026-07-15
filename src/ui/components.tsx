@@ -4,11 +4,35 @@ import { NumberField } from '@base-ui/react/number-field';
 import { Switch } from '@base-ui/react/switch';
 import { Toggle } from '@base-ui/react/toggle';
 import { Input } from '@base-ui/react/input';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 export interface Option {
   value: string;
   label: string;
+}
+
+export interface IconOption extends Option {
+  icon?: string | null;
+}
+
+// Small image with a graceful text-only fallback: manifest icons are not
+// guaranteed (mock mode has none, a couple of collections have none), so a
+// broken/missing src just collapses to an empty slot instead of a broken icon.
+export function AssetIcon({ src, size = 24, className }: { src?: string | null; size?: number; className?: string }) {
+  if (!src) return <span className={`asset-icon-empty${className ? ` ${className}` : ''}`} style={{ width: size, height: size }} />;
+  return (
+    <img
+      className={`asset-icon${className ? ` ${className}` : ''}`}
+      src={src}
+      alt=""
+      loading="lazy"
+      style={{ width: size, height: size }}
+      onError={(e) => {
+        // Keep the reserved slot (no layout shift) but drop the broken image.
+        e.currentTarget.style.visibility = 'hidden';
+      }}
+    />
+  );
 }
 
 // A labelled control row used throughout the controls bar.
@@ -56,6 +80,48 @@ export function SelectField({
   );
 }
 
+// Same as SelectField, but each option (and the closed trigger) can show a
+// small icon, e.g. a weapon's backpack icon.
+export function IconSelectField({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: IconOption[];
+  placeholder?: string;
+}) {
+  const selected = options.find((o) => o.value === value);
+  return (
+    <Select.Root value={value} onValueChange={(v) => onChange(v as string)}>
+      <Select.Trigger className="ui-select-trigger ui-select-trigger-icon">
+        <span className="ui-icon-option">
+          <AssetIcon src={selected?.icon} size={20} />
+          <Select.Value>{() => selected?.label ?? placeholder ?? 'Select'}</Select.Value>
+        </span>
+        <Select.Icon className="ui-select-icon">v</Select.Icon>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Positioner className="ui-select-positioner" sideOffset={4} alignItemWithTrigger={false}>
+          <Select.Popup className="ui-select-popup">
+            {options.map((o) => (
+              <Select.Item key={o.value} value={o.value} className="ui-select-item">
+                <span className="ui-icon-option">
+                  <AssetIcon src={o.icon} size={24} />
+                  <Select.ItemText>{o.label}</Select.ItemText>
+                </span>
+                <Select.ItemIndicator className="ui-select-indicator">*</Select.ItemIndicator>
+              </Select.Item>
+            ))}
+          </Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
+    </Select.Root>
+  );
+}
+
 export function SliderField({
   value,
   onChange,
@@ -84,6 +150,51 @@ export function SliderField({
         </Slider.Track>
       </Slider.Control>
     </Slider.Root>
+  );
+}
+
+const WEAR_COLORS = ['#4a7d12', '#82b461', '#dcb259', '#bb6454', '#84453b'] as const;
+const WEAR_SHORT = ['FN', 'MW', 'FT', 'WW', 'BS'] as const;
+
+export function WearSliderField({
+  value,
+  names,
+  onChange,
+}: {
+  value: number;
+  names: string[];
+  onChange: (v: number) => void;
+}) {
+  const selected = Math.max(0, Math.min(4, Math.round(value)));
+  return (
+    <div className="wear-slider" style={{ '--wear-color': WEAR_COLORS[selected] } as CSSProperties}>
+      <Slider.Root
+        value={selected}
+        onValueChange={(v) => onChange(Math.round(Array.isArray(v) ? v[0] : v))}
+        min={0}
+        max={4}
+        step={1}
+        aria-label="Weapon wear"
+        aria-valuetext={names[selected] ?? WEAR_SHORT[selected]}
+      >
+        <Slider.Control className="wear-slider-control">
+          <Slider.Track className="wear-slider-track">
+            {WEAR_COLORS.map((color, index) => (
+              <span
+                key={color}
+                className="wear-slider-stop"
+                data-selected={index === selected || undefined}
+                style={{ left: `${index * 25}%`, backgroundColor: color }}
+              />
+            ))}
+            <Slider.Thumb className="wear-slider-thumb" />
+          </Slider.Track>
+        </Slider.Control>
+      </Slider.Root>
+      <div className="wear-slider-labels" aria-hidden="true">
+        {WEAR_SHORT.map((label, index) => <span key={label} data-selected={index === selected || undefined}>{label}</span>)}
+      </div>
+    </div>
   );
 }
 
@@ -121,13 +232,22 @@ export function NumberFieldControl({
   );
 }
 
-export function TeamToggle({ team, onChange }: { team: 'red' | 'blu'; onChange: (t: 'red' | 'blu') => void }) {
+export function TeamToggle({
+  team,
+  onChange,
+  disabled = false,
+}: {
+  team: 'red' | 'blu';
+  onChange: (t: 'red' | 'blu') => void;
+  disabled?: boolean;
+}) {
   return (
-    <div className="ui-team-toggle" data-team={team}>
+    <div className="ui-team-toggle" data-team={team} data-fixed={disabled || undefined}>
       <Toggle
         className="ui-team-btn"
         aria-label="RED team"
-        pressed={team === 'red'}
+        pressed={disabled || team === 'red'}
+        disabled={disabled}
         onPressedChange={() => onChange('red')}
         data-side="red"
       >
@@ -136,7 +256,8 @@ export function TeamToggle({ team, onChange }: { team: 'red' | 'blu'; onChange: 
       <Toggle
         className="ui-team-btn"
         aria-label="BLU team"
-        pressed={team === 'blu'}
+        pressed={disabled || team === 'blu'}
+        disabled={disabled}
         onPressedChange={() => onChange('blu')}
         data-side="blu"
       >
