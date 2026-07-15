@@ -61,3 +61,14 @@ export function loadEditorEnvCube(
     onError,
   );
 }
+
+export function loadMapSkybox(skybox: string): Promise<THREE.CubeTexture> {
+  const root = `/data/env/maps/${skybox}/`;
+  return new THREE.CubeTextureLoader().setPath(root).loadAsync([
+    'px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png',
+  ]).then((texture) => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    return texture;
+  });
+}

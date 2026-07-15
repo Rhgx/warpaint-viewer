@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getPreset } from './lighting';
-import { loadEditorEnvCube, makeEnvCube } from './env';
+import { loadEditorEnvCube, loadMapSkybox, makeEnvCube } from './env';
 import { InspectControls } from './inspectControls';
 import type { WeaponMaterial } from '../data/types';
 
@@ -22,6 +22,8 @@ export class Viewer {
   private meshes: THREE.Mesh[] = [];
   private envMap: THREE.CubeTexture;
   private envReady: Promise<void>;
+  private backgroundTextures = new Map<string, THREE.CubeTexture>();
+  private backgroundLoadToken = 0;
   private gltfLoader = new GLTFLoader();
   private texLoader = new THREE.TextureLoader();
   private normalTexture: THREE.Texture | null = null;
@@ -141,6 +143,23 @@ export class Viewer {
     }
     preset.ambientCube.forEach((color, i) => this.tf2Uniforms.uTf2AmbientCube.value[i].copy(color));
     this.scene.background = new THREE.Color(preset.background);
+    this.scene.backgroundBlurriness = 0;
+    const skybox = preset.skybox;
+    const token = ++this.backgroundLoadToken;
+    if (!skybox) return;
+    const cached = this.backgroundTextures.get(skybox);
+    if (cached) {
+      this.scene.background = cached;
+      this.scene.backgroundBlurriness = preset.backgroundBlur ?? 0;
+      return;
+    }
+    void loadMapSkybox(skybox).then((texture) => {
+      if (this.disposed) { texture.dispose(); return; }
+      this.backgroundTextures.set(skybox, texture);
+      if (token !== this.backgroundLoadToken) return;
+      this.scene.background = texture;
+      this.scene.backgroundBlurriness = preset.backgroundBlur ?? 0;
+    }).catch((error) => console.warn(`[warpaint-viewer] ${skybox} background unavailable`, error));
   }
 
   // The compositor result is stored as sRGB, matching Source's output target.
@@ -456,6 +475,8 @@ vec3 outgoingLight = reflectedLight.directDiffuse + tf2AmbientDiffuse + reflecte
     this.exponentTexture?.dispose();
     this.lightwarpTexture?.dispose();
     this.envMap.dispose();
+    for (const texture of this.backgroundTextures.values()) texture.dispose();
+    this.backgroundTextures.clear();
     if (!this.currentGeoCached) for (const mesh of this.meshes) mesh.geometry.dispose();
     for (const p of this.geoCache.values()) p.then((geos) => geos.forEach((g) => g.dispose())).catch(() => undefined);
     this.geoCache.clear();
