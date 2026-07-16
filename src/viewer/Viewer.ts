@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getPreset } from './lighting';
-import { loadEditorEnvCube, loadMapSkybox, makeEnvCube } from './env';
+import { loadEditorEnvCube, makeEnvCube } from './env';
 import { InspectControls } from './inspectControls';
 import type { WeaponMaterial } from '../data/types';
 
@@ -34,8 +34,6 @@ export class Viewer {
   private meshes: THREE.Mesh[] = [];
   private envMap: THREE.CubeTexture;
   private envReady: Promise<void>;
-  private backgroundTextures = new Map<string, THREE.CubeTexture>();
-  private backgroundLoadToken = 0;
   private gltfLoader = new GLTFLoader();
   private texLoader = new THREE.TextureLoader();
   private normalTexture: THREE.Texture | null = null;
@@ -79,7 +77,8 @@ export class Viewer {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+    this.renderer.setClearAlpha(0);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.LinearToneMapping;
@@ -95,6 +94,8 @@ export class Viewer {
     this.scene.add(this.modelGroup);
 
     this.controls = new InspectControls(this.camera, this.modelGroup, canvas);
+    canvas.addEventListener('pointermove', this.onBackplatePointerMove);
+    canvas.addEventListener('pointerleave', this.onBackplatePointerLeave);
 
     this.envMap = makeEnvCube(0x9fb8d6, 0x40382c);
     this.material = new THREE.MeshPhongMaterial({
@@ -144,6 +145,9 @@ export class Viewer {
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
     this.lastTime = now;
     this.controls.update(dt);
+    // Panning is a framing operation, not physical movement through the map.
+    // Move the light rig with the model's translation, but not its rotation.
+    this.lightGroup.position.copy(this.modelGroup.position);
     this.renderer.render(this.scene, this.camera);
   };
 
@@ -155,32 +159,35 @@ export class Viewer {
     return this.envReady;
   }
 
+  private onBackplatePointerMove = (event: PointerEvent) => {
+    const host = this.canvas.parentElement;
+    if (!host?.classList.contains('has-backplate')) return;
+    const bounds = host.getBoundingClientRect();
+    const x = ((event.clientX - bounds.left) / Math.max(1, bounds.width) - 0.5) * -14;
+    const y = ((event.clientY - bounds.top) / Math.max(1, bounds.height) - 0.5) * -10;
+    host.style.setProperty('--backplate-x', `${x.toFixed(2)}px`);
+    host.style.setProperty('--backplate-y', `${y.toFixed(2)}px`);
+  };
+
+  private onBackplatePointerLeave = () => {
+    const host = this.canvas.parentElement;
+    host?.style.setProperty('--backplate-x', '0px');
+    host?.style.setProperty('--backplate-y', '0px');
+  };
+
   setLighting(presetId: string) {
     const preset = getPreset(presetId);
+    this.renderer.toneMappingExposure = preset.exposure ?? 1;
     this.lightGroup.clear();
-    for (const l of preset.build()) {
+    for (const l of preset.build(this.camera)) {
       this.lightGroup.add(l);
       if (l instanceof THREE.DirectionalLight || l instanceof THREE.SpotLight) this.lightGroup.add(l.target);
     }
     preset.ambientCube.forEach((color, i) => this.tf2Uniforms.uTf2AmbientCube.value[i].copy(color));
-    this.scene.background = new THREE.Color(preset.background);
-    this.scene.backgroundBlurriness = 0;
-    const skybox = preset.skybox;
-    const token = ++this.backgroundLoadToken;
-    if (!skybox) return;
-    const cached = this.backgroundTextures.get(skybox);
-    if (cached) {
-      this.scene.background = cached;
-      this.scene.backgroundBlurriness = preset.backgroundBlur ?? 0;
-      return;
-    }
-    void loadMapSkybox(skybox).then((texture) => {
-      if (this.disposed) { texture.dispose(); return; }
-      this.backgroundTextures.set(skybox, texture);
-      if (token !== this.backgroundLoadToken) return;
-      this.scene.background = texture;
-      this.scene.backgroundBlurriness = preset.backgroundBlur ?? 0;
-    }).catch((error) => console.warn(`[warpaint-viewer] ${skybox} background unavailable`, error));
+    const host = this.canvas.parentElement;
+    host?.classList.toggle('has-backplate', Boolean(preset.backplate));
+    host?.style.setProperty('--backplate-image', preset.backplate ? `url("${preset.backplate}")` : 'none');
+    this.scene.background = preset.backplate ? null : new THREE.Color(preset.background);
   }
 
   // The compositor result is stored as sRGB, matching Source's output target.
@@ -544,6 +551,10 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.onResize);
+    this.canvas.removeEventListener('pointermove', this.onBackplatePointerMove);
+    this.canvas.removeEventListener('pointerleave', this.onBackplatePointerLeave);
+    this.canvas.parentElement?.classList.remove('has-backplate');
+    this.canvas.parentElement?.style.removeProperty('--backplate-image');
     this.controls.dispose();
     this.material.dispose();
     this.lensMaterial.dispose();
@@ -553,8 +564,6 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     this.lightwarpTexture?.dispose();
     this.selfIllumTexture?.dispose();
     this.envMap.dispose();
-    for (const texture of this.backgroundTextures.values()) texture.dispose();
-    this.backgroundTextures.clear();
     if (!this.currentGeoCached) for (const mesh of this.meshes) mesh.geometry.dispose();
     for (const p of this.geoCache.values()) p.then((parts) => parts.forEach((part) => part.geometry.dispose())).catch(() => undefined);
     this.geoCache.clear();

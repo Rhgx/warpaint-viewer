@@ -9,12 +9,12 @@ export type AmbientCube = readonly [
 export interface LightingPreset {
   id: string;
   label: string;
-  build: () => THREE.Light[];
-  // Source order: +X, -X, +Y, -Y, +Z, -Z. Values are linear RGB.
+  build: (camera?: THREE.PerspectiveCamera) => THREE.Light[];
+  // THREE world-axis order: +X, -X, +Y, -Y, +Z, -Z. Values are linear RGB.
   ambientCube: AmbientCube;
   background: number;
-  skybox?: string;
-  backgroundBlur?: number;
+  backplate?: string;
+  exposure?: number;
 }
 
 type SourceLight = readonly [number, number, number, number];
@@ -30,32 +30,44 @@ function sourceColor([r, g, b]: readonly number[]): THREE.Color {
 }
 
 function sourceLightIntensity(light: SourceLight): number {
-  // Hammer brightness is an authoring value rather than a physical unit. 600
-  // is the neutral bridge into the viewer: it keeps the raw ratios between
-  // maps and makes Sawmill's 600-unit sun a three.js intensity of exactly 1.
-  return light[3] / 600;
+  // VRAD compiles Hammer's sRGB light color to linear, then scales it by
+  // brightness / 250. This reproduces the intensity vectors in the BSP's
+  // LUMP_WORLDLIGHTS_HDR (for example Sawmill 600 -> 2.4x).
+  return light[3] / 250;
 }
 
-function sourceAmbientCube(light: SourceLight): AmbientCube {
-  // Source's light_environment ambient is omnidirectional. Preserve its color
-  // and brightness, normalizing 500 (Sawmill's authored value) to 1 before it
-  // enters the TF2 ambient-cube shader.
-  const scale = light[3] / 500;
-  const value: [number, number, number] = [
-    (light[0] / 255) * scale,
-    (light[1] / 255) * scale,
-    (light[2] / 255) * scale,
-  ];
-  return cube(value);
+function compiledAmbientCube(sourceCube: readonly (readonly number[])[]): AmbientCube {
+  const face = (sourceIndex: number) => new THREE.Vector3(...sourceCube[sourceIndex] as [number, number, number]);
+  // The BSP stores Source axes. The shader receives THREE world normals:
+  // THREE +X/-X = Source -Y/+Y, +Y/-Y = +Z/-Z, +Z/-Z = +X/-X.
+  return [face(3), face(2), face(4), face(5), face(0), face(1)];
 }
 
-function sourceDirection(pitch: number, yaw: number): THREE.Vector3 {
-  const p = THREE.MathUtils.degToRad(pitch);
-  const y = THREE.MathUtils.degToRad(yaw);
-  // Hammer light_environment uses negative pitch for downward travel. Convert
-  // Source (X forward, Y left, Z up) to THREE (X right, Y up, Z forward).
-  const source = new THREE.Vector3(Math.cos(p) * Math.cos(y), Math.cos(p) * Math.sin(y), Math.sin(p));
-  return new THREE.Vector3(-source.y, source.z, source.x).normalize();
+function sourceCameraBasis(angles: SourceVector) {
+  const pitch = THREE.MathUtils.degToRad(angles[0]);
+  const yaw = THREE.MathUtils.degToRad(angles[1]);
+  const forward = new THREE.Vector3(
+    Math.cos(pitch) * Math.cos(yaw),
+    Math.cos(pitch) * Math.sin(yaw),
+    -Math.sin(pitch),
+  ).normalize();
+  const right = new THREE.Vector3(Math.sin(yaw), -Math.cos(yaw), 0).normalize();
+  const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+  return { forward, right, up };
+}
+
+function sourceVectorToCameraWorld(
+  source: THREE.Vector3,
+  captureAngles: SourceVector,
+  camera?: THREE.PerspectiveCamera,
+): THREE.Vector3 {
+  const basis = sourceCameraBasis(captureAngles);
+  const cameraLocal = new THREE.Vector3(
+    source.dot(basis.right),
+    source.dot(basis.up),
+    -source.dot(basis.forward),
+  );
+  return camera ? cameraLocal.applyQuaternion(camera.quaternion) : cameraLocal;
 }
 
 function directional(color: THREE.ColorRepresentation, intensity: number, direction: THREE.Vector3) {
@@ -66,35 +78,57 @@ function directional(color: THREE.ColorRepresentation, intensity: number, direct
   return light;
 }
 
-function sourceEnvironmentLight(environment: { light: SourceLight | null; angles: SourceVector | null; pitch: number }) {
+function sourceEnvironmentLight(
+  environment: { light: SourceLight | null; angles: SourceVector | null; pitch: number },
+  captureAngles: SourceVector,
+  camera?: THREE.PerspectiveCamera,
+) {
   if (!environment.light) return [];
   const yaw = environment.angles?.[1] ?? 0;
-  return [directional(sourceColor(environment.light), sourceLightIntensity(environment.light), sourceDirection(environment.pitch, yaw))];
+  const sourceRay = new THREE.Vector3(
+    Math.cos(THREE.MathUtils.degToRad(environment.pitch)) * Math.cos(THREE.MathUtils.degToRad(yaw)),
+    Math.cos(THREE.MathUtils.degToRad(environment.pitch)) * Math.sin(THREE.MathUtils.degToRad(yaw)),
+    Math.sin(THREE.MathUtils.degToRad(environment.pitch)),
+  ).normalize();
+  return [directional(
+    sourceColor(environment.light),
+    sourceLightIntensity(environment.light),
+    sourceVectorToCameraWorld(sourceRay, captureAngles, camera),
+  )];
 }
 
 function sourceLocalSpot(
   light: (typeof BSP_MAP_LIGHTING.indoors.localLights)[number],
   sampleOrigin: SourceVector,
+  captureAngles: SourceVector,
+  focusDistance: number,
+  camera?: THREE.PerspectiveCamera,
 ): THREE.SpotLight {
   const raw = light.light as SourceLight;
+  // The viewer can pan weapons much farther than a physical inspect camera.
+  // Keep local fixtures angularly correct but outside every weapon's bounds,
+  // avoiding light/model intersections and unstable inverse-square changes.
+  const safeLightRadius = 1000;
   const spot = new THREE.SpotLight(
     sourceColor(raw),
     sourceLightIntensity(raw),
-    light.zeroPercentDistance > 0 ? light.zeroPercentDistance / 200 : 1000,
+    0,
     THREE.MathUtils.degToRad(light.cone),
     Math.max(0, 1 - light.innerCone / Math.max(1, light.cone)),
-    2,
+    0,
   );
   const origin = light.origin as SourceVector;
-  // Keep the exact map-space relationship while fitting Source units into the
-  // small object-preview scene.
-  spot.position.set(
-    -(origin[1] - sampleOrigin[1]) / 200,
-    (origin[2] - sampleOrigin[2]) / 200,
-    (origin[0] - sampleOrigin[0]) / 200,
-  );
-  const direction = sourceDirection(light.pitch, light.angles?.[1] ?? 0);
-  spot.target.position.copy(spot.position).add(direction.multiplyScalar(10));
+  const cameraBasis = sourceCameraBasis(captureAngles);
+  const focusOrigin = new THREE.Vector3(...sampleOrigin).addScaledVector(cameraBasis.forward, focusDistance);
+  const sourceOffset = new THREE.Vector3(...origin).sub(focusOrigin);
+  spot.position.copy(sourceVectorToCameraWorld(sourceOffset, captureAngles, camera).normalize().multiplyScalar(safeLightRadius));
+  const sourceRay = new THREE.Vector3(
+    Math.cos(THREE.MathUtils.degToRad(light.pitch)) * Math.cos(THREE.MathUtils.degToRad(light.angles?.[1] ?? 0)),
+    Math.cos(THREE.MathUtils.degToRad(light.pitch)) * Math.sin(THREE.MathUtils.degToRad(light.angles?.[1] ?? 0)),
+    Math.sin(THREE.MathUtils.degToRad(light.pitch)),
+  ).normalize();
+  const direction = sourceVectorToCameraWorld(sourceRay, captureAngles, camera);
+  spot.target.position.copy(spot.position).add(direction.multiplyScalar(safeLightRadius * 2));
   return spot;
 }
 
@@ -118,19 +152,45 @@ function fogBackground(color: readonly number[] | null): number {
   return (color[0] << 16) | (color[1] << 8) | color[2];
 }
 
+function ambientProbeBackground(sourceCube: readonly (readonly number[])[]): number {
+  const average = [0, 1, 2].map((channel) => (
+    sourceCube.reduce((sum, face) => sum + face[channel], 0) / sourceCube.length
+  ));
+  // Probe values are already linear; convert to the display color space used
+  // by THREE.Color backgrounds. This gives the room its compiled warm-brown
+  // ambience without inventing another hand-authored color.
+  return new THREE.Color(average[0], average[1], average[2]).getHex(THREE.SRGBColorSpace);
+}
+
 const mapPreset = (id: keyof typeof BSP_MAP_LIGHTING): LightingPreset => {
   const source = BSP_MAP_LIGHTING[id];
   const isLocal = source.localLights.length > 0 && source.sampleOrigin;
   return {
     id,
     label: source.label,
-    background: fogBackground(source.fog?.color ?? null),
-    skybox: source.skybox,
-    backgroundBlur: 0.48,
-    ambientCube: sourceAmbientCube(source.environment.ambient as SourceLight),
-    build: () => isLocal
-      ? source.localLights.map((light) => sourceLocalSpot(light as (typeof BSP_MAP_LIGHTING.indoors.localLights)[number], source.sampleOrigin as SourceVector))
-      : sourceEnvironmentLight(source.environment as { light: SourceLight; angles: SourceVector; pitch: number }),
+    background: isLocal
+      ? ambientProbeBackground(source.ambientProbe.cube)
+      : fogBackground(source.fog?.color ?? null),
+    // Actual in-map captures are baked into blurred 2D backplates. Lighting
+    // still comes exclusively from the BSP data above.
+    backplate: `/data/env/backplates/${id}.webp`,
+    // Source SDK 2013's default mat_autoexposure_max. An isolated weapon
+    // against sky converges near this end of TF2's 0.5-2.0 HDR range.
+    exposure: 2,
+    ambientCube: compiledAmbientCube(source.ambientProbe.cube),
+    build: (camera) => isLocal
+      ? source.localLights.map((light) => sourceLocalSpot(
+        light as (typeof BSP_MAP_LIGHTING.indoors.localLights)[number],
+        source.sampleOrigin as SourceVector,
+        source.captureAngles as SourceVector,
+        source.focusDistance,
+        camera,
+      ))
+      : sourceEnvironmentLight(
+        source.environment as { light: SourceLight; angles: SourceVector; pitch: number },
+        source.captureAngles as SourceVector,
+        camera,
+      ),
   };
 };
 
@@ -139,6 +199,7 @@ export const LIGHTING_PRESETS: LightingPreset[] = [
     id: 'inspect',
     label: 'Inspect',
     background: 0x1c1f24,
+    exposure: 1,
     // CPotteryWheelPanel::CreateDefaultLights uses 0.4 on every cube face.
     ambientCube: cube([0.4, 0.4, 0.4]),
     build: inspectionLights,

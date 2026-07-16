@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { decodeVTF } from './lib/vtf.mjs';
 import { encodePNG } from './lib/png.mjs';
 import { extractBatch, listVPK } from './lib/vpk.mjs';
+import { sampleBspAmbientCube } from './lib/bsp-lighting.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BSPSOURCE = process.env.BSPSOURCE_HOME || 'C:/Users/TR/Desktop/BSPSource';
@@ -30,13 +31,15 @@ const SKYBOX_OUT = path.join(ROOT, 'public', 'data', 'env', 'maps');
 const GENERATED_OUT = path.join(ROOT, 'src', 'viewer', 'mapLighting.generated.ts');
 
 const PRESETS = [
-  { id: 'daylight', label: 'Badlands daylight', map: 'cp_badlands' },
-  { id: 'overcast', label: 'Sawmill storm', map: 'koth_sawmill' },
+  { id: 'daylight', label: 'Badlands', map: 'cp_badlands', sampleOrigin: [0, 0, 364], captureAngles: [0, 45, 0] },
+  { id: 'overcast', label: 'Sawmill', map: 'koth_sawmill', sampleOrigin: [511.677, -4.29442, 160.25], captureAngles: [0, 225, 0] },
   {
-    id: 'indoors', label: '2Fort intel room', map: 'ctf_2fort',
-    sampleOrigin: [-488.66, 3348.51, -131.026], localLightCount: 2,
+    id: 'indoors', label: '2Fort', map: 'ctf_2fort',
+    // Valve's unobstructed point_devshot_camera "devshot_red_flagroom2".
+    // This is also the exact origin used by the captured 2Fort backplate.
+    sampleOrigin: [-592, 3328, -65.111], captureAngles: [0, 338, 0], focusDistance: 128, localLightCount: 4,
   },
-  { id: 'night', label: 'Harvest Halloween night', map: 'koth_harvest_event' },
+  { id: 'night', label: 'Harvest Event', map: 'koth_harvest_event', sampleOrigin: [0, 0, 104.25], captureAngles: [0, 45, 0] },
 ];
 
 function assertFile(file, label) {
@@ -170,11 +173,15 @@ function main() {
     const fog = entities.find((entity) => entity.classname === 'env_fog_controller');
     if (!world?.skyname || !environment) throw new Error(`Incomplete lighting entities in ${preset.map}`);
     extractSkybox(world.skyname, vpkFiles);
+    const bspPath = path.join(TF_DIR, 'maps', `${preset.map}.bsp`);
     result[preset.id] = {
       label: preset.label,
       map: preset.map,
       skybox: world.skyname,
       sampleOrigin: preset.sampleOrigin ?? null,
+      captureAngles: preset.captureAngles ?? [0, 0, 0],
+      focusDistance: preset.focusDistance ?? 0,
+      ambientProbe: sampleBspAmbientCube(bspPath, preset.sampleOrigin),
       environment: entityData(environment),
       localLights: nearestLocalLights(entities, preset.sampleOrigin, preset.localLightCount),
       fog: fog ? {
