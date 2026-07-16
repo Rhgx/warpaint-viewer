@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ScrollArea } from '@base-ui/react/scroll-area';
-import { ArrowDownNarrowWide, ArrowUpNarrowWide } from 'lucide-react';
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, Search } from 'lucide-react';
 import { AssetIcon, TextField } from './components';
 import type { PaintkitEntry } from '../data/types';
 
@@ -11,6 +11,21 @@ interface CollectionRow {
 }
 
 type Group = readonly [string, PaintkitEntry[]];
+
+// Highest grade first; unknown grade sorts last. Ties broken by name.
+const GRADE_RANK: Record<string, number> = {
+  elite: 6,
+  assassin: 5,
+  commando: 4,
+  mercenary: 3,
+  freelance: 2,
+  civilian: 1,
+};
+
+function byGradeThenName(a: PaintkitEntry, b: PaintkitEntry): number {
+  const rankDiff = (GRADE_RANK[b.grade ?? ''] ?? 0) - (GRADE_RANK[a.grade ?? ''] ?? 0);
+  return rankDiff !== 0 ? rankDiff : a.name.localeCompare(b.name);
+}
 
 // Left panel: a collection rail (with an "All" entry) filters a warpaint list
 // below it. Collections and paints share one oldest/newest order toggle
@@ -60,6 +75,12 @@ export function WarpaintList({
   // A filter, or the "All" entry, spans every collection and needs group
   // headers; a single selected collection is already unambiguous.
   const showGroupHeaders = isFiltering || activeCollection === null;
+  // A collection has only a handful of thumbnail assets (at most 15). Native
+  // lazy loading can defer all of them after this panel is swapped into view,
+  // which made a newly opened collection look empty for seconds. Keep the
+  // large, all-collections catalogue lazy, but fetch the chosen collection's
+  // compact set immediately.
+  const prioritizePaintIcons = activeCollection !== null && !isFiltering;
 
   const groups = useMemo<Group[]>(() => {
     const source = isFiltering
@@ -71,7 +92,7 @@ export function WarpaintList({
         ? paintkits.filter((p) => (p.collection ?? 'Uncategorized') === activeCollection)
         : paintkits;
 
-    if (!isFiltering && activeCollection) return [[activeCollection, source]];
+    if (!isFiltering && activeCollection) return [[activeCollection, [...source].sort(byGradeThenName)]];
 
     const byCollection = new Map<string, PaintkitEntry[]>();
     for (const p of source) {
@@ -80,6 +101,7 @@ export function WarpaintList({
       arr.push(p);
       byCollection.set(key, arr);
     }
+    for (const arr of byCollection.values()) arr.sort(byGradeThenName);
     const sorted = [...byCollection.entries()].sort(
       (a, b) => Math.min(...a[1].map((p) => p.id)) - Math.min(...b[1].map((p) => p.id)),
     );
@@ -101,10 +123,14 @@ export function WarpaintList({
             <span>{reversed ? 'Newest' : 'Oldest'}</span>
           </button>
         </div>
-        <TextField value={filter} onChange={setFilter} placeholder="Filter warpaints or collections..." />
+        <div className="search-field">
+          <Search className="search-field-icon" size={14} />
+          <TextField value={filter} onChange={setFilter} placeholder="Filter warpaints or collections..." />
+        </div>
       </div>
 
       <div className="collection-rail">
+        <div className="collection-rail-label">Collections</div>
         <button
           type="button"
           className={`collection-row${activeCollection === null ? ' selected' : ''}`}
@@ -141,7 +167,7 @@ export function WarpaintList({
         </ScrollArea.Root>
       </div>
 
-      <ScrollArea.Root className="ui-scroll-root">
+      <ScrollArea.Root className="ui-scroll-root paint-list-scroll">
         <ScrollArea.Viewport className="ui-scroll-viewport">
           <ScrollArea.Content>
             {groups.length === 0 && <div className="warpaint-empty">No matches</div>}
@@ -150,7 +176,8 @@ export function WarpaintList({
                 {showGroupHeaders && (
                   <div className="warpaint-group-label">
                     <AssetIcon src={collectionIcons[collection]} size={16} />
-                    <span>{collection}</span>
+                    <span className="warpaint-group-label-name">{collection}</span>
+                    <span className="warpaint-group-label-count">{kits.length}</span>
                   </div>
                 )}
                 {kits.map((kit) => (
@@ -159,9 +186,15 @@ export function WarpaintList({
                     key={kit.id}
                     className={`warpaint-item${kit.id === selectedId ? ' selected' : ''}`}
                     onClick={() => onSelect(kit.id)}
+                    data-grade={kit.grade}
                   >
                     <span className="warpaint-item-icon">
-                      <AssetIcon src={paintIcons[kit.id]} size={42} />
+                      <AssetIcon
+                        src={paintIcons[kit.id]}
+                        size={42}
+                        loading={prioritizePaintIcons ? 'eager' : 'lazy'}
+                        fetchPriority={prioritizePaintIcons ? 'high' : 'auto'}
+                      />
                     </span>
                     <span className="warpaint-item-name">{kit.name}</span>
                   </button>

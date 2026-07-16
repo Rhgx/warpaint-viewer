@@ -18,14 +18,27 @@ export interface IconOption extends Option {
 // Small image with a graceful text-only fallback: manifest icons are not
 // guaranteed (mock mode has none, a couple of collections have none), so a
 // broken/missing src just collapses to an empty slot instead of a broken icon.
-export function AssetIcon({ src, size = 24, className }: { src?: string | null; size?: number; className?: string }) {
+export function AssetIcon({
+  src,
+  size = 24,
+  className,
+  loading = 'lazy',
+  fetchPriority = 'auto',
+}: {
+  src?: string | null;
+  size?: number;
+  className?: string;
+  loading?: 'eager' | 'lazy';
+  fetchPriority?: 'high' | 'low' | 'auto';
+}) {
   if (!src) return <span className={`asset-icon-empty${className ? ` ${className}` : ''}`} style={{ width: size, height: size }} />;
   return (
     <img
       className={`asset-icon${className ? ` ${className}` : ''}`}
       src={src}
       alt=""
-      loading="lazy"
+      loading={loading}
+      fetchPriority={fetchPriority}
       style={{ width: size, height: size }}
       onError={(e) => {
         // Keep the reserved slot (no layout shift) but drop the broken image.
@@ -35,8 +48,9 @@ export function AssetIcon({ src, size = 24, className }: { src?: string | null; 
   );
 }
 
-// A labelled control row used throughout the controls bar.
-export function Control({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+// A labelled control row used throughout the controls bar. `label` accepts a
+// leading icon plus text (see ControlsBar) as well as a plain string.
+export function Control({ label, children, className }: { label: ReactNode; children: ReactNode; className?: string }) {
   return (
     <label className={`control${className ? ` ${className}` : ''}`}>
       <span className="control-label">{label}</span>

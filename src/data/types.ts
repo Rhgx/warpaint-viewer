@@ -38,6 +38,8 @@ export interface WeaponEntry {
   material: WeaponMaterial;
 }
 
+export type Grade = 'civilian' | 'freelance' | 'mercenary' | 'commando' | 'assassin' | 'elite';
+
 export interface PaintkitEntry {
   id: number;
   name: string;
@@ -47,6 +49,7 @@ export interface PaintkitEntry {
   weapons: string[]; // weapon keys this kit can render on
   perWear?: boolean; // if true, recipe files are split per wear level
   materialOverrides?: Record<string, string>; // weapon key -> manifest material id
+  grade?: Grade; // rarity grade, populated at load time from public/data/grades.json
 }
 
 export interface Manifest {

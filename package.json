@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "extract:map-lighting": "node tools/extract-map-lighting.mjs",
+    "update:warpaints": "node -e \"require('node:fs').rmSync('staging/items_game.json', { force: true })\" && node tools/extract.mjs && node tools/extract-grades.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },

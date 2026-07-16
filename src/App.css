@@ -163,6 +163,30 @@
   height: 100%;
   object-fit: contain;
 }
+/* Grade color plumbing: an item's data-grade attribute selects the raw grade
+   color, which the generic rule below blends toward --text for the name.
+   Items with no known grade render exactly as before. */
+.warpaint-item[data-grade] {
+  --item-grade-text: color-mix(in srgb, var(--item-grade-raw) var(--grade-tint-strength), var(--text));
+}
+.warpaint-item[data-grade='civilian'] {
+  --item-grade-raw: var(--grade-civilian);
+}
+.warpaint-item[data-grade='freelance'] {
+  --item-grade-raw: var(--grade-freelance);
+}
+.warpaint-item[data-grade='mercenary'] {
+  --item-grade-raw: var(--grade-mercenary);
+}
+.warpaint-item[data-grade='commando'] {
+  --item-grade-raw: var(--grade-commando);
+}
+.warpaint-item[data-grade='assassin'] {
+  --item-grade-raw: var(--grade-assassin);
+}
+.warpaint-item[data-grade='elite'] {
+  --item-grade-raw: var(--grade-elite);
+}
 .warpaint-empty {
   padding: 24px 12px;
   color: var(--text-dim);
