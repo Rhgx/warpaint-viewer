@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import type { RecipeNode, TextureResolver } from './types';
-import type { ResolvedNode } from './resolve';
-import { resolveRecipe, isIdentityTransform } from './resolve';
+import type { PaintSeed, RecipeNode, TextureResolver } from './types';
+import type { ResolvedNode, ResolvedTransform } from './resolve';
+import { resolveRecipe } from './resolve';
 import { TextureCache } from './textureCache';
+import type { TextureMetadata } from '../data/types';
 import {
   FRAG,
   VERT,
@@ -21,9 +22,26 @@ export interface ComposeResult {
 
 export interface CompositorOptions {
   size?: number; // square, default 1024
+  textureMetadata?: Record<string, TextureMetadata>;
+}
+
+export interface ComposeDimensions {
+  width: number;
+  height: number;
 }
 
 const IDENTITY3 = new THREE.Matrix3();
+const IDENTITY_TRANSFORM: ResolvedTransform = {
+  black: 0, white: 1, gamma: 1,
+  rotationDeg: 0, translateU: 0, translateV: 0, scale: 1,
+  flipU: false, flipV: false,
+};
+
+interface EvaluatedInput {
+  texture: THREE.Texture;
+  transform: ResolvedTransform;
+  target: THREE.WebGLRenderTarget | null;
+}
 
 // Reimplements TF2's paintkit compositor on the GPU via three.js render targets,
 // sharing the viewer's WebGL context. Evaluates a resolved stage tree bottom-up
@@ -31,7 +49,8 @@ const IDENTITY3 = new THREE.Matrix3();
 export class Compositor {
   private renderer: THREE.WebGLRenderer;
   private ownsRenderer: boolean;
-  private size: number;
+  private width: number;
+  private height: number;
   private textures: TextureCache;
 
   private scene = new THREE.Scene();
@@ -46,8 +65,8 @@ export class Compositor {
   private composeQueue: Promise<void> = Promise.resolve();
 
   constructor(resolver: TextureResolver, opts: CompositorOptions & { renderer?: THREE.WebGLRenderer } = {}) {
-    this.size = opts.size ?? 1024;
-    this.textures = new TextureCache(resolver);
+    this.width = this.height = opts.size ?? 1024;
+    this.textures = new TextureCache(resolver, undefined, opts.textureMetadata);
     if (opts.renderer) {
       this.renderer = opts.renderer;
       this.ownsRenderer = false;
@@ -67,13 +86,19 @@ export class Compositor {
         uTex0: { value: null },
         uTex1: { value: null },
         uTex2: { value: null },
+        uTex3: { value: null },
         uAdjust0: { value: new THREE.Vector3(0, 1, 1) },
         uAdjust1: { value: new THREE.Vector3(0, 1, 1) },
         uAdjust2: { value: new THREE.Vector3(0, 1, 1) },
+        uAdjust3: { value: new THREE.Vector3(0, 1, 1) },
         uSrgb0: { value: 0 },
         uSrgb1: { value: 0 },
         uSrgb2: { value: 0 },
+        uSrgb3: { value: 0 },
         uUv0: { value: new THREE.Matrix3() },
+        uUv1: { value: new THREE.Matrix3() },
+        uUv2: { value: new THREE.Matrix3() },
+        uUv3: { value: new THREE.Matrix3() },
         uSelect: { value: new Array(16).fill(0) },
         uNumSelect: { value: 0 },
         uDestTl: { value: new THREE.Vector2(0, 1) },
@@ -87,7 +112,7 @@ export class Compositor {
   }
 
   private makeTarget(): THREE.WebGLRenderTarget {
-    const t = new THREE.WebGLRenderTarget(this.size, this.size, {
+    const t = new THREE.WebGLRenderTarget(this.width, this.height, {
       // TF2 composites into an 8-bit target. Matching that format also halves
       // render-target bandwidth and memory versus the previous half-float path.
       type: THREE.UnsignedByteType,
@@ -109,7 +134,18 @@ export class Compositor {
   }
 
   private release(t: THREE.WebGLRenderTarget) {
-    this.pool.push(t);
+    if (t.width === this.width && t.height === this.height) this.pool.push(t);
+    else t.dispose();
+  }
+
+  private setOutputSize(width: number, height: number) {
+    const nextWidth = Math.max(1, Math.floor(width));
+    const nextHeight = Math.max(1, Math.floor(height));
+    if (nextWidth === this.width && nextHeight === this.height) return;
+    for (const target of this.pool) target.dispose();
+    this.pool.length = 0;
+    this.width = nextWidth;
+    this.height = nextHeight;
   }
 
   // Gather every texture ref in the resolved tree so we can preload before render.
@@ -124,7 +160,7 @@ export class Compositor {
         node.nodes.forEach((n) => this.collectRefs(n, out));
         break;
       case 'select':
-        out.push({ ref: node.groups, nearest: true });
+        out.push({ ref: node.groups, nearest: false });
         break;
       case 'apply_sticker':
         out.push({ ref: node.base, nearest: false });
@@ -148,7 +184,7 @@ export class Compositor {
         node.nodes.forEach((child) => this.collectRecipeRefs(child, out));
         break;
       case 'select':
-        out.push({ ref: node.groups, nearest: true });
+        out.push({ ref: node.groups, nearest: false });
         break;
       case 'apply_sticker':
         for (const sticker of node.stickers ?? []) {
@@ -212,11 +248,12 @@ export class Compositor {
   // renders INTO, WebGL detects a framebuffer feedback loop, raises
   // INVALID_OPERATION, skips the draw, and the target stays cleared-to-black.
   // That corrupted every composite after the first until this was added.
-  private setTextures(t0: THREE.Texture, t1: THREE.Texture | null, t2: THREE.Texture | null) {
+  private setTextures(t0: THREE.Texture, t1: THREE.Texture | null, t2: THREE.Texture | null, t3: THREE.Texture | null = null) {
     const u = this.material.uniforms;
     u.uTex0.value = t0;
     u.uTex1.value = t1 ?? this.dummyTex();
     u.uTex2.value = t2 ?? this.dummyTex();
+    u.uTex3.value = t3 ?? this.dummyTex();
   }
 
   private _dummy: THREE.DataTexture | null = null;
@@ -241,91 +278,89 @@ export class Compositor {
     return this._constWhite;
   }
 
-  private async evaluate(node: ResolvedNode): Promise<THREE.WebGLRenderTarget> {
+  private configureInputs(inputs: EvaluatedInput[], safe: THREE.Texture) {
+    const u = this.material.uniforms;
+    const padded = Array.from({ length: 4 }, (_, index) => inputs[index] ?? {
+      texture: safe,
+      transform: IDENTITY_TRANSFORM,
+      target: null,
+    });
+    this.setTextures(padded[0].texture, padded[1].texture, padded[2].texture, padded[3].texture);
+    const adjusts = [u.uAdjust0, u.uAdjust1, u.uAdjust2, u.uAdjust3];
+    const srgb = [u.uSrgb0, u.uSrgb1, u.uSrgb2, u.uSrgb3];
+    const matrices = [u.uUv0, u.uUv1, u.uUv2, u.uUv3];
+    padded.forEach((input, index) => {
+      const t = input.transform;
+      (adjusts[index].value as THREE.Vector3).set(t.black, t.white, t.gamma);
+      srgb[index].value = 1;
+      (matrices[index].value as THREE.Matrix3).copy(
+        this.uvMatrix(t.rotationDeg, t.translateU, t.translateV, t.scale, t.flipU, t.flipV),
+      );
+    });
+  }
+
+  private releaseInputs(inputs: EvaluatedInput[]) {
+    const released = new Set<THREE.WebGLRenderTarget>();
+    for (const input of inputs) {
+      if (input.target && !released.has(input.target)) {
+        released.add(input.target);
+        this.release(input.target);
+      }
+    }
+  }
+
+  private async evaluate(node: ResolvedNode): Promise<EvaluatedInput> {
     const u = this.material.uniforms;
     switch (node.type) {
       case 'texture_lookup': {
         const tex = await this.textures.load(node.texture);
-        const out = this.acquire();
-        u.uMode.value = MODE_TEXTURE;
-        this.setTextures(tex, null, null);
-        u.uSrgb0.value = 1;
-        (u.uAdjust0.value as THREE.Vector3).set(node.black, node.white, node.gamma);
-        (u.uUv0.value as THREE.Matrix3).copy(
-          this.uvMatrix(node.rotationDeg, node.translateU, node.translateV, node.scale, node.flipU, node.flipV),
-        );
-        this.renderInto(out);
-        return out;
+        // Source feeds texture leaves directly into their parent compositor
+        // stage. Keeping the transform/levels as sampler state avoids an extra
+        // RGBA8 quantization pass for every transformed lookup.
+        return { texture: tex, transform: node, target: null };
       }
       case 'combine_multiply':
       case 'combine_add':
       case 'combine_lerp': {
+        const children = await Promise.all(node.nodes.map((child) => this.evaluate(child)));
         let result: THREE.WebGLRenderTarget;
         if (node.type === 'combine_lerp') {
-          // Exactly 3 inputs: c0, c1, selector (fxc main_lerp).
-          const a = await this.evaluate(node.nodes[0]);
-          const b = node.nodes[1] ? await this.evaluate(node.nodes[1]) : null;
-          const cSel = node.nodes[2] ? await this.evaluate(node.nodes[2]) : null;
           const out = this.acquire();
           u.uMode.value = MODE_LERP;
-          // Defensive: a malformed 2-node lerp falls back to a constant 0.5 mix.
-          this.setTextures(a.texture, b ? b.texture : a.texture, cSel ? cSel.texture : this.constHalf());
-          u.uSrgb0.value = 1;
-          u.uSrgb1.value = 1;
-          u.uSrgb2.value = 1;
-          (u.uAdjust0.value as THREE.Vector3).set(0, 1, 1);
-          (u.uAdjust1.value as THREE.Vector3).set(0, 1, 1);
-          (u.uAdjust2.value as THREE.Vector3).set(0, 1, 1);
+          const lerpInputs = [
+            children[0],
+            children[1] ?? children[0],
+            children[2] ?? { texture: this.constHalf(), transform: IDENTITY_TRANSFORM, target: null },
+          ].filter(Boolean) as EvaluatedInput[];
+          this.configureInputs(lerpInputs, this.constWhite());
           this.renderInto(out);
-          this.release(a);
-          if (b) this.release(b);
-          if (cSel) this.release(cSel);
           result = out;
         } else {
-          // Multiply/Add are n-ary in real data (the engine batches 4 inputs
-          // per pass and chains passes); both ops are associative, and each
-          // input's own adjust/transform is already baked into its target, so
-          // pairwise folding is exact.
           const mode = node.type === 'combine_multiply' ? MODE_MULTIPLY : MODE_ADD;
-          result = await this.evaluate(node.nodes[0]);
-          for (let i = 1; i < node.nodes.length; i++) {
-            const rhs = await this.evaluate(node.nodes[i]);
+          const safe = node.type === 'combine_multiply' ? this.constWhite() : this.constZero();
+          let pending = [...children];
+          let previous: EvaluatedInput | null = null;
+          do {
+            const capacity = previous ? 3 : 4;
+            const batch = pending.splice(0, capacity);
+            if (previous) batch.unshift(previous);
             const out = this.acquire();
             u.uMode.value = mode;
-            this.setTextures(result.texture, rhs.texture, null);
-            u.uSrgb0.value = 1;
-            u.uSrgb1.value = 1;
-            (u.uAdjust0.value as THREE.Vector3).set(0, 1, 1);
-            (u.uAdjust1.value as THREE.Vector3).set(0, 1, 1);
+            this.configureInputs(batch, safe);
             this.renderInto(out);
-            this.release(result);
-            this.release(rhs);
-            result = out;
-          }
+            if (previous?.target) this.release(previous.target);
+            previous = { texture: out.texture, transform: IDENTITY_TRANSFORM, target: out };
+          } while (pending.length);
+          result = previous!.target!;
         }
-        // A combine stage's own transform/adjust describe how ITS output is
-        // sampled by the parent (per-input TEXTRANSFORM/TEXADJUSTLEVELS in
-        // compositor.cpp); apply them as a post-pass when non-identity.
-        if (!isIdentityTransform(node)) {
-          const out = this.acquire();
-          u.uMode.value = MODE_TEXTURE;
-          this.setTextures(result.texture, null, null);
-          u.uSrgb0.value = 1;
-          (u.uAdjust0.value as THREE.Vector3).set(node.black, node.white, node.gamma);
-          (u.uUv0.value as THREE.Matrix3).copy(
-            this.uvMatrix(node.rotationDeg, node.translateU, node.translateV, node.scale, node.flipU, node.flipV),
-          );
-          this.renderInto(out);
-          this.release(result);
-          result = out;
-        }
-        return result;
+        this.releaseInputs(children);
+        return { texture: result.texture, transform: node, target: result };
       }
       case 'select': {
-        const groups = await this.textures.load(node.groups, { nearest: true });
+        const groups = await this.textures.load(node.groups);
         const out = this.acquire();
         u.uMode.value = MODE_SELECT;
-        this.setTextures(groups, null, null);
+        this.setTextures(groups, null, null, null);
         u.uSrgb0.value = 0;
         // Raw 0..255 group ids scaled by cFac = 1/16 exactly as compositor.cpp
         // does before uploading cSelectValues.
@@ -333,7 +368,7 @@ export class Compositor {
         for (let i = 0; i < 16; i++) arr[i] = i < node.select.length ? node.select[i] / 16 : 0;
         u.uNumSelect.value = Math.min(16, node.select.length);
         this.renderInto(out);
-        return out;
+        return { texture: out.texture, transform: IDENTITY_TRANSFORM, target: out };
       }
       case 'apply_sticker': {
         const base = await this.evaluate(node.nodes[0]);
@@ -341,17 +376,22 @@ export class Compositor {
         const stickerSpec = node.spec ? await this.textures.load(node.spec) : null;
         const out = this.acquire();
         u.uMode.value = MODE_BLEND;
-        this.setTextures(base.texture, sticker, stickerSpec ?? this.constWhite());
+        this.setTextures(base.texture, sticker, stickerSpec ?? this.constWhite(), null);
+        const t = base.transform;
         u.uSrgb0.value = 1;
         u.uSrgb1.value = 1;
         u.uSrgb2.value = 1;
+        (u.uAdjust0.value as THREE.Vector3).set(t.black, t.white, t.gamma);
+        (u.uUv0.value as THREE.Matrix3).copy(
+          this.uvMatrix(t.rotationDeg, t.translateU, t.translateV, t.scale, t.flipU, t.flipV),
+        );
         (u.uAdjust1.value as THREE.Vector3).set(node.black, node.white, node.gamma);
         (u.uDestTl.value as THREE.Vector2).set(node.destTl[0], node.destTl[1]);
         (u.uDestTr.value as THREE.Vector2).set(node.destTr[0], node.destTr[1]);
         (u.uDestBl.value as THREE.Vector2).set(node.destBl[0], node.destBl[1]);
         this.renderInto(out);
-        this.release(base);
-        return out;
+        if (base.target) this.release(base.target);
+        return { texture: out.texture, transform: IDENTITY_TRANSFORM, target: out };
       }
     }
   }
@@ -367,15 +407,27 @@ export class Compositor {
     return this._constHalf;
   }
 
+  private _constZero: THREE.DataTexture | null = null;
+  private constZero(): THREE.DataTexture {
+    if (!this._constZero) {
+      const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1, THREE.RGBAFormat);
+      t.colorSpace = THREE.NoColorSpace;
+      t.needsUpdate = true;
+      this._constZero = t;
+    }
+    return this._constZero;
+  }
+
   // Compose a recipe at a seed. Returns a target the caller owns; return it via
   // releaseResult() (preferred, recycles into the pool) or dispose it.
-  compose(recipe: RecipeNode, seed: number): Promise<ComposeResult> {
-    const task = this.composeQueue.then(() => this.composeNow(recipe, seed));
+  compose(recipe: RecipeNode, seed: PaintSeed, dimensions?: ComposeDimensions): Promise<ComposeResult> {
+    const task = this.composeQueue.then(() => this.composeNow(recipe, seed, dimensions));
     this.composeQueue = task.then(() => undefined, () => undefined);
     return task;
   }
 
-  private async composeNow(recipe: RecipeNode, seed: number): Promise<ComposeResult> {
+  private async composeNow(recipe: RecipeNode, seed: PaintSeed, dimensions?: ComposeDimensions): Promise<ComposeResult> {
+    if (dimensions) this.setOutputSize(dimensions.width, dimensions.height);
     const resolved = resolveRecipe(recipe, seed);
     const refs: { ref: string; nearest: boolean }[] = [];
     this.collectRefs(resolved, refs);
@@ -386,13 +438,21 @@ export class Compositor {
     try {
       await Promise.all(uniqueRefs.map((r) => this.textures.load(r.ref, { nearest: r.nearest }).catch(() => null)));
       const result = await this.evaluate(resolved);
+      let target = result.target;
+      if (!target) {
+        target = this.acquire();
+        const u = this.material.uniforms;
+        u.uMode.value = MODE_TEXTURE;
+        this.configureInputs([result], this.constWhite());
+        this.renderInto(target);
+      }
       // RGB bytes are sRGB-encoded by the compositor shader, but the target
       // must remain NoColorSpace. Marking a pooled render target as sRGB makes
       // WebGL perform a second hardware conversion on later writes/samples.
       // Viewer decodes these stored bytes exactly once in map_fragment.
       // colorSpace and wrapping are fixed when the pooled target is created;
       // never mutate/re-upload a render-target texture after drawing it.
-      return { texture: result.texture, target: result };
+      return { texture: target.texture, target };
     } finally {
       unpin();
     }
@@ -409,7 +469,9 @@ export class Compositor {
   // device regardless of EXT_color_buffer_float support. ~1/255 precision is
   // plenty for the selftest's math assertions.
   readPixels(target: THREE.WebGLRenderTarget): Float32Array {
-    const byteTarget = new THREE.WebGLRenderTarget(this.size, this.size, {
+    const width = target.width;
+    const height = target.height;
+    const byteTarget = new THREE.WebGLRenderTarget(width, height, {
       type: THREE.UnsignedByteType,
       format: THREE.RGBAFormat,
       colorSpace: THREE.NoColorSpace,
@@ -419,13 +481,13 @@ export class Compositor {
     });
     const u = this.material.uniforms;
     u.uMode.value = MODE_TEXTURE;
-    this.setTextures(target.texture, null, null);
+    this.setTextures(target.texture, null, null, null);
     u.uSrgb0.value = 1;
     (u.uAdjust0.value as THREE.Vector3).set(0, 1, 1);
     (u.uUv0.value as THREE.Matrix3).copy(IDENTITY3);
     this.renderInto(byteTarget);
-    const bytes = new Uint8Array(this.size * this.size * 4);
-    this.renderer.readRenderTargetPixels(byteTarget, 0, 0, this.size, this.size, bytes);
+    const bytes = new Uint8Array(width * height * 4);
+    this.renderer.readRenderTargetPixels(byteTarget, 0, 0, width, height, bytes);
     byteTarget.dispose();
     const out = new Float32Array(bytes.length);
     for (let i = 0; i < bytes.length; i += 4) {
@@ -442,7 +504,7 @@ export class Compositor {
     return this.renderer;
   }
   getSize() {
-    return this.size;
+    return this.width;
   }
 
   dispose() {
@@ -453,6 +515,7 @@ export class Compositor {
     (this.quad.geometry as THREE.BufferGeometry).dispose();
     if (this._constHalf) this._constHalf.dispose();
     if (this._constWhite) this._constWhite.dispose();
+    if (this._constZero) this._constZero.dispose();
     if (this._dummy) this._dummy.dispose();
     if (this.ownsRenderer) this.renderer.dispose();
   }

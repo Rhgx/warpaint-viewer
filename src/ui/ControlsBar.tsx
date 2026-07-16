@@ -1,5 +1,5 @@
 import { Dices, RotateCcw } from 'lucide-react';
-import { Control, IconSelectField, NumberFieldControl, SelectField, TeamToggle, WearSliderField } from './components';
+import { Control, IconSelectField, SelectField, TeamToggle, WearSliderField } from './components';
 import type { IconOption } from './components';
 import { LIGHTING_PRESETS } from '../viewer/lighting';
 import type { Manifest, Team } from '../data/types';
@@ -8,7 +8,7 @@ export interface ControlsState {
   weaponKey: string;
   wearIndex: number;
   team: Team;
-  seed: number;
+  seed: string;
   preset: string;
 }
 
@@ -59,11 +59,17 @@ export function ControlsBar({
 
       <Control label="Seed">
         <div className="seed-row">
-          <NumberFieldControl
+          <input
+            className="ui-num-input seed-input"
+            inputMode="numeric"
+            aria-label="Paint seed"
             value={state.seed}
-            min={0}
-            max={4294967295}
-            onChange={(v) => onChange({ seed: Math.max(0, Math.floor(v)) })}
+            onChange={(event) => {
+              const digits = event.currentTarget.value.replace(/\D/g, '').slice(0, 20);
+              if (!digits) return;
+              const seed = BigInt.asUintN(64, BigInt(digits));
+              onChange({ seed: seed.toString() });
+            }}
           />
           <button type="button" className="btn btn-icon" title="Randomize seed" aria-label="Randomize seed" onClick={onRandomizeSeed}>
             <Dices size={15} />

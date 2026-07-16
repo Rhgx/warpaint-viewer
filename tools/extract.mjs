@@ -21,7 +21,7 @@ import { loadLocalization, locLookup } from './lib/localization.mjs';
 import {
   buildIndex, resolveRecipe, WEAPON_SLOTS, texturePublicPath,
 } from './lib/resolve.mjs';
-import { decodeVTF, decodeVTFCubemap } from './lib/vtf.mjs';
+import { decodeVTF, decodeVTFCubemap, parseVTFHeader } from './lib/vtf.mjs';
 import { encodePNG } from './lib/png.mjs';
 import { listVPK, extractBatch, TEXTURES_VPK, MISC_VPK } from './lib/vpk.mjs';
 
@@ -38,9 +38,19 @@ const LOC_ENGLISH = `${TF}/resource/tf_english.txt`;
 
 const WEAR_LEVELS = [0.2, 0.4, 0.6, 0.8, 1.0];
 const WEAR_NAMES = ['Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn', 'Battle Scarred'];
+const COMPOSITE_1024_WEAPONS = new Set(['c_flameball', 'c_holymackerel', 'c_lochnload', 'c_quadball']);
 
 function log(...a) { console.log(...a); }
 function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
+
+function pngDimensions(publicRef) {
+  if (!publicRef) return null;
+  const full = path.join(PUBLIC_DATA, publicRef);
+  if (!fs.existsSync(full)) return null;
+  const header = fs.readFileSync(full);
+  if (header.length < 24 || header.toString('ascii', 1, 4) !== 'PNG') return null;
+  return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+}
 
 // ---------------------------------------------------------------------------
 // items_game parsing + prefab-aware field lookup
@@ -326,8 +336,11 @@ function main() {
   }
 
   // Textures ----------------------------------------------------------------
-  if (run('textures')) {
-    extractAndDecodeTextures(allTextureRefs);
+  let textureMetadata = {};
+  if (run('textures')) textureMetadata = extractAndDecodeTextures(allTextureRefs);
+  else {
+    const metadataPath = path.join(STAGING, 'texture_metadata.json');
+    if (fs.existsSync(metadataPath)) textureMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
   }
 
   // Backpack icons ------------------------------------------------------------
@@ -341,18 +354,25 @@ function main() {
   if (run('manifest') || run('recipes')) {
     const weapons = [...weaponRegistry.values()]
       .sort((a, b) => a.key.localeCompare(b.key))
-      .map((w) => ({
+      .map((w) => {
+        const dimensions = pngDimensions(w.compositeTexture) || {
+          width: COMPOSITE_1024_WEAPONS.has(w.key) ? 1024 : 2048,
+          height: COMPOSITE_1024_WEAPONS.has(w.key) ? 1024 : 2048,
+        };
+        return ({
         key: w.key,
         name: w.name,
         model: `models/${w.key}.glb`,
+        ...(dimensions ? { compositeWidth: dimensions.width, compositeHeight: dimensions.height } : {}),
         ...(w.icon ? { icon: w.icon } : {}),
         material: w.material || { phongExponent: null, phongBoost: 1, envmapTint: [0, 0, 0], normalMap: null },
-      }));
+      }); });
     const manifest = {
       generatedAt: new Date().toISOString(),
       paintkits: manifestPaintkits,
       weapons,
       materials: materialOverrides,
+      textures: textureMetadata,
       collectionIcons,
       wearLevels: WEAR_LEVELS,
       wearNames: WEAR_NAMES,
@@ -398,6 +418,26 @@ function vmtColor(body, key, fallback = null) {
   return value.length >= 3 ? [value[0], value[1], value[2]] : fallback;
 }
 
+function hasVmtProxy(body, name) {
+  const proxies = kvGet(body, 'proxies');
+  return !!(proxies && kvGet(proxies, name));
+}
+
+function vmtSelfIllum(body, allTextureRefs) {
+  if (!vmtBool(body, '$selfillum')) return {};
+  const rawMask = kvGet(body, '$selfillummask');
+  const selfIllumMask = rawMask ? texturePublicPath(rawMask) : null;
+  if (selfIllumMask) allTextureRefs.add(selfIllumMask);
+  return {
+    selfIllum: true,
+    selfIllumMask,
+    selfIllumTint: vmtColor(body, '$selfillumtint', [1, 1, 1]),
+    selfIllumFresnel: vmtBool(body, '$selfillumfresnel'),
+    selfIllumFresnelMinMaxExp: vmtColor(body, '$selfillumfresnelminmaxexp', [0, 1, 1]),
+    modelGlowColor: hasVmtProxy(body, 'modelglowcolor'),
+  };
+}
+
 function parseOverrideMaterial(full, allTextureRefs) {
   const kv = parseKV(fs.readFileSync(full, 'utf8'));
   const body = kv[Object.keys(kv)[0]] || {};
@@ -429,6 +469,7 @@ function parseOverrideMaterial(full, allTextureRefs) {
     rimLightExponent: rimExponent ? rimExponent[0] : 4,
     rimLightBoost: rimBoost ? rimBoost[0] : 1,
     rimMask: vmtBool(body, '$rimmask'),
+    ...vmtSelfIllum(body, allTextureRefs),
   };
   if (material.normalMap) allTextureRefs.add(material.normalMap);
   if (material.phongExponentTexture) allTextureRefs.add(material.phongExponentTexture);
@@ -499,6 +540,10 @@ function resolveWeaponMaterials(weaponRegistry, allTextureRefs, weaponModels, ma
           const bump = kvGet(body, '$bumpmap');
           const exponentTexture = kvGet(body, '$phongexponenttexture');
           const lightwarpTexture = kvGet(body, '$lightwarptexture');
+          const baseTexture = kvGet(body, '$basetexture');
+          if (baseTexture) {
+            w.compositeTexture = texturePublicPath(baseTexture);
+          }
           material = {
             phongExponent: phongExp ? phongExp[0] : null,
             phongBoost: phongBoost ? phongBoost[0] : 1,
@@ -519,6 +564,7 @@ function resolveWeaponMaterials(weaponRegistry, allTextureRefs, weaponModels, ma
             rimLightExponent: rimExponent ? rimExponent[0] : 4,
             rimLightBoost: rimBoost ? rimBoost[0] : 1,
             rimMask: vmtBool(body, '$rimmask'),
+            ...vmtSelfIllum(body, allTextureRefs),
           };
           if (material.normalMap) allTextureRefs.add(material.normalMap);
           if (material.phongExponentTexture) allTextureRefs.add(material.phongExponentTexture);
@@ -717,6 +763,7 @@ function extractAndDecodeTextures(allTextureRefs) {
 
   log('[textures] decoding VTF -> PNG ...');
   let ok = 0; let fail = 0;
+  const metadata = {};
   const failList = [];
   for (const w of wanted) {
     if (!w.src) { fail++; failList.push({ ...w, err: 'not in vpk' }); continue; }
@@ -725,6 +772,13 @@ function extractAndDecodeTextures(allTextureRefs) {
     try {
       const buf = fs.readFileSync(vtfPath);
       const dec = decodeVTF(buf);
+      const hdr = parseVTFHeader(buf);
+      metadata[w.pub] = {
+        width: hdr.width, height: hdr.height, mipCount: hdr.mipCount,
+        clampS: !!(hdr.flags & 0x4), clampT: !!(hdr.flags & 0x8),
+        pointSample: !!(hdr.flags & 0x1), trilinear: !!(hdr.flags & 0x2),
+        anisotropic: !!(hdr.flags & 0x10), noMip: !!(hdr.flags & 0x100), noLod: !!(hdr.flags & 0x200),
+      };
       const png = encodePNG(dec.rgba, dec.width, dec.height);
       ensureDir(path.dirname(outPath));
       fs.writeFileSync(outPath, png);
@@ -740,6 +794,7 @@ function extractAndDecodeTextures(allTextureRefs) {
     fs.writeFileSync(path.join(STAGING, 'texture_failures.json'), JSON.stringify(failList, null, 1));
     log(`[textures] failure details -> staging/texture_failures.json`);
   }
+  fs.writeFileSync(path.join(STAGING, 'texture_metadata.json'), JSON.stringify(metadata));
 
   // CMDLPanel (and therefore TF2's item inspection panel) always binds
   // materials/editor/cubemap as its local reflection cubemap. Keep the six
@@ -759,6 +814,7 @@ function extractAndDecodeTextures(allTextureRefs) {
   } catch (e) {
     log(`[textures] failed to decode TF2 editor cubemap: ${e.message}`);
   }
+  return metadata;
 }
 
 // ---------------------------------------------------------------------------

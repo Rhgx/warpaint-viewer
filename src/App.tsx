@@ -37,11 +37,14 @@ function BootLoader({ boot }: { boot: BootState }) {
   );
 }
 
-function randomSeed(): number {
+function randomSeed(): string {
   if (globalThis.crypto?.getRandomValues) {
-    return globalThis.crypto.getRandomValues(new Uint32Array(1))[0];
+    const words = globalThis.crypto.getRandomValues(new Uint32Array(2));
+    return ((BigInt(words[0]) << 32n) | BigInt(words[1])).toString();
   }
-  return Math.floor(Math.random() * 0x100000000);
+  const hi = BigInt(Math.floor(Math.random() * 0x100000000));
+  const lo = BigInt(Math.floor(Math.random() * 0x100000000));
+  return ((hi << 32n) | lo).toString();
 }
 
 export default function App() {
@@ -118,7 +121,11 @@ function MainApp() {
       ]);
       if (disposed || !canvasRef.current) return;
       viewer = new ViewerCls(canvasRef.current);
-      compositor = new CompositorCls(data.resolveTexture, { renderer: viewer.renderer, size: 1024 });
+      compositor = new CompositorCls(data.resolveTexture, {
+        renderer: viewer.renderer,
+        size: 1024,
+        textureMetadata: data.manifest.textures,
+      });
       viewerRef.current = viewer;
       compositorRef.current = compositor;
       setEngineReady(true);
@@ -187,6 +194,11 @@ function MainApp() {
     const ds = data;
     if (!engineReady || !ds || !selectedKit || !state.weaponKey || loadedAssetKey !== selectedAssetKey) return;
     if (!selectedKit.weapons.includes(state.weaponKey)) return;
+    const weapon = ds.manifest.weapons.find((entry) => entry.key === state.weaponKey);
+    const dimensions = {
+      width: weapon?.compositeWidth ?? 1024,
+      height: weapon?.compositeHeight ?? 1024,
+    };
 
     const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}`;
     if (composeKey === lastComposeKeyRef.current) return;
@@ -257,7 +269,7 @@ function MainApp() {
         }
         // TF2 selects the complete paint-kit recipe for the wear category; it
         // does not crossfade that result with Factory New.
-        const result = await comp.compose(recipe, state.seed);
+        const result = await comp.compose(recipe, state.seed, dimensions);
         if (cancelled) {
           comp.releaseResult(result);
           return;
@@ -279,7 +291,7 @@ function MainApp() {
             advanceBoot(88 + ((i + 1) / Math.max(1, variants.length)) * 10, 'Preparing wear and team variants…');
             await comp.preload(variantRecipe);
             if (cancelled) return;
-            const warmed = await comp.compose(variantRecipe, state.seed);
+            const warmed = await comp.compose(variantRecipe, state.seed, dimensions);
             if (cancelled) { comp.releaseResult(warmed); return; }
             cacheResult(key, warmed, comp);
           }
@@ -296,7 +308,7 @@ function MainApp() {
                 window.clearInterval(iv);
                 return;
               }
-              setState((s) => ({ ...s, seed: s.seed + 1 }));
+              setState((s) => ({ ...s, seed: BigInt.asUintN(64, BigInt(s.seed) + 1n).toString() }));
             }, 800);
           }
         }
@@ -318,7 +330,7 @@ function MainApp() {
               // One warmed composite per frame keeps camera interaction smooth.
               await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
               if (cancelled) return;
-              const warmed = await comp.compose(variantRecipe, state.seed);
+              const warmed = await comp.compose(variantRecipe, state.seed, dimensions);
               if (cancelled || compositorRef.current !== comp) {
                 comp.releaseResult(warmed);
                 return;

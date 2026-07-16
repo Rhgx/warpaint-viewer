@@ -74,3 +74,4 @@ export type Recipe = RecipeNode;
 
 // Resolves a texture path/ref to a URL the browser can load.
 export type TextureResolver = (ref: string) => string;
+export type PaintSeed = string;

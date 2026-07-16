@@ -4,7 +4,7 @@
 
 import type { PaintkitRandomState, UniformRandomStream } from './rng';
 import { advancePaintkitStream, createPaintkitRandomState, resolveRange } from './rng';
-import type { RecipeNode, StageTransform } from './types';
+import type { PaintSeed, RecipeNode, StageTransform } from './types';
 
 export interface ResolvedTransform {
   black: number;
@@ -170,6 +170,6 @@ function resolveNode(node: RecipeNode, state: PaintkitRandomState): ResolvedNode
   }
 }
 
-export function resolveRecipe(root: RecipeNode, seed: number): ResolvedNode {
+export function resolveRecipe(root: RecipeNode, seed: PaintSeed): ResolvedNode {
   return resolveNode(root, createPaintkitRandomState(seed));
 }

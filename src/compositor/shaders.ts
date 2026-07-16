@@ -35,13 +35,19 @@ uniform int  uMode;
 uniform sampler2D uTex0;
 uniform sampler2D uTex1;
 uniform sampler2D uTex2;
+uniform sampler2D uTex3;
 uniform vec3 uAdjust0; // black, white, gamma
 uniform vec3 uAdjust1;
 uniform vec3 uAdjust2;
+uniform vec3 uAdjust3;
 uniform float uSrgb0;
 uniform float uSrgb1;
 uniform float uSrgb2;
-uniform mat3 uUv0;          // uv transform for MODE_TEXTURE
+uniform float uSrgb3;
+uniform mat3 uUv0;
+uniform mat3 uUv1;
+uniform mat3 uUv2;
+uniform mat3 uUv3;
 uniform float uSelect[16];  // select group ids pre-scaled by 1/16 (cFac)
 uniform int uNumSelect;
 uniform vec2 uDestTl;       // sticker parallelogram corners in dest UV space
@@ -107,28 +113,32 @@ void main() {
     return;
   }
   if (uMode == ${MODE_MULTIPLY}) {
-    vec4 c0 = adjustLevels(samp(uTex0, vUv, uSrgb0), uAdjust0);
-    vec4 c1 = adjustLevels(samp(uTex1, vUv, uSrgb1), uAdjust1);
-    writeLinear(c0 * c1);
+    vec4 c0 = adjustLevels(samp(uTex0, (uUv0 * vec3(vUv, 1.0)).xy, uSrgb0), uAdjust0);
+    vec4 c1 = adjustLevels(samp(uTex1, (uUv1 * vec3(vUv, 1.0)).xy, uSrgb1), uAdjust1);
+    vec4 c2 = adjustLevels(samp(uTex2, (uUv2 * vec3(vUv, 1.0)).xy, uSrgb2), uAdjust2);
+    vec4 c3 = adjustLevels(samp(uTex3, (uUv3 * vec3(vUv, 1.0)).xy, uSrgb3), uAdjust3);
+    writeLinear(c0 * c1 * c2 * c3);
     return;
   }
   if (uMode == ${MODE_ADD}) {
-    vec4 c0 = adjustLevels(samp(uTex0, vUv, uSrgb0), uAdjust0);
-    vec4 c1 = adjustLevels(samp(uTex1, vUv, uSrgb1), uAdjust1);
-    writeLinear(c0 + c1);
+    vec4 c0 = adjustLevels(samp(uTex0, (uUv0 * vec3(vUv, 1.0)).xy, uSrgb0), uAdjust0);
+    vec4 c1 = adjustLevels(samp(uTex1, (uUv1 * vec3(vUv, 1.0)).xy, uSrgb1), uAdjust1);
+    vec4 c2 = adjustLevels(samp(uTex2, (uUv2 * vec3(vUv, 1.0)).xy, uSrgb2), uAdjust2);
+    vec4 c3 = adjustLevels(samp(uTex3, (uUv3 * vec3(vUv, 1.0)).xy, uSrgb3), uAdjust3);
+    writeLinear(c0 + c1 + c2 + c3);
     return;
   }
   if (uMode == ${MODE_LERP}) {
-    vec4 c0 = adjustLevels(samp(uTex0, vUv, uSrgb0), uAdjust0);
-    vec4 c1 = adjustLevels(samp(uTex1, vUv, uSrgb1), uAdjust1);
-    vec4 sel = adjustLevels(samp(uTex2, vUv, uSrgb2), uAdjust2);
+    vec4 c0 = adjustLevels(samp(uTex0, (uUv0 * vec3(vUv, 1.0)).xy, uSrgb0), uAdjust0);
+    vec4 c1 = adjustLevels(samp(uTex1, (uUv1 * vec3(vUv, 1.0)).xy, uSrgb1), uAdjust1);
+    vec4 sel = adjustLevels(samp(uTex2, (uUv2 * vec3(vUv, 1.0)).xy, uSrgb2), uAdjust2);
     writeLinear(mix(c0, c1, sel.x)); // lerp(color0, color1, colSel.xxxx)
     return;
   }
   if (uMode == ${MODE_BLEND}) {
     // Sticker blend. tex0 = surface so far, tex1 = sticker mapped onto the
     // parallelogram TL/TR/BL, tex2 = the optional grayscale specular map.
-    vec4 c0 = samp(uTex0, vUv, uSrgb0);
+    vec4 c0 = adjustLevels(samp(uTex0, (uUv0 * vec3(vUv, 1.0)).xy, uSrgb0), uAdjust0);
     vec2 U = uDestTr - uDestTl;
     vec2 V = uDestBl - uDestTl;
     float det = U.x * V.y - U.y * V.x;

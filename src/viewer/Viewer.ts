@@ -19,6 +19,18 @@ export class Viewer {
   private modelGroup = new THREE.Group(); // rotated/panned by InspectControls
   private centerGroup = new THREE.Group(); // offsets the mesh so its center sits at the origin
   private material: THREE.MeshPhongMaterial;
+  private lensMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0x111820,
+    roughness: 0.08,
+    metalness: 0,
+    transmission: 0.92,
+    thickness: 0.18,
+    ior: 1.33,
+    transparent: true,
+    opacity: 0.72,
+    side: THREE.DoubleSide,
+    envMapIntensity: 1,
+  });
   private meshes: THREE.Mesh[] = [];
   private envMap: THREE.CubeTexture;
   private envReady: Promise<void>;
@@ -29,6 +41,7 @@ export class Viewer {
   private normalTexture: THREE.Texture | null = null;
   private exponentTexture: THREE.Texture | null = null;
   private lightwarpTexture: THREE.Texture | null = null;
+  private selfIllumTexture: THREE.Texture | null = null;
   private materialLoadToken = 0;
   private tf2Uniforms = {
     uTf2PhongEnabled: { value: 0 },
@@ -50,6 +63,12 @@ export class Viewer {
     uTf2RimExponent: { value: 4 },
     uTf2RimBoost: { value: 1 },
     uTf2RimMask: { value: 0 },
+    uTf2SelfIllum: { value: 0 },
+    uTf2UseSelfIllumMask: { value: 0 },
+    uTf2SelfIllumMaskMap: { value: null as THREE.Texture | null },
+    uTf2SelfIllumTint: { value: new THREE.Color(1, 1, 1) },
+    uTf2SelfIllumFresnel: { value: 0 },
+    uTf2SelfIllumFresnelParams: { value: new THREE.Vector4(1, 0, 1, 1) },
     uTf2EnvTint: { value: new THREE.Color(0, 0, 0) },
     uTf2AmbientCube: { value: Array.from({ length: 6 }, () => new THREE.Vector3(0.4, 0.4, 0.4)) },
   };
@@ -66,8 +85,10 @@ export class Viewer {
     this.renderer.toneMapping = THREE.LinearToneMapping;
     this.renderer.toneMappingExposure = 1;
 
-    this.camera = new THREE.PerspectiveCamera(40, 1, 0.01, 1000);
+    this.camera = new THREE.PerspectiveCamera(75, 1, 0.01, 1000);
     this.camera.position.set(4, 2, 5);
+    this.camera.lookAt(0, 0, 0);
+    this.camera.updateMatrixWorld();
 
     this.modelGroup.add(this.centerGroup);
     this.scene.add(this.lightGroup);
@@ -178,8 +199,10 @@ uniform float uTf2PhongEnabled, uTf2BaseAlphaPhongMask, uTf2NormalAlphaEnvMask;
 uniform float uTf2PhongBoost, uTf2PhongExponent, uTf2PhongExponentFactor;
 uniform float uTf2UseExponentMap, uTf2UseLightwarp, uTf2HalfLambert, uTf2AlbedoTint, uTf2UsePhongTint;
 uniform float uTf2RimLight, uTf2RimExponent, uTf2RimBoost, uTf2RimMask;
-uniform sampler2D uTf2ExponentMap, uTf2LightwarpMap;
-uniform vec3 uTf2PhongTint, uTf2Fresnel, uTf2EnvTint;
+uniform float uTf2SelfIllum, uTf2SelfIllumFresnel, uTf2UseSelfIllumMask;
+uniform sampler2D uTf2ExponentMap, uTf2LightwarpMap, uTf2SelfIllumMaskMap;
+uniform vec3 uTf2PhongTint, uTf2Fresnel, uTf2SelfIllumTint, uTf2EnvTint;
+uniform vec4 uTf2SelfIllumFresnelParams;
 uniform vec3 uTf2AmbientCube[6];
 vec3 tf2AmbientLight( vec3 worldNormal ) {
   vec3 n2 = worldNormal * worldNormal;
@@ -245,7 +268,7 @@ float specularStrength = uTf2PhongEnabled * uTf2PhongBoost * tf2SpecMask;`,
 \t\t* material.specularColor * material.specularStrength * tf2Fresnel;
 \tfloat tf2RimFacing = tf2Facing * tf2Facing;
 \tvec3 tf2Rim = directLight.color * dotNL * pow( tf2LdotR, max( uTf2RimExponent, 0.001 ) )
-\t\t* tf2RimFacing * material.tf2RimMask * uTf2RimLight;
+\t\t* material.specularColor * tf2RimFacing * material.tf2RimMask * uTf2RimLight;
 \treflectedLight.directSpecular += max( tf2Specular, tf2Rim );`,
         )
         .replace(
@@ -278,7 +301,27 @@ tf2AmbientRimFresnel *= tf2AmbientRimFresnel;
 float tf2AmbientRimMask = material.tf2RimMask * tf2AmbientRimFresnel * uTf2RimLight;
 vec3 tf2AmbientRim = tf2AmbientLight( tf2WorldEyeDir ) * uTf2RimBoost
   * saturate( tf2AmbientRimMask * tf2AmbientWorldNormal.y ) * material.specularColor;
-vec3 outgoingLight = reflectedLight.directDiffuse + tf2AmbientDiffuse + reflectedLight.directSpecular
+// skin_ps20b.fxc blends lit diffuse toward an albedo-colored self-illumination
+// target using base alpha and a view-facing Fresnel mask. Macaw override
+// materials (Blackout, Steel Brushed, etc.) use this as their characteristic
+// colored metal sheen; it is separate from the glossy phong highlight.
+float tf2SelfIllumFacing = saturate( dot( geometryNormal, geometryViewDir ) );
+float tf2SelfIllumFresnelMask = saturate(
+  pow( tf2SelfIllumFacing, uTf2SelfIllumFresnelParams.z ) * uTf2SelfIllumFresnelParams.x
+  + uTf2SelfIllumFresnelParams.y
+);
+tf2SelfIllumFresnelMask = mix( 1.0, tf2SelfIllumFresnelMask, uTf2SelfIllumFresnel );
+float tf2SeparateSelfIllumMask = texture2D( uTf2SelfIllumMaskMap, vMapUv ).r;
+float tf2BaseSelfIllumMask = mix( diffuseColor.a, tf2SeparateSelfIllumMask, uTf2UseSelfIllumMask );
+float tf2SelfIllumMask = uTf2SelfIllum * tf2BaseSelfIllumMask * tf2SelfIllumFresnelMask;
+float tf2SelfIllumBrightness = mix( 1.0, uTf2SelfIllumFresnelParams.w, uTf2SelfIllumFresnel );
+vec3 tf2LitDiffuse = reflectedLight.directDiffuse + tf2AmbientDiffuse;
+tf2LitDiffuse = mix(
+  tf2LitDiffuse,
+  diffuseColor.rgb * uTf2SelfIllumTint * tf2SelfIllumBrightness,
+  tf2SelfIllumMask
+);
+vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
   + reflectedLight.indirectSpecular + tf2AmbientRim + totalEmissiveRadiance;`,
       );
       shader.fragmentShader = shader.fragmentShader.replace(
@@ -298,7 +341,7 @@ vec3 outgoingLight = reflectedLight.directDiffuse + tf2AmbientDiffuse + reflecte
 #endif`,
       );
     };
-    this.material.customProgramCacheKey = () => 'tf2-vertexlit-v5-source-panel';
+    this.material.customProgramCacheKey = () => 'tf2-vertexlit-v6-selfillum';
   }
 
   async applyMaterialParams(mat: WeaponMaterial, resolveTexture: (ref: string) => string = (ref) => ref): Promise<void> {
@@ -317,6 +360,20 @@ vec3 outgoingLight = reflectedLight.directDiffuse + tf2AmbientDiffuse + reflecte
     u.uTf2RimExponent.value = mat.rimLightExponent ?? 4;
     u.uTf2RimBoost.value = mat.rimLightBoost ?? 1;
     u.uTf2RimMask.value = mat.rimMask ? 1 : 0;
+    u.uTf2SelfIllum.value = mat.selfIllum ? 1 : 0;
+    u.uTf2SelfIllumFresnel.value = mat.selfIllumFresnel ? 1 : 0;
+    // ModelGlowColor resolves to white outside crit/glow states in TF2's
+    // inspection view, replacing the static warm fallback in these VMTs.
+    const selfIllumTint = mat.modelGlowColor ? [1, 1, 1] : (mat.selfIllumTint ?? [1, 1, 1]);
+    u.uTf2SelfIllumTint.value.setRGB(selfIllumTint[0], selfIllumTint[1], selfIllumTint[2]);
+    const [selfIllumMin, selfIllumMax, selfIllumExp] = mat.selfIllumFresnelMinMaxExp ?? [0, 1, 1];
+    const selfIllumBias = Math.abs(selfIllumMax) > 1e-6 ? selfIllumMin / selfIllumMax : 0;
+    u.uTf2SelfIllumFresnelParams.value.set(
+      1 - selfIllumBias,
+      selfIllumBias,
+      Math.max(selfIllumExp, 0.001),
+      selfIllumMax,
+    );
     u.uTf2HalfLambert.value = mat.halfLambert ? 1 : 0;
     u.uTf2EnvTint.value.setRGB(...mat.envmapTint);
     this.material.specular.setRGB(1, 1, 1);
@@ -328,12 +385,15 @@ vec3 outgoingLight = reflectedLight.directDiffuse + tf2AmbientDiffuse + reflecte
     this.normalTexture?.dispose();
     this.exponentTexture?.dispose();
     this.lightwarpTexture?.dispose();
-    this.normalTexture = this.exponentTexture = this.lightwarpTexture = null;
+    this.selfIllumTexture?.dispose();
+    this.normalTexture = this.exponentTexture = this.lightwarpTexture = this.selfIllumTexture = null;
     this.material.normalMap = null;
     u.uTf2ExponentMap.value = null;
     u.uTf2LightwarpMap.value = null;
     u.uTf2UseExponentMap.value = 0;
     u.uTf2UseLightwarp.value = 0;
+    u.uTf2UseSelfIllumMask.value = 0;
+    u.uTf2SelfIllumMaskMap.value = null;
 
     const loads: Promise<void>[] = [];
     if (mat.normalMap) loads.push(this.texLoader.loadAsync(resolveTexture(mat.normalMap)).then((t) => {
@@ -360,9 +420,20 @@ vec3 outgoingLight = reflectedLight.directDiffuse + tf2AmbientDiffuse + reflecte
     if (mat.lightwarpTexture) {
       loads.push(this.texLoader.loadAsync(resolveTexture(mat.lightwarpTexture)).then((t) => {
         if (token !== this.materialLoadToken || this.disposed) { t.dispose(); return; }
-        t.colorSpace = THREE.SRGBColorSpace; t.flipY = false;
+        // skin_dx9_helper.cpp does not enable sRGB reads for the diffuse-warp
+        // sampler. Source therefore uses the stored ramp values directly.
+        t.colorSpace = THREE.NoColorSpace; t.flipY = false;
         t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
         this.lightwarpTexture = t; u.uTf2LightwarpMap.value = t; u.uTf2UseLightwarp.value = 1;
+        this.renderer.initTexture(t);
+      }).catch(() => undefined));
+    }
+    if (mat.selfIllumMask) {
+      loads.push(this.texLoader.loadAsync(resolveTexture(mat.selfIllumMask)).then((t) => {
+        if (token !== this.materialLoadToken || this.disposed) { t.dispose(); return; }
+        t.colorSpace = THREE.NoColorSpace; t.flipY = false;
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        this.selfIllumTexture = t; u.uTf2SelfIllumMaskMap.value = t; u.uTf2UseSelfIllumMask.value = 1;
         this.renderer.initTexture(t);
       }).catch(() => undefined));
     }
@@ -371,20 +442,23 @@ vec3 outgoingLight = reflectedLight.directDiffuse + tf2AmbientDiffuse + reflecte
   }
 
   // Geometry cache: switching weapons back and forth never refetches a GLB.
-  private geoCache = new Map<string, Promise<THREE.BufferGeometry[]>>();
+  private geoCache = new Map<string, Promise<Array<{ geometry: THREE.BufferGeometry; materialName: string }>>>();
   private currentGeoCached = false;
   private loadToken = 0;
 
-  private setMeshGeometries(geometries: THREE.BufferGeometry[], fromCache: boolean) {
+  private setMeshGeometries(parts: Array<{ geometry: THREE.BufferGeometry; materialName: string }>, fromCache: boolean) {
     for (const mesh of this.meshes) {
       this.centerGroup.remove(mesh);
       // Cached geometries are shared and disposed with the cache, not per swap.
       if (!this.currentGeoCached) mesh.geometry.dispose();
     }
     this.currentGeoCached = fromCache;
-    this.meshes = geometries.map((geo) => new THREE.Mesh(geo, this.material));
+    this.meshes = parts.map(({ geometry, materialName }) => {
+      const isLens = /(?:^|_)lens(?:$|_)/i.test(materialName);
+      return new THREE.Mesh(geometry, isLens ? this.lensMaterial : this.material);
+    });
     this.centerGroup.add(...this.meshes);
-    this.frameCamera(geometries);
+    this.frameCamera(parts.map((part) => part.geometry));
   }
 
   private clearModel() {
@@ -407,10 +481,12 @@ vec3 outgoingLight = reflectedLight.directDiffuse + tf2AmbientDiffuse + reflecte
     let promise = this.geoCache.get(url);
     if (!promise) {
       promise = this.gltfLoader.loadAsync(url).then((gltf) => {
-        const geometries: THREE.BufferGeometry[] = [];
+        const geometries: Array<{ geometry: THREE.BufferGeometry; materialName: string }> = [];
         gltf.scene.traverse((o) => {
           if ((o as THREE.Mesh).isMesh) {
-            geometries.push((o as THREE.Mesh).geometry as THREE.BufferGeometry);
+            const mesh = o as THREE.Mesh;
+            const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+            geometries.push({ geometry: mesh.geometry as THREE.BufferGeometry, materialName: material?.name ?? '' });
           }
         });
         if (!geometries.length) throw new Error('no mesh in GLB');
@@ -470,15 +546,17 @@ vec3 outgoingLight = reflectedLight.directDiffuse + tf2AmbientDiffuse + reflecte
     window.removeEventListener('resize', this.onResize);
     this.controls.dispose();
     this.material.dispose();
+    this.lensMaterial.dispose();
     this.materialLoadToken++;
     this.normalTexture?.dispose();
     this.exponentTexture?.dispose();
     this.lightwarpTexture?.dispose();
+    this.selfIllumTexture?.dispose();
     this.envMap.dispose();
     for (const texture of this.backgroundTextures.values()) texture.dispose();
     this.backgroundTextures.clear();
     if (!this.currentGeoCached) for (const mesh of this.meshes) mesh.geometry.dispose();
-    for (const p of this.geoCache.values()) p.then((geos) => geos.forEach((g) => g.dispose())).catch(() => undefined);
+    for (const p of this.geoCache.values()) p.then((parts) => parts.forEach((part) => part.geometry.dispose())).catch(() => undefined);
     this.geoCache.clear();
     this.renderer.dispose();
   }

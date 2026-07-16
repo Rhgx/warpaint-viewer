@@ -154,7 +154,7 @@ export function SelfTestPage() {
 
     (async () => {
       for (const c of cases) {
-        const res = await comp.compose(c.recipe, 1);
+        const res = await comp.compose(c.recipe, '1');
         const buf = comp.readPixels(res.target);
         const size = comp.getSize();
         const px = Math.min(size - 1, Math.floor(c.sample[0] * size));

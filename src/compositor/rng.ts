@@ -2,6 +2,8 @@
 // compositor. Paint-kit seeds are split into two interleaved 32-bit streams;
 // recipe stages alternate between them after resolving their own random fields.
 
+import type { PaintSeed } from './types';
+
 const NTAB = 32;
 const IA = 16807;
 const IM = 2147483647;
@@ -70,8 +72,8 @@ export interface PaintkitRandomState {
   current: 0 | 1;
 }
 
-export function createPaintkitRandomState(seed: number): PaintkitRandomState {
-  const source = BigInt(seed >>> 0);
+export function createPaintkitRandomState(seed: PaintSeed): PaintkitRandomState {
+  const source = BigInt.asUintN(64, BigInt(seed || '0'));
   const split = [0n, 0n];
   for (let i = 0n; i < 32n; i++) {
     const sourceBit = 2n * i;

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { TextureResolver } from './types';
+import type { TextureMetadata } from '../data/types';
 
 export interface LoadOpts {
   nearest?: boolean; // select group maps must not interpolate region indices
@@ -39,10 +40,12 @@ export class TextureCache {
   private budget: number;
   private totalBytes = 0;
   private pinned = new Set<string>();
+  private metadata: Record<string, TextureMetadata>;
 
-  constructor(resolve: TextureResolver, budgetBytes = 384 * 1024 * 1024) {
+  constructor(resolve: TextureResolver, budgetBytes = 384 * 1024 * 1024, metadata: Record<string, TextureMetadata> = {}) {
     this.resolve = resolve;
     this.budget = budgetBytes;
+    this.metadata = metadata;
   }
 
   keyFor(ref: string, opts: LoadOpts = {}): string {
@@ -97,8 +100,9 @@ export class TextureCache {
           // every source unflipped keeps composite space identical to game UV
           // space (v down), so the result maps onto the mesh exactly in-game.
           tex.flipY = false;
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.RepeatWrapping;
+          const meta = this.metadata[ref];
+          tex.wrapS = meta?.clampS ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+          tex.wrapT = meta?.clampT ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
           if (opts.nearest) {
             tex.magFilter = THREE.NearestFilter;
             tex.minFilter = THREE.NearestFilter;
@@ -106,9 +110,13 @@ export class TextureCache {
             tex.wrapS = THREE.ClampToEdgeWrapping;
             tex.wrapT = THREE.ClampToEdgeWrapping;
           } else {
-            tex.magFilter = THREE.LinearFilter;
-            tex.minFilter = THREE.LinearMipmapLinearFilter;
-            tex.generateMipmaps = true;
+            tex.magFilter = meta?.pointSample ? THREE.NearestFilter : THREE.LinearFilter;
+            tex.generateMipmaps = !(meta?.noMip || meta?.noLod);
+            tex.minFilter = !tex.generateMipmaps
+              ? tex.magFilter
+              : meta?.pointSample ? THREE.NearestMipmapNearestFilter
+                : meta?.trilinear || meta?.anisotropic ? THREE.LinearMipmapLinearFilter : THREE.LinearMipmapNearestFilter;
+            if (meta?.anisotropic) tex.anisotropy = 16;
           }
           tex.needsUpdate = true;
           entry.settled = true;
