@@ -1,4 +1,4 @@
-import { Dices, RotateCcw } from 'lucide-react';
+import { Camera, Crosshair, Dices, Droplets, Hash, RotateCcw, Sun, Users } from 'lucide-react';
 import { Control, IconSelectField, SelectField, TeamToggle, WearSliderField } from './components';
 import type { IconOption } from './components';
 import { LIGHTING_PRESETS } from '../viewer/lighting';
@@ -33,7 +33,7 @@ export function ControlsBar({
 
   return (
     <div className="controls-bar">
-      <Control label="Weapon">
+      <Control label={<><Crosshair size={12} /><span>Weapon</span></>}>
         <IconSelectField
           value={state.weaponKey}
           onChange={(v) => onChange({ weaponKey: v })}
@@ -41,7 +41,7 @@ export function ControlsBar({
         />
       </Control>
 
-      <Control label={`Wear - ${manifest.wearNames[state.wearIndex] ?? ''}`}>
+      <Control label={<><Droplets size={12} /><span>Wear - {manifest.wearNames[state.wearIndex] ?? ''}</span></>}>
         <WearSliderField
           value={state.wearIndex}
           names={manifest.wearNames}
@@ -49,7 +49,7 @@ export function ControlsBar({
         />
       </Control>
 
-      <Control label="Team">
+      <Control label={<><Users size={12} /><span>Team</span></>}>
         <TeamToggle
           team={state.team}
           disabled={!hasTeamTextures}
@@ -57,7 +57,7 @@ export function ControlsBar({
         />
       </Control>
 
-      <Control label="Seed">
+      <Control label={<><Hash size={12} /><span>Seed</span></>}>
         <div className="seed-row">
           <input
             className="ui-num-input seed-input"
@@ -67,8 +67,8 @@ export function ControlsBar({
             onChange={(event) => {
               const digits = event.currentTarget.value.replace(/\D/g, '').slice(0, 20);
               if (!digits) return;
-              const seed = BigInt.asUintN(64, BigInt(digits));
-              onChange({ seed: seed.toString() });
+              const value = BigInt.asUintN(64, BigInt(digits));
+              onChange({ seed: value.toString() });
             }}
           />
           <button type="button" className="btn btn-icon" title="Randomize seed" aria-label="Randomize seed" onClick={onRandomizeSeed}>
@@ -77,7 +77,7 @@ export function ControlsBar({
         </div>
       </Control>
 
-      <Control label="Lighting">
+      <Control label={<><Sun size={12} /><span>Lighting</span></>}>
         <SelectField
           value={state.preset}
           onChange={(v) => onChange({ preset: v })}
@@ -85,7 +85,7 @@ export function ControlsBar({
         />
       </Control>
 
-      <Control label="View">
+      <Control label={<><Camera size={12} /><span>View</span></>}>
         <button type="button" className="btn" onClick={onResetView}>
           <RotateCcw size={13} />
           <span>Reset</span>

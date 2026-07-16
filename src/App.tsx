@@ -14,6 +14,7 @@ const SelfTestPage = lazy(() => import('./selftest').then((m) => ({ default: m.S
 
 const COMPOSE_BADGE_DELAY_MS = 250;
 const COMPOSE_CACHE_SIZE = 8;
+const DEFAULT_WEAPON_KEY = 'c_rocketlauncher';
 
 interface BootState {
   progress: number;
@@ -95,10 +96,13 @@ function MainApp() {
         if (cancelled) return;
         setData(ds);
         advanceBoot(16, 'Catalog ready');
-        // Auto-select the first paintkit so the canvas is never empty.
-        const firstKit = ds.manifest.paintkits[0] ?? null;
-        setSelectedKitId(firstKit ? firstKit.id : null);
-        setState((s) => ({ ...s, weaponKey: firstKit?.weapons[0] ?? ds.manifest.weapons[0]?.key ?? '' }));
+        // The catalog is chronological, so start with its newest paintkit.
+        const newestKit = ds.manifest.paintkits.at(-1) ?? null;
+        const weaponKey = newestKit?.weapons.includes(DEFAULT_WEAPON_KEY)
+          ? DEFAULT_WEAPON_KEY
+          : newestKit?.weapons[0] ?? ds.manifest.weapons[0]?.key ?? '';
+        setSelectedKitId(newestKit?.id ?? null);
+        setState((s) => ({ ...s, weaponKey }));
       })
       .catch((e) => setError(String(e)));
     return () => {

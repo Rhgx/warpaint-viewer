@@ -41,40 +41,86 @@
   color: var(--text-dim);
 }
 
+/* ---------- search field ---------- */
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-field-icon {
+  position: absolute;
+  left: 8px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.search-field .ui-input {
+  padding-left: 26px;
+}
+
 /* ---------- collection rail ---------- */
 .collection-rail {
   display: flex;
   flex-direction: column;
   flex: none;
+  /* Scrollbars are overlay elements. Keep the rail's opaque divider above the
+     paint-list scrollbar so its thumb cannot peek through this boundary. */
+  position: relative;
+  z-index: 1;
+  overflow: clip;
   border-bottom: 1px solid var(--border);
   background: var(--panel-2);
+}
+.collection-rail-label {
+  padding: 8px 12px 4px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.7px;
 }
 .collection-rail-scroll {
   flex: 0 1 auto;
   /* Whole rows only (44px each): no half-clipped row at the fold. */
   max-height: min(352px, 40vh);
 }
+/* Reserve a dedicated rail for the paint-list scrollbar. Base UI positions
+   the track over the scroll area by default; the root padding keeps rows and
+   sticky collection headers out from underneath it. */
+.paint-list-scroll {
+  --paint-list-scrollbar-gutter: 12px;
+  padding-right: var(--paint-list-scrollbar-gutter);
+}
+.paint-list-scroll > .ui-scrollbar {
+  width: var(--paint-list-scrollbar-gutter);
+  margin-block: 8px;
+  padding-inline: 3px;
+  background: var(--panel);
+}
 .collection-row {
   height: 44px;
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
-  padding: 6px 12px;
+  width: calc(100% - 5px);
+  margin: 1px 5px 1px 0;
+  padding: 6px 10px 6px 15px;
   background: none;
   border: none;
-  border-left: 2px solid transparent;
+  /* Flat, flush left edge so the selection accent bar sits tight against the
+     sidebar edge; only the right corners round. */
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
   text-align: left;
   cursor: pointer;
   color: var(--text);
+  transition: var(--transition-fast);
 }
 .collection-row:hover {
   background: var(--border);
 }
 .collection-row.selected {
-  background: var(--panel);
-  border-left-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
   font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .collection-row-icon-slot {
   display: flex;
@@ -114,47 +160,61 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  backdrop-filter: blur(6px);
   border-bottom: 1px solid var(--border);
+}
+.warpaint-group-label-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.warpaint-group-label-count {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
 }
 .warpaint-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
-  padding: 5px 12px;
+  width: calc(100% - 5px);
+  margin: 1px 5px 1px 0;
+  padding: 5px 10px 5px 15px;
   background: none;
   border: none;
-  border-left: 2px solid transparent;
+  border-radius: 0;
   text-align: left;
   cursor: pointer;
+  transition: var(--transition-fast);
 }
 .warpaint-item:hover {
   background: var(--panel-2);
 }
-.warpaint-item:focus-visible,
-.collection-row:focus-visible,
-.order-toggle:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: -1px;
-}
 .warpaint-item.selected {
-  background: var(--panel-2);
-  border-left-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+  color: var(--text);
+  font-weight: 600;
 }
 .warpaint-item-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--item-grade-text, inherit);
 }
 .warpaint-item-icon {
+  position: relative;
   flex: none;
   width: 42px;
   height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--panel-2);
 }
@@ -291,6 +351,11 @@
 }
 .boot-loader-card {
   width: min(420px, calc(100vw - 48px));
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
 }
 .boot-loader-title {
   margin-bottom: 14px;
@@ -303,8 +368,8 @@
   height: 6px;
   overflow: hidden;
   border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  background: var(--panel);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
 }
 .boot-loader-fill {
   height: 100%;
@@ -321,9 +386,11 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Floating pill inside the canvas so the footer is a single clean bar. */
+/* Floating pill inside the canvas so the footer is a single clean bar. Fades
+   out after the first pointer/wheel interaction with the canvas. */
 .canvas-hint {
   position: absolute;
+  z-index: 2;
   left: 50%;
   bottom: 10px;
   transform: translateX(-50%);
@@ -331,12 +398,19 @@
   border: 1px solid var(--border);
   border-radius: 999px;
   background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: var(--shadow-pop);
   color: var(--text-dim);
   font-size: 10.5px;
   letter-spacing: 0.2px;
   white-space: nowrap;
   pointer-events: none;
   user-select: none;
+  opacity: 1;
+  transition: opacity 200ms ease;
+}
+.canvas-hint.dismissed {
+  opacity: 0;
 }
 
 /* ---------- controls bar ---------- */
@@ -345,27 +419,29 @@
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: center;
-  row-gap: 12px;
-  padding: 12px 8px;
+  gap: 8px 22px;
+  padding: 14px 16px;
   border-top: 1px solid var(--border);
   background: var(--panel);
-}
-.controls-bar > .control {
-  padding: 0 16px;
-}
-.controls-bar > .control + .control {
-  border-left: 1px solid var(--border);
 }
 .control {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  gap: 6px;
 }
 .control-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
+}
+.control-label svg {
+  flex: none;
+  opacity: 0.85;
 }
 .seed-row {
   display: flex;
@@ -377,4 +453,20 @@
   width: var(--control-h, 28px);
   justify-content: center;
   flex: none;
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 860px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .sidebar {
+    max-height: 42vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .stage {
+    min-height: 0;
+  }
 }
