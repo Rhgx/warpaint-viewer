@@ -72,6 +72,7 @@ function MainApp() {
   const [error, setError] = useState<string | null>(null);
   const [selectedKitId, setSelectedKitId] = useState<number | null>(null);
   const [composing, setComposing] = useState(false);
+  const [hintDismissed, setHintDismissed] = useState(false);
   const [loadedAssetKey, setLoadedAssetKey] = useState('');
   const [boot, setBoot] = useState<BootState>({ progress: 4, label: 'Loading catalog…' });
   const [state, setState] = useState<ControlsState>(() => ({
@@ -412,10 +413,21 @@ function MainApp() {
         />
       </aside>
       <main className="stage">
-        <div className="canvas-wrap">
+        <div
+          className="canvas-wrap"
+          onPointerDown={() => setHintDismissed(true)}
+          onWheel={() => setHintDismissed(true)}
+        >
           <canvas ref={canvasRef} className="viewer-canvas" />
-          {composing && <div className="composing-badge">compositing...</div>}
-          <div className="canvas-hint">drag to rotate, scroll to zoom, right-drag to pan, double-click to reset</div>
+          {composing && (
+            <div className="composing-badge">
+              <span className="composing-badge-spinner" aria-hidden="true" />
+              <span>Compositing…</span>
+            </div>
+          )}
+          <div className={`canvas-hint${hintDismissed ? ' dismissed' : ''}`}>
+            drag to rotate, scroll to zoom, right-drag to pan, double-click to reset
+          </div>
         </div>
         <ControlsBar
           manifest={data.manifest}
