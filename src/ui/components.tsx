@@ -15,6 +15,10 @@ export interface IconOption extends Option {
   icon?: string | null;
 }
 
+export interface SwatchOption extends Option {
+  color?: string | null; // CSS color; missing/null renders a hollow swatch
+}
+
 // Small image with a graceful text-only fallback: manifest icons are not
 // guaranteed (mock mode has none, a couple of collections have none), so a
 // broken/missing src just collapses to an empty slot instead of a broken icon.
@@ -48,8 +52,8 @@ export function AssetIcon({
   );
 }
 
-// A labelled control row used throughout the controls bar. `label` accepts a
-// leading icon plus text (see ControlsBar) as well as a plain string.
+// A labelled control row used throughout the inspector panel. `label` accepts
+// a leading icon plus text (see Inspector) as well as a plain string.
 export function Control({ label, children, className }: { label: ReactNode; children: ReactNode; className?: string }) {
   return (
     <label className={`control${className ? ` ${className}` : ''}`}>
@@ -136,18 +140,63 @@ export function IconSelectField({
   );
 }
 
+// Same as SelectField, but each option (and the closed trigger) shows a
+// small round color swatch, e.g. a killstreak sheen tint. A missing/null
+// color (e.g. the 'none' option) renders as a hollow swatch.
+export function SwatchSelectField({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: SwatchOption[];
+  placeholder?: string;
+}) {
+  const selected = options.find((o) => o.value === value);
+  return (
+    <Select.Root value={value} onValueChange={(v) => onChange(v as string)}>
+      <Select.Trigger className="ui-select-trigger ui-select-trigger-icon">
+        <span className="ui-icon-option">
+          <span className="ui-swatch" data-empty={!selected?.color || undefined} style={selected?.color ? { backgroundColor: selected.color } : undefined} />
+          <Select.Value>{() => selected?.label ?? placeholder ?? 'Select'}</Select.Value>
+        </span>
+        <Select.Icon className="ui-select-icon">v</Select.Icon>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Positioner className="ui-select-positioner" sideOffset={4} alignItemWithTrigger={false}>
+          <Select.Popup className="ui-select-popup">
+            {options.map((o) => (
+              <Select.Item key={o.value} value={o.value} className="ui-select-item">
+                <span className="ui-icon-option">
+                  <span className="ui-swatch" data-empty={!o.color || undefined} style={o.color ? { backgroundColor: o.color } : undefined} />
+                  <Select.ItemText>{o.label}</Select.ItemText>
+                </span>
+                <Select.ItemIndicator className="ui-select-indicator">*</Select.ItemIndicator>
+              </Select.Item>
+            ))}
+          </Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
+    </Select.Root>
+  );
+}
+
 export function SliderField({
   value,
   onChange,
   min,
   max,
   step,
+  ariaLabel,
 }: {
   value: number;
   onChange: (v: number) => void;
   min: number;
   max: number;
   step: number;
+  ariaLabel?: string;
 }) {
   return (
     <Slider.Root
@@ -156,6 +205,7 @@ export function SliderField({
       min={min}
       max={max}
       step={step}
+      aria-label={ariaLabel}
     >
       <Slider.Control className="ui-slider-control">
         <Slider.Track className="ui-slider-track">

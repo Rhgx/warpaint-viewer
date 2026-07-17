@@ -3,6 +3,19 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getPreset } from './lighting';
 import { loadEditorEnvCube, makeEnvCube } from './env';
 import { InspectControls } from './inspectControls';
+import {
+  getSheen,
+  createUnusualEffect,
+  loadSheenAssets,
+  createSheenMaterial,
+  computeSheenFrameData,
+  setParticlePointScale,
+  SHEEN_SWEEP_SECONDS,
+  SHEEN_PAUSE_SECONDS,
+  SHEEN_FRAMERATE,
+  SHEEN_MASK_FRAMES,
+} from './effects';
+import type { UnusualEffect, ViewAnglePreset, SheenAssets, SheenFrameData } from './effects';
 import type { WeaponMaterial } from '../data/types';
 
 // three.js viewer with TF2's important VertexLitGeneric/Skin controls layered
@@ -74,6 +87,36 @@ export class Viewer {
   private lastTime = 0;
   private disposed = false;
   private canvas: HTMLCanvasElement;
+  private activeUnusual: UnusualEffect | null = null;
+  private unusualId = 'none';
+  private unusualWeaponKey = '';
+  // Set by frameCamera; reused by setFov to reframe without resetting pose.
+  private framedDims: [number, number, number] | null = null;
+  private framedRadius = 1;
+  // Model bounding-box center in GEOMETRY space (raw, uncentered), cached so
+  // every rebuildUnusualEffect call (including setUnusual between model
+  // loads) can pass a fallback control point without re-deriving it.
+  private framedCenter = new THREE.Vector3();
+
+  private resizeObserver: ResizeObserver | null = null;
+
+  // Killstreak sheen: a shared second-pass material over per-mesh clones of
+  // the weapon geometry. Assets/material are created lazily on first enable
+  // and kept for this Viewer's lifetime.
+  private sheenId = 'none';
+  private sheenTeam: 'red' | 'blu' = 'red';
+  private sheenAssets: SheenAssets | null = null;
+  private sheenAssetsPromise: Promise<SheenAssets> | null = null;
+  private sheenMaterial: THREE.ShaderMaterial | null = null;
+  private sheenMeshes: THREE.Mesh[] = [];
+  private sheenElapsed = 0;
+  private sheenFrameData: SheenFrameData = { scaleX: 1, offsetX: 0, scaleY: 1, offsetY: 0, sweepAxis: 0, sideAxis: 1 };
+  private meshIsLens: boolean[] = [];
+
+  // Orthographic projection: derived every frame from the perspective camera,
+  // which InspectControls always drives.
+  private orthoCamera: THREE.OrthographicCamera;
+  private projectionMode: 'perspective' | 'orthographic' = 'perspective';
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -88,6 +131,7 @@ export class Viewer {
     this.camera.position.set(4, 2, 5);
     this.camera.lookAt(0, 0, 0);
     this.camera.updateMatrixWorld();
+    this.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, this.camera.near, this.camera.far);
 
     this.modelGroup.add(this.centerGroup);
     this.scene.add(this.lightGroup);
@@ -126,6 +170,11 @@ export class Viewer {
 
     this.onResize();
     window.addEventListener('resize', this.onResize);
+    // The canvas also changes size when the app's layout reflows (inspector
+    // sections collapsing, responsive breakpoint stacking) without a window
+    // resize event; ResizeObserver catches that directly on the element.
+    this.resizeObserver = new ResizeObserver(() => this.onResize());
+    this.resizeObserver.observe(canvas);
     this.lastTime = performance.now();
     this.loop();
   }
@@ -136,6 +185,8 @@ export class Viewer {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    setParticlePointScale(h * this.renderer.getPixelRatio());
+    this.syncOrthoCamera();
   };
 
   private loop = () => {
@@ -148,8 +199,42 @@ export class Viewer {
     // Panning is a framing operation, not physical movement through the map.
     // Move the light rig with the model's translation, but not its rotation.
     this.lightGroup.position.copy(this.modelGroup.position);
-    this.renderer.render(this.scene, this.camera);
+    this.updateSheenAnimation(dt);
+    if (this.activeUnusual) {
+      // Particles simulate in world space; re-anchor the control points to
+      // the weapon's current transform first so they follow the model the way
+      // PATTACH_POINT_FOLLOW attachments do in game.
+      this.centerGroup.updateWorldMatrix(true, false);
+      this.activeUnusual.updateAnchor(this.centerGroup.matrixWorld);
+      this.activeUnusual.update(dt);
+    }
+    if (this.projectionMode === 'orthographic') {
+      this.syncOrthoCamera();
+      this.renderer.render(this.scene, this.orthoCamera);
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
   };
+
+  // Derives the ortho camera from the perspective camera every frame: same
+  // position/orientation, with a frustum sized to match what the perspective
+  // camera currently sees at its dolly distance (InspectControls always keeps
+  // the camera on a ray through the origin, so position.length() is that
+  // distance).
+  private syncOrthoCamera() {
+    this.orthoCamera.position.copy(this.camera.position);
+    this.orthoCamera.quaternion.copy(this.camera.quaternion);
+    const dist = this.camera.position.length();
+    const halfH = dist * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const halfW = halfH * this.camera.aspect;
+    this.orthoCamera.left = -halfW;
+    this.orthoCamera.right = halfW;
+    this.orthoCamera.top = halfH;
+    this.orthoCamera.bottom = -halfH;
+    this.orthoCamera.near = this.camera.near;
+    this.orthoCamera.far = this.camera.far;
+    this.orthoCamera.updateProjectionMatrix();
+  }
 
   resetView() {
     this.controls.reset();
@@ -194,6 +279,163 @@ export class Viewer {
   setMap(texture: THREE.Texture | null) {
     this.material.map = texture;
     this.material.needsUpdate = true;
+  }
+
+  setSheen(sheenId: string, team: 'red' | 'blu') {
+    const wasOff = this.sheenId === 'none';
+    this.sheenId = sheenId;
+    this.sheenTeam = team;
+    if (sheenId === 'none') {
+      this.teardownSheenMeshes();
+      return;
+    }
+    if (wasOff) this.sheenElapsed = 0;
+    void this.ensureSheenReady().then(() => {
+      if (this.disposed || this.sheenId === 'none') return;
+      this.rebuildSheenMeshes();
+    });
+  }
+
+  private ensureSheenReady(): Promise<void> {
+    if (this.sheenAssets) return Promise.resolve();
+    if (!this.sheenAssetsPromise) {
+      this.sheenAssetsPromise = loadSheenAssets().catch((err) => {
+        console.warn('[warpaint-viewer] killstreak sheen assets unavailable; sheen disabled:', err);
+        this.sheenAssetsPromise = null;
+        throw err;
+      });
+    }
+    return this.sheenAssetsPromise
+      .then((assets) => {
+        if (this.disposed) return;
+        this.sheenAssets = assets;
+        this.sheenMaterial = createSheenMaterial(assets, this.material.side);
+      })
+      .catch(() => undefined);
+  }
+
+  private teardownSheenMeshes() {
+    for (const mesh of this.sheenMeshes) this.centerGroup.remove(mesh);
+    this.sheenMeshes = [];
+  }
+
+  private rebuildSheenMeshes() {
+    this.teardownSheenMeshes();
+    if (this.sheenId === 'none' || !this.sheenMaterial) return;
+    for (let i = 0; i < this.meshes.length; i++) {
+      if (this.meshIsLens[i]) continue;
+      const mesh = new THREE.Mesh(this.meshes[i].geometry, this.sheenMaterial);
+      mesh.renderOrder = 1;
+      this.centerGroup.add(mesh);
+      this.sheenMeshes.push(mesh);
+    }
+    this.updateSheenFrameUniforms();
+    this.updateSheenTint();
+  }
+
+  private updateSheenFrameUniforms() {
+    if (!this.sheenMaterial) return;
+    const u = this.sheenMaterial.uniforms;
+    u.uMaskScale.value.set(this.sheenFrameData.scaleX, this.sheenFrameData.scaleY);
+    u.uMaskOffset.value.set(this.sheenFrameData.offsetX, this.sheenFrameData.offsetY);
+    u.uSweepAxis.value = this.sheenFrameData.sweepAxis;
+    u.uSideAxis.value = this.sheenFrameData.sideAxis;
+  }
+
+  private updateSheenTint() {
+    if (!this.sheenMaterial) return;
+    const preset = getSheen(this.sheenId);
+    const rgb = this.sheenTeam === 'blu' ? preset.blu : preset.red;
+    this.sheenMaterial.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2], 1);
+  }
+
+  // Sweep timing (CProxyAnimatedWeaponSheen): 60 mask frames at 25 fps, then
+  // invisible for 5s with no killstreak owner (the inspect case), then loop.
+  private updateSheenAnimation(dt: number) {
+    if (this.sheenId === 'none' || !this.sheenMaterial || this.sheenMeshes.length === 0) return;
+    this.sheenElapsed += dt;
+    const cycle = SHEEN_SWEEP_SECONDS + SHEEN_PAUSE_SECONDS;
+    const tInCycle = this.sheenElapsed % cycle;
+    const sweeping = tInCycle < SHEEN_SWEEP_SECONDS;
+    for (const mesh of this.sheenMeshes) mesh.visible = sweeping;
+    if (sweeping) {
+      this.sheenMaterial.uniforms.uFrame.value = Math.min(SHEEN_MASK_FRAMES - 1, Math.floor(SHEEN_FRAMERATE * tInCycle));
+    }
+  }
+
+  setUnusual(effectId: string, weaponKey: string) {
+    this.unusualId = effectId;
+    this.unusualWeaponKey = weaponKey;
+    this.rebuildUnusualEffect();
+  }
+
+  private rebuildUnusualEffect() {
+    if (this.activeUnusual) {
+      this.scene.remove(this.activeUnusual.object);
+      this.activeUnusual.dispose();
+      this.activeUnusual = null;
+    }
+    const effect = createUnusualEffect(this.unusualId, this.framedRadius, this.unusualWeaponKey, this.framedCenter);
+    if (!effect) return;
+    // Added at the scene root: particles simulate in WORLD space (like the
+    // game, where control points follow the weapon but particles do not).
+    // The render loop re-anchors the effect's control points from
+    // centerGroup.matrixWorld every frame.
+    this.scene.add(effect.object);
+    this.activeUnusual = effect;
+  }
+
+  setViewAngle(preset: ViewAnglePreset) {
+    this.controls.setViewDirection(preset.dir ? new THREE.Vector3(...preset.dir) : null);
+  }
+
+  setProjection(mode: 'perspective' | 'orthographic') {
+    this.projectionMode = mode;
+  }
+
+  setFov(fov: number) {
+    this.camera.fov = THREE.MathUtils.clamp(fov, 30, 110);
+    this.camera.updateProjectionMatrix();
+    if (!this.framedDims) return;
+    const dist = this.computeFramingDistance(this.framedDims, this.framedRadius);
+    this.controls.rescaleFraming(dist);
+  }
+
+  // Renders at `scale`x resolution with no background so the PNG carries
+  // alpha. The canvas drawing buffer isn't preserved, so toBlob must be
+  // called synchronously off the same render (no await in between).
+  async captureScreenshot(scale = 2): Promise<Blob> {
+    const prevPixelRatio = this.renderer.getPixelRatio();
+    const prevSize = new THREE.Vector2();
+    this.renderer.getSize(prevSize);
+    const prevBackground = this.scene.background;
+    const prevAspect = this.camera.aspect;
+    const w = this.canvas.clientWidth || 1;
+    const h = this.canvas.clientHeight || 1;
+    try {
+      this.scene.background = null;
+      this.renderer.setPixelRatio(1);
+      this.renderer.setSize(w * scale, h * scale, false);
+      this.camera.aspect = w / h;
+      this.camera.updateProjectionMatrix();
+      if (this.projectionMode === 'orthographic') {
+        this.syncOrthoCamera();
+        this.renderer.render(this.scene, this.orthoCamera);
+      } else {
+        this.renderer.render(this.scene, this.camera);
+      }
+      const blob = await new Promise<Blob | null>((resolve) => {
+        this.renderer.domElement.toBlob(resolve, 'image/png');
+      });
+      if (!blob) throw new Error('[warpaint-viewer] screenshot capture failed');
+      return blob;
+    } finally {
+      this.renderer.setPixelRatio(prevPixelRatio);
+      this.renderer.setSize(prevSize.x, prevSize.y, false);
+      this.scene.background = prevBackground;
+      this.camera.aspect = prevAspect;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   private installTf2Shader() {
@@ -318,7 +560,13 @@ float tf2SelfIllumFresnelMask = saturate(
   + uTf2SelfIllumFresnelParams.y
 );
 tf2SelfIllumFresnelMask = mix( 1.0, tf2SelfIllumFresnelMask, uTf2SelfIllumFresnel );
+// vMapUv only exists when the material has a map; before the first composite
+// lands the shader compiles without one, so guard the separate-mask sample.
+#ifdef USE_MAP
 float tf2SeparateSelfIllumMask = texture2D( uTf2SelfIllumMaskMap, vMapUv ).r;
+#else
+float tf2SeparateSelfIllumMask = 0.0;
+#endif
 float tf2BaseSelfIllumMask = mix( diffuseColor.a, tf2SeparateSelfIllumMask, uTf2UseSelfIllumMask );
 float tf2SelfIllumMask = uTf2SelfIllum * tf2BaseSelfIllumMask * tf2SelfIllumFresnelMask;
 float tf2SelfIllumBrightness = mix( 1.0, uTf2SelfIllumFresnelParams.w, uTf2SelfIllumFresnel );
@@ -454,26 +702,28 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
   private loadToken = 0;
 
   private setMeshGeometries(parts: Array<{ geometry: THREE.BufferGeometry; materialName: string }>, fromCache: boolean) {
+    this.teardownSheenMeshes();
     for (const mesh of this.meshes) {
       this.centerGroup.remove(mesh);
       // Cached geometries are shared and disposed with the cache, not per swap.
       if (!this.currentGeoCached) mesh.geometry.dispose();
     }
     this.currentGeoCached = fromCache;
-    this.meshes = parts.map(({ geometry, materialName }) => {
-      const isLens = /(?:^|_)lens(?:$|_)/i.test(materialName);
-      return new THREE.Mesh(geometry, isLens ? this.lensMaterial : this.material);
-    });
+    this.meshIsLens = parts.map(({ materialName }) => /(?:^|_)lens(?:$|_)/i.test(materialName));
+    this.meshes = parts.map(({ geometry }, i) => new THREE.Mesh(geometry, this.meshIsLens[i] ? this.lensMaterial : this.material));
     this.centerGroup.add(...this.meshes);
     this.frameCamera(parts.map((part) => part.geometry));
+    if (this.sheenId !== 'none' && this.sheenMaterial) this.rebuildSheenMeshes();
   }
 
   private clearModel() {
+    this.teardownSheenMeshes();
     for (const mesh of this.meshes) {
       this.centerGroup.remove(mesh);
       if (!this.currentGeoCached) mesh.geometry.dispose();
     }
     this.meshes = [];
+    this.meshIsLens = [];
     this.currentGeoCached = false;
   }
 
@@ -529,15 +779,16 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     // that axis against the horizontal fov and the next-largest against the
     // vertical one. Fitting everything against the vertical fov (the old
     // sphere fit) framed long weapons far too small on wide canvases.
-    const dims = [size.x, size.y, size.z].sort((a, b) => b - a);
-    const vHalf = (this.camera.fov * Math.PI) / 360;
-    const hHalf = Math.atan(Math.tan(vHalf) * Math.max(1, this.camera.aspect));
-    const margin = 1.35; // headroom for the angled default view direction
-    const dist = Math.max(
-      (dims[0] * 0.5 * margin) / Math.tan(hHalf),
-      (dims[1] * 0.5 * margin) / Math.tan(vHalf),
-      radius * 1.6, // keep the camera outside the model with room to orbit
-    );
+    const dims = [size.x, size.y, size.z].sort((a, b) => b - a) as [number, number, number];
+    this.framedDims = dims;
+    this.framedRadius = radius;
+    this.framedCenter.copy(center);
+    const dist = this.computeFramingDistance(dims, radius);
+
+    // Sheen mask placement (CProxyAnimatedWeaponSheen::InitParams) uses the
+    // model's raw, uncentered local-space bounding box.
+    this.sheenFrameData = computeSheenFrameData(box.min, box.max);
+    this.updateSheenFrameUniforms();
 
     // Center the mesh at the origin; the controls own modelGroup's transform.
     this.centerGroup.position.set(-center.x, -center.y, -center.z);
@@ -545,17 +796,42 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     this.camera.far = dist * 100;
     this.camera.updateProjectionMatrix();
     this.controls.setFraming(dist, radius);
+    this.rebuildUnusualEffect();
+  }
+
+  private computeFramingDistance(dims: [number, number, number], radius: number): number {
+    const vHalf = (this.camera.fov * Math.PI) / 360;
+    const hHalf = Math.atan(Math.tan(vHalf) * Math.max(1, this.camera.aspect));
+    const margin = 1.35; // headroom for the angled default view direction
+    return Math.max(
+      (dims[0] * 0.5 * margin) / Math.tan(hHalf),
+      (dims[1] * 0.5 * margin) / Math.tan(vHalf),
+      radius * 1.6, // keep the camera outside the model with room to orbit
+    );
   }
 
   dispose() {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.onResize);
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
     this.canvas.removeEventListener('pointermove', this.onBackplatePointerMove);
     this.canvas.removeEventListener('pointerleave', this.onBackplatePointerLeave);
     this.canvas.parentElement?.classList.remove('has-backplate');
     this.canvas.parentElement?.style.removeProperty('--backplate-image');
     this.controls.dispose();
+    if (this.activeUnusual) {
+      this.scene.remove(this.activeUnusual.object);
+      this.activeUnusual.dispose();
+      this.activeUnusual = null;
+    }
+    this.teardownSheenMeshes();
+    this.sheenMaterial?.dispose();
+    this.sheenMaterial = null;
+    this.sheenAssets?.maskTexture.dispose();
+    this.sheenAssets?.cubeTexture.dispose();
+    this.sheenAssets = null;
     this.material.dispose();
     this.lensMaterial.dispose();
     this.materialLoadToken++;

@@ -9,6 +9,11 @@ const TF_DIR = 'C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2';
 export const VPK_EXE = `${TF_DIR}/bin/vpk.exe`;
 export const TEXTURES_VPK = `${TF_DIR}/tf/tf2_textures_dir.vpk`;
 export const MISC_VPK = `${TF_DIR}/tf/tf2_misc_dir.vpk`;
+// TF2 mounts the HL2 base-game VPKs too; several particle materials referenced by the unusual
+// effects (e.g. particle/smokesprites_0001, vgui/white, effects/fleck_glass3) are HL2 base
+// content with no TF2-local copy, so they only resolve by also searching these.
+export const HL2_TEXTURES_VPK = `${TF_DIR}/hl2/hl2_textures_dir.vpk`;
+export const HL2_MISC_VPK = `${TF_DIR}/hl2/hl2_misc_dir.vpk`;
 
 // List all file paths (lowercased) inside a vpk.
 export function listVPK(vpkPath) {

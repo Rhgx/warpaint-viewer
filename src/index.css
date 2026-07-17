@@ -121,6 +121,7 @@ button {
 .ui-input:focus-visible,
 .ui-numfield:focus-within,
 .ui-team-btn:focus-visible,
+.ui-toggle-btn:focus-visible,
 .ui-switch:focus-visible,
 .collection-row:focus-visible,
 .warpaint-item:focus-visible,
@@ -224,6 +225,48 @@ button {
 }
 .ui-select-indicator {
   font-size: 11px;
+}
+
+/* ---------- swatch select (killstreak sheen) ---------- */
+.ui-swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+}
+.ui-swatch[data-empty] {
+  background: transparent;
+}
+
+/* ---------- generic two-way toggle group (e.g. projection) ---------- */
+.ui-toggle-group {
+  display: inline-flex;
+  min-height: var(--control-h);
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.ui-toggle-btn {
+  flex: 1;
+  padding: 5px 10px;
+  background: var(--panel);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+.ui-toggle-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+.ui-toggle-btn:hover {
+  background: var(--panel-2);
+}
+.ui-toggle-btn[data-pressed] {
+  background: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ---------- Base UI: Slider ---------- */
@@ -410,6 +453,7 @@ button {
   overflow: hidden;
 }
 .ui-team-btn {
+  flex: 1 1 0;
   padding: 5px 12px;
   background: var(--panel);
   border: none;

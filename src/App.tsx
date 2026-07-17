@@ -6,8 +6,9 @@ import { loadDataSource } from './data/loader';
 import type { DataSource } from './data/loader';
 import type { PaintkitEntry } from './data/types';
 import { WarpaintList } from './ui/WarpaintList';
-import { ControlsBar } from './ui/ControlsBar';
-import type { ControlsState } from './ui/ControlsBar';
+import { Inspector } from './ui/Inspector';
+import type { ControlsState } from './ui/Inspector';
+import { VIEW_ANGLES } from './viewer/presets';
 
 // Selftest page is code-split: it never loads in normal use.
 const SelfTestPage = lazy(() => import('./selftest').then((m) => ({ default: m.SelfTestPage })));
@@ -82,6 +83,11 @@ function MainApp() {
     team: 'red',
     seed: randomSeed(),
     preset: 'inspect',
+    sheen: 'none',
+    unusual: 'none',
+    fov: 75,
+    projection: 'perspective',
+    screenshotScale: 2,
   }));
 
   const advanceBoot = useCallback((progress: number, label: string) => {
@@ -133,6 +139,8 @@ function MainApp() {
       });
       viewerRef.current = viewer;
       compositorRef.current = compositor;
+      // Dev-only escape hatch for debugging the viewer from the console.
+      if (import.meta.env.DEV) (window as unknown as { __viewer?: Viewer }).__viewer = viewer;
       setEngineReady(true);
       advanceBoot(34, 'Loading TF2 environment…');
       await viewer.ready();
@@ -192,6 +200,26 @@ function MainApp() {
   useEffect(() => {
     if (engineReady) viewerRef.current?.setLighting(state.preset);
   }, [engineReady, state.preset]);
+
+  // Killstreak sheen.
+  useEffect(() => {
+    if (engineReady) viewerRef.current?.setSheen(state.sheen, state.team);
+  }, [engineReady, state.sheen, state.team]);
+
+  // Unusual particle effect.
+  useEffect(() => {
+    if (engineReady) viewerRef.current?.setUnusual(state.unusual, state.weaponKey);
+  }, [engineReady, state.unusual, state.weaponKey]);
+
+  // Field of view.
+  useEffect(() => {
+    if (engineReady) viewerRef.current?.setFov(state.fov);
+  }, [engineReady, state.fov]);
+
+  // Projection mode.
+  useEffect(() => {
+    if (engineReady) viewerRef.current?.setProjection(state.projection);
+  }, [engineReady, state.projection]);
 
   // Recompose when recipe inputs change: debounced, deduped, and the previous
   // texture stays on the mesh until the new one is ready (no untextured flash).
@@ -371,13 +399,42 @@ function MainApp() {
       if (kit && !kit.weapons.includes(state.weaponKey)) {
         next.weaponKey = kit.weapons[0] ?? state.weaponKey;
       }
-      if (kit && !kit.hasTeamTextures) next.team = 'red';
+      // Team Shine is the one sheen with a per-team color, so the team choice
+      // stays meaningful (and selectable) even on single-team warpaints.
+      if (kit && !kit.hasTeamTextures && state.sheen !== 'team_shine') next.team = 'red';
       patch(next);
     },
-    [data, state.weaponKey, patch],
+    [data, state.weaponKey, state.sheen, patch],
   );
 
   const randomizeSeed = useCallback(() => patch({ seed: randomSeed() }), [patch]);
+
+  const onViewAngle = useCallback((id: string) => {
+    const preset = VIEW_ANGLES.find((p) => p.id === id) ?? VIEW_ANGLES[0];
+    viewerRef.current?.setViewAngle(preset);
+  }, []);
+
+  const onScreenshot = useCallback(async () => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    try {
+      const blob = await viewer.captureScreenshot(state.screenshotScale);
+      const kitName = selectedKit?.name
+        ? selectedKit.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+        : '';
+      const filename = `${kitName || 'warpaint'}_${state.weaponKey}_seed${state.seed}.png`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('[warpaint-viewer] screenshot capture failed:', e);
+    }
+  }, [selectedKit, state.weaponKey, state.seed, state.screenshotScale]);
 
   if (error) return <div className="fatal">Failed to start: {error}</div>;
   if (!data) return <BootLoader boot={boot} />;
@@ -433,7 +490,9 @@ function MainApp() {
             drag to rotate, scroll to zoom, right-drag to pan, double-click to reset
           </div>
         </div>
-        <ControlsBar
+      </main>
+      <aside className="inspector">
+        <Inspector
           manifest={data.manifest}
           weaponOptions={weaponOptions}
           hasTeamTextures={selectedKit?.hasTeamTextures ?? false}
@@ -441,8 +500,10 @@ function MainApp() {
           onChange={patch}
           onRandomizeSeed={randomizeSeed}
           onResetView={() => viewerRef.current?.resetView()}
+          onViewAngle={onViewAngle}
+          onScreenshot={onScreenshot}
         />
-      </main>
+      </aside>
       {boot.progress < 100 && <BootLoader boot={boot} />}
     </div>
   );

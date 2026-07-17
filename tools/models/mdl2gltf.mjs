@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { parseMDL, resolveMaterialName } from './lib/mdl.mjs';
+import { parseMDL, resolveMaterialName, rootFrameTransforms } from './lib/mdl.mjs';
 import { parseVVD } from './lib/vvd.mjs';
 import { parseVTX } from './lib/vtx.mjs';
 import { buildGLB } from './lib/glb.mjs';
@@ -60,39 +60,10 @@ function ensureExtracted(vpkRel) {
 
 // Orientation: TF2 c_model weapons are NOT authored in Source world space
 // (Z-up). They are authored in the weapon_bone attachment frame, which is
-// bonemerged onto the player's hand in-game. Verified against the MDL bone
-// data of all 45 manifest weapons: root "weapon_bone" quat is identity for
-// every gun, and the geometry uses +X right, +Y up, +Z forward (muzzle).
-// Evidence: flamethrower tank hangs at y=-17.6 (down), sniper scope at
-// y=+17.2 (up), every barrel extends along +Z (flamethrower nozzle z=+68.9,
-// shotgun z=+35). That frame already matches glTF conventions (Y-up,
-// right-handed, front at +Z), so NO axis rotation is applied.
-//
-// A few models carry a non-identity root bone (c_knife: 180 deg about Y,
-// c_demo_sultan_sword: -90 deg about Y, some have translation offsets), so we
-// re-express the bind mesh in the root bone frame by applying the root bone's
-// poseToBone (world-to-bone) matrix3x4. For identity roots this is a no-op;
-// for the rest it normalizes facing/origin to the common attachment frame.
-// Melee weapons are genuinely authored head/blade along +Y (up out of the
-// gripping fist); that is correct and left as-is.
-function rootFrameTransforms(mdl) {
-  const ptb = mdl.bones[0]?.poseToBone;
-  if (!ptb) {
-    return { pos: (v) => v, nrm: (v) => v };
-  }
-  const m = ptb; // row-major 3x4: rows [r0 r1 r2], col 3 = translation
-  const pos = (v) => [
-    m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3],
-    m[4] * v[0] + m[5] * v[1] + m[6] * v[2] + m[7],
-    m[8] * v[0] + m[9] * v[1] + m[10] * v[2] + m[11],
-  ];
-  const nrm = (v) => [
-    m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
-    m[4] * v[0] + m[5] * v[1] + m[6] * v[2],
-    m[8] * v[0] + m[9] * v[1] + m[10] * v[2],
-  ];
-  return { pos, nrm };
-}
+// bonemerged onto the player's hand in-game. See rootFrameTransforms() in
+// lib/mdl.mjs for the full derivation and evidence; it is shared with
+// extract-attachments.mjs so mesh geometry and attachment points land in the
+// identical frame.
 
 function normalize3(x, y, z) {
   const len = Math.hypot(x, y, z) || 1;

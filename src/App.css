@@ -1,6 +1,6 @@
 .app {
   display: grid;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: 340px 1fr 256px;
   height: 100%;
   overflow: hidden;
 }
@@ -413,17 +413,7 @@
   opacity: 0;
 }
 
-/* ---------- controls bar ---------- */
-.controls-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 8px 22px;
-  padding: 14px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--panel);
-}
+/* ---------- controls ---------- */
 .control {
   display: flex;
   flex-direction: column;
@@ -448,6 +438,25 @@
   gap: 6px;
   align-items: center;
 }
+/* The seed is a full 64-bit decimal (up to 20 digits); the generic
+   .ui-num-input width is too narrow to show it without scrolling. It also
+   stands alone (no .ui-numfield group around it), so it needs its own panel
+   background and border to read as an input instead of bare text. */
+.seed-input {
+  width: 172px;
+  min-height: var(--control-h);
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-fast);
+}
+.seed-input:hover {
+  border-color: var(--border-strong);
+}
+.seed-input:focus {
+  border-color: var(--accent);
+}
 .btn-icon {
   padding: 0;
   width: var(--control-h, 28px);
@@ -455,11 +464,118 @@
   flex: none;
 }
 
+/* ---------- inspector (right panel) ---------- */
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+}
+.inspector-section + .inspector-section {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.inspector-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 2px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.inspector-section-header:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.inspector-section-chevron {
+  flex: none;
+  transition: transform 140ms ease;
+}
+.inspector-section-chevron[data-collapsed] {
+  transform: rotate(-90deg);
+}
+.inspector-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 2px 10px;
+}
+.inspector .control {
+  align-items: stretch;
+  gap: 6px;
+}
+.inspector .control-label {
+  justify-content: flex-start;
+}
+.inspector .seed-input {
+  width: 100%;
+}
+.inspector .ui-slider-control,
+.inspector .ui-select-trigger {
+  width: 100%;
+}
+/* The wear control was sized for the old horizontal footer; in the panel it
+   must follow the column width or it forces a horizontal scrollbar. */
+.inspector .wear-slider {
+  width: 100%;
+}
+.inspector .ui-team-toggle {
+  width: 100%;
+}
+.inspector-actions-row {
+  display: flex;
+  gap: 6px;
+}
+.inspector-actions-row .btn {
+  flex: 1;
+  justify-content: center;
+}
+
 /* ---------- responsive ---------- */
+@media (max-width: 1100px) {
+  .app {
+    grid-template-columns: 340px 1fr;
+    grid-template-rows: 1fr auto;
+    grid-template-areas:
+      'sidebar stage'
+      'sidebar inspector';
+  }
+  .sidebar {
+    grid-area: sidebar;
+  }
+  .stage {
+    grid-area: stage;
+  }
+  .inspector {
+    grid-area: inspector;
+    max-height: 42vh;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+}
 @media (max-width: 860px) {
   .app {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      'sidebar'
+      'stage'
+      'inspector';
   }
   .sidebar {
     max-height: 42vh;

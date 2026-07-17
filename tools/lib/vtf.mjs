@@ -255,6 +255,107 @@ export function decodeVTF(buf) {
   return decodeLargestMipAt(buf, hdr, largestMipOffset(hdr));
 }
 
+// Offset of a specific frame (0-based) within the largest mip (mip 0, face 0, slice 0).
+// Frames are stored consecutively within a mip level (mip -> frame -> face -> slice).
+function largestMipFrameOffset(hdr, frameIndex) {
+  const { highResFormat: fmt, width, height, faces, depth } = hdr;
+  const frameSize = mipByteSize(fmt, width, height) * faces * depth;
+  return largestMipOffset(hdr) + frameIndex * frameSize;
+}
+
+// Decode a single frame (0-based) of the largest mip. decodeVTF always returns frame 0; this is
+// for animated textures (e.g. materials/effects/animatedsheen/animatedsheen0.vtf) that need a
+// specific frame or every frame.
+export function decodeVTFFrame(buf, frameIndex) {
+  const hdr = parseVTFHeader(buf);
+  const { width, height, frames } = hdr;
+  if (width === 0 || height === 0) throw new Error('VTF has zero dimension');
+  if (frameIndex < 0 || frameIndex >= frames) throw new Error(`Frame index ${frameIndex} out of range (frames=${frames})`);
+  return decodeLargestMipAt(buf, hdr, largestMipFrameOffset(hdr, frameIndex));
+}
+
+// Decode every frame of the largest mip, in order (frame 0 first).
+export function decodeVTFAllFrames(buf) {
+  const hdr = parseVTFHeader(buf);
+  const { width, height, frames } = hdr;
+  if (width === 0 || height === 0) throw new Error('VTF has zero dimension');
+  return Array.from({ length: frames }, (_, i) => decodeLargestMipAt(buf, hdr, largestMipFrameOffset(hdr, i)));
+}
+
+// ---------------------------------------------------------------------------
+// Sprite sheet resource (VTF 7.3+ resource dictionary, resource tag 0x10 0x00 0x00).
+// Describes named sequences of UV cells within the texture; without it a renderer must
+// treat the whole (often multi-cell) sheet as a single sprite.
+// ---------------------------------------------------------------------------
+
+const RSRC_SHEET = 0x10;
+
+// Locate the sprite-sheet resource's byte offset in a VTF, or null if absent/pre-7.3.
+function findSheetResourceOffset(buf) {
+  const verMajor = buf.readUInt32LE(4);
+  const verMinor = buf.readUInt32LE(8);
+  if (!(verMajor > 7 || (verMajor === 7 && verMinor >= 3))) return null;
+  const numResources = buf.readUInt32LE(68);
+  let ro = 80;
+  for (let r = 0; r < numResources; r++) {
+    const tag0 = buf[ro], tag1 = buf[ro + 1], tag2 = buf[ro + 2];
+    const offset = buf.readUInt32LE(ro + 4);
+    if (tag0 === RSRC_SHEET && tag1 === 0x00 && tag2 === 0x00) return offset;
+    ro += 8;
+  }
+  return null;
+}
+
+// Parse the sheet blob at `off`. Binary layout: int32 version; int32 sequenceCount; then per
+// sequence: int32 sequenceNumber, int32 clamp, int32 frameCount, float32 totalTime; then per
+// frame: float32 displayTime, then UV coords (version 0: 1 sample of 4 float32 x0,y0,x1,y1;
+// version 1: 4 samples of 4 float32 each, sample 0 used). Returns null on any structural or
+// range problem (out-of-bounds read, non-finite float) so the caller can treat it as "no sheet".
+function parseSheetBlob(buf, off) {
+  let p = off;
+  const readI32 = () => { const v = buf.readInt32LE(p); p += 4; return v; };
+  const readF32 = () => { const v = buf.readFloatLE(p); p += 4; return v; };
+
+  const version = readI32();
+  const sequenceCount = readI32();
+  if (!Number.isFinite(sequenceCount) || sequenceCount < 1 || sequenceCount > 64) return null;
+  if (version !== 0 && version !== 1) return null;
+
+  const sequences = [];
+  for (let s = 0; s < sequenceCount; s++) {
+    const sequenceNumber = readI32();
+    const clamp = readI32();
+    const frameCount = readI32();
+    const totalTime = readF32();
+    if (!Number.isFinite(frameCount) || frameCount < 0 || frameCount > 4096) return null;
+    const frames = [];
+    for (let f = 0; f < frameCount; f++) {
+      const displayTime = readF32();
+      const uv = [readF32(), readF32(), readF32(), readF32()];
+      if (version === 1) p += 16 * 3; // skip samples 1..3, keep sample 0
+      for (const c of uv) if (!Number.isFinite(c) || c < 0 || c > 1) return null;
+      frames.push({ displayTime, uv });
+    }
+    sequences.push({ sequenceNumber, clamp: !!clamp, totalTime, frames });
+  }
+  return { version, sequences };
+}
+
+// Parse a VTF's embedded sprite-sheet resource, if present and well-formed. Returns
+// { version, sequences: [{ sequenceNumber, clamp, totalTime, frames: [{displayTime, uv:[x0,y0,x1,y1]}] }] }
+// or null if the VTF has no sheet resource, or the blob fails validation (out-of-range uv,
+// sequenceCount, etc.) - callers should log and treat that as "no sheet" per spec.
+export function parseVTFSpriteSheet(buf) {
+  if (buf.toString('ascii', 0, 4) !== 'VTF\0') throw new Error('Not a VTF file');
+  const off = findSheetResourceOffset(buf);
+  if (off == null) return null;
+  try {
+    return parseSheetBlob(buf, off);
+  } catch {
+    return null;
+  }
+}
+
 // Decode the six largest cubemap faces in Valve/DirectX order:
 // +X, -X, +Y, -Y, +Z, -Z. This is also the order expected by THREE.CubeTexture.
 export function decodeVTFCubemap(buf) {

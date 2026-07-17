@@ -32,6 +32,9 @@ export function parseMDL(path) {
   const numbodyparts = b.readInt32LE(0xe8);
   const bodypartindex = b.readInt32LE(0xec);
 
+  const numlocalattachments = b.readInt32LE(0xf0);
+  const localattachmentindex = b.readInt32LE(0xf4);
+
   // --- textures ---
   const textures = [];
   for (let i = 0; i < numtextures; i++) {
@@ -120,12 +123,82 @@ export function parseMDL(path) {
     bodyparts.push({ index: i, name: bpName, base: bpBaseVal, nummodels, models });
   }
 
+  // --- attachments (mstudioattachment_t: sznameindex, flags, localbone, local[12], unused[8]) ---
+  const attachments = [];
+  for (let i = 0; i < numlocalattachments; i++) {
+    const base = localattachmentindex + i * 92;
+    const sz = b.readInt32LE(base);
+    const aname = readCStr(b, base + sz);
+    const flags = b.readUInt32LE(base + 4);
+    const localbone = b.readInt32LE(base + 8);
+    const local = [];
+    for (let k = 0; k < 12; k++) local.push(b.readFloatLE(base + 12 + k * 4));
+    attachments.push({ index: i, name: aname, flags, localbone, local });
+  }
+
   return {
     path, version, checksum, name,
     textures, cdtextures, skins,
     numskinref, numskinfamilies,
-    bones, bodyparts,
+    bones, bodyparts, attachments,
   };
+}
+
+// Invert a 3x4 row-major affine matrix (rotation + translation, no scale/shear),
+// i.e. the same layout as mstudiobone_t.poseToBone and mstudioattachment_t.local.
+// Given M = [R | t], M^-1 = [R^T | -R^T * t].
+export function invertAffine3x4(m) {
+  const r00 = m[0], r01 = m[1], r02 = m[2], tx = m[3];
+  const r10 = m[4], r11 = m[5], r12 = m[6], ty = m[7];
+  const r20 = m[8], r21 = m[9], r22 = m[10], tz = m[11];
+  const itx = -(r00 * tx + r10 * ty + r20 * tz);
+  const ity = -(r01 * tx + r11 * ty + r21 * tz);
+  const itz = -(r02 * tx + r12 * ty + r22 * tz);
+  return [r00, r10, r20, itx, r01, r11, r21, ity, r02, r12, r22, itz];
+}
+
+// Apply a row-major 3x4 affine matrix to a point.
+export function applyMat3x4(m, v) {
+  return [
+    m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3],
+    m[4] * v[0] + m[5] * v[1] + m[6] * v[2] + m[7],
+    m[8] * v[0] + m[9] * v[1] + m[10] * v[2] + m[11],
+  ];
+}
+
+// Orientation: TF2 c_model weapons are NOT authored in Source world space
+// (Z-up). They are authored in the weapon_bone attachment frame, which is
+// bonemerged onto the player's hand in-game. Verified against the MDL bone
+// data of all 45 manifest weapons: root "weapon_bone" quat is identity for
+// every gun, and the geometry uses +X right, +Y up, +Z forward (muzzle).
+// Evidence: flamethrower tank hangs at y=-17.6 (down), sniper scope at
+// y=+17.2 (up), every barrel extends along +Z (flamethrower nozzle z=+68.9,
+// shotgun z=+35). That frame already matches glTF conventions (Y-up,
+// right-handed, front at +Z), so NO axis rotation is applied.
+//
+// A few models carry a non-identity root bone (c_knife: 180 deg about Y,
+// c_demo_sultan_sword: -90 deg about Y, some have translation offsets), so we
+// re-express the bind mesh in the root bone frame by applying the root bone's
+// poseToBone (world-to-bone) matrix3x4. For identity roots this is a no-op;
+// for the rest it normalizes facing/origin to the common attachment frame.
+// Melee weapons are genuinely authored head/blade along +Y (up out of the
+// gripping fist); that is correct and left as-is.
+//
+// Shared by mdl2gltf.mjs (mesh vertices) and extract-attachments.mjs
+// (unusual/muzzle attachment points), so both land in the identical frame.
+export function rootFrameTransforms(mdl) {
+  const ptb = mdl.bones[0]?.poseToBone;
+  if (!ptb) {
+    return { pos: (v) => v, nrm: (v) => v };
+  }
+  const m = ptb; // row-major 3x4: rows [r0 r1 r2], col 3 = translation
+  const pos = (v) => applyMat3x4(m, v);
+  const nrm = (v) => [
+    m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
+    m[4] * v[0] + m[5] * v[1] + m[6] * v[2],
+    m[8] * v[0] + m[9] * v[1] + m[10] * v[2],
+  ];
+  return { pos, nrm };
 }
 
 // Resolve the material name for a mesh at skin family `skinFamily`.

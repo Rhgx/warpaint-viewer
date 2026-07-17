@@ -26,7 +26,8 @@ export class InspectControls {
   private model: THREE.Group;
 
   // Framing (set by setFraming, restored on reset)
-  private viewDir = new THREE.Vector3(0.7, 0.4, 0.8).normalize();
+  private readonly defaultViewDir = new THREE.Vector3(0.7, 0.4, 0.8).normalize();
+  private viewDir = this.defaultViewDir.clone();
   private baseDist = 5;
   private radius = 1;
 
@@ -87,6 +88,46 @@ export class InspectControls {
   }
   private maxDist() {
     return this.baseDist * 4;
+  }
+
+  // Sets the camera's fixed viewing ray (normalized), or restores the default
+  // 3/4 inspect angle when null, then resets rotation/pan/zoom so the angle
+  // is exact.
+  setViewDirection(dir: THREE.Vector3 | null) {
+    if (dir) {
+      const d = dir.clone();
+      // Straight up/down rays make camera.lookAt's default up vector
+      // degenerate; nudge off-axis slightly before normalizing.
+      if (Math.abs(d.x) < 1e-6 && Math.abs(d.z) < 1e-6) d.z += 0.0001;
+      this.viewDir = d.normalize();
+    } else {
+      this.viewDir = this.defaultViewDir.clone();
+    }
+    this.reset();
+  }
+
+  // Sets model rotation directly (radians from degrees), clearing inertia.
+  // Kept for API completeness; Viewer's view-angle presets now go through
+  // setViewDirection instead of rotating the model.
+  setPose(yawDeg: number, pitchDeg: number) {
+    this.yaw = THREE.MathUtils.degToRad(yawDeg);
+    this.pitch = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(pitchDeg), -PITCH_LIMIT, PITCH_LIMIT);
+    this.velYaw = 0;
+    this.velPitch = 0;
+    this.apply();
+  }
+
+  // Rescales the framed default distance (e.g. after an FOV change) while
+  // preserving the user's current zoom ratio relative to the old default.
+  rescaleFraming(distance: number) {
+    const oldBase = this.baseDist;
+    this.baseDist = distance;
+    if (oldBase > 0) {
+      const ratio = distance / oldBase;
+      this.dist = THREE.MathUtils.clamp(this.dist * ratio, this.minDist(), this.maxDist());
+      this.targetDist = THREE.MathUtils.clamp(this.targetDist * ratio, this.minDist(), this.maxDist());
+    }
+    this.apply();
   }
 
   private onContextMenu = (e: Event) => e.preventDefault();
