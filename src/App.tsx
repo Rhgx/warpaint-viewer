@@ -83,6 +83,7 @@ function MainApp() {
 
   const [data, setData] = useState<DataSource | null>(null);
   const [engineReady, setEngineReady] = useState(false);
+  const [environmentReady, setEnvironmentReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedKitId, setSelectedKitId] = useState<number | null>(null);
   const [composing, setComposing] = useState(false);
@@ -119,17 +120,17 @@ function MainApp() {
         // The URL is parsed exactly once, right here, and only ever applied
         // on top of the catalog's own defaults below; every param is
         // optional and independently falls back if missing or invalid.
-        const url = parseUrlState(window.location.search);
+        const url = parseUrlState(window.location.search, window.location.hash);
 
-        // The catalog is chronological, so start with its newest paintkit;
-        // an unknown/invalid ?kit= id falls back to that same default.
-        const newestKit = ds.manifest.paintkits.at(-1) ?? null;
+        // Start empty unless a valid shared-link selection was requested.
+        // Unknown kit ids also remain empty instead of silently selecting a
+        // different item from the catalog.
         const urlKit = url.kitId != null ? ds.manifest.paintkits.find((p) => p.id === url.kitId) ?? null : null;
-        const kit = urlKit ?? newestKit;
+        const kit = urlKit;
 
         let weaponKey = kit?.weapons.includes(DEFAULT_WEAPON_KEY)
           ? DEFAULT_WEAPON_KEY
-          : kit?.weapons[0] ?? ds.manifest.weapons[0]?.key ?? '';
+          : kit?.weapons[0] ?? '';
         if (url.weaponKey && kit?.weapons.includes(url.weaponKey)) weaponKey = url.weaponKey;
 
         setSelectedKitId(kit?.id ?? null);
@@ -182,11 +183,15 @@ function MainApp() {
       setEngineReady(true);
       advanceBoot(34, 'Loading TF2 environment…');
       await viewer.ready();
-      if (!disposed) advanceBoot(43, 'Environment ready');
+      if (!disposed) {
+        setEnvironmentReady(true);
+        advanceBoot(43, 'Environment ready');
+      }
     })();
     return () => {
       disposed = true;
       setEngineReady(false);
+      setEnvironmentReady(false);
       lastComposeKeyRef.current = '';
       for (const result of new Set(composeCache.values())) result.target.dispose();
       composeCache.clear();
@@ -201,6 +206,12 @@ function MainApp() {
   const selectedKit: PaintkitEntry | null =
     data && selectedKitId != null ? data.manifest.paintkits.find((p) => p.id === selectedKitId) ?? null : null;
   const selectedAssetKey = selectedKit && state.weaponKey ? `${selectedKit.id}|${state.weaponKey}` : '';
+
+  // A blank catalog selection has no model/paint work to wait for. Once the
+  // renderer environment is ready, the intentionally empty stage is ready too.
+  useEffect(() => {
+    if (environmentReady && !selectedKit) advanceBoot(100, 'Ready');
+  }, [environmentReady, selectedKit, advanceBoot]);
 
   // Start the tiny recipe request as soon as selection state changes, in
   // parallel with the lazily imported renderer/model setup.
@@ -266,7 +277,7 @@ function MainApp() {
   useEffect(() => {
     if (!bootSelectionAppliedRef.current) return;
     const handle = window.setTimeout(() => {
-      const qs = serializeUrlState(window.location.search, {
+      const urlState = serializeUrlState(window.location.search, {
         kitId: selectedKitId,
         weaponKey: state.weaponKey,
         seed: state.seed,
@@ -278,7 +289,7 @@ function MainApp() {
         projection: state.projection,
         fov: state.fov,
       });
-      const url = `${window.location.pathname}${qs}${window.location.hash}`;
+      const url = `${window.location.pathname}${urlState.search}${urlState.hash}`;
       window.history.replaceState(null, '', url);
     }, URL_SYNC_DEBOUNCE_MS);
     return () => window.clearTimeout(handle);

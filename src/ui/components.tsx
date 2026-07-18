@@ -17,6 +17,15 @@ export interface IconOption extends Option {
 
 export interface SwatchOption extends Option {
   color?: string | null; // CSS color; missing/null renders a hollow swatch
+  secondaryColor?: string | null; // Optional second half, used by team-dependent colors
+}
+
+function OptionSwatch({ option }: { option?: SwatchOption }) {
+  const split = option?.color && option.secondaryColor;
+  const style = split
+    ? { background: `linear-gradient(45deg, ${option.color} 0 49%, ${option.secondaryColor} 51% 100%)` }
+    : option?.color ? { backgroundColor: option.color } : undefined;
+  return <span className="ui-swatch" data-empty={!option?.color || undefined} data-split={split || undefined} style={style} />;
 }
 
 // Small image with a graceful text-only fallback: manifest icons are not
@@ -159,7 +168,7 @@ export function SwatchSelectField({
     <Select.Root value={value} onValueChange={(v) => onChange(v as string)}>
       <Select.Trigger className="ui-select-trigger ui-select-trigger-icon">
         <span className="ui-icon-option">
-          <span className="ui-swatch" data-empty={!selected?.color || undefined} style={selected?.color ? { backgroundColor: selected.color } : undefined} />
+          <OptionSwatch option={selected} />
           <Select.Value>{() => selected?.label ?? placeholder ?? 'Select'}</Select.Value>
         </span>
         <Select.Icon className="ui-select-icon">v</Select.Icon>
@@ -170,7 +179,7 @@ export function SwatchSelectField({
             {options.map((o) => (
               <Select.Item key={o.value} value={o.value} className="ui-select-item">
                 <span className="ui-icon-option">
-                  <span className="ui-swatch" data-empty={!o.color || undefined} style={o.color ? { backgroundColor: o.color } : undefined} />
+                  <OptionSwatch option={o} />
                   <Select.ItemText>{o.label}</Select.ItemText>
                 </span>
                 <Select.ItemIndicator className="ui-select-indicator">*</Select.ItemIndicator>

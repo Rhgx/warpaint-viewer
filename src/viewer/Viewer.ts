@@ -95,6 +95,7 @@ export class Viewer {
   // Set by frameCamera; reused by setFov to reframe without resetting pose.
   private framedDims: [number, number, number] | null = null;
   private framedRadius = 1;
+  private perspectiveCenterNdc = new THREE.Vector2();
   // Model bounding-box center in GEOMETRY space (raw, uncentered), cached so
   // every rebuildUnusualEffect call (including setUnusual between model
   // loads) can pass a fallback control point without re-deriving it.
@@ -378,6 +379,7 @@ export class Viewer {
 
   setProjection(mode: 'perspective' | 'orthographic') {
     this.projectionMode = mode;
+    this.controls.setDefaultPan(mode === 'perspective' ? this.computePerspectivePan() : new THREE.Vector2());
   }
 
   setFov(fov: number) {
@@ -385,7 +387,7 @@ export class Viewer {
     this.camera.updateProjectionMatrix();
     if (!this.framedDims) return;
     const dist = this.computeFramingDistance(this.framedDims, this.framedRadius);
-    this.controls.rescaleFraming(dist);
+    this.controls.rescaleFraming(dist, this.projectionMode === 'perspective' ? this.computePerspectivePan(dist) : new THREE.Vector2());
   }
 
   // Renders at `scale`x resolution with no background so the PNG carries
@@ -829,7 +831,39 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     this.camera.far = dist * 100;
     this.camera.updateProjectionMatrix();
     this.controls.setFraming(dist, radius);
+
+    // A centered 3D bounding box can still look off-center after perspective
+    // projection (especially long, deep weapons such as the rocket launcher).
+    // Measure the actual projected vertices and make that visual center the
+    // controls' reset position.
+    const projectedMin = new THREE.Vector2(Infinity, Infinity);
+    const projectedMax = new THREE.Vector2(-Infinity, -Infinity);
+    const point = new THREE.Vector3();
+    for (const geometry of geometries) {
+      const positions = geometry.getAttribute('position');
+      if (!positions) continue;
+      for (let i = 0; i < positions.count; i++) {
+        point.fromBufferAttribute(positions, i).sub(center).project(this.camera);
+        projectedMin.x = Math.min(projectedMin.x, point.x);
+        projectedMin.y = Math.min(projectedMin.y, point.y);
+        projectedMax.x = Math.max(projectedMax.x, point.x);
+        projectedMax.y = Math.max(projectedMax.y, point.y);
+      }
+    }
+    if (Number.isFinite(projectedMin.x)) {
+      this.perspectiveCenterNdc.copy(projectedMin.add(projectedMax).multiplyScalar(0.5));
+      const defaultPan = this.projectionMode === 'perspective' ? this.computePerspectivePan(dist) : new THREE.Vector2();
+      this.controls.setFraming(dist, radius, defaultPan);
+    }
     this.rebuildUnusualEffect();
+  }
+
+  private computePerspectivePan(distance = this.camera.position.length()): THREE.Vector2 {
+    const vHalf = (this.camera.fov * Math.PI) / 360;
+    return new THREE.Vector2(
+      -this.perspectiveCenterNdc.x * distance * Math.tan(vHalf) * this.camera.aspect,
+      -this.perspectiveCenterNdc.y * distance * Math.tan(vHalf),
+    );
   }
 
   private computeFramingDistance(dims: [number, number, number], radius: number): number {

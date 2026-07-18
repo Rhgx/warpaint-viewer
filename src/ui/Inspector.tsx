@@ -163,7 +163,8 @@ export function Inspector({
   const sheenOptions: SwatchOption[] = SHEEN_PRESETS.map((p) => ({
     value: p.id,
     label: p.label,
-    color: p.id === 'none' ? null : rgbCss(state.team === 'blu' ? p.blu : p.red),
+    color: p.id === 'none' ? null : rgbCss(p.id === 'team_shine' ? p.red : (state.team === 'blu' ? p.blu : p.red)),
+    secondaryColor: p.id === 'team_shine' ? rgbCss(p.blu) : null,
   }));
 
   return (

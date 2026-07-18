@@ -210,7 +210,8 @@ button {
   padding: 4px;
   max-height: 320px;
   overflow: auto;
-  min-width: 150px;
+  width: var(--anchor-width);
+  max-width: var(--available-width);
 }
 .ui-select-item {
   display: flex;
@@ -235,14 +236,19 @@ button {
 /* ---------- swatch select (killstreak sheen) ---------- */
 .ui-swatch {
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   border: 1px solid var(--border-strong);
   background: var(--panel);
+  box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 12%);
 }
 .ui-swatch[data-empty] {
   background: transparent;
+  box-shadow: none;
+}
+.ui-swatch[data-split] {
+  border-color: color-mix(in srgb, var(--border-strong) 70%, white 30%);
 }
 
 /* ---------- generic two-way toggle group (e.g. projection) ---------- */

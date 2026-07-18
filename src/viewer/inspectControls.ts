@@ -30,6 +30,7 @@ export class InspectControls {
   private viewDir = this.defaultViewDir.clone();
   private baseDist = 5;
   private radius = 1;
+  private defaultPan = new THREE.Vector2();
 
   // Current state
   private dist = 5;
@@ -66,16 +67,25 @@ export class InspectControls {
 
   // Called by the viewer after loading a model: fixes the camera ray and the
   // default distance, then resets the transform state.
-  setFraming(distance: number, radius: number) {
+  setFraming(distance: number, radius: number, defaultPan = new THREE.Vector2()) {
     this.baseDist = distance;
     this.radius = radius;
+    this.defaultPan.copy(defaultPan);
     this.reset();
+  }
+
+  // Changes the projection-specific resting position without discarding any
+  // deliberate pan the user has added on top of it.
+  setDefaultPan(defaultPan: THREE.Vector2) {
+    this.pan.sub(this.defaultPan).add(defaultPan);
+    this.defaultPan.copy(defaultPan);
+    this.apply();
   }
 
   reset() {
     this.yaw = 0;
     this.pitch = 0;
-    this.pan.set(0, 0);
+    this.pan.copy(this.defaultPan);
     this.dist = this.baseDist;
     this.targetDist = this.baseDist;
     this.velYaw = 0;
@@ -119,13 +129,17 @@ export class InspectControls {
 
   // Rescales the framed default distance (e.g. after an FOV change) while
   // preserving the user's current zoom ratio relative to the old default.
-  rescaleFraming(distance: number) {
+  rescaleFraming(distance: number, defaultPan?: THREE.Vector2) {
     const oldBase = this.baseDist;
     this.baseDist = distance;
     if (oldBase > 0) {
       const ratio = distance / oldBase;
       this.dist = THREE.MathUtils.clamp(this.dist * ratio, this.minDist(), this.maxDist());
       this.targetDist = THREE.MathUtils.clamp(this.targetDist * ratio, this.minDist(), this.maxDist());
+    }
+    if (defaultPan) {
+      this.pan.sub(this.defaultPan).add(defaultPan);
+      this.defaultPan.copy(defaultPan);
     }
     this.apply();
   }

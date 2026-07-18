@@ -288,7 +288,7 @@ export function WarpaintList({
               <div className="warpaint-group" key={collection}>
                 {showGroupHeaders && (
                   <div className="warpaint-group-label">
-                    <AssetIcon src={collectionIcons[collection]} size={16} />
+                    <AssetIcon src={collectionIcons[collection]} size={24} />
                     <span className="warpaint-group-label-name">{collection}</span>
                     <span className="warpaint-group-label-count">{kits.length}</span>
                   </div>
