@@ -16,7 +16,7 @@ export interface DataSource {
   getAssetUrl(rel: string): string | null;
 }
 
-const DATA_ROOT = '/data';
+const DATA_ROOT = `${import.meta.env.BASE_URL}data`;
 
 function joinData(rel: string): string {
   if (rel.startsWith('data:') || rel.startsWith('http')) return rel;

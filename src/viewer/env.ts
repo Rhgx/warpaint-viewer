@@ -45,7 +45,7 @@ export function loadEditorEnvCube(
   onLoad: (texture: THREE.CubeTexture) => void,
   onError?: (error: unknown) => void,
 ): void {
-  const root = '/data/env/editor-cubemap/';
+  const root = `${import.meta.env.BASE_URL}data/env/editor-cubemap/`;
   new THREE.CubeTextureLoader().setPath(root).load(
     ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png'],
     (texture) => {
@@ -63,7 +63,7 @@ export function loadEditorEnvCube(
 }
 
 export function loadMapSkybox(skybox: string): Promise<THREE.CubeTexture> {
-  const root = `/data/env/maps/${skybox}/`;
+  const root = `${import.meta.env.BASE_URL}data/env/maps/${skybox}/`;
   return new THREE.CubeTextureLoader().setPath(root).loadAsync([
     'px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png',
   ]).then((texture) => {

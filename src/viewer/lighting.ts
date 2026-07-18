@@ -168,7 +168,7 @@ const mapPreset = (id: keyof typeof BSP_MAP_LIGHTING): LightingPreset => {
       : fogBackground(source.fog?.color ?? null),
     // Actual in-map captures are baked into blurred 2D backplates. Lighting
     // still comes exclusively from the BSP data above.
-    backplate: `/data/env/backplates/${id}.webp`,
+    backplate: `${import.meta.env.BASE_URL}data/env/backplates/${id}.webp`,
     // Source SDK 2013's default mat_autoexposure_max. An isolated weapon
     // against sky converges near this end of TF2's 0.5-2.0 HDR range.
     exposure: 2,
