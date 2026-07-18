@@ -1,0 +1,90 @@
+{
+ "effects/sc_hardglow.vmt": {
+  "file": "effects_sc_hardglow.png",
+  "frames": 1,
+  "width": 128,
+  "height": 128,
+  "additive": true,
+  "shader": "Spritecard"
+ },
+ "effects/fire_embers1.vmt": {
+  "file": "effects_fire_embers1.png",
+  "frames": 1,
+  "width": 256,
+  "height": 256,
+  "additive": true,
+  "shader": "UnlitGeneric"
+ },
+ "vgui/white": {
+  "file": "vgui_white.png",
+  "frames": 1,
+  "width": 1,
+  "height": 1,
+  "additive": false,
+  "shader": "UnlitGeneric"
+ },
+ "particle/smokesprites_0001.vmt": {
+  "file": "particle_smokesprites_0001.png",
+  "frames": 1,
+  "width": 256,
+  "height": 256,
+  "additive": false,
+  "shader": "UnlitGeneric"
+ },
+ "effects/conc_warp.vmt": {
+  "file": "effects_conc_warp.png",
+  "frames": 1,
+  "width": 256,
+  "height": 256,
+  "additive": false,
+  "shader": "Refract"
+ },
+ "effects/circle2.vmt": {
+  "file": "effects_circle2.png",
+  "frames": 1,
+  "width": 256,
+  "height": 256,
+  "additive": true,
+  "shader": "UnlitGeneric"
+ },
+ "effects/wispy_smoke2.vmt": {
+  "file": "effects_wispy_smoke2.png",
+  "frames": 1,
+  "width": 128,
+  "height": 128,
+  "additive": false,
+  "shader": "UnlitGeneric"
+ },
+ "effects/circle_nocull_altered.vmt": {
+  "file": "effects_circle_nocull_altered.png",
+  "frames": 1,
+  "width": 256,
+  "height": 256,
+  "additive": true,
+  "shader": "UnlitGeneric"
+ },
+ "effects/fleck_glass3.vmt": {
+  "file": "effects_fleck_glass3.png",
+  "frames": 1,
+  "width": 64,
+  "height": 64,
+  "additive": false,
+  "shader": "UnlitGeneric"
+ },
+ "effects/snowflake01.vmt": {
+  "file": "effects_snowflake01.png",
+  "frames": 1,
+  "width": 64,
+  "height": 64,
+  "additive": false,
+  "shader": "SpriteCard"
+ },
+ "effects/comball_d/ar2_altfire1_d.vmt": {
+  "file": "effects_comball_d_ar2_altfire1_d.png",
+  "frames": 27,
+  "width": 256,
+  "height": 256,
+  "additive": true,
+  "shader": "UnlitGeneric"
+ }
+}

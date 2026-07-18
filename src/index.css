@@ -1,0 +1,593 @@
+:root {
+  /* Light theme (default) */
+  --bg: #f2f3f5;
+  --panel: #ffffff;
+  --panel-2: #eaecef;
+  --text: #14161a;
+  --text-dim: #5b6470;
+  --border: #d3d8dd;
+  --border-strong: #9aa2ab;
+  --accent: #2f6fdb;
+  --accent-text: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  --red: #b8383b;
+  --blu: #3a6ea5;
+  --pass: #1f8a4c;
+  --fail: #c23b3b;
+  color-scheme: light dark;
+
+  /* War paint grade (rarity) colors, standard TF2 palette. Blended toward
+     --text before use so light grades (civilian, freelance) stay readable
+     on a light panel; --grade-tint-strength controls how much of the raw
+     color survives the blend and is tuned per theme below. */
+  --grade-civilian: #b0c3d9;
+  --grade-freelance: #5e98d9;
+  --grade-mercenary: #4b69ff;
+  --grade-commando: #8847ff;
+  --grade-assassin: #d32ce6;
+  --grade-elite: #eb4b4b;
+  --grade-tint-strength: 45%;
+
+  /* Shared control sizing so selects, buttons, inputs and number fields
+     line up in the controls bar. */
+  --control-h: 28px;
+
+  /* Height of the bottom tab strip that replaces the sidebar/inspector
+     layout below 860px (App.css); the stage and slide-over panels both
+     inset by this so nothing renders underneath it. */
+  --mobile-tabstrip-h: 56px;
+
+  /* Radius scale, applied consistently across buttons/inputs/popups. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* Elevation for popups/floating elements; stronger in dark theme below. */
+  --shadow-pop: 0 4px 16px rgba(20, 22, 26, 0.1), 0 1px 3px rgba(20, 22, 26, 0.08);
+
+  /* Shared, reduced-motion-aware transition for interactive surfaces. */
+  --transition-fast: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181c;
+    --panel: #1e2126;
+    --panel-2: #24282f;
+    --text: #eef0f3;
+    --text-dim: #99a1ac;
+    --border: #34393f;
+    --border-strong: #4d545e;
+    --accent: #4c8dff;
+    --accent-text: #0b0d10;
+    --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--panel));
+    --red: #d24b4e;
+    --blu: #5a8fd0;
+    --pass: #46c07a;
+    --fail: #e06060;
+    --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35);
+    /* Dark panels contrast fine with the raw grade colors, so let more of
+       them show through. */
+    --grade-tint-strength: 70%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-fast: none;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2 {
+  font-weight: 600;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.loading,
+.fatal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-dim);
+}
+.fatal {
+  color: var(--fail);
+}
+
+/* ---------- focus ring, shared by interactive controls ---------- */
+.btn:focus-visible,
+.ui-select-trigger:focus-visible,
+.ui-input:focus-visible,
+.ui-numfield:focus-within,
+.ui-team-btn:focus-visible,
+.ui-toggle-btn:focus-visible,
+.ui-switch:focus-visible,
+.warpaint-item:focus-visible,
+.warpaint-tile:focus-visible,
+.order-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 2px;
+}
+
+/* ---------- generic flat button ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control-h);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.btn:hover {
+  border-color: var(--border-strong);
+}
+.btn:active {
+  background: var(--border);
+}
+
+/* ---------- icon + label rows (select items, weapon/collection pickers) ---------- */
+.asset-icon,
+.asset-icon-empty {
+  flex: none;
+  object-fit: contain;
+  image-rendering: auto;
+}
+.ui-icon-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+.ui-icon-option > *:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Base UI: Select ---------- */
+.ui-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 150px;
+  min-height: var(--control-h);
+  padding: 5px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.ui-select-trigger:hover {
+  border-color: var(--border-strong);
+}
+.ui-select-trigger-icon {
+  min-width: 190px;
+}
+.ui-select-icon {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.ui-select-positioner {
+  z-index: 50;
+}
+.ui-select-popup {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  padding: 4px;
+  max-height: 320px;
+  overflow: auto;
+  min-width: 150px;
+}
+.ui-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  transition: var(--transition-fast);
+}
+.ui-select-item[data-highlighted] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.ui-select-indicator {
+  font-size: 11px;
+}
+
+/* ---------- swatch select (killstreak sheen) ---------- */
+.ui-swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+}
+.ui-swatch[data-empty] {
+  background: transparent;
+}
+
+/* ---------- generic two-way toggle group (e.g. projection) ---------- */
+.ui-toggle-group {
+  display: inline-flex;
+  min-height: var(--control-h);
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.ui-toggle-btn {
+  flex: 1;
+  padding: 5px 10px;
+  background: var(--panel);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+.ui-toggle-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+.ui-toggle-btn:hover {
+  background: var(--panel-2);
+}
+.ui-toggle-btn[data-pressed] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+/* ---------- Base UI: Slider ---------- */
+.ui-slider-control {
+  display: flex;
+  align-items: center;
+  width: 150px;
+  height: 18px;
+}
+.ui-slider-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+}
+.ui-slider-indicator {
+  position: absolute;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.ui-slider-thumb {
+  width: 13px;
+  height: 13px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+}
+.ui-slider-thumb:hover {
+  border-color: var(--accent);
+}
+
+/* ---------- Five-detent wear control ---------- */
+.wear-slider {
+  width: 250px;
+  padding: 1px 5px 0;
+}
+.wear-slider-control {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  cursor: pointer;
+  touch-action: none;
+}
+.wear-slider-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+/* Filled portion takes the wear color of the current stop. */
+.wear-slider-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--wear-color);
+  transition: width 140ms ease, background-color 140ms ease;
+}
+.wear-slider-stop {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 32%, transparent);
+  transform: translate(-50%, -50%);
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+.wear-slider-stop:not([data-reached]) {
+  opacity: 0.55;
+}
+.wear-slider-stop[data-selected] {
+  box-shadow: 0 0 0 2px var(--text), 0 0 0 4px var(--panel);
+  transform: translate(-50%, -50%) scale(1.12);
+  opacity: 1;
+}
+.wear-slider-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: var(--wear-color);
+  box-shadow: 0 0 0 2px var(--text);
+  outline: none;
+  transition: background-color 140ms ease;
+}
+.wear-slider-thumb:focus-visible {
+  box-shadow: 0 0 0 2px var(--text), 0 0 0 5px color-mix(in srgb, var(--wear-color) 48%, transparent);
+}
+.wear-slider-labels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin: 3px -9px 0;
+}
+.wear-slider-labels button {
+  padding: 2px 0;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: var(--text-dim);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+  text-align: center;
+  cursor: pointer;
+}
+.wear-slider-labels button:hover {
+  color: var(--text);
+}
+.wear-slider-labels button:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.wear-slider-labels button[data-selected] {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* ---------- Base UI: NumberField ---------- */
+.ui-numfield {
+  display: inline-flex;
+  min-height: var(--control-h);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--panel);
+  transition: var(--transition-fast);
+}
+.ui-numfield:focus-within {
+  border-color: var(--accent);
+}
+.ui-num-btn {
+  width: 24px;
+  background: var(--panel-2);
+  border: none;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.ui-num-btn:last-child {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+.ui-num-btn:hover {
+  background: var(--border);
+}
+.ui-num-input {
+  width: 92px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 5px 8px;
+  text-align: center;
+  outline: none;
+}
+
+/* ---------- Base UI: Input ---------- */
+.ui-input {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 5px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: inherit;
+  outline: none;
+  transition: var(--transition-fast);
+}
+.ui-input:hover {
+  border-color: var(--border-strong);
+}
+.ui-input:focus {
+  border-color: var(--accent);
+}
+
+/* ---------- Team toggle ---------- */
+.ui-team-toggle {
+  display: inline-flex;
+  min-height: var(--control-h);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.ui-team-btn {
+  flex: 1 1 0;
+  padding: 5px 12px;
+  background: var(--panel);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: var(--transition-fast);
+}
+.ui-team-btn:focus-visible {
+  outline-offset: -2px;
+}
+.ui-team-btn[data-side='red'] {
+  border-right: 1px solid var(--border);
+}
+.ui-team-btn[data-side='red'][data-pressed] {
+  background: var(--red);
+  color: #fff;
+}
+.ui-team-btn[data-side='blu'][data-pressed] {
+  background: var(--blu);
+  color: #fff;
+}
+.ui-team-btn:disabled {
+  cursor: not-allowed;
+  filter: saturate(0.38);
+  opacity: 0.66;
+}
+.ui-team-toggle[data-fixed] .ui-team-btn[data-side='red'] {
+  background: color-mix(in srgb, var(--red) 56%, var(--panel));
+  color: color-mix(in srgb, #fff 76%, var(--muted));
+}
+.ui-team-toggle[data-fixed] .ui-team-btn[data-side='blu'] {
+  background: color-mix(in srgb, var(--blu) 56%, var(--panel));
+  color: color-mix(in srgb, #fff 76%, var(--muted));
+}
+
+/* ---------- Base UI: Switch ---------- */
+.ui-switch {
+  width: 34px;
+  height: 18px;
+  background: var(--border);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  padding: 1px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.ui-switch[data-checked] {
+  background: var(--accent);
+}
+.ui-switch-thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.12s;
+}
+.ui-switch[data-checked] .ui-switch-thumb {
+  transform: translateX(16px);
+}
+
+/* ---------- Base UI: ScrollArea ---------- */
+.ui-scroll-root {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.ui-scroll-viewport {
+  height: 100%;
+  overflow-y: auto;
+}
+.ui-scrollbar {
+  display: flex;
+  justify-content: center;
+  width: 8px;
+  padding: 2px;
+}
+.ui-scrollbar-thumb {
+  width: 100%;
+  /* Mix with the panel instead of transparency so a thumb always reads as a
+     single solid control, independent of whatever sits behind it. */
+  background: color-mix(in srgb, var(--border-strong) 80%, var(--panel));
+  border-radius: var(--radius-sm);
+  transition: var(--transition-fast);
+}
+.ui-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* ---------- Self test ---------- */
+.selftest {
+  max-width: 760px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+.selftest-status {
+  display: inline-block;
+  padding: 6px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.selftest-status.pass {
+  background: var(--pass);
+  color: #fff;
+}
+.selftest-status.fail {
+  background: var(--fail);
+  color: #fff;
+}
+.selftest-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.selftest-table th,
+.selftest-table td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.selftest-table tr.pass td:nth-child(2) {
+  color: var(--pass);
+  font-weight: 700;
+}
+.selftest-table tr.fail td:nth-child(2) {
+  color: var(--fail);
+  font-weight: 700;
+}

@@ -1,0 +1,36 @@
+{
+  "name": "warpaint-viewer",
+  "description": "A 1:1 recreation of the TF2 warpaint compositor and lighting engine in Three.js, presented as an interactive viewer",
+  "private": true,
+  "version": "1.0.0",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "extract:map-lighting": "node tools/extract-map-lighting.mjs",
+    "extract:effects": "node tools/extract-effects.mjs",
+    "update:warpaints": "node -e \"require('node:fs').rmSync('staging/items_game.json', { force: true })\" && node tools/extract.mjs && node tools/extract-grades.mjs",
+    "lint": "oxlint",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.6.0",
+    "lucide-react": "^1.24.0",
+    "protobufjs": "^8.7.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "@types/three": "^0.185.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "oxlint": "^1.71.0",
+    "sharp": "^0.35.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1"
+  }
+}
