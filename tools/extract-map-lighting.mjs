@@ -6,9 +6,8 @@
 //   BSPSOURCE_HOME=C:/path/to/BSPSource
 //   TF2_DIR=C:/path/to/Team Fortress 2
 
-// The generated TypeScript intentionally retains the raw Hammer values. The
-// runtime owns the small, documented conversion from Source brightness units
-// to three.js units.
+// The generated TypeScript retains raw Hammer environment values plus the
+// compiled BSP ambient and local-light values used by the Source renderer.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -17,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { decodeVTF } from './lib/vtf.mjs';
 import { encodePNG } from './lib/png.mjs';
 import { extractBatch, listVPK } from './lib/vpk.mjs';
-import { sampleBspAmbientCube } from './lib/bsp-lighting.mjs';
+import { sampleBspAmbientCube, sampleBspLocalLights } from './lib/bsp-lighting.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BSPSOURCE = process.env.BSPSOURCE_HOME || 'C:/Users/TR/Desktop/BSPSource';
@@ -57,6 +56,18 @@ function parseLight(value) {
   return values ? values.map((entry) => Math.round(entry * 1000) / 1000) : null;
 }
 
+function lightingOrigin(preset) {
+  const origin = preset.sampleOrigin;
+  if (!origin || !preset.focusDistance) return origin;
+  const pitch = preset.captureAngles[0] * Math.PI / 180;
+  const yaw = preset.captureAngles[1] * Math.PI / 180;
+  return [
+    origin[0] + Math.cos(pitch) * Math.cos(yaw) * preset.focusDistance,
+    origin[1] + Math.cos(pitch) * Math.sin(yaw) * preset.focusDistance,
+    origin[2] - Math.sin(pitch) * preset.focusDistance,
+  ];
+}
+
 function parseVmf(text) {
   const blocks = [];
   for (const match of text.matchAll(/^(world|entity)\s*\{([\s\S]*?)^\}/gm)) {
@@ -80,21 +91,6 @@ function entityData(entity) {
     fiftyPercentDistance: Number(entity._fifty_percent_distance ?? 0),
     zeroPercentDistance: Number(entity._zero_percent_distance ?? 0),
   };
-}
-
-function nearestLocalLights(entities, origin, count) {
-  if (!origin || !count) return [];
-  return entities
-    .filter((entity) => entity.classname === 'light' || entity.classname === 'light_spot')
-    .map((entity) => {
-      const data = entityData(entity);
-      const point = data.origin;
-      const distance = point ? Math.hypot(point[0] - origin[0], point[1] - origin[1], point[2] - origin[2]) : Infinity;
-      return { ...data, distance: Math.round(distance * 1000) / 1000 };
-    })
-    .filter((light) => light.light && Number.isFinite(light.distance))
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, count);
 }
 
 function decompileMaps() {
@@ -174,6 +170,10 @@ function main() {
     if (!world?.skyname || !environment) throw new Error(`Incomplete lighting entities in ${preset.map}`);
     extractSkybox(world.skyname, vpkFiles);
     const bspPath = path.join(TF_DIR, 'maps', `${preset.map}.bsp`);
+    const modelOrigin = lightingOrigin(preset);
+    const localLighting = preset.localLightCount
+      ? sampleBspLocalLights(bspPath, modelOrigin, preset.localLightCount)
+      : null;
     result[preset.id] = {
       label: preset.label,
       map: preset.map,
@@ -181,9 +181,10 @@ function main() {
       sampleOrigin: preset.sampleOrigin ?? null,
       captureAngles: preset.captureAngles ?? [0, 0, 0],
       focusDistance: preset.focusDistance ?? 0,
-      ambientProbe: sampleBspAmbientCube(bspPath, preset.sampleOrigin),
+      lightingOrigin: modelOrigin,
+      ambientProbe: sampleBspAmbientCube(bspPath, modelOrigin),
       environment: entityData(environment),
-      localLights: nearestLocalLights(entities, preset.sampleOrigin, preset.localLightCount),
+      localLights: localLighting?.lights ?? [],
       fog: fog ? {
         color: parseVector(fog.fogcolor)?.map(Math.round) ?? null,
         color2: parseVector(fog.fogcolor2)?.map(Math.round) ?? null,

@@ -10,8 +10,9 @@ export interface LightingPreset {
   id: string;
   label: string;
   build: (camera?: THREE.PerspectiveCamera) => THREE.Light[];
-  // THREE world-axis order: +X, -X, +Y, -Y, +Z, -Z. Values are linear RGB.
+  // Source-axis order: +X, -X, +Y, -Y, +Z, -Z. Values are linear RGB.
   ambientCube: AmbientCube;
+  ambientBasis?: (camera?: THREE.PerspectiveCamera) => THREE.Matrix3;
   background: number;
   backplate?: string;
   exposure?: number;
@@ -36,11 +37,8 @@ function sourceLightIntensity(light: SourceLight): number {
   return light[3] / 250;
 }
 
-function compiledAmbientCube(sourceCube: readonly (readonly number[])[]): AmbientCube {
-  const face = (sourceIndex: number) => new THREE.Vector3(...sourceCube[sourceIndex] as [number, number, number]);
-  // The BSP stores Source axes. The shader receives THREE world normals:
-  // THREE +X/-X = Source -Y/+Y, +Y/-Y = +Z/-Z, +Z/-Z = +X/-X.
-  return [face(3), face(2), face(4), face(5), face(0), face(1)];
+function sourceAmbientCube(sourceCube: readonly (readonly number[])[]): AmbientCube {
+  return sourceCube.map((face) => new THREE.Vector3(...face as [number, number, number])) as unknown as AmbientCube;
 }
 
 function sourceCameraBasis(angles: SourceVector) {
@@ -70,6 +68,19 @@ function sourceVectorToCameraWorld(
   return camera ? cameraLocal.applyQuaternion(camera.quaternion) : cameraLocal;
 }
 
+function sourceNormalBasis(captureAngles: SourceVector, camera?: THREE.PerspectiveCamera): THREE.Matrix3 {
+  const x = sourceVectorToCameraWorld(new THREE.Vector3(1, 0, 0), captureAngles, camera);
+  const y = sourceVectorToCameraWorld(new THREE.Vector3(0, 1, 0), captureAngles, camera);
+  const z = sourceVectorToCameraWorld(new THREE.Vector3(0, 0, 1), captureAngles, camera);
+  // Columns map Source normals into viewer world space; invert so the shader
+  // can evaluate its Source-ordered ambient cube from a viewer-world normal.
+  return new THREE.Matrix3().set(
+    x.x, y.x, z.x,
+    x.y, y.y, z.y,
+    x.z, y.z, z.z,
+  ).invert();
+}
+
 function directional(color: THREE.ColorRepresentation, intensity: number, direction: THREE.Vector3) {
   const light = new THREE.DirectionalLight(color, intensity);
   // THREE shines from position to target, so place it opposite the Source ray.
@@ -97,39 +108,23 @@ function sourceEnvironmentLight(
   )];
 }
 
-function sourceLocalSpot(
+function sourceCompiledLocalLight(
   light: (typeof BSP_MAP_LIGHTING.indoors.localLights)[number],
-  sampleOrigin: SourceVector,
+  lightingOrigin: SourceVector,
   captureAngles: SourceVector,
-  focusDistance: number,
   camera?: THREE.PerspectiveCamera,
-): THREE.SpotLight {
-  const raw = light.light as SourceLight;
-  // The viewer can pan weapons much farther than a physical inspect camera.
-  // Keep local fixtures angularly correct but outside every weapon's bounds,
-  // avoiding light/model intersections and unstable inverse-square changes.
-  const safeLightRadius = 1000;
-  const spot = new THREE.SpotLight(
-    sourceColor(raw),
-    sourceLightIntensity(raw),
-    0,
-    THREE.MathUtils.degToRad(light.cone),
-    Math.max(0, 1 - light.innerCone / Math.max(1, light.cone)),
-    0,
-  );
-  const origin = light.origin as SourceVector;
-  const cameraBasis = sourceCameraBasis(captureAngles);
-  const focusOrigin = new THREE.Vector3(...sampleOrigin).addScaledVector(cameraBasis.forward, focusDistance);
-  const sourceOffset = new THREE.Vector3(...origin).sub(focusOrigin);
-  spot.position.copy(sourceVectorToCameraWorld(sourceOffset, captureAngles, camera).normalize().multiplyScalar(safeLightRadius));
-  const sourceRay = new THREE.Vector3(
-    Math.cos(THREE.MathUtils.degToRad(light.pitch)) * Math.cos(THREE.MathUtils.degToRad(light.angles?.[1] ?? 0)),
-    Math.cos(THREE.MathUtils.degToRad(light.pitch)) * Math.sin(THREE.MathUtils.degToRad(light.angles?.[1] ?? 0)),
-    Math.sin(THREE.MathUtils.degToRad(light.pitch)),
-  ).normalize();
-  const direction = sourceVectorToCameraWorld(sourceRay, captureAngles, camera);
-  spot.target.position.copy(spot.position).add(direction.multiplyScalar(safeLightRadius * 2));
-  return spot;
+): THREE.DirectionalLight {
+  // Source chooses up to four visible BSP world lights and evaluates their
+  // attenuation at the renderable origin. A directional proxy preserves that
+  // exact compiled RGB contribution on arbitrarily scaled viewer weapons.
+  const color = new THREE.Color(...light.color as [number, number, number]);
+  const sourceToLight = new THREE.Vector3(...light.origin as SourceVector)
+    .sub(new THREE.Vector3(...lightingOrigin));
+  const directionToLight = sourceVectorToCameraWorld(sourceToLight, captureAngles, camera).normalize();
+  const result = new THREE.DirectionalLight(color, 1);
+  result.position.copy(directionToLight).multiplyScalar(10_000);
+  result.target.position.set(0, 0, 0);
+  return result;
 }
 
 function inspectionLights(): THREE.Light[] {
@@ -164,7 +159,7 @@ function ambientProbeBackground(sourceCube: readonly (readonly number[])[]): num
 
 const mapPreset = (id: keyof typeof BSP_MAP_LIGHTING): LightingPreset => {
   const source = BSP_MAP_LIGHTING[id];
-  const isLocal = source.localLights.length > 0 && source.sampleOrigin;
+  const isLocal = source.focusDistance > 0 && source.sampleOrigin !== null;
   return {
     id,
     label: source.label,
@@ -177,13 +172,13 @@ const mapPreset = (id: keyof typeof BSP_MAP_LIGHTING): LightingPreset => {
     // Source SDK 2013's default mat_autoexposure_max. An isolated weapon
     // against sky converges near this end of TF2's 0.5-2.0 HDR range.
     exposure: 2,
-    ambientCube: compiledAmbientCube(source.ambientProbe.cube),
+    ambientCube: sourceAmbientCube(source.ambientProbe.cube),
+    ambientBasis: (camera) => sourceNormalBasis(source.captureAngles as SourceVector, camera),
     build: (camera) => isLocal
-      ? source.localLights.map((light) => sourceLocalSpot(
+      ? source.localLights.map((light) => sourceCompiledLocalLight(
         light as (typeof BSP_MAP_LIGHTING.indoors.localLights)[number],
-        source.sampleOrigin as SourceVector,
+        source.lightingOrigin as SourceVector,
         source.captureAngles as SourceVector,
-        source.focusDistance,
         camera,
       ))
       : sourceEnvironmentLight(

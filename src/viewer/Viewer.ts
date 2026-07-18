@@ -83,6 +83,7 @@ export class Viewer {
     uTf2SelfIllumFresnelParams: { value: new THREE.Vector4(1, 0, 1, 1) },
     uTf2EnvTint: { value: new THREE.Color(0, 0, 0) },
     uTf2AmbientCube: { value: Array.from({ length: 6 }, () => new THREE.Vector3(0.4, 0.4, 0.4)) },
+    uTf2AmbientBasis: { value: new THREE.Matrix3() },
   };
   private raf = 0;
   private lastTime = 0;
@@ -253,6 +254,7 @@ export class Viewer {
       if (l instanceof THREE.DirectionalLight || l instanceof THREE.SpotLight) this.lightGroup.add(l.target);
     }
     preset.ambientCube.forEach((color, i) => this.tf2Uniforms.uTf2AmbientCube.value[i].copy(color));
+    this.tf2Uniforms.uTf2AmbientBasis.value.copy(preset.ambientBasis?.(this.camera) ?? new THREE.Matrix3());
     const host = this.canvas.parentElement;
     host?.classList.toggle('has-backplate', Boolean(preset.backplate));
     host?.style.setProperty('--backplate-image', preset.backplate ? `url("${preset.backplate}")` : 'none');
@@ -482,11 +484,13 @@ uniform sampler2D uTf2ExponentMap, uTf2LightwarpMap, uTf2SelfIllumMaskMap;
 uniform vec3 uTf2PhongTint, uTf2Fresnel, uTf2SelfIllumTint, uTf2EnvTint;
 uniform vec4 uTf2SelfIllumFresnelParams;
 uniform vec3 uTf2AmbientCube[6];
+uniform mat3 uTf2AmbientBasis;
 vec3 tf2AmbientLight( vec3 worldNormal ) {
-  vec3 n2 = worldNormal * worldNormal;
-  return n2.x * uTf2AmbientCube[worldNormal.x < 0.0 ? 1 : 0]
-       + n2.y * uTf2AmbientCube[worldNormal.y < 0.0 ? 3 : 2]
-       + n2.z * uTf2AmbientCube[worldNormal.z < 0.0 ? 5 : 4];
+  vec3 sourceNormal = normalize( uTf2AmbientBasis * worldNormal );
+  vec3 n2 = sourceNormal * sourceNormal;
+  return n2.x * uTf2AmbientCube[sourceNormal.x < 0.0 ? 1 : 0]
+       + n2.y * uTf2AmbientCube[sourceNormal.y < 0.0 ? 3 : 2]
+       + n2.z * uTf2AmbientCube[sourceNormal.z < 0.0 ? 5 : 4];
 }`,
       );
 

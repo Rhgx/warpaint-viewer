@@ -15,6 +15,11 @@ export const BSP_MAP_LIGHTING = {
       0
     ],
     "focusDistance": 0,
+    "lightingOrigin": [
+      0,
+      0,
+      364
+    ],
     "ambientProbe": {
       "source": "LUMP_LEAF_AMBIENT_LIGHTING_HDR",
       "position": [
@@ -119,6 +124,11 @@ export const BSP_MAP_LIGHTING = {
       0
     ],
     "focusDistance": 0,
+    "lightingOrigin": [
+      511.677,
+      -4.29442,
+      160.25
+    ],
     "ambientProbe": {
       "source": "LUMP_LEAF_AMBIENT_LIGHTING_HDR",
       "position": [
@@ -223,11 +233,16 @@ export const BSP_MAP_LIGHTING = {
       0
     ],
     "focusDistance": 128,
+    "lightingOrigin": [
+      -473.3204666154512,
+      3280.0503560427633,
+      -65.111
+    ],
     "ambientProbe": {
       "source": "LUMP_LEAF_AMBIENT_LIGHTING_HDR",
       "position": [
-        -592,
-        3328,
+        -473.3204666154512,
+        3280.0503560427633,
         -65.111
       ],
       "requestedLeaf": 402,
@@ -235,34 +250,34 @@ export const BSP_MAP_LIGHTING = {
       "sampleCount": 16,
       "cube": [
         [
-          0.063238,
-          0.044216,
-          0.027065
+          0.049876,
+          0.034202,
+          0.022148
         ],
         [
-          0.019973,
-          0.013921,
-          0.009089
+          0.039832,
+          0.028521,
+          0.017689
         ],
         [
-          0.056894,
-          0.040193,
-          0.026506
+          0.064949,
+          0.046219,
+          0.031621
         ],
         [
-          0.023561,
-          0.015728,
-          0.011252
+          0.031914,
+          0.021436,
+          0.014691
         ],
         [
-          0.013093,
-          0.008565,
-          0.006701
+          0.016729,
+          0.011348,
+          0.009183
         ],
         [
-          0.090724,
-          0.065523,
-          0.036426
+          0.09785,
+          0.070014,
+          0.040246
         ]
       ]
     },
@@ -298,108 +313,43 @@ export const BSP_MAP_LIGHTING = {
     },
     "localLights": [
       {
-        "classname": "light_spot",
         "origin": [
-          -489.397,
-          3330.97,
-          -30.9933
+          -508.05499267578125,
+          3073.27001953125,
+          -23.99329948425293
         ],
-        "angles": [
-          -75,
-          90,
-          90
+        "intensity": [
+          23529.4140625,
+          23529.4140625,
+          23529.4140625
         ],
-        "pitch": -75,
-        "light": [
-          255,
-          255,
-          255,
-          600
-        ],
-        "ambient": null,
-        "cone": 50,
-        "innerCone": 30,
-        "fiftyPercentDistance": 0,
-        "zeroPercentDistance": 0,
-        "distance": 108.168
-      },
-      {
-        "classname": "light_spot",
-        "origin": [
-          -508.055,
-          3073.27,
-          -23.9933
-        ],
-        "angles": [
-          -90,
+        "normal": [
+          -3.803587134143527e-8,
           0,
-          0
+          -1
         ],
-        "pitch": -90,
-        "light": [
-          255,
-          255,
-          255,
-          600
+        "cluster": 176,
+        "type": 2,
+        "style": 0,
+        "stopdot": 0.42261824011802673,
+        "stopdot2": 0.1736481487751007,
+        "exponent": 1,
+        "radius": 0,
+        "constantAttenuation": 0,
+        "linearAttenuation": 0,
+        "quadraticAttenuation": 1,
+        "flags": 0,
+        "color": [
+          0.038888,
+          0.038888,
+          0.038888
         ],
-        "ambient": null,
-        "cone": 80,
-        "innerCone": 65,
-        "fiftyPercentDistance": 0,
-        "zeroPercentDistance": 0,
-        "distance": 271.339
-      },
-      {
-        "classname": "light_spot",
-        "origin": [
-          -292.055,
-          3073.27,
-          -21.9933
+        "direction": [
+          -0.162561,
+          -0.967751,
+          0.192435
         ],
-        "angles": [
-          -90,
-          180,
-          0
-        ],
-        "pitch": -90,
-        "light": [
-          255,
-          255,
-          255,
-          600
-        ],
-        "ambient": null,
-        "cone": 65,
-        "innerCone": 55,
-        "fiftyPercentDistance": 0,
-        "zeroPercentDistance": 0,
-        "distance": 395.871
-      },
-      {
-        "classname": "light_spot",
-        "origin": [
-          -176.055,
-          3329.27,
-          -21.9933
-        ],
-        "angles": [
-          -90,
-          180,
-          0
-        ],
-        "pitch": -90,
-        "light": [
-          255,
-          255,
-          255,
-          600
-        ],
-        "ambient": null,
-        "cone": 65,
-        "innerCone": 55,
-        "fiftyPercentDistance": 0,
-        "zeroPercentDistance": 0,
-        "distance": 418.176
+        "distance": 213.671
       }
     ],
     "fog": {
@@ -432,6 +382,11 @@ export const BSP_MAP_LIGHTING = {
       0
     ],
     "focusDistance": 0,
+    "lightingOrigin": [
+      0,
+      0,
+      104.25
+    ],
     "ambientProbe": {
       "source": "LUMP_LEAF_AMBIENT_LIGHTING_HDR",
       "position": [

@@ -7,6 +7,7 @@ import fs from 'node:fs';
 
 const HEADER_LUMPS = 64;
 const LUMP_PLANES = 1;
+const LUMP_VISIBILITY = 4;
 const LUMP_NODES = 5;
 const LUMP_LEAFS = 10;
 const LUMP_LEAF_AMBIENT_INDEX_HDR = 51;
@@ -77,13 +78,38 @@ function findLeaf(position, planes, nodes) {
   throw new Error('BSP node traversal exceeded its safety limit');
 }
 
-function leafBounds(leaves, leafIndex) {
+function leafInfo(leaves, leafIndex) {
   const offset = leafIndex * 32;
   if (offset < 0 || offset + 32 > leaves.length) throw new Error(`Invalid BSP leaf ${leafIndex}`);
   return {
+    cluster: leaves.readInt16LE(offset + 4),
     mins: [leaves.readInt16LE(offset + 8), leaves.readInt16LE(offset + 10), leaves.readInt16LE(offset + 12)],
     maxs: [leaves.readInt16LE(offset + 14), leaves.readInt16LE(offset + 16), leaves.readInt16LE(offset + 18)],
   };
+}
+
+function visibleClusters(visibility, cluster) {
+  if (cluster < 0 || visibility.length < 4) return null;
+  const clusterCount = visibility.readInt32LE(0);
+  if (cluster >= clusterCount || 4 + clusterCount * 8 > visibility.length) return null;
+  const sourceOffset = visibility.readInt32LE(4 + cluster * 8);
+  if (sourceOffset < 0 || sourceOffset >= visibility.length) return null;
+
+  const bytes = Buffer.alloc(Math.ceil(clusterCount / 8));
+  let input = sourceOffset;
+  let output = 0;
+  while (output < bytes.length && input < visibility.length) {
+    const value = visibility[input++];
+    if (value !== 0) {
+      bytes[output++] = value;
+      continue;
+    }
+    if (input >= visibility.length) break;
+    output += visibility[input++];
+  }
+  return (target) => target === cluster || (
+    target >= 0 && target < clusterCount && (bytes[target >> 3] & (1 << (target & 7))) !== 0
+  );
 }
 
 function decodeRgbExp32(data, offset) {
@@ -115,7 +141,7 @@ export function sampleBspAmbientCube(bspPath, position) {
   }
   if (!sampleCount) throw new Error(`No ambient lighting samples for BSP leaf ${requestedLeaf}`);
 
-  const { mins, maxs } = leafBounds(leaves, sampleLeaf);
+  const { mins, maxs } = leafInfo(leaves, sampleLeaf);
   const cube = Array.from({ length: 6 }, () => [0, 0, 0]);
   let totalWeight = 0;
   for (let i = 0; i < sampleCount; i++) {
@@ -167,4 +193,60 @@ export function readBspWorldLights(bspPath) {
     });
   }
   return lights;
+}
+
+function localLightAtPoint(light, position) {
+  // LightDesc_t::ComputeNonincidenceLightAtPoints in Source SDK 2013. The
+  // surface-normal Lambert term is intentionally left for the model shader.
+  if ((light.type !== 1 && light.type !== 2) || light.style !== 0 || (light.flags & 1)) return null;
+  const delta = light.origin.map((value, axis) => value - position[axis]);
+  const distanceSquared = Math.max(1, delta.reduce((sum, value) => sum + value * value, 0));
+  if (light.radius && distanceSquared >= light.radius * light.radius) return null;
+  const distance = Math.sqrt(distanceSquared);
+  const direction = delta.map((value) => value / distance);
+  const denominator = light.constantAttenuation
+    + light.linearAttenuation * distance
+    + light.quadraticAttenuation * distanceSquared;
+  if (!(denominator > 0)) return null;
+
+  let coneScale = 1;
+  if (light.type === 2) {
+    const coneDot = -direction.reduce((sum, value, axis) => sum + value * light.normal[axis], 0);
+    if (coneDot <= light.stopdot2) return null;
+    const spread = light.stopdot - light.stopdot2;
+    coneScale = spread > 1e-10 ? Math.min(1, (coneDot - light.stopdot2) / spread) : 1;
+    if (light.exponent !== 0 && light.exponent !== 1) coneScale **= light.exponent;
+  }
+
+  const scale = coneScale / denominator;
+  const color = light.intensity.map((value) => value * scale);
+  const score = Math.max(...color);
+  if (!(score > 0)) return null;
+  return {
+    ...light,
+    color: color.map((value) => Math.round(value * 1e6) / 1e6),
+    direction: direction.map((value) => Math.round(value * 1e6) / 1e6),
+    distance: Math.round(distance * 1000) / 1000,
+    score,
+  };
+}
+
+export function sampleBspLocalLights(bspPath, position, count = 4) {
+  const bsp = fs.readFileSync(bspPath);
+  if (bsp.toString('ascii', 0, 4) !== 'VBSP') throw new Error(`Not a Source BSP: ${bspPath}`);
+  const planes = readLump(bsp, LUMP_PLANES).data;
+  const nodes = readLump(bsp, LUMP_NODES).data;
+  const leaves = readLump(bsp, LUMP_LEAFS).data;
+  const visibility = readLump(bsp, LUMP_VISIBILITY).data;
+  const leaf = findLeaf(position, planes, nodes);
+  const cluster = leafInfo(leaves, leaf).cluster;
+  const isVisible = visibleClusters(visibility, cluster);
+  const lights = readBspWorldLights(bspPath)
+    .filter((light) => !isVisible || isVisible(light.cluster))
+    .map((light) => localLightAtPoint(light, position))
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, count)
+    .map(({ score: _score, ...light }) => light);
+  return { source: 'LUMP_WORLDLIGHTS_HDR', position, leaf, cluster, lights };
 }
