@@ -259,6 +259,11 @@ async function main() {
 
   // Resolve everything ------------------------------------------------------
   log('[recipes] resolving recipes ...');
+  // The live texture compositor derives an omitted sticker spec as
+  // `<base>_s` (the SDK proto comment still calls the suffix `_spec`). Only
+  // retain that implicit ref when it is actually shipped; otherwise Source
+  // binds black and the sticker is matte.
+  const compositorVpkPaths = new Set([...listVPK(TEXTURES_VPK), ...listVPK(MISC_VPK)]);
   const manifestPaintkits = [];
   const paintIconRefByKit = new Map(); // paintkit id -> representative pattern texture ref
   const weaponRegistry = new Map(); // weaponKey -> { key, name, itemDefIndex, modelPath }
@@ -307,6 +312,7 @@ async function main() {
         for (let w = 0; w < nWear; w++) {
           const r = resolveRecipe(def, slot, itemDef, w, team, ctx);
           if (!r) { trees.push(null); continue; }
+          addImplicitStickerSpecs(r.tree, compositorVpkPaths, r.textureRefs);
           for (const t of r.textureRefs) { allTextureRefs.add(t); kitTextureRefs.add(t); }
           trees.push(r.tree);
         }
@@ -433,6 +439,22 @@ async function main() {
   if (run('verify')) {
     verify(manifestPaintkits, allTextureRefs, skipped);
   }
+}
+
+function addImplicitStickerSpecs(node, vpkPaths, textureRefs) {
+  if (!node || typeof node !== 'object') return;
+  if (node.type === 'apply_sticker') {
+    for (const sticker of node.stickers || []) {
+      if (!sticker.base || sticker.spec) continue;
+      const implicit = sticker.base.replace(/\.webp$/i, '_s.webp');
+      const vpkPath = `materials/${implicit.replace(/^textures\//i, '').replace(/\.webp$/i, '.vtf')}`.toLowerCase();
+      if (vpkPaths.has(vpkPath)) {
+        sticker.spec = implicit;
+        textureRefs.add(implicit);
+      }
+    }
+  }
+  for (const child of node.nodes || []) addImplicitStickerSpecs(child, vpkPaths, textureRefs);
 }
 
 // ---------------------------------------------------------------------------

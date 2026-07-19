@@ -376,7 +376,10 @@ export class Compositor {
         const stickerSpec = node.spec ? await this.textures.load(node.spec) : null;
         const out = this.acquire();
         u.uMode.value = MODE_BLEND;
-        this.setTextures(base.texture, sticker, stickerSpec ?? this.constWhite(), null);
+        // CTCApplyStickerStage binds black when the optional implicit `_s`
+        // texture is unavailable. Black writes a zero phong mask, so stickers
+        // without a spec map (such as Sandwich Diner) stay matte.
+        this.setTextures(base.texture, sticker, stickerSpec ?? this.dummyTex(), null);
         const t = base.transform;
         u.uSrgb0.value = 1;
         u.uSrgb1.value = 1;

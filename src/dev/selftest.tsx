@@ -39,7 +39,7 @@ interface Case {
   recipe: RecipeNode;
   // (px,py) in 0..1, expected linear rgb, tolerance
   sample: [number, number];
-  expected: [number, number, number];
+  expected: number[];
   tol: number;
 }
 
@@ -127,6 +127,20 @@ function buildCases(): { cases: Case[]; texMap: Record<string, string> } {
       })(),
       tol: 0.02,
     },
+    {
+      name: 'Sticker without spec map writes matte alpha',
+      recipe: {
+        type: 'apply_sticker',
+        stickers: [{ base: 'STICKER', weight: 1 }],
+        destTl: [0, 0],
+        destTr: [1, 0],
+        destBl: [0, 1],
+        nodes: [lookupA],
+      },
+      sample: [0.5, 0.5],
+      expected: [1, 1, 1, 0],
+      tol: 0.02,
+    },
   ];
 
   const texMap: Record<string, string> = {
@@ -134,6 +148,7 @@ function buildCases(): { cases: Case[]; texMap: Record<string, string> } {
     B: texB,
     SEL: texSel,
     G16: groupsUniform16,
+    STICKER: solid(255, 255, 255),
   };
   return { cases, texMap };
 }
@@ -141,8 +156,8 @@ function buildCases(): { cases: Case[]; texMap: Record<string, string> } {
 interface Result {
   name: string;
   pass: boolean;
-  got: [number, number, number];
-  expected: [number, number, number];
+  got: number[];
+  expected: number[];
 }
 
 // ---------------------------------------------------------------------------
@@ -422,11 +437,8 @@ export function SelfTestPage() {
         const px = Math.min(size - 1, Math.floor(c.sample[0] * size));
         const py = Math.min(size - 1, Math.floor(c.sample[1] * size));
         const i = (py * size + px) * 4;
-        const got: [number, number, number] = [buf[i], buf[i + 1], buf[i + 2]];
-        const pass =
-          Math.abs(got[0] - c.expected[0]) <= c.tol &&
-          Math.abs(got[1] - c.expected[1]) <= c.tol &&
-          Math.abs(got[2] - c.expected[2]) <= c.tol;
+        const got = Array.from(buf.slice(i, i + c.expected.length));
+        const pass = c.expected.every((expected, channel) => Math.abs(got[channel] - expected) <= c.tol);
         out.push({ name: c.name, pass, got, expected: c.expected });
         res.target.dispose();
       }
