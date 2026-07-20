@@ -102,6 +102,7 @@ export class Viewer {
   private framedCenter = new THREE.Vector3();
 
   private resizeObserver: ResizeObserver | null = null;
+  private resizeTimer = 0;
 
   // Killstreak sheen: a shared second-pass material over per-mesh clones of
   // the weapon geometry. Assets/material are created lazily on first enable
@@ -174,7 +175,15 @@ export class Viewer {
     // The canvas also changes size when the app's layout reflows (inspector
     // sections collapsing, responsive breakpoint stacking) without a window
     // resize event; ResizeObserver catches that directly on the element.
-    this.resizeObserver = new ResizeObserver(() => this.onResize());
+    // Layout panels animate their width/height. Resizing the WebGL drawing
+    // buffer on every animation frame causes visible clears and flicker, so
+    // keep the existing frame CSS-scaled during the short transition and do
+    // one real renderer resize after the layout has settled.
+    this.resizeObserver = new ResizeObserver(() => {
+      this.syncDisplayAspect();
+      window.clearTimeout(this.resizeTimer);
+      this.resizeTimer = window.setTimeout(this.onResize, 240);
+    });
     this.resizeObserver.observe(canvas);
     this.lastTime = performance.now();
     this.loop();
@@ -184,11 +193,20 @@ export class Viewer {
     const w = this.canvas.clientWidth || 1;
     const h = this.canvas.clientHeight || 1;
     this.renderer.setSize(w, h, false);
+    this.syncDisplayAspect();
+  };
+
+  // Keep projection matched to the CSS box while a panel transition changes
+  // its aspect ratio. The existing drawing buffer can then be CSS-scaled
+  // briefly without making the weapon look squeezed or stretched.
+  private syncDisplayAspect() {
+    const w = this.canvas.clientWidth || 1;
+    const h = this.canvas.clientHeight || 1;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     setParticlePointScale(h * this.renderer.getPixelRatio());
     this.syncOrthoCamera();
-  };
+  }
 
   private loop = () => {
     if (this.disposed) return;
@@ -881,6 +899,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.onResize);
+    window.clearTimeout(this.resizeTimer);
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.canvas.parentElement?.classList.remove('has-backplate');

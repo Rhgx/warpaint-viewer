@@ -94,7 +94,7 @@ export class InspectControls {
   }
 
   private minDist() {
-    return this.radius * 1.1;
+    return this.radius * 0.85;
   }
   private maxDist() {
     return this.baseDist * 4;

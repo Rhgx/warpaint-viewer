@@ -1,0 +1,141 @@
+.custom-workbench-slot {
+  flex: 0 0 0;
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  transition: flex-basis 210ms ease, visibility 0s linear 210ms;
+}
+.custom-workbench-slot[data-open] {
+  flex-basis: clamp(250px, 29vh, 340px);
+  visibility: visible;
+  pointer-events: auto;
+  transition: flex-basis 210ms ease, visibility 0s;
+}
+.custom-workbench {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border-strong);
+  background: var(--panel);
+  color: var(--text);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 150ms ease, transform 210ms ease;
+}
+.custom-workbench-slot[data-open] .custom-workbench {
+  opacity: 1;
+  transform: translateY(0);
+}
+.custom-workbench-header {
+  flex: none;
+  display: flex;
+  min-height: 48px;
+  padding: 7px 10px 7px 12px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.custom-workbench-summary,
+.custom-asset-name,
+.custom-asset-actions,
+.custom-file-button {
+  display: flex;
+  align-items: center;
+}
+.custom-workbench-summary { color: var(--text-dim); font-size: 9.5px; }
+.custom-workbench-summary { gap: 12px; }
+.custom-workbench-summary button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.custom-workbench-summary button:hover { background: var(--panel-2); color: var(--text); }
+.custom-workbench-error {
+  flex: none;
+  padding: 5px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--fail) 35%, var(--border));
+  background: color-mix(in srgb, var(--fail) 10%, var(--panel));
+  color: var(--fail);
+  font-size: 10px;
+}
+.custom-workbench-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px 12px; }
+.custom-workbench-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.custom-workbench-spinner { animation: custom-workbench-spin 700ms linear infinite; }
+@keyframes custom-workbench-spin { to { transform: rotate(360deg); } }
+.custom-asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+.custom-asset-card {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.custom-asset-preview { position: relative; min-height: 116px; background: #17191d; }
+.custom-asset-preview img { width: 100%; height: 100%; object-fit: contain; }
+.custom-asset-preview span {
+  position: absolute;
+  inset: auto 4px 4px;
+  padding: 2px 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(8 10 13 / 78%);
+  color: #d7dce4;
+  font-size: 8px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.custom-asset-info { min-width: 0; padding: 8px; }
+.custom-asset-name { gap: 4px; font-size: 11px; font-weight: 650; text-transform: capitalize; }
+.custom-asset-path { margin-top: 2px; overflow: hidden; color: var(--text-dim); font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
+.custom-asset-actions { gap: 5px; margin-top: 9px; }
+.custom-file-button,
+.custom-asset-reset {
+  min-height: 25px;
+  padding: 0 8px;
+  gap: 4px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 9.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.custom-file-button-secondary,
+.custom-asset-reset { border-color: var(--border-strong); background: var(--panel); color: var(--text-dim); }
+.custom-file-button:hover,
+.custom-asset-reset:hover { filter: brightness(1.1); color: var(--text); }
+.custom-file-button input { display: none; }
+.custom-asset-reset { margin-left: auto; }
+.custom-asset-files { display: flex; margin-top: 7px; flex-direction: column; gap: 2px; color: var(--text-dim); font-size: 8.5px; }
+@media (max-width: 860px) { .custom-workbench-slot { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .custom-workbench-slot,
+  .custom-workbench { transition: none; }
+  .custom-workbench-spinner { animation: none; }
+}

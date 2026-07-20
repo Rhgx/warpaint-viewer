@@ -1,8 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Palette, SlidersHorizontal } from 'lucide-react';
 import './App.css';
 import type { Viewer } from './viewer/Viewer';
 import type { Compositor, ComposeResult } from './compositor/compositor';
+import type { RecipeNode } from './compositor/types';
 import { loadDataSource } from './data/loader';
 import type { DataSource } from './data/loader';
 import type { PaintkitEntry } from './data/types';
@@ -10,6 +11,8 @@ import { WarpaintList } from './ui/WarpaintList';
 import { Inspector } from './ui/Inspector';
 import type { ControlsState } from './ui/Inspector';
 import { StageToolbar } from './ui/StageToolbar';
+import { CustomWarpaintWorkbench } from './ui/CustomWarpaintImport';
+import type { WarpaintAssetOverrides } from './ui/CustomWarpaintImport';
 import { VIEW_ANGLES } from './viewer/presets';
 import { parseUrlState, serializeUrlState } from './urlState';
 
@@ -21,6 +24,29 @@ const COMPOSE_CACHE_SIZE = 8;
 const DEFAULT_WEAPON_KEY = 'c_rocketlauncher';
 const URL_SYNC_DEBOUNCE_MS = 300;
 const SEED_HISTORY_CAP = 20;
+
+const EMPTY_OVERRIDES: WarpaintAssetOverrides = { revision: 0, assets: {} };
+
+function applyTextureOverrides(node: RecipeNode, textures: Record<string, string>): RecipeNode {
+  switch (node.type) {
+    case 'texture_lookup':
+      return textures[node.texture] ? { ...node, texture: textures[node.texture] } : node;
+    case 'select':
+      return textures[node.groups] ? { ...node, groups: textures[node.groups] } : node;
+    case 'apply_sticker':
+      return {
+        ...node,
+        stickers: node.stickers.map((sticker) => ({
+          ...sticker,
+          base: textures[sticker.base] ?? sticker.base,
+          spec: sticker.spec ? textures[sticker.spec] ?? sticker.spec : undefined,
+        })),
+        nodes: node.nodes.map((child) => applyTextureOverrides(child, textures)),
+      };
+    default:
+      return { ...node, nodes: node.nodes.map((child) => applyTextureOverrides(child, textures)) };
+  }
+}
 
 type MobilePanel = 'none' | 'catalog' | 'controls';
 
@@ -86,6 +112,13 @@ function MainApp() {
   const [environmentReady, setEnvironmentReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedKitId, setSelectedKitId] = useState<number | null>(null);
+  const [workbenchOpen, setWorkbenchOpen] = useState(false);
+  const [workbenchMounted, setWorkbenchMounted] = useState(false);
+  const [editorRecipe, setEditorRecipe] = useState<RecipeNode | null>(null);
+  const [editorLoading, setEditorLoading] = useState(false);
+  const [assetOverrideCache, setAssetOverrideCache] = useState<Record<string, WarpaintAssetOverrides>>({});
+  const [catalogVisible, setCatalogVisible] = useState(true);
+  const [controlsVisible, setControlsVisible] = useState(true);
   const [composing, setComposing] = useState(false);
   const [hintDismissed, setHintDismissed] = useState(false);
   const [loadedAssetKey, setLoadedAssetKey] = useState('');
@@ -206,6 +239,27 @@ function MainApp() {
   const selectedKit: PaintkitEntry | null =
     data && selectedKitId != null ? data.manifest.paintkits.find((p) => p.id === selectedKitId) ?? null : null;
   const selectedAssetKey = selectedKit && state.weaponKey ? `${selectedKit.id}|${state.weaponKey}` : '';
+  const assetOverrideScope = selectedAssetKey;
+  const assetOverrides = assetOverrideCache[assetOverrideScope] ?? EMPTY_OVERRIDES;
+  const activeTextureOverrides = useMemo(
+    () => Object.fromEntries(
+      Object.entries(assetOverrides.assets).flatMap(([ref, asset]) => asset.output ? [[ref, asset.output]] : []),
+    ),
+    [assetOverrides],
+  );
+
+  // Custom files only live in memory. Let the browser warn before a refresh,
+  // tab close, or navigation would discard any cached edit set.
+  useEffect(() => {
+    const hasCachedEdits = Object.values(assetOverrideCache).some((entry) => Object.keys(entry.assets).length > 0);
+    if (!hasCachedEdits) return;
+    const confirmLoss = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', confirmLoss);
+    return () => window.removeEventListener('beforeunload', confirmLoss);
+  }, [assetOverrideCache]);
 
   // A blank catalog selection has no model/paint work to wait for. Once the
   // renderer environment is ready, the intentionally empty stage is ready too.
@@ -218,6 +272,22 @@ function MainApp() {
   useEffect(() => {
     if (!data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) return;
     void data.getRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
+  }, [data, selectedKit, state.weaponKey, state.team, state.wearIndex]);
+
+  useEffect(() => {
+    if (!data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) {
+      setEditorRecipe(null);
+      setEditorLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setEditorLoading(true);
+    void data.getRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex).then((recipe) => {
+      if (!cancelled) setEditorRecipe(recipe);
+    }).finally(() => {
+      if (!cancelled) setEditorLoading(false);
+    });
+    return () => { cancelled = true; };
   }, [data, selectedKit, state.weaponKey, state.team, state.wearIndex]);
 
   // Load the model when the weapon changes.
@@ -310,7 +380,7 @@ function MainApp() {
       height: weapon?.compositeHeight ?? 1024,
     };
 
-    const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}`;
+    const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}`;
     if (composeKey === lastComposeKeyRef.current) return;
 
     let cancelled = false;
@@ -334,6 +404,7 @@ function MainApp() {
 
     const likelyVariants = () => {
       const variants: Array<{ team: ControlsState['team']; wear: number }> = [];
+      if (Object.keys(activeTextureOverrides).length) return variants;
       if (selectedKit.perWear) {
         for (let wear = 0; wear < 5; wear++) if (wear !== state.wearIndex) variants.push({ team: state.team, wear });
       }
@@ -364,13 +435,14 @@ function MainApp() {
       }, COMPOSE_BADGE_DELAY_MS);
       const t0 = performance.now();
       try {
-        const recipe = await ds.getRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
+        const sourceRecipe = await ds.getRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
         if (cancelled) return;
-        if (!recipe) {
+        if (!sourceRecipe) {
           console.warn(`[warpaint-viewer] no recipe for ${composeKey}`);
           if (!firstPaintLoggedRef.current) setError('The initial warpaint recipe is missing.');
           return;
         }
+        const recipe = applyTextureOverrides(sourceRecipe, activeTextureOverrides);
         if (!firstPaintLoggedRef.current) {
           advanceBoot(70, 'Decoding paint textures…');
           await comp.preload(recipe);
@@ -464,7 +536,7 @@ function MainApp() {
       window.clearTimeout(badgeTimer);
       window.clearTimeout(prewarmTimer);
     };
-  }, [engineReady, data, selectedKit, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, advanceBoot]);
+  }, [engineReady, data, selectedKit, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, activeTextureOverrides, advanceBoot]);
 
   // Pushing history here (rather than inside the setState updater) keeps the
   // updater pure: React/StrictMode may invoke an updater function twice in
@@ -581,7 +653,12 @@ function MainApp() {
   const toggleMobilePanel = (panel: MobilePanel) => setMobilePanel((current) => (current === panel ? 'none' : panel));
 
   return (
-    <div className="app" data-mobile-panel={mobilePanel}>
+    <div
+      className="app"
+      data-mobile-panel={mobilePanel}
+      data-catalog-hidden={!catalogVisible ? '' : undefined}
+      data-controls-hidden={!controlsVisible ? '' : undefined}
+    >
       <aside className="sidebar">
         <WarpaintList
           paintkits={data.manifest.paintkits}
@@ -603,12 +680,12 @@ function MainApp() {
               <div className="stage-header">
                 <div
                   className="stage-header-name"
-                  style={{ color: selectedKit.grade ? `var(--grade-${selectedKit.grade})` : undefined }}
+                  style={{ color: selectedKit?.grade ? `var(--grade-${selectedKit.grade})` : undefined }}
                 >
                   {selectedKit.name}
                 </div>
                 <div className="stage-header-meta">
-                  {selectedKit.collection ?? 'Uncategorized'} - {weaponName}
+                  {selectedKit.collection ?? 'Uncategorized'} - {weaponName}{Object.keys(activeTextureOverrides).length ? ' - Custom files' : ''}
                 </div>
               </div>
             )}
@@ -620,6 +697,15 @@ function MainApp() {
             )}
           </div>
           <StageToolbar
+            catalogVisible={catalogVisible}
+            controlsVisible={controlsVisible}
+            workbenchOpen={workbenchOpen}
+            onToggleWorkbench={() => {
+              setWorkbenchMounted(true);
+              setWorkbenchOpen((open) => !open);
+            }}
+            onToggleCatalog={() => setCatalogVisible((visible) => !visible)}
+            onToggleControls={() => setControlsVisible((visible) => !visible)}
             onSavePng={onScreenshot}
             onCopyImage={onCopyImage}
             onCopyLink={onCopyLink}
@@ -628,6 +714,22 @@ function MainApp() {
           <div className={`canvas-hint${hintDismissed ? ' dismissed' : ''}`}>
             drag to rotate, scroll to zoom, right-drag to pan, double-click to reset
           </div>
+        </div>
+        <div className="custom-workbench-slot" data-open={workbenchOpen ? '' : undefined} aria-hidden={!workbenchOpen}>
+          {workbenchMounted && (
+            <CustomWarpaintWorkbench
+              key={`${selectedKitId ?? 'empty'}|${state.weaponKey}`}
+              recipe={editorRecipe}
+              resolveTexture={data.resolveTexture}
+              loading={editorLoading}
+              initialOverrides={assetOverrides}
+              onChange={(overrides) => {
+                lastComposeKeyRef.current = '';
+                setAssetOverrideCache((cache) => ({ ...cache, [assetOverrideScope]: overrides }));
+              }}
+              onClose={() => setWorkbenchOpen(false)}
+            />
+          )}
         </div>
       </main>
       <aside className="inspector">

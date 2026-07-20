@@ -1,21 +1,52 @@
 .app {
+  --catalog-width: 340px;
+  --controls-width: 256px;
   display: grid;
-  grid-template-columns: 340px 1fr 256px;
+  grid-template-columns: var(--catalog-width) minmax(0, 1fr) var(--controls-width);
   height: 100%;
   overflow: hidden;
+  transition: grid-template-columns 190ms ease;
+}
+.app[data-catalog-hidden] {
+  --catalog-width: 0px;
+}
+.app[data-controls-hidden] {
+  --controls-width: 0px;
+}
+.app[data-catalog-hidden] > .sidebar {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-10px);
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 190ms ease, visibility 0s linear 190ms;
+}
+.app[data-controls-hidden] > .inspector {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(10px);
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 190ms ease, visibility 0s linear 190ms;
 }
 
 /* ---------- sidebar / warpaint list ---------- */
 .sidebar {
+  grid-column: 1;
+  min-width: 0;
   border-right: 1px solid var(--border);
   background: var(--panel);
   min-height: 0;
   display: flex;
+  overflow: hidden;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition: opacity 150ms ease, transform 190ms ease, visibility 0s;
 }
 .warpaint-list {
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-width: 340px;
   min-height: 0;
 }
 .warpaint-list-header {
@@ -303,6 +334,7 @@
 
 /* ---------- stage ---------- */
 .stage {
+  grid-column: 2;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -544,6 +576,19 @@
 .stage-toolbar-btn[data-feedback='error'] {
   color: var(--fail);
 }
+.custom-workbench-trigger[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.stage-toolbar-btn[aria-pressed='false'] {
+  color: color-mix(in srgb, var(--text-dim) 55%, transparent);
+}
+.stage-toolbar-divider {
+  align-self: stretch;
+  width: 1px;
+  margin: 3px 1px;
+  background: var(--border);
+}
 
 /* ---------- controls ---------- */
 .control {
@@ -625,6 +670,7 @@
 
 /* ---------- inspector (right panel) ---------- */
 .inspector {
+  grid-column: 3;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -635,6 +681,10 @@
   padding: 10px;
   background: var(--panel);
   border-left: 1px solid var(--border);
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition: opacity 150ms ease, transform 190ms ease, max-height 190ms ease, padding 190ms ease, visibility 0s;
 }
 .inspector-section + .inspector-section {
   border-top: 1px solid var(--border);
@@ -725,7 +775,7 @@
 /* ---------- responsive ---------- */
 @media (max-width: 1100px) {
   .app {
-    grid-template-columns: 340px 1fr;
+    grid-template-columns: var(--catalog-width) minmax(0, 1fr);
     grid-template-rows: 1fr auto;
     grid-template-areas:
       'sidebar stage'
@@ -743,6 +793,13 @@
     border-left: none;
     border-top: 1px solid var(--border);
   }
+  .app[data-controls-hidden] > .inspector {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-top-color: transparent;
+    transform: translateY(10px);
+  }
 }
 /* Below 860px the sidebar/inspector stop taking grid space entirely and
    become fixed slide-over panels above the stage instead, toggled by the
@@ -759,6 +816,9 @@
   .stage {
     padding-bottom: var(--mobile-tabstrip-h);
   }
+  .warpaint-list {
+    min-width: 0;
+  }
   .sidebar,
   .inspector {
     position: fixed;
@@ -769,6 +829,27 @@
     max-height: none;
     box-shadow: var(--shadow-pop);
     transition: transform 220ms ease;
+  }
+  .app[data-catalog-hidden] > .sidebar,
+  .app[data-controls-hidden] > .inspector {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform 220ms ease;
+  }
+  .app[data-catalog-hidden] > .sidebar {
+    transform: translateX(-100%);
+  }
+  .app[data-controls-hidden] > .inspector {
+    max-height: none;
+    padding: 10px;
+    border-top-color: var(--border);
+    transform: translateX(100%);
+  }
+  .stage-panel-toggle,
+  .custom-workbench-trigger,
+  .stage-toolbar-divider:first-of-type {
+    display: none;
   }
   .sidebar {
     left: 0;
@@ -804,6 +885,14 @@
 /* Placed after the 860px rule above (same specificity) so it wins when both
    apply: the slide-over panels snap open/closed instead of sliding. */
 @media (max-width: 860px) and (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .inspector {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app,
   .sidebar,
   .inspector {
     transition: none;
