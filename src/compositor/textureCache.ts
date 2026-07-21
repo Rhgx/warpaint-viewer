@@ -41,11 +41,13 @@ export class TextureCache {
   private totalBytes = 0;
   private pinned = new Set<string>();
   private metadata: Record<string, TextureMetadata>;
+  private metadataResolver: ((ref: string) => Partial<TextureMetadata> | undefined) | undefined;
 
-  constructor(resolve: TextureResolver, budgetBytes = 384 * 1024 * 1024, metadata: Record<string, TextureMetadata> = {}) {
+  constructor(resolve: TextureResolver, budgetBytes = 384 * 1024 * 1024, metadata: Record<string, TextureMetadata> = {}, metadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined) {
     this.resolve = resolve;
     this.budget = budgetBytes;
     this.metadata = metadata;
+    this.metadataResolver = metadataResolver;
   }
 
   keyFor(ref: string, opts: LoadOpts = {}): string {
@@ -80,14 +82,13 @@ export class TextureCache {
       this.cache.set(key, existing);
       return existing.promise;
     }
-    const url = this.resolve(ref);
     const entry: Entry = {
       promise: Promise.resolve(null as unknown as THREE.Texture),
       bytes: 0,
       settled: false,
       failed: false,
     };
-    entry.promise = new Promise<THREE.Texture>((resolve, reject) => {
+    entry.promise = Promise.resolve(this.resolve(ref)).then((url) => new Promise<THREE.Texture>((resolve, reject) => {
       this.loader.load(
         url,
         (tex) => {
@@ -100,7 +101,7 @@ export class TextureCache {
           // every source unflipped keeps composite space identical to game UV
           // space (v down), so the result maps onto the mesh exactly in-game.
           tex.flipY = false;
-          const meta = this.metadata[ref];
+          const meta = { ...this.metadata[ref], ...this.metadataResolver?.(ref) };
           tex.wrapS = meta?.clampS ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
           tex.wrapT = meta?.clampT ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
           if (opts.nearest) {
@@ -132,7 +133,7 @@ export class TextureCache {
           reject(new Error(`failed to load texture: ${ref} (${url})`));
         },
       );
-    });
+    }));
     this.cache.set(key, entry);
     return entry.promise;
   }

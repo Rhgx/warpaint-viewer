@@ -19,6 +19,7 @@ import { BootLoader } from './ui/BootLoader';
 import { VIEW_ANGLES } from './viewer/presets';
 import { useBootData, randomSeed } from './hooks/useBootData';
 import { useComposedPaint } from './hooks/useComposedPaint';
+import { useSourcePackage } from './hooks/useSourcePackage';
 
 // Selftest page is code-split: it never loads in normal use.
 const SelfTestPage = lazy(() => import('./dev/selftest').then((m) => ({ default: m.SelfTestPage })));
@@ -85,6 +86,25 @@ function MainApp() {
   // recipe-specific refs that do not exist on the next weapon are simply unused.
   const assetOverrideScope = selectedKit ? String(selectedKit.id) : '';
   const assetOverrides = assetOverrideCache[assetOverrideScope] ?? EMPTY_OVERRIDES;
+  const { provider: sourceProvider, sourcePackage, packageGeneration, suggestedPaintkitId, removePackage } = useSourcePackage(
+    data?.resolveTexture ?? ((ref) => ref),
+    () => setAssetOverrideCache({}),
+  );
+
+  // A numeric ZIP wrapper is a conventional paintkit index. Switch only when
+  // it resolves to a real catalog entry; unknown numbers leave selection alone.
+  useEffect(() => {
+    if (!data || suggestedPaintkitId === undefined) return;
+    const kit = data.manifest.paintkits.find((entry) => entry.id === suggestedPaintkitId);
+    if (!kit) return;
+    setSelectedKitId(kit.id);
+    setState((current) => ({
+      ...current,
+      weaponKey: kit.weapons.includes(current.weaponKey) ? current.weaponKey : (kit.weapons[0] ?? current.weaponKey),
+      team: kit.hasTeamTextures || current.sheen === 'team_shine' ? current.team : 'red',
+    }));
+  }, [data, packageGeneration, suggestedPaintkitId]);
+  const resolvePackageTexture = useCallback((ref: string) => sourceProvider.resolvePreview(ref), [sourceProvider]);
   const activeTextureOverrides = useMemo(
     () => Object.fromEntries(
       Object.entries(assetOverrides.assets).flatMap(([ref, asset]) => asset.output ? [[ref, asset.output]] : []),
@@ -100,6 +120,7 @@ function MainApp() {
     loadedAssetKey,
     state,
     assetOverrides,
+    packageGeneration,
     activeTextureOverrides,
     viewerRef,
     compositorRef,
@@ -123,10 +144,11 @@ function MainApp() {
       ]);
       if (disposed || !canvasRef.current) return;
       viewer = new ViewerCls(canvasRef.current);
-      compositor = new CompositorCls(data.resolveTexture, {
+      compositor = new CompositorCls((ref) => sourceProvider.resolve(ref), {
         renderer: viewer.renderer,
         size: 1024,
         textureMetadata: data.manifest.textures,
+        textureMetadataResolver: (ref) => sourceProvider.metadataFor(ref),
       });
       viewerRef.current = viewer;
       compositorRef.current = compositor;
@@ -150,20 +172,20 @@ function MainApp() {
       viewerRef.current = null;
       compositorRef.current = null;
     };
-  }, [data, advanceBoot, disposeCache]);
+  }, [data, advanceBoot, disposeCache, sourceProvider]);
 
   // Custom files only live in memory. Let the browser warn before a refresh,
   // tab close, or navigation would discard any cached edit set.
   useEffect(() => {
     const hasCachedEdits = Object.values(assetOverrideCache).some((entry) => Object.keys(entry.assets).length > 0);
-    if (!hasCachedEdits) return;
+    if (!hasCachedEdits && sourcePackage.status !== 'mounted') return;
     const confirmLoss = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', confirmLoss);
     return () => window.removeEventListener('beforeunload', confirmLoss);
-  }, [assetOverrideCache]);
+  }, [assetOverrideCache, sourcePackage.status]);
 
   // A blank catalog selection has no model/paint work to wait for. Once the
   // renderer environment is ready, the intentionally empty stage is ready too.
@@ -221,7 +243,7 @@ function MainApp() {
     void Promise.all([
       viewer.ready(),
       viewer.loadModel(data.getModelUrl(state.weaponKey)),
-      viewer.applyMaterialParams(material, data.resolveTexture),
+      viewer.applyMaterialParams(material, (ref) => sourceProvider.resolve(ref)),
     ]).then(() => {
       if (cancelled) return;
       setLoadedAssetKey(selectedAssetKey);
@@ -230,7 +252,16 @@ function MainApp() {
       if (!cancelled) setError(`Failed to load weapon assets: ${String(e)}`);
     });
     return () => { cancelled = true; };
-  }, [engineReady, data, selectedKit, selectedAssetKey, state.weaponKey, advanceBoot]);
+  }, [engineReady, data, selectedKit, selectedAssetKey, state.weaponKey, packageGeneration, advanceBoot, sourceProvider]);
+
+  // Archive replacement changes the answer for existing Source paths, so
+  // release old source uploads and composite targets before the generation-keyed
+  // compose starts. The provider ignores stale reads from the removed package.
+  useEffect(() => {
+    compositorRef.current?.invalidateTextures();
+    disposeCache();
+    resetComposeKey();
+  }, [packageGeneration, disposeCache, resetComposeKey]);
 
   // Lighting.
   useEffect(() => {
@@ -446,12 +477,19 @@ function MainApp() {
               recipes={editorRecipes}
               resolveTexture={data.resolveTexture}
               textureMetadata={data.manifest.textures}
+              sourcePackage={sourcePackage}
+              resolvePackageTexture={resolvePackageTexture}
+              packageGeneration={packageGeneration}
               loading={editorLoading}
               open={workbenchOpen}
               initialOverrides={assetOverrides}
               onChange={(overrides) => {
                 resetComposeKey();
                 setAssetOverrideCache((cache) => ({ ...cache, [assetOverrideScope]: overrides }));
+              }}
+              onResetAll={() => {
+                removePackage();
+                setAssetOverrideCache({});
               }}
               // A height of 0 means "back to the default clamp", which is what
               // double-clicking the drawer's resize handle asks for.

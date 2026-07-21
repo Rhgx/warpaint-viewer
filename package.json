@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@zip.js/zip.js": "^2.8.31",
     "lucide-react": "^1.24.0",
     "protobufjs": "^8.7.1",
     "react": "^19.2.7",

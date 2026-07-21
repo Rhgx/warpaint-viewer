@@ -1,5 +1,5 @@
 import type { Grade, Manifest, PaintkitEntry, Team } from './types';
-import type { RecipeNode, TextureResolver } from '../compositor/types';
+import type { RecipeNode } from '../compositor/types';
 import { mockManifest, mockRecipe } from '../dev/mock/data';
 import { mockTextures } from '../dev/mock/textures';
 
@@ -7,7 +7,7 @@ export interface DataSource {
   readonly kind: 'real' | 'mock';
   readonly manifest: Manifest;
   // Resolve a texture ref (path or mock key or data: URL) to a loadable URL.
-  resolveTexture: TextureResolver;
+  resolveTexture: (ref: string) => string;
   // Load and parse a recipe stage tree; null if none exists for this combo.
   getRecipe(kit: PaintkitEntry, weaponKey: string, team: Team, wearIndex: number): Promise<RecipeNode | null>;
   // Absolute URL of a weapon GLB, or null when the stage should remain empty.
@@ -38,7 +38,7 @@ class RealDataSource implements DataSource {
     this.manifest = manifest;
   }
 
-  resolveTexture: TextureResolver = (ref) => joinData(ref);
+  resolveTexture = (ref: string) => joinData(ref);
 
   getModelUrl(weaponKey: string): string | null {
     const w = this.manifest.weapons.find((x) => x.key === weaponKey);
@@ -87,7 +87,7 @@ class MockDataSource implements DataSource {
   readonly manifest = mockManifest;
   private textures = mockTextures();
 
-  resolveTexture: TextureResolver = (ref) => {
+  resolveTexture = (ref: string) => {
     if (ref.startsWith('data:')) return ref;
     const url = this.textures[ref];
     if (!url) throw new Error(`mock texture not found: ${ref}`);

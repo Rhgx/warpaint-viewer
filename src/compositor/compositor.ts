@@ -23,6 +23,7 @@ export interface ComposeResult {
 export interface CompositorOptions {
   size?: number; // square, default 1024
   textureMetadata?: Record<string, TextureMetadata>;
+  textureMetadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined;
 }
 
 export interface ComposeDimensions {
@@ -66,7 +67,7 @@ export class Compositor {
 
   constructor(resolver: TextureResolver, opts: CompositorOptions & { renderer?: THREE.WebGLRenderer } = {}) {
     this.width = this.height = opts.size ?? 1024;
-    this.textures = new TextureCache(resolver, undefined, opts.textureMetadata);
+    this.textures = new TextureCache(resolver, undefined, opts.textureMetadata, opts.textureMetadataResolver);
     if (opts.renderer) {
       this.renderer = opts.renderer;
       this.ownsRenderer = false;
@@ -508,6 +509,11 @@ export class Compositor {
   }
   getSize() {
     return this.width;
+  }
+
+  /** Drop package-owned uploads when the Source filesystem is replaced. */
+  invalidateTextures() {
+    this.textures.dispose();
   }
 
   dispose() {

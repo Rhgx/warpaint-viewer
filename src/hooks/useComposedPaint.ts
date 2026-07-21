@@ -39,6 +39,7 @@ interface UseComposedPaintOptions {
   loadedAssetKey: string;
   state: ControlsState;
   assetOverrides: WarpaintAssetOverrides;
+  packageGeneration: number;
   activeTextureOverrides: Record<string, string>;
   viewerRef: React.RefObject<Viewer | null>;
   compositorRef: React.RefObject<Compositor | null>;
@@ -55,6 +56,7 @@ export function useComposedPaint({
   loadedAssetKey,
   state,
   assetOverrides,
+  packageGeneration,
   activeTextureOverrides,
   viewerRef,
   compositorRef,
@@ -93,7 +95,7 @@ export function useComposedPaint({
       height: weapon?.compositeHeight ?? 1024,
     };
 
-    const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}`;
+    const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}`;
     if (composeKey === lastComposeKeyRef.current) return;
 
     let cancelled = false;
@@ -249,7 +251,7 @@ export function useComposedPaint({
       window.clearTimeout(badgeTimer);
       window.clearTimeout(prewarmTimer);
     };
-  }, [engineReady, data, selectedKit, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
+  }, [engineReady, data, selectedKit, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
 
   return { composing, resetComposeKey, disposeCache };
 }

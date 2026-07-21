@@ -670,7 +670,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     this.material.customProgramCacheKey = () => 'tf2-vertexlit-v6-selfillum';
   }
 
-  async applyMaterialParams(mat: WeaponMaterial, resolveTexture: (ref: string) => string = (ref) => ref): Promise<void> {
+  async applyMaterialParams(mat: WeaponMaterial, resolveTexture: (ref: string) => string | Promise<string> = (ref) => ref): Promise<void> {
     const u = this.tf2Uniforms;
     u.uTf2PhongEnabled.value = mat.phong ? 1 : 0;
     u.uTf2BaseAlphaPhongMask.value = mat.baseMapAlphaPhongMask ? 1 : 0;
@@ -722,7 +722,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     u.uTf2SelfIllumMaskMap.value = null;
 
     const loads: Promise<void>[] = [];
-    if (mat.normalMap) loads.push(this.texLoader.loadAsync(resolveTexture(mat.normalMap)).then((t) => {
+    if (mat.normalMap) loads.push(Promise.resolve(resolveTexture(mat.normalMap)).then((url) => this.texLoader.loadAsync(url)).then((t) => {
       if (token !== this.materialLoadToken || this.disposed) { t.dispose(); return; }
       t.colorSpace = THREE.NoColorSpace;
       t.flipY = false; // glTF UV convention, same as the composited map
@@ -736,7 +736,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
       this.renderer.initTexture(t);
     }).catch(() => undefined));
     if (mat.phongExponentTexture) {
-      loads.push(this.texLoader.loadAsync(resolveTexture(mat.phongExponentTexture)).then((t) => {
+      loads.push(Promise.resolve(resolveTexture(mat.phongExponentTexture)).then((url) => this.texLoader.loadAsync(url)).then((t) => {
         if (token !== this.materialLoadToken || this.disposed) { t.dispose(); return; }
         t.colorSpace = THREE.NoColorSpace; t.flipY = false;
         this.exponentTexture = t; u.uTf2ExponentMap.value = t; u.uTf2UseExponentMap.value = 1;
@@ -744,7 +744,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
       }).catch(() => undefined));
     }
     if (mat.lightwarpTexture) {
-      loads.push(this.texLoader.loadAsync(resolveTexture(mat.lightwarpTexture)).then((t) => {
+      loads.push(Promise.resolve(resolveTexture(mat.lightwarpTexture)).then((url) => this.texLoader.loadAsync(url)).then((t) => {
         if (token !== this.materialLoadToken || this.disposed) { t.dispose(); return; }
         // skin_dx9_helper.cpp does not enable sRGB reads for the diffuse-warp
         // sampler. Source therefore uses the stored ramp values directly.
@@ -755,7 +755,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
       }).catch(() => undefined));
     }
     if (mat.selfIllumMask) {
-      loads.push(this.texLoader.loadAsync(resolveTexture(mat.selfIllumMask)).then((t) => {
+      loads.push(Promise.resolve(resolveTexture(mat.selfIllumMask)).then((url) => this.texLoader.loadAsync(url)).then((t) => {
         if (token !== this.materialLoadToken || this.disposed) { t.dispose(); return; }
         t.colorSpace = THREE.NoColorSpace; t.flipY = false;
         t.wrapS = t.wrapT = THREE.RepeatWrapping;

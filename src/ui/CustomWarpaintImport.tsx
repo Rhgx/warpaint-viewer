@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import {
   AlertTriangle,
   Eye,
@@ -8,6 +8,7 @@ import {
   ImagePlus,
   Layers,
   LoaderCircle,
+  PackageOpen,
   RotateCcw,
   Search,
   Sticker,
@@ -15,8 +16,12 @@ import {
 } from 'lucide-react';
 import type { RecipeNode } from '../compositor/types';
 import type { TextureMetadata } from '../data/types';
+import { decodeVTF, parseVTFHeader } from '../../tools/lib/vtf-core.mjs';
 import { TextField } from './components';
+import { SourcePackageImport, SourcePackagePanel } from './SourcePackagePanel';
+import type { SourcePackageState } from './SourcePackagePanel';
 import './CustomWarpaintImport.css';
+import './SourcePackagePanel.css';
 
 export interface WarpaintAssetOverrides {
   revision: number;
@@ -37,14 +42,15 @@ interface AssetSlot {
 }
 
 export interface WarpaintAssetState {
-  color?: { dataUrl: string; fileName: string; isTga: boolean };
+  color?: { dataUrl: string; fileName: string; isTga: boolean; hasEmbeddedAlpha?: boolean };
   alpha?: { dataUrl: string; fileName: string };
   output?: string;
   size?: { width: number; height: number };
 }
 
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
-const SUPPORTED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'tga'];
+const MAX_VTF_PIXELS = 16 * 1024 * 1024;
+const SUPPORTED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'tga', 'vtf'];
 const MIN_PANEL_HEIGHT = 190;
 const RESET_CONFIRM_MS = 3000;
 
@@ -122,6 +128,30 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
     image.onload = () => resolve(image);
     image.src = dataUrl;
   });
+}
+
+function TexturePreview({
+  refPath,
+  fallbackUrl,
+  resolvePackageTexture,
+  packageGeneration,
+}: {
+  refPath: string | undefined;
+  fallbackUrl: string;
+  resolvePackageTexture?: (ref: string) => Promise<string>;
+  packageGeneration: number;
+}) {
+  const [src, setSrc] = useState(fallbackUrl);
+  useEffect(() => {
+    let cancelled = false;
+    setSrc(fallbackUrl);
+    if (!refPath || !resolvePackageTexture) return () => { cancelled = true; };
+    void resolvePackageTexture(refPath).then((url) => {
+      if (!cancelled) setSrc(url);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [refPath, fallbackUrl, resolvePackageTexture, packageGeneration]);
+  return <img src={src} alt="" />;
 }
 
 function pngChunk(type: string, data: Uint8Array): Uint8Array {
@@ -209,16 +239,39 @@ async function decodeTga(file: File): Promise<string> {
   return encodeRgbaPng(Uint8Array.from(parsed.data as ArrayLike<number>), parsed.width, parsed.height);
 }
 
+async function decodeVtf(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let header;
+  try {
+    header = parseVTFHeader(bytes);
+  } catch (cause) {
+    throw new Error(`${file.name}: ${cause instanceof Error ? cause.message : 'Invalid VTF header.'}`);
+  }
+  const pixels = header.width * header.height;
+  if (!Number.isSafeInteger(pixels) || pixels > MAX_VTF_PIXELS) {
+    throw new Error(`${file.name}: VTF dimensions ${header.width} x ${header.height} exceed the 16 megapixel import limit.`);
+  }
+  try {
+    const decoded = decodeVTF(bytes);
+    return encodeRgbaPng(decoded.rgba, decoded.width, decoded.height);
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : 'The image data could not be decoded.';
+    throw new Error(`${file.name}: VTF ${header.verMajor}.${header.verMinor}, format ${header.highResFormat}: ${detail}`);
+  }
+}
+
 async function readTexture(file: File, alphaOnly = false) {
   const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
   if (!SUPPORTED_EXTENSIONS.includes(extension) || (alphaOnly && extension === 'tga')) {
-    throw new Error(alphaOnly ? 'Choose a PNG, JPG, or WebP alpha mask.' : 'Choose a PNG, JPG, WebP, or TGA texture.');
+    throw new Error(alphaOnly ? 'Choose a PNG, JPG, or WebP alpha mask.' : 'Choose a PNG, JPG, WebP, TGA, or VTF texture.');
   }
+  if (alphaOnly && extension === 'vtf') throw new Error('VTF textures contain their own alpha channel and cannot be used as a separate alpha mask.');
   if (file.size > MAX_FILE_BYTES) throw new Error('Files must be 32 MB or smaller.');
   return {
-    dataUrl: extension === 'tga' ? await decodeTga(file) : await readAsDataUrl(file),
+    dataUrl: extension === 'tga' ? await decodeTga(file) : extension === 'vtf' ? await decodeVtf(file) : await readAsDataUrl(file),
     fileName: file.name,
     isTga: extension === 'tga',
+    hasEmbeddedAlpha: extension === 'tga' || extension === 'vtf',
   };
 }
 
@@ -266,20 +319,30 @@ export function CustomWarpaintWorkbench({
   recipes,
   resolveTexture,
   textureMetadata,
+  sourcePackage,
+  resolvePackageTexture,
+  packageGeneration,
   loading,
   open,
   initialOverrides,
   onChange,
+  onResetAll,
   onResize,
   onClose,
 }: {
   recipes: WearRecipe[];
   resolveTexture: (ref: string) => string;
   textureMetadata?: Record<string, TextureMetadata>;
+  sourcePackage: SourcePackageState;
+  /** Async Source package resolver used only for the non-destructive preview. */
+  resolvePackageTexture?: (ref: string) => Promise<string>;
+  packageGeneration?: number;
   loading: boolean;
   open: boolean;
   initialOverrides: WarpaintAssetOverrides;
   onChange: (overrides: WarpaintAssetOverrides) => void;
+  /** Reset all returns the entire workbench to built-ins, including its package. */
+  onResetAll?: () => void;
   onResize: (height: number) => void;
   onClose: () => void;
 }) {
@@ -291,6 +354,10 @@ export function CustomWarpaintWorkbench({
   const [filter, setFilter] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
   const [resizing, setResizing] = useState(false);
+  const [dropping, setDropping] = useState(false);
+  // dragenter/dragleave fire for every child the pointer crosses, so the cue
+  // is driven by a depth count instead of the last event seen.
+  const dragDepthRef = useRef(0);
   const revisionRef = useRef(initialOverrides.revision);
   // Async imports read the edit set after their awaits, so the latest map has
   // to be readable outside of React's render closure.
@@ -350,7 +417,7 @@ export function CustomWarpaintWorkbench({
       const current = assetsRef.current[slot.ref] ?? {};
       const nextAsset: WarpaintAssetState = alphaOnly
         ? { ...current, alpha: { dataUrl: read.dataUrl, fileName: read.fileName } }
-        : { ...current, color: read, alpha: read.isTga ? undefined : current.alpha };
+        : { ...current, color: read, alpha: read.hasEmbeddedAlpha ? undefined : current.alpha };
       commit({ ...assetsRef.current, [slot.ref]: await rebuild(nextAsset) });
     } catch (cause) {
       setSlotError(slot.ref, cause instanceof Error ? cause.message : 'The file could not be imported.');
@@ -381,6 +448,7 @@ export function CustomWarpaintWorkbench({
     setErrors({});
     setComparing({});
     commit({});
+    onResetAll?.();
   };
 
   // Drag the drawer's top edge to trade stage height for a taller asset grid.
@@ -405,6 +473,35 @@ export function CustomWarpaintWorkbench({
     window.addEventListener('pointercancel', stop);
   };
 
+  // Package files can be dropped anywhere on the workbench, not just onto the
+  // bar: the drawer is short, and hunting for a small well is worse than
+  // treating the whole surface as the target.
+  const dragging = (event: ReactDragEvent<HTMLElement>) => [...event.dataTransfer.types].includes('Files');
+  const dropHandlers = {
+    onDragEnter: (event: ReactDragEvent<HTMLElement>) => {
+      if (!dragging(event)) return;
+      dragDepthRef.current += 1;
+      setDropping(true);
+    },
+    onDragOver: (event: ReactDragEvent<HTMLElement>) => {
+      if (!dragging(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    },
+    onDragLeave: () => {
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current === 0) setDropping(false);
+    },
+    onDrop: (event: ReactDragEvent<HTMLElement>) => {
+      if (!dragging(event)) return;
+      event.preventDefault();
+      dragDepthRef.current = 0;
+      setDropping(false);
+      const files = [...event.dataTransfer.files];
+      if (files.length) sourcePackage.onImport(files);
+    },
+  };
+
   const query = filter.trim().toLowerCase();
   const visible = slots.filter((slot) => !query
     || shortName(slot.ref).toLowerCase().includes(query)
@@ -414,7 +511,13 @@ export function CustomWarpaintWorkbench({
     .filter((entry) => entry.items.length > 0);
 
   return (
-    <section className="custom-workbench" aria-label="Custom warpaint files" ref={sectionRef}>
+    <section
+      className="custom-workbench"
+      aria-label="Custom warpaint files"
+      ref={sectionRef}
+      data-dropping={dropping ? '' : undefined}
+      {...dropHandlers}
+    >
       <div
         className="custom-workbench-resizer"
         role="separator"
@@ -425,7 +528,6 @@ export function CustomWarpaintWorkbench({
         onDoubleClick={() => onResize(0)}
       />
       <header className="custom-workbench-header">
-        <h2 className="custom-workbench-title">Custom files</h2>
         <div className="custom-workbench-search">
           <Search className="custom-workbench-search-icon" size={13} />
           <TextField
@@ -441,8 +543,9 @@ export function CustomWarpaintWorkbench({
           />
         </div>
         <div className="custom-workbench-summary">
+          <SourcePackageImport state={sourcePackage} />
           <span>{replacedCount ? `${replacedCount} of ${slots.length} replaced` : `${slots.length} inputs`}</span>
-          {replacedCount > 0 && (
+          {(replacedCount > 0 || sourcePackage.status === 'mounted') && (
             <button
               type="button"
               className="custom-workbench-reset-all"
@@ -463,6 +566,15 @@ export function CustomWarpaintWorkbench({
           </button>
         </div>
       </header>
+
+      <SourcePackagePanel state={sourcePackage} />
+
+      {dropping && (
+        <div className="source-package-dropzone">
+          <PackageOpen size={18} />
+          Drop a Source .zip or .vpk to mount it
+        </div>
+      )}
 
       <div className="custom-workbench-body">
         {loading ? (
@@ -487,9 +599,14 @@ export function CustomWarpaintWorkbench({
                   return (
                     <article className="custom-asset-card" key={slot.ref} data-replaced={asset ? '' : undefined}>
                       <div className="custom-asset-preview">
-                        <img
-                          src={showOriginal ? resolveTexture(slot.ref) : asset?.output ?? resolveTexture(slot.ref)}
-                          alt=""
+                        <TexturePreview
+                          // Compare removes only the manual layer. It must
+                          // reveal a mounted package before falling through to
+                          // the built-in asset, matching the real resolver.
+                          refPath={showOriginal ? slot.ref : asset?.output ?? slot.ref}
+                          fallbackUrl={showOriginal ? resolveTexture(slot.ref) : asset?.output ?? resolveTexture(slot.ref)}
+                          resolvePackageTexture={resolvePackageTexture}
+                          packageGeneration={packageGeneration ?? 0}
                         />
                         <span className="custom-asset-kind">{KIND_LABEL[slot.kind]}</span>
                         {asset?.output && (
@@ -520,7 +637,7 @@ export function CustomWarpaintWorkbench({
                           {asset?.color ? (
                             <>
                               <span className="custom-asset-file" title={asset.color.fileName}>
-                                {asset.color.fileName}{asset.color.isTga ? ' (embedded alpha)' : ''}
+                                {asset.color.fileName}{(asset.color.hasEmbeddedAlpha ?? asset.color.isTga) ? ' (embedded alpha)' : ''}
                               </span>
                               {asset.alpha && (
                                 <span className="custom-asset-file" title={asset.alpha.fileName}>
@@ -552,12 +669,12 @@ export function CustomWarpaintWorkbench({
                           {errors[slot.ref] && <span className="custom-asset-error" role="alert">{errors[slot.ref]}</span>}
                         </div>
                         <div className="custom-asset-actions">
-                          <label className="custom-file-button" title="Import a PNG, JPG, WebP or TGA texture">
+                          <label className="custom-file-button" title="Import a PNG, JPG, WebP, TGA or VTF texture">
                             <ImagePlus size={13} />
                             <span>{asset?.color ? 'Replace' : 'Texture'}</span>
                             <input
                               type="file"
-                              accept=".png,.jpg,.jpeg,.webp,.tga"
+                              accept=".png,.jpg,.jpeg,.webp,.tga,.vtf"
                               aria-label={`Import a texture for ${shortName(slot.ref)}`}
                               onChange={(event) => {
                                 const file = event.target.files?.[0];
@@ -568,7 +685,7 @@ export function CustomWarpaintWorkbench({
                               }}
                             />
                           </label>
-                          {!asset?.color?.isTga && (
+                          {!(asset?.color && (asset.color.hasEmbeddedAlpha ?? asset.color.isTga)) && (
                             <label
                               className="custom-file-button custom-file-button-secondary"
                               title="Import a separate greyscale or transparent image to use as this texture's alpha channel"
