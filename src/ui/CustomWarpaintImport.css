@@ -6,6 +6,13 @@
   pointer-events: none;
   transition: flex-basis 210ms ease, visibility 0s linear 210ms;
 }
+.custom-workbench-loading {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--text-dim);
+  font-size: 12px;
+}
 .custom-workbench-slot[data-open] {
   flex-basis: var(--workbench-h, clamp(250px, 29vh, 340px));
   visibility: visible;

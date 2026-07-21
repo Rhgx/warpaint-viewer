@@ -13,7 +13,6 @@ import { WarpaintList } from './ui/WarpaintList';
 import { Inspector } from './ui/Inspector';
 import type { ControlsState } from './ui/Inspector';
 import { StageToolbar } from './ui/StageToolbar';
-import { CustomWarpaintWorkbench } from './ui/CustomWarpaintImport';
 import type { WarpaintAssetOverrides, WearRecipe } from './ui/CustomWarpaintImport';
 import { BootLoader } from './ui/BootLoader';
 import { VIEW_ANGLES } from './viewer/presets';
@@ -23,6 +22,9 @@ import { useSourcePackage } from './hooks/useSourcePackage';
 
 // Selftest page is code-split: it never loads in normal use.
 const SelfTestPage = lazy(() => import('./dev/selftest').then((m) => ({ default: m.SelfTestPage })));
+// The custom-file UI includes texture decoders and a large interactive editor.
+// It is not needed to view a paint, so mount it only after the drawer opens.
+const CustomWarpaintWorkbench = lazy(() => import('./ui/CustomWarpaintImport').then((m) => ({ default: m.CustomWarpaintWorkbench })));
 
 const SEED_HISTORY_CAP = 20;
 
@@ -472,30 +474,32 @@ function MainApp() {
           style={workbenchHeight ? ({ '--workbench-h': `${workbenchHeight}px` } as CSSProperties) : undefined}
         >
           {workbenchMounted && (
-            <CustomWarpaintWorkbench
-              key={`${selectedKitId ?? 'empty'}|${state.weaponKey}`}
-              recipes={editorRecipes}
-              resolveTexture={data.resolveTexture}
-              textureMetadata={data.manifest.textures}
-              sourcePackage={sourcePackage}
-              resolvePackageTexture={resolvePackageTexture}
-              packageGeneration={packageGeneration}
-              loading={editorLoading}
-              open={workbenchOpen}
-              initialOverrides={assetOverrides}
-              onChange={(overrides) => {
-                resetComposeKey();
-                setAssetOverrideCache((cache) => ({ ...cache, [assetOverrideScope]: overrides }));
-              }}
-              onResetAll={() => {
-                removePackage();
-                setAssetOverrideCache({});
-              }}
-              // A height of 0 means "back to the default clamp", which is what
-              // double-clicking the drawer's resize handle asks for.
-              onResize={setWorkbenchHeight}
-              onClose={() => setWorkbenchOpen(false)}
-            />
+            <Suspense fallback={<div className="custom-workbench-loading">Loading custom files…</div>}>
+              <CustomWarpaintWorkbench
+                key={`${selectedKitId ?? 'empty'}|${state.weaponKey}`}
+                recipes={editorRecipes}
+                resolveTexture={data.resolveTexture}
+                textureMetadata={data.manifest.textures}
+                sourcePackage={sourcePackage}
+                resolvePackageTexture={resolvePackageTexture}
+                packageGeneration={packageGeneration}
+                loading={editorLoading}
+                open={workbenchOpen}
+                initialOverrides={assetOverrides}
+                onChange={(overrides) => {
+                  resetComposeKey();
+                  setAssetOverrideCache((cache) => ({ ...cache, [assetOverrideScope]: overrides }));
+                }}
+                onResetAll={() => {
+                  removePackage();
+                  setAssetOverrideCache({});
+                }}
+                // A height of 0 means "back to the default clamp", which is what
+                // double-clicking the drawer's resize handle asks for.
+                onResize={setWorkbenchHeight}
+                onClose={() => setWorkbenchOpen(false)}
+              />
+            </Suspense>
           )}
         </div>
       </main>

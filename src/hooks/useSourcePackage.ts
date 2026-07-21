@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SourcePackageState, SourcePackageSummary } from '../ui/SourcePackagePanel';
-import { openVpkSourcePackage, openZipSourcePackage, type SourcePackage, type SourcePackageOpenResult } from '../source';
+import type { SourcePackage, SourcePackageOpenResult } from '../source/contracts';
 import { isSupportedTexturePath, sourcePathExtension } from '../source/paths';
 import { SourceTextureProvider } from '../source/provider';
+
+type StaticPackageSummary = Omit<SourcePackageSummary, 'usedCount' | 'fallbackCount'>;
+
+// Package entry indexes never change after opening. Provider activity is much
+// more frequent than mounts, so retain the archive-derived fields and only
+// recalculate the two live counters on each UI sync.
+const staticSummaryCache = new WeakMap<SourcePackage, StaticPackageSummary>();
 
 function importDiagnostic(cause: unknown) {
   const error = cause instanceof Error ? cause : new Error(String(cause));
@@ -11,16 +18,25 @@ function importDiagnostic(cause: unknown) {
 }
 
 function summaryFor(pkg: SourcePackage, provider: SourceTextureProvider): SourcePackageSummary {
-  const counts = new Map<string, number>();
-  for (const entry of pkg.entries.values()) {
-    if (!entry.path.startsWith('materials/') || !isSupportedTexturePath(entry.path)) continue;
-    const extension = sourcePathExtension(entry.path) ?? 'other';
-    counts.set(extension, (counts.get(extension) ?? 0) + 1);
+  let summary = staticSummaryCache.get(pkg);
+  if (!summary) {
+    const counts = new Map<string, number>();
+    for (const entry of pkg.entries.values()) {
+      if (!entry.path.startsWith('materials/') || !isSupportedTexturePath(entry.path)) continue;
+      const extension = sourcePathExtension(entry.path) ?? 'other';
+      counts.set(extension, (counts.get(extension) ?? 0) + 1);
+    }
+    summary = {
+      name: pkg.name,
+      format: pkg.format,
+      entryCount: pkg.entries.size,
+      materialsByExtension: [...counts].sort(([a], [b]) => a.localeCompare(b)).map(([extension, count]) => ({ extension, count })),
+    };
+    staticSummaryCache.set(pkg, summary);
   }
   const snapshot = provider.snapshot();
   return {
-    name: pkg.name, format: pkg.format, entryCount: pkg.entries.size,
-    materialsByExtension: [...counts].sort(([a], [b]) => a.localeCompare(b)).map(([extension, count]) => ({ extension, count })),
+    ...summary,
     usedCount: snapshot.usedPaths.size, fallbackCount: snapshot.fallbackIdentities.size,
   };
 }
@@ -58,8 +74,12 @@ export function useSourcePackage(fallback: (ref: string) => string, onSuccessful
         let opened: SourcePackageOpenResult;
         if (zips.length) {
           if (zips.length !== 1 || files.length !== 1) throw new Error('Select exactly one .zip package.');
+          // Archive parsers are intentionally loaded only after a user picks a
+          // package. @zip.js is sizeable and no normal viewing path needs it.
+          const { openZipSourcePackage } = await import('../source/zip');
           opened = await openZipSourcePackage(zips[0]);
         } else if (vpks.length) {
+          const { openVpkSourcePackage } = await import('../source/vpk');
           opened = await openVpkSourcePackage(vpks);
         } else {
           throw new Error('Select a .zip package or a complete .vpk file set.');

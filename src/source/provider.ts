@@ -1,4 +1,3 @@
-import { decodeVTF, parseVTFHeader } from '../../tools/lib/vtf-core.mjs';
 import type { TextureMetadata } from '../data/types';
 import type { SourceDiagnostic, SourcePackage } from './contracts';
 import { sourcePathExtension, sourceTextureCandidates, sourceTextureIdentity } from './paths';
@@ -23,6 +22,8 @@ export class SourceTextureProvider {
   #usedPaths = new Set<string>();
   #fallbackIdentities = new Set<string>();
   #diagnostics: SourceDiagnostic[] = [];
+  #notificationPending = false;
+  #notificationToken = 0;
   private readonly fallback: (ref: string) => string;
   private readonly onChange: (() => void) | undefined;
 
@@ -55,7 +56,7 @@ export class SourceTextureProvider {
     this.#diagnostics = [...diagnostics];
     this.#clearTransientState();
     previous?.dispose();
-    this.onChange?.();
+    this.#notifyImmediately();
   }
 
   unmount(): void {
@@ -66,7 +67,7 @@ export class SourceTextureProvider {
     this.#diagnostics = [];
     this.#clearTransientState();
     previous.dispose();
-    this.onChange?.();
+    this.#notifyImmediately();
   }
 
   dispose(): void { this.unmount(); this.#clearTransientState(); }
@@ -95,7 +96,7 @@ export class SourceTextureProvider {
     catch { return this.fallback(ref); }
     const path = candidates.find((candidate) => pkg.has(candidate));
     if (!path) {
-      if (consume && !this.#fallbackIdentities.has(identity)) { this.#fallbackIdentities.add(identity); this.onChange?.(); }
+      if (consume && !this.#fallbackIdentities.has(identity)) { this.#fallbackIdentities.add(identity); this.#notifySoon(); }
       return this.fallback(ref);
     }
     const key = `${this.#generation}:${path}`;
@@ -137,7 +138,7 @@ export class SourceTextureProvider {
       const message = cause instanceof Error ? cause.message : 'Could not decode this package texture.';
       if (!this.#diagnostics.some((entry) => entry.id === `decode:${path}`)) {
         this.#diagnostics.push({ id: `decode:${path}`, level: 'warning', message: 'Could not use package texture; the built-in asset was used instead.', detail: `${path}: ${message}` });
-        this.onChange?.();
+        this.#notifySoon();
       }
       return this.fallback(fallbackRef);
     }
@@ -146,16 +147,40 @@ export class SourceTextureProvider {
   #recordUsed(path: string): void {
     if (this.#usedPaths.has(path)) return;
     this.#usedPaths.add(path);
+    this.#notifySoon();
+  }
+
+  /** Package texture resolution often completes in a burst. One paint refresh
+   * only needs one UI summary update, while mount/remove remain immediate. */
+  #notifySoon(): void {
+    if (!this.onChange || this.#notificationPending) return;
+    this.#notificationPending = true;
+    const token = ++this.#notificationToken;
+    const flush = () => {
+      if (token !== this.#notificationToken) return;
+      this.#notificationPending = false;
+      this.onChange?.();
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(flush);
+    else queueMicrotask(flush);
+  }
+
+  #notifyImmediately(): void {
+    // Invalidate a queued summary update so mounting/removing has exactly one
+    // synchronous state transition rather than an unnecessary trailing render.
+    this.#notificationPending = false;
+    this.#notificationToken += 1;
     this.onChange?.();
   }
 }
 
 async function decodePackageTexture(bytes: Uint8Array, extension: string): Promise<{ url: string; metadata?: Partial<TextureMetadata> }> {
   if (extension === 'vtf') {
-    const header = parseVTFHeader(bytes);
-    if (!Number.isSafeInteger(header.width * header.height) || header.width * header.height > MAX_DECODED_PIXELS) throw new Error(`VTF dimensions ${header.width} x ${header.height} exceed the 16 megapixel limit.`);
-    const decoded = decodeVTF(bytes);
-    return { url: URL.createObjectURL(new Blob([toArrayBuffer(rgbaPng(decoded.rgba, decoded.width, decoded.height))], { type: 'image/png' })), metadata: header.sampling };
+    // VTF decoding and lossless PNG encoding run in a lazy Worker. This keeps
+    // package reads from blocking interaction with the active paint.
+    const { decodeVtfToPng } = await import('./vtfDecode');
+    const decoded = await decodeVtfToPng(bytes, { maxPixels: MAX_DECODED_PIXELS });
+    return { url: URL.createObjectURL(new Blob([decoded.png], { type: 'image/png' })), metadata: decoded.header.sampling };
   }
   if (extension === 'tga') {
     const { TGALoader } = await import('three/addons/loaders/TGALoader.js');

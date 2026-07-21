@@ -141,7 +141,7 @@ export class Viewer {
     this.scene.add(this.lightGroup);
     this.scene.add(this.modelGroup);
 
-    this.controls = new InspectControls(this.camera, this.modelGroup, canvas);
+    this.controls = new InspectControls(this.camera, this.modelGroup, canvas, () => this.invalidate());
 
     this.envMap = makeEnvCube(0x9fb8d6, 0x40382c);
     this.material = new THREE.MeshPhongMaterial({
@@ -161,6 +161,7 @@ export class Viewer {
         this.envMap = texture;
         this.material.envMap = texture;
         this.material.needsUpdate = true;
+        this.invalidate();
         resolve();
       }, () => {
         console.warn('[warpaint-viewer] TF2 editor cubemap unavailable; using fallback');
@@ -181,12 +182,14 @@ export class Viewer {
     // one real renderer resize after the layout has settled.
     this.resizeObserver = new ResizeObserver(() => {
       this.syncDisplayAspect();
+      this.invalidate();
       window.clearTimeout(this.resizeTimer);
       this.resizeTimer = window.setTimeout(this.onResize, 240);
     });
     this.resizeObserver.observe(canvas);
     this.lastTime = performance.now();
-    this.loop();
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.invalidate();
   }
 
   private onResize = () => {
@@ -194,6 +197,7 @@ export class Viewer {
     const h = this.canvas.clientHeight || 1;
     this.renderer.setSize(w, h, false);
     this.syncDisplayAspect();
+    this.invalidate();
   };
 
   // Keep projection matched to the CSS box while a panel transition changes
@@ -208,13 +212,30 @@ export class Viewer {
     this.syncOrthoCamera();
   }
 
-  private loop = () => {
-    if (this.disposed) return;
-    this.raf = requestAnimationFrame(this.loop);
+  // Schedule a single paint. Animated state calls this again after each frame;
+  // a static scene therefore consumes no requestAnimationFrame callbacks.
+  private invalidate() {
+    if (this.disposed || this.raf || document.hidden) return;
+    this.raf = requestAnimationFrame(this.renderFrame);
+  }
+
+  private onVisibilityChange = () => {
+    this.lastTime = performance.now();
+    if (document.hidden) {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      return;
+    }
+    this.invalidate();
+  };
+
+  private renderFrame = () => {
+    this.raf = 0;
+    if (this.disposed || document.hidden) return;
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
     this.lastTime = now;
-    this.controls.update(dt);
+    const controlsAnimating = this.controls.update(dt);
     // Panning is a framing operation, not physical movement through the map.
     // Move the light rig with the model's translation, but not its rotation.
     this.lightGroup.position.copy(this.modelGroup.position);
@@ -233,6 +254,8 @@ export class Viewer {
     } else {
       this.renderer.render(this.scene, this.camera);
     }
+    const sheenAnimating = this.sheenId !== 'none' && this.sheenMaterial !== null && this.sheenMeshes.length > 0;
+    if (controlsAnimating || sheenAnimating || this.activeUnusual) this.invalidate();
   };
 
   // Derives the ortho camera from the perspective camera every frame: same
@@ -278,18 +301,21 @@ export class Viewer {
     host?.classList.toggle('has-backplate', Boolean(preset.backplate));
     host?.style.setProperty('--backplate-image', preset.backplate ? `url("${preset.backplate}")` : 'none');
     this.scene.background = preset.backplate ? null : new THREE.Color(preset.background);
+    this.invalidate();
   }
 
   // The compositor result is stored as sRGB, matching Source's output target.
   setMap(texture: THREE.Texture | null) {
     this.material.map = texture;
     this.material.needsUpdate = true;
+    this.invalidate();
   }
 
   setSheen(sheenId: string, team: 'red' | 'blu') {
     const wasOff = this.sheenId === 'none';
     this.sheenId = sheenId;
     this.sheenTeam = team;
+    this.invalidate();
     if (sheenId === 'none') {
       this.teardownSheenMeshes();
       return;
@@ -298,6 +324,7 @@ export class Viewer {
     void this.ensureSheenReady().then(() => {
       if (this.disposed || this.sheenId === 'none') return;
       this.rebuildSheenMeshes();
+      this.invalidate();
     });
   }
 
@@ -381,13 +408,17 @@ export class Viewer {
       this.activeUnusual = null;
     }
     const effect = createUnusualEffect(this.unusualId, this.framedRadius, this.unusualWeaponKey, this.framedCenter);
-    if (!effect) return;
+    if (!effect) {
+      this.invalidate();
+      return;
+    }
     // Added at the scene root: particles simulate in WORLD space (like the
     // game, where control points follow the weapon but particles do not).
     // The render loop re-anchors the effect's control points from
     // centerGroup.matrixWorld every frame.
     this.scene.add(effect.object);
     this.activeUnusual = effect;
+    this.invalidate();
   }
 
   setViewAngle(preset: ViewAnglePreset) {
@@ -398,14 +429,19 @@ export class Viewer {
   setProjection(mode: 'perspective' | 'orthographic') {
     this.projectionMode = mode;
     this.controls.setDefaultPan(mode === 'perspective' ? this.computePerspectivePan() : new THREE.Vector2());
+    this.invalidate();
   }
 
   setFov(fov: number) {
     this.camera.fov = THREE.MathUtils.clamp(fov, 30, 110);
     this.camera.updateProjectionMatrix();
-    if (!this.framedDims) return;
+    if (!this.framedDims) {
+      this.invalidate();
+      return;
+    }
     const dist = this.computeFramingDistance(this.framedDims, this.framedRadius);
     this.controls.rescaleFraming(dist, this.projectionMode === 'perspective' ? this.computePerspectivePan(dist) : new THREE.Vector2());
+    this.invalidate();
   }
 
   // Renders at `scale`x resolution with no background so the PNG carries
@@ -504,6 +540,7 @@ export class Viewer {
       this.scene.background = prevBackground;
       this.camera.aspect = prevAspect;
       this.camera.updateProjectionMatrix();
+      this.invalidate();
     }
   }
 
@@ -706,6 +743,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     this.material.shininess = THREE.MathUtils.clamp(mat.phongExponent ?? 5, 1, 300);
     this.material.reflectivity = 1;
     this.material.needsUpdate = true;
+    this.invalidate();
 
     const token = ++this.materialLoadToken;
     this.normalTexture?.dispose();
@@ -734,6 +772,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
       this.material.normalMap = t;
       this.material.needsUpdate = true;
       this.renderer.initTexture(t);
+      this.invalidate();
     }).catch(() => undefined));
     if (mat.phongExponentTexture) {
       loads.push(Promise.resolve(resolveTexture(mat.phongExponentTexture)).then((url) => this.texLoader.loadAsync(url)).then((t) => {
@@ -741,6 +780,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
         t.colorSpace = THREE.NoColorSpace; t.flipY = false;
         this.exponentTexture = t; u.uTf2ExponentMap.value = t; u.uTf2UseExponentMap.value = 1;
         this.renderer.initTexture(t);
+        this.invalidate();
       }).catch(() => undefined));
     }
     if (mat.lightwarpTexture) {
@@ -752,6 +792,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
         t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
         this.lightwarpTexture = t; u.uTf2LightwarpMap.value = t; u.uTf2UseLightwarp.value = 1;
         this.renderer.initTexture(t);
+        this.invalidate();
       }).catch(() => undefined));
     }
     if (mat.selfIllumMask) {
@@ -761,10 +802,12 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
         this.selfIllumTexture = t; u.uTf2SelfIllumMaskMap.value = t; u.uTf2UseSelfIllumMask.value = 1;
         this.renderer.initTexture(t);
+        this.invalidate();
       }).catch(() => undefined));
     }
     this.material.needsUpdate = true;
     await Promise.all(loads);
+    this.invalidate();
   }
 
   // Geometry cache: switching weapons back and forth never refetches a GLB.
@@ -785,6 +828,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     this.centerGroup.add(...this.meshes);
     this.frameCamera(parts.map((part) => part.geometry));
     if (this.sheenId !== 'none' && this.sheenMaterial) this.rebuildSheenMeshes();
+    this.invalidate();
   }
 
   private clearModel() {
@@ -796,6 +840,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     this.meshes = [];
     this.meshIsLens = [];
     this.currentGeoCached = false;
+    this.invalidate();
   }
 
   // Load a weapon GLB. Concurrent calls resolve in call order via a token so a
@@ -917,6 +962,7 @@ vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.onResize);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     window.clearTimeout(this.resizeTimer);
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;

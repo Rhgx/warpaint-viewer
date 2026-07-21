@@ -8,7 +8,28 @@ import type { ControlsState } from '../ui/Inspector';
 import type { WarpaintAssetOverrides } from '../ui/CustomWarpaintImport';
 
 const COMPOSE_BADGE_DELAY_MS = 250;
-const COMPOSE_CACHE_SIZE = 8;
+const IDLE_TIMEOUT_MS = 2_000;
+const IDLE_FALLBACK_DELAY_MS = 250;
+
+interface IdleDeadlineLike {
+  didTimeout: boolean;
+  timeRemaining(): number;
+}
+
+type IdleCallbackWindow = Window & {
+  requestIdleCallback?: (callback: (deadline: IdleDeadlineLike) => void, options?: { timeout?: number }) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
+// A composite can occupy several MB of GPU memory. Retain the fast-path LRU on
+// desktop machines, but do not reserve eight render targets on constrained
+// devices simply to make infrequently-used wear variants instantaneous.
+function composeCacheLimit(): number {
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  if ((nav.deviceMemory !== undefined && nav.deviceMemory <= 4) || nav.hardwareConcurrency <= 4) return 4;
+  if (nav.deviceMemory !== undefined && nav.deviceMemory <= 8) return 6;
+  return 8;
+}
 
 export function applyTextureOverrides(node: RecipeNode, textures: Record<string, string>): RecipeNode {
   switch (node.type) {
@@ -100,7 +121,7 @@ export function useComposedPaint({
 
     let cancelled = false;
     let badgeTimer = 0;
-    let prewarmTimer = 0;
+    let cancelPendingIdle: (() => void) | null = null;
 
     const cacheResult = (key: string, result: ComposeResult, comp: Compositor) => {
       const cache = composeCacheRef.current;
@@ -108,7 +129,7 @@ export function useComposedPaint({
       if (old && old !== result) comp.releaseResult(old);
       cache.delete(key);
       cache.set(key, result);
-      while (cache.size > COMPOSE_CACHE_SIZE) {
+      while (cache.size > composeCacheLimit()) {
         const victim = [...cache.keys()].find((candidate) => candidate !== lastComposeKeyRef.current && candidate !== key);
         if (!victim) break;
         const evicted = cache.get(victim);
@@ -126,6 +147,43 @@ export function useComposedPaint({
       if (selectedKit.hasTeamTextures) variants.push({ team: state.team === 'red' ? 'blu' : 'red', wear: state.wearIndex });
       return variants;
     };
+
+    // Keep speculative decoding and rendering off the first-paint path. The
+    // timeout lets browsers without requestIdleCallback make progress, while
+    // requestIdleCallback itself prevents a sequence of warmups from competing
+    // with input and animation work on supported browsers.
+    const waitForIdle = () => new Promise<void>((resolve) => {
+      const idleWindow = window as IdleCallbackWindow;
+      let idleHandle = 0;
+      let fallbackTimer = 0;
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        if (idleHandle) idleWindow.cancelIdleCallback?.(idleHandle);
+        if (fallbackTimer) window.clearTimeout(fallbackTimer);
+        cancelPendingIdle = null;
+        resolve();
+      };
+      const request = () => {
+        if (idleWindow.requestIdleCallback) {
+          idleHandle = idleWindow.requestIdleCallback((deadline) => {
+            idleHandle = 0;
+            // Leave a small budget for the browser's own bookkeeping; retry on
+            // a later idle period instead of starting GPU work at the deadline.
+            if (!cancelled && !deadline.didTimeout && deadline.timeRemaining() < 12) {
+              request();
+              return;
+            }
+            finish();
+          }, { timeout: IDLE_TIMEOUT_MS });
+        } else {
+          fallbackTimer = window.setTimeout(finish, IDLE_FALLBACK_DELAY_MS);
+        }
+      };
+      cancelPendingIdle = finish;
+      request();
+    });
 
     const timer = window.setTimeout(async () => {
       const comp = compositorRef.current;
@@ -158,12 +216,9 @@ export function useComposedPaint({
           return;
         }
         const recipe = applyTextureOverrides(sourceRecipe, activeTextureOverrides);
-        if (!firstPaintLoggedRef.current) {
-          advanceBoot(70, 'Decoding paint textures…');
-          await comp.preload(recipe);
-          if (cancelled) return;
-          advanceBoot(86, 'Composing initial warpaint…');
-        }
+        // compose() loads precisely the textures selected by this seed. Do not
+        // block the first visible paint on every possible sticker alternative.
+        if (!firstPaintLoggedRef.current) advanceBoot(70, 'Composing initial warpaint…');
         // TF2 selects the complete paint-kit recipe for the wear category; it
         // does not crossfade that result with Factory New.
         const result = await comp.compose(recipe, state.seed, dimensions);
@@ -178,20 +233,6 @@ export function useComposedPaint({
         const dt = performance.now() - t0;
         if (import.meta.env.DEV) console.log(`[perf] compose ${composeKey} in ${dt.toFixed(1)}ms`);
         if (!firstPaintLoggedRef.current) {
-          const variants = likelyVariants();
-          for (let i = 0; i < variants.length; i++) {
-            const variant = variants[i];
-            const key = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${variant.team}|${variant.wear}|${state.seed}`;
-            const variantRecipe = await ds.getRecipe(selectedKit, state.weaponKey, variant.team, variant.wear);
-            if (cancelled) return;
-            if (!variantRecipe) continue;
-            advanceBoot(88 + ((i + 1) / Math.max(1, variants.length)) * 10, 'Preparing wear and team variants…');
-            await comp.preload(variantRecipe);
-            if (cancelled) return;
-            const warmed = await comp.compose(variantRecipe, state.seed, dimensions);
-            if (cancelled) { comp.releaseResult(warmed); return; }
-            cacheResult(key, warmed, comp);
-          }
           firstPaintLoggedRef.current = true;
           advanceBoot(100, 'Ready');
           if (import.meta.env.DEV) console.log(`[perf] first painted weapon at ${performance.now().toFixed(0)}ms since navigation`);
@@ -210,32 +251,31 @@ export function useComposedPaint({
           }
         }
 
-        // Once the requested paint is visible, use otherwise-idle time to
-        // decode/upload and compose the variants users are most likely to pick
-        // next. They remain as GPU textures in a small LRU, making wear/team
-        // toggles a setMap() call rather than another visible composition.
-        prewarmTimer = window.setTimeout(() => {
-          void (async () => {
-            for (const variant of likelyVariants()) {
-              if (cancelled || compositorRef.current !== comp) return;
-              const key = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${variant.team}|${variant.wear}|${state.seed}`;
-              if (composeCacheRef.current.has(key)) continue;
-              const variantRecipe = await ds.getRecipe(selectedKit, state.weaponKey, variant.team, variant.wear);
-              if (!variantRecipe || cancelled) return;
-              await comp.preload(variantRecipe);
-              if (cancelled) return;
-              // One warmed composite per frame keeps camera interaction smooth.
-              await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-              if (cancelled) return;
-              const warmed = await comp.compose(variantRecipe, state.seed, dimensions);
-              if (cancelled || compositorRef.current !== comp) {
-                comp.releaseResult(warmed);
-                return;
-              }
-              cacheResult(key, warmed, comp);
+        // Once the requested paint is visible, warm sticker alternatives and
+        // likely wear/team variants only during browser idle periods. Both the
+        // broad preload and the composite render are gated separately because
+        // either can become expensive with a custom package.
+        void (async () => {
+          for (const variant of likelyVariants()) {
+            if (cancelled || compositorRef.current !== comp) return;
+            const key = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${variant.team}|${variant.wear}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}`;
+            if (composeCacheRef.current.has(key)) continue;
+            await waitForIdle();
+            if (cancelled || compositorRef.current !== comp) return;
+            const variantRecipe = await ds.getRecipe(selectedKit, state.weaponKey, variant.team, variant.wear);
+            if (!variantRecipe || cancelled) return;
+            await comp.preload(variantRecipe);
+            if (cancelled || compositorRef.current !== comp) return;
+            await waitForIdle();
+            if (cancelled || compositorRef.current !== comp) return;
+            const warmed = await comp.compose(variantRecipe, state.seed, dimensions);
+            if (cancelled || compositorRef.current !== comp) {
+              comp.releaseResult(warmed);
+              return;
             }
-          })();
-        }, 50);
+            cacheResult(key, warmed, comp);
+          }
+        })();
       } catch (e) {
         console.error('[warpaint-viewer] compose failed:', e);
         if (!firstPaintLoggedRef.current) setError(`Failed to prepare initial warpaint: ${String(e)}`);
@@ -249,7 +289,7 @@ export function useComposedPaint({
       cancelled = true;
       window.clearTimeout(timer);
       window.clearTimeout(badgeTimer);
-      window.clearTimeout(prewarmTimer);
+      cancelPendingIdle?.();
     };
   }, [engineReady, data, selectedKit, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
 

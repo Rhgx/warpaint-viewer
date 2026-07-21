@@ -24,6 +24,7 @@ export class InspectControls {
   private dom: HTMLElement;
   private camera: THREE.PerspectiveCamera;
   private model: THREE.Group;
+  private onChange: (() => void) | undefined;
 
   // Framing (set by setFraming, restored on reset)
   private readonly defaultViewDir = new THREE.Vector3(0.7, 0.4, 0.8).normalize();
@@ -49,10 +50,11 @@ export class InspectControls {
 
   private disposed = false;
 
-  constructor(camera: THREE.PerspectiveCamera, model: THREE.Group, dom: HTMLElement) {
+  constructor(camera: THREE.PerspectiveCamera, model: THREE.Group, dom: HTMLElement, onChange?: () => void) {
     this.camera = camera;
     this.model = model;
     this.dom = dom;
+    this.onChange = onChange;
     model.rotation.order = 'YXZ';
 
     dom.addEventListener('pointerdown', this.onPointerDown);
@@ -156,6 +158,8 @@ export class InspectControls {
     this.velYaw = 0;
     this.velPitch = 0;
     this.dom.setPointerCapture(e.pointerId);
+    // Start the active-control frame loop before the first pointermove.
+    this.onChange?.();
     e.preventDefault();
   };
 
@@ -214,6 +218,8 @@ export class InspectControls {
       this.minDist(),
       this.maxDist(),
     );
+    // Wheel motion is integrated in update(), so request its first frame now.
+    this.onChange?.();
   };
 
   private onDblClick = (e: MouseEvent) => {
@@ -222,8 +228,8 @@ export class InspectControls {
   };
 
   // Per-frame integration: rotate inertia and smooth zoom. dt in seconds.
-  update(dt: number) {
-    if (this.disposed) return;
+  update(dt: number): boolean {
+    if (this.disposed) return false;
     let dirty = false;
 
     if (this.mode !== 'rotate' && (this.velYaw !== 0 || this.velPitch !== 0)) {
@@ -248,6 +254,10 @@ export class InspectControls {
     }
 
     if (dirty) this.apply();
+    // Keep a frame pending while a pointer is held, even between pointermove
+    // events. This makes controls responsive on displays that present faster
+    // than input events, while the viewer can otherwise stay fully idle.
+    return dirty || this.mode !== 'none';
   }
 
   private apply() {
@@ -261,6 +271,7 @@ export class InspectControls {
     const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
     const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
     this.model.position.copy(right.multiplyScalar(this.pan.x)).add(up.multiplyScalar(this.pan.y));
+    this.onChange?.();
   }
 
   dispose() {

@@ -13,6 +13,60 @@ interface Entry {
   failed: boolean;
 }
 
+/**
+ * The browser only exposes these as soft hints, so keep this deliberately
+ * small and tolerate their absence (notably in Safari and test runners).
+ */
+export interface TextureCacheBudgetHints {
+  deviceMemory?: number;
+  hardwareConcurrency?: number;
+  maxTextureSize?: number;
+}
+
+const MIB = 1024 * 1024;
+
+/**
+ * Pick an LRU budget that leaves room for the viewer, compositor targets, and
+ * the rest of the page. Source textures can be reloaded; avoiding a GPU reset
+ * on an integrated/mobile GPU is more valuable than retaining every variant.
+ *
+ * Unknown hardware gets 256 MiB: materially safer than the old 384 MiB while
+ * still holding roughly eleven fully-mipped 2048px RGBA textures. A capable
+ * desktop (more than 8 GiB of reported memory) retains the previous 384 MiB
+ * budget. GPU max texture size only constrains clearly lower-end adapters; an
+ * 8192px desktop GPU is not penalized merely for reporting that limit.
+ */
+export function textureCacheBudgetBytes(hints: TextureCacheBudgetHints = {}): number {
+  const nav = globalThis.navigator as (Navigator & { deviceMemory?: number }) | undefined;
+  const memory = hints.deviceMemory ?? nav?.deviceMemory;
+  const cores = hints.hardwareConcurrency ?? nav?.hardwareConcurrency;
+  let budgetMiB = 256;
+
+  if (Number.isFinite(memory)) {
+    if (memory! <= 2) budgetMiB = 96;
+    else if (memory! <= 4) budgetMiB = 160;
+    else if (memory! <= 8) budgetMiB = 256;
+    else budgetMiB = 384;
+  }
+
+  // CPU count is a weaker signal than RAM, but reliably spots phones and
+  // low-power Chromebooks when Device Memory is unavailable.
+  if (Number.isFinite(cores)) {
+    if (cores! <= 2) budgetMiB = Math.min(budgetMiB, 96);
+    else if (cores! <= 4) budgetMiB = Math.min(budgetMiB, 160);
+    else if (cores! <= 6) budgetMiB = Math.min(budgetMiB, 256);
+  }
+
+  // maxTextureSize is not VRAM, but 2048/4096 limits are a useful guardrail
+  // for integrated and mobile adapters. Do not reduce 8192+ desktop GPUs.
+  if (Number.isFinite(hints.maxTextureSize)) {
+    if (hints.maxTextureSize! <= 2048) budgetMiB = Math.min(budgetMiB, 96);
+    else if (hints.maxTextureSize! <= 4096) budgetMiB = Math.min(budgetMiB, 160);
+  }
+
+  return budgetMiB * MIB;
+}
+
 // Estimated GPU bytes for a decoded texture (RGBA + ~1/3 for mips).
 function textureBytes(tex: THREE.Texture): number {
   const img = tex.image as { width?: number; height?: number } | undefined;
@@ -43,7 +97,7 @@ export class TextureCache {
   private metadata: Record<string, TextureMetadata>;
   private metadataResolver: ((ref: string) => Partial<TextureMetadata> | undefined) | undefined;
 
-  constructor(resolve: TextureResolver, budgetBytes = 384 * 1024 * 1024, metadata: Record<string, TextureMetadata> = {}, metadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined) {
+  constructor(resolve: TextureResolver, budgetBytes = textureCacheBudgetBytes(), metadata: Record<string, TextureMetadata> = {}, metadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined) {
     this.resolve = resolve;
     this.budget = budgetBytes;
     this.metadata = metadata;

@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import type { RecipeNode } from '../compositor/types';
 import type { TextureMetadata } from '../data/types';
-import { decodeVTF, parseVTFHeader } from '../../tools/lib/vtf-core.mjs';
 import { TextField } from './components';
 import { SourcePackageImport, SourcePackagePanel } from './SourcePackagePanel';
 import type { SourcePackageState } from './SourcePackagePanel';
@@ -241,22 +240,25 @@ async function decodeTga(file: File): Promise<string> {
 
 async function decodeVtf(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  let header;
+  // The Worker client is loaded only when a VTF is selected. It retains an
+  // in-process fallback for older browsers and test environments.
+  const { decodeVtfToPng, VtfDecodeError } = await import('../source/vtfDecode');
   try {
-    header = parseVTFHeader(bytes);
-  } catch (cause) {
-    throw new Error(`${file.name}: ${cause instanceof Error ? cause.message : 'Invalid VTF header.'}`);
-  }
-  const pixels = header.width * header.height;
-  if (!Number.isSafeInteger(pixels) || pixels > MAX_VTF_PIXELS) {
-    throw new Error(`${file.name}: VTF dimensions ${header.width} x ${header.height} exceed the 16 megapixel import limit.`);
-  }
-  try {
-    const decoded = decodeVTF(bytes);
-    return encodeRgbaPng(decoded.rgba, decoded.width, decoded.height);
+    const decoded = await decodeVtfToPng(bytes, {
+      maxPixels: MAX_VTF_PIXELS,
+      limitDescription: '16 megapixel import limit',
+    });
+    return readAsDataUrl(new File([decoded.png], 'decoded.png', { type: 'image/png' }));
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : 'The image data could not be decoded.';
-    throw new Error(`${file.name}: VTF ${header.verMajor}.${header.verMinor}, format ${header.highResFormat}: ${detail}`);
+    const header = cause instanceof VtfDecodeError ? cause.header : undefined;
+    // Header-size validation was historically reported without decode details.
+    // Keep that actionable import error stable while retaining VTF metadata for
+    // actual pixel-format/decompression failures.
+    if (detail.startsWith('VTF dimensions ')) throw new Error(`${file.name}: ${detail}`);
+    throw new Error(header
+      ? `${file.name}: VTF ${header.verMajor}.${header.verMinor}, format ${header.highResFormat}: ${detail}`
+      : `${file.name}: ${detail}`);
   }
 }
 

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { PaintSeed, RecipeNode, TextureResolver } from './types';
 import type { ResolvedNode, ResolvedTransform } from './resolve';
 import { resolveRecipe } from './resolve';
-import { TextureCache } from './textureCache';
+import { TextureCache, textureCacheBudgetBytes } from './textureCache';
 import type { TextureMetadata } from '../data/types';
 import {
   FRAG,
@@ -67,7 +67,6 @@ export class Compositor {
 
   constructor(resolver: TextureResolver, opts: CompositorOptions & { renderer?: THREE.WebGLRenderer } = {}) {
     this.width = this.height = opts.size ?? 1024;
-    this.textures = new TextureCache(resolver, undefined, opts.textureMetadata, opts.textureMetadataResolver);
     if (opts.renderer) {
       this.renderer = opts.renderer;
       this.ownsRenderer = false;
@@ -75,6 +74,12 @@ export class Compositor {
       this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
       this.ownsRenderer = true;
     }
+    this.textures = new TextureCache(
+      resolver,
+      textureCacheBudgetBytes({ maxTextureSize: this.renderer.capabilities.maxTextureSize }),
+      opts.textureMetadata,
+      opts.textureMetadataResolver,
+    );
 
     this.material = new THREE.RawShaderMaterial({
       glslVersion: THREE.GLSL3,
