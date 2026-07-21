@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { Eye, Palette, SlidersHorizontal } from 'lucide-react';
 import './ui/WarpaintList.css';
 import './ui/StageToolbar.css';
@@ -16,7 +17,7 @@ import { Inspector } from './ui/Inspector';
 import type { ControlsState } from './ui/Inspector';
 import { StageToolbar } from './ui/StageToolbar';
 import { CustomWarpaintWorkbench } from './ui/CustomWarpaintImport';
-import type { WarpaintAssetOverrides } from './ui/CustomWarpaintImport';
+import type { WarpaintAssetOverrides, WearRecipe } from './ui/CustomWarpaintImport';
 import { VIEW_ANGLES } from './viewer/presets';
 import { parseUrlState, serializeUrlState } from './urlState';
 
@@ -118,7 +119,9 @@ function MainApp() {
   const [selectedKitId, setSelectedKitId] = useState<number | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchMounted, setWorkbenchMounted] = useState(false);
-  const [editorRecipe, setEditorRecipe] = useState<RecipeNode | null>(null);
+  // 0 keeps the CSS default drawer height; anything else is a user drag.
+  const [workbenchHeight, setWorkbenchHeight] = useState(0);
+  const [editorRecipes, setEditorRecipes] = useState<WearRecipe[]>([]);
   const [editorLoading, setEditorLoading] = useState(false);
   const [assetOverrideCache, setAssetOverrideCache] = useState<Record<string, WarpaintAssetOverrides>>({});
   const [catalogVisible, setCatalogVisible] = useState(true);
@@ -281,16 +284,29 @@ function MainApp() {
     void data.getRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
   }, [data, selectedKit, state.weaponKey, state.team, state.wearIndex]);
 
+  // The editor lists every input the paint can use, not just the ones the
+  // current wear happens to reach: per-wear recipes swap in dirt/blood/
+  // scratch/burnt-albedo textures at some levels only, and those inputs must
+  // stay editable whatever the wear slider says. Bundles are cached, so the
+  // extra wear levels cost no extra requests.
   useEffect(() => {
     if (!data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) {
-      setEditorRecipe(null);
+      setEditorRecipes([]);
       setEditorLoading(false);
       return;
     }
     let cancelled = false;
     setEditorLoading(true);
-    void data.getRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex).then((recipe) => {
-      if (!cancelled) setEditorRecipe(recipe);
+    const wearIndexes = selectedKit.perWear
+      ? data.manifest.wearLevels.map((_, index) => index)
+      : [state.wearIndex];
+    void Promise.all(
+      wearIndexes.map((wearIndex) => data
+        .getRecipe(selectedKit, state.weaponKey, state.team, wearIndex)
+        .then((recipe) => ({ wearIndex, recipe }))),
+    ).then((loaded) => {
+      if (cancelled) return;
+      setEditorRecipes(loaded.flatMap(({ wearIndex, recipe }) => recipe ? [{ wearIndex, recipe }] : []));
     }).finally(() => {
       if (!cancelled) setEditorLoading(false);
     });
@@ -722,18 +738,28 @@ function MainApp() {
             drag to rotate, scroll to zoom, right-drag to pan, double-click to reset
           </div>
         </div>
-        <div className="custom-workbench-slot" data-open={workbenchOpen ? '' : undefined} aria-hidden={!workbenchOpen}>
+        <div
+          className="custom-workbench-slot"
+          data-open={workbenchOpen ? '' : undefined}
+          inert={!workbenchOpen}
+          style={workbenchHeight ? ({ '--workbench-h': `${workbenchHeight}px` } as CSSProperties) : undefined}
+        >
           {workbenchMounted && (
             <CustomWarpaintWorkbench
               key={`${selectedKitId ?? 'empty'}|${state.weaponKey}`}
-              recipe={editorRecipe}
+              recipes={editorRecipes}
               resolveTexture={data.resolveTexture}
+              textureMetadata={data.manifest.textures}
               loading={editorLoading}
+              open={workbenchOpen}
               initialOverrides={assetOverrides}
               onChange={(overrides) => {
                 lastComposeKeyRef.current = '';
                 setAssetOverrideCache((cache) => ({ ...cache, [assetOverrideScope]: overrides }));
               }}
+              // A height of 0 means "back to the default clamp", which is what
+              // double-clicking the drawer's resize handle asks for.
+              onResize={setWorkbenchHeight}
               onClose={() => setWorkbenchOpen(false)}
             />
           )}

@@ -1,6 +1,21 @@
-import { useMemo, useRef, useState } from 'react';
-import { FileImage, ImagePlus, LoaderCircle, Sticker, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
+import {
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  FileImage,
+  ImagePlus,
+  Layers,
+  LoaderCircle,
+  RotateCcw,
+  Search,
+  Sticker,
+  X,
+} from 'lucide-react';
 import type { RecipeNode } from '../compositor/types';
+import type { TextureMetadata } from '../data/types';
+import { TextField } from './components';
 import './CustomWarpaintImport.css';
 
 export interface WarpaintAssetOverrides {
@@ -8,23 +23,39 @@ export interface WarpaintAssetOverrides {
   assets: Record<string, WarpaintAssetState>;
 }
 
+type SlotGroup = 'artwork' | 'mask' | 'support';
+
+export interface WearRecipe {
+  wearIndex: number;
+  recipe: RecipeNode;
+}
+
 interface AssetSlot {
   ref: string;
   kind: 'texture' | 'mask' | 'sticker' | 'sticker-mask';
+  group: SlotGroup;
 }
 
 export interface WarpaintAssetState {
   color?: { dataUrl: string; fileName: string; isTga: boolean };
   alpha?: { dataUrl: string; fileName: string };
   output?: string;
+  size?: { width: number; height: number };
 }
 
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'tga'];
+const MIN_PANEL_HEIGHT = 190;
+const RESET_CONFIRM_MS = 3000;
 
-function collectSlots(node: RecipeNode | null): AssetSlot[] {
-  if (!node) return [];
-  const slots = new Map<string, AssetSlot>();
+// Unions the inputs of every wear variant. A per-wear paint reads different
+// textures at different wear levels (dirt, blood, scratches, burnt albedo),
+// and all of them stay listed so an edit never depends on where the wear
+// slider happens to sit.
+function collectSlots(recipes: WearRecipe[]): AssetSlot[] {
+  if (recipes.length === 0) return [];
+  type Draft = Omit<AssetSlot, 'group'>;
+  const slots = new Map<string, Draft>();
   const add = (ref: string | undefined, kind: AssetSlot['kind']) => {
     if (ref && !slots.has(ref)) slots.set(ref, { ref, kind });
   };
@@ -47,8 +78,8 @@ function collectSlots(node: RecipeNode | null): AssetSlot[] {
         current.nodes.forEach(visit);
     }
   };
-  visit(node);
-  const priority = (slot: AssetSlot) => {
+  for (const entry of recipes) visit(entry.recipe);
+  const priority = (slot: Draft) => {
     const ref = slot.ref.toLowerCase();
     // Put the identity of the selected paint in view first. Weapon AO/group/
     // wear maps and generated blank inputs are still editable, but they are
@@ -61,7 +92,13 @@ function collectSlots(node: RecipeNode | null): AssetSlot[] {
     if (ref.includes('ao') || ref.includes('wearblend') || ref.includes('/blank')) return 6;
     return 5;
   };
-  return [...slots.values()].sort((a, b) => priority(a) - priority(b));
+  return [...slots.values()]
+    .sort((a, b) => priority(a) - priority(b))
+    .map((slot) => {
+      const rank = priority(slot);
+      const group: SlotGroup = rank <= 2 ? 'artwork' : rank === 4 ? 'mask' : 'support';
+      return { ...slot, group };
+    });
 }
 
 function shortName(ref: string): string {
@@ -217,116 +254,358 @@ const KIND_LABEL: Record<AssetSlot['kind'], string> = {
   'sticker-mask': 'Sticker mask',
 };
 
+const GROUP_LABEL: Record<SlotGroup, string> = {
+  artwork: 'Artwork',
+  mask: 'Masks',
+  support: 'Support files',
+};
+
+const GROUP_ORDER: SlotGroup[] = ['artwork', 'mask', 'support'];
+
 export function CustomWarpaintWorkbench({
-  recipe,
+  recipes,
   resolveTexture,
+  textureMetadata,
   loading,
+  open,
   initialOverrides,
   onChange,
+  onResize,
   onClose,
 }: {
-  recipe: RecipeNode | null;
+  recipes: WearRecipe[];
   resolveTexture: (ref: string) => string;
+  textureMetadata?: Record<string, TextureMetadata>;
   loading: boolean;
+  open: boolean;
   initialOverrides: WarpaintAssetOverrides;
   onChange: (overrides: WarpaintAssetOverrides) => void;
+  onResize: (height: number) => void;
   onClose: () => void;
 }) {
-  const slots = useMemo(() => collectSlots(recipe), [recipe]);
+  const slots = useMemo(() => collectSlots(recipes), [recipes]);
   const [assets, setAssets] = useState<Record<string, WarpaintAssetState>>(initialOverrides.assets);
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [comparing, setComparing] = useState<Record<string, boolean>>({});
+  const [filter, setFilter] = useState('');
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resizing, setResizing] = useState(false);
   const revisionRef = useRef(initialOverrides.revision);
+  // Async imports read the edit set after their awaits, so the latest map has
+  // to be readable outside of React's render closure.
+  const assetsRef = useRef(assets);
+  const sectionRef = useRef<HTMLElement | null>(null);
 
-  const publish = (next: Record<string, WarpaintAssetState>) => {
+  const replacedCount = Object.keys(assets).length;
+
+  // Escape closes the drawer, matching every other dismissible surface. The
+  // filter field swallows it first so a stray Escape only clears the search.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!confirmReset) return;
+    const timer = window.setTimeout(() => setConfirmReset(false), RESET_CONFIRM_MS);
+    return () => window.clearTimeout(timer);
+  }, [confirmReset]);
+
+  const commit = (next: Record<string, WarpaintAssetState>) => {
+    assetsRef.current = next;
+    setAssets(next);
     revisionRef.current += 1;
-    onChange({
-      revision: revisionRef.current,
-      assets: next,
+    onChange({ revision: revisionRef.current, assets: next });
+  };
+
+  const setSlotError = (ref: string, message: string) => {
+    setErrors((current) => {
+      const next = { ...current };
+      if (message) next[ref] = message;
+      else delete next[ref];
+      return next;
     });
+  };
+
+  const rebuild = async (asset: WarpaintAssetState): Promise<WarpaintAssetState> => {
+    if (!asset.color) return { ...asset, output: undefined, size: undefined };
+    const output = asset.alpha
+      ? await mergeAlpha(asset.color.dataUrl, asset.alpha.dataUrl)
+      : asset.color.dataUrl;
+    const image = await loadImage(output);
+    return { ...asset, output, size: { width: image.naturalWidth, height: image.naturalHeight } };
   };
 
   const updateFile = async (slot: AssetSlot, file: File | undefined, alphaOnly: boolean) => {
     if (!file) return;
-    setError('');
+    setSlotError(slot.ref, '');
+    setBusy((current) => ({ ...current, [slot.ref]: true }));
     try {
       const read = await readTexture(file, alphaOnly);
-      const current = assets[slot.ref] ?? {};
+      const current = assetsRef.current[slot.ref] ?? {};
       const nextAsset: WarpaintAssetState = alphaOnly
         ? { ...current, alpha: { dataUrl: read.dataUrl, fileName: read.fileName } }
         : { ...current, color: read, alpha: read.isTga ? undefined : current.alpha };
-      nextAsset.output = nextAsset.color
-        ? nextAsset.alpha
-          ? await mergeAlpha(nextAsset.color.dataUrl, nextAsset.alpha.dataUrl)
-          : nextAsset.color.dataUrl
-        : undefined;
-      const next = { ...assets, [slot.ref]: nextAsset };
-      setAssets(next);
-      publish(next);
+      commit({ ...assetsRef.current, [slot.ref]: await rebuild(nextAsset) });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The file could not be imported.');
+      setSlotError(slot.ref, cause instanceof Error ? cause.message : 'The file could not be imported.');
+    } finally {
+      setBusy((current) => {
+        const next = { ...current };
+        delete next[slot.ref];
+        return next;
+      });
     }
   };
 
-  const resetSlot = (ref: string) => {
-    const next = { ...assets };
-    delete next[ref];
-    setAssets(next);
-    publish(next);
+  const removeAlpha = async (ref: string) => {
+    const current = assetsRef.current[ref];
+    if (!current?.alpha) return;
+    const { alpha: _alpha, ...rest } = current;
+    commit({ ...assetsRef.current, [ref]: await rebuild(rest) });
   };
 
+  const resetSlot = (ref: string) => {
+    const next = { ...assetsRef.current };
+    delete next[ref];
+    setSlotError(ref, '');
+    commit(next);
+  };
+
+  const resetAll = () => {
+    setErrors({});
+    setComparing({});
+    commit({});
+  };
+
+  // Drag the drawer's top edge to trade stage height for a taller asset grid.
+  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const startY = event.clientY;
+    const startHeight = sectionRef.current?.offsetHeight ?? 0;
+    const maxHeight = Math.round(window.innerHeight * 0.75);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setResizing(true);
+    const move = (moveEvent: PointerEvent) => {
+      const height = startHeight + (startY - moveEvent.clientY);
+      onResize(Math.min(maxHeight, Math.max(MIN_PANEL_HEIGHT, height)));
+    };
+    const stop = () => {
+      setResizing(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+  };
+
+  const query = filter.trim().toLowerCase();
+  const visible = slots.filter((slot) => !query
+    || shortName(slot.ref).toLowerCase().includes(query)
+    || slot.ref.toLowerCase().includes(query));
+  const groups = GROUP_ORDER
+    .map((group) => ({ group, items: visible.filter((slot) => slot.group === group) }))
+    .filter((entry) => entry.items.length > 0);
+
   return (
-    <section className="custom-workbench" aria-label="Custom warpaint files">
+    <section className="custom-workbench" aria-label="Custom warpaint files" ref={sectionRef}>
+      <div
+        className="custom-workbench-resizer"
+        role="separator"
+        aria-label="Resize custom files panel"
+        aria-orientation="horizontal"
+        data-resizing={resizing ? '' : undefined}
+        onPointerDown={startResize}
+        onDoubleClick={() => onResize(0)}
+      />
       <header className="custom-workbench-header">
+        <h2 className="custom-workbench-title">Custom files</h2>
+        <div className="custom-workbench-search">
+          <Search className="custom-workbench-search-icon" size={13} />
+          <TextField
+            value={filter}
+            onChange={setFilter}
+            placeholder="Filter inputs..."
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && filter) {
+                event.preventDefault();
+                setFilter('');
+              }
+            }}
+          />
+        </div>
         <div className="custom-workbench-summary">
-          <span>{slots.length} inputs</span>
-          <span>{Object.keys(assets).length} replaced</span>
-          <button type="button" aria-label="Close custom warpaint files" onClick={onClose}><X size={16} /></button>
+          <span>{replacedCount ? `${replacedCount} of ${slots.length} replaced` : `${slots.length} inputs`}</span>
+          {replacedCount > 0 && (
+            <button
+              type="button"
+              className="custom-workbench-reset-all"
+              data-confirm={confirmReset ? '' : undefined}
+              onClick={() => (confirmReset ? resetAll() : setConfirmReset(true))}
+            >
+              <RotateCcw size={12} />
+              {confirmReset ? 'Discard all?' : 'Reset all'}
+            </button>
+          )}
+          <button
+            type="button"
+            title="Close custom warpaint files"
+            aria-label="Close custom warpaint files"
+            onClick={onClose}
+          >
+            <X size={16} />
+          </button>
         </div>
       </header>
 
-      {error && <div className="custom-workbench-error" role="alert">{error}</div>}
       <div className="custom-workbench-body">
         {loading ? (
           <div className="custom-workbench-empty"><LoaderCircle className="custom-workbench-spinner" size={20} /> Reading recipe inputs...</div>
-        ) : !recipe ? (
+        ) : recipes.length === 0 ? (
           <div className="custom-workbench-empty"><FileImage size={22} /> Select a warpaint to use as the editable recipe template.</div>
-        ) : (
-          <div className="custom-asset-grid">
-            {slots.map((slot) => {
-              const asset = assets[slot.ref];
-              return (
-                <article className="custom-asset-card" key={slot.ref}>
-                  <div className="custom-asset-preview">
-                    <img src={asset?.output ?? resolveTexture(slot.ref)} alt="" />
-                    <span>{KIND_LABEL[slot.kind]}</span>
-                  </div>
-                  <div className="custom-asset-info">
-                    <div className="custom-asset-name">{slot.kind.startsWith('sticker') && <Sticker size={12} />}{shortName(slot.ref)}</div>
-                    <div className="custom-asset-path" title={slot.ref}>{slot.ref}</div>
-                    <div className="custom-asset-actions">
-                      <label className="custom-file-button">
-                        <ImagePlus size={13} /> {asset?.color ? 'Replace' : 'Texture'}
-                        <input type="file" accept=".png,.jpg,.jpeg,.webp,.tga" onChange={(event) => void updateFile(slot, event.target.files?.[0], false)} />
-                      </label>
-                      {!asset?.color?.isTga && (
-                        <label className="custom-file-button custom-file-button-secondary">
-                          Alpha
-                          <input type="file" accept=".png,.jpg,.jpeg,.webp" onChange={(event) => void updateFile(slot, event.target.files?.[0], true)} />
-                        </label>
-                      )}
-                      {asset && <button type="button" className="custom-asset-reset" onClick={() => resetSlot(slot.ref)}>Reset</button>}
-                    </div>
-                    {asset?.color && (
-                      <div className="custom-asset-files">
-                        <span>{asset.color.fileName}{asset.color.isTga ? ' (embedded alpha)' : ''}</span>
-                        {asset.alpha && <span>Alpha: {asset.alpha.fileName}</span>}
-                      </div>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
+        ) : groups.length === 0 ? (
+          <div className="custom-workbench-empty">
+            <Search size={18} /> No inputs match “{filter}”.
           </div>
+        ) : (
+          groups.map(({ group, items }) => (
+            <div className="custom-asset-group" key={group}>
+              <div className="custom-asset-group-label">{GROUP_LABEL[group]}<span>{items.length}</span></div>
+              <div className="custom-asset-grid">
+                {items.map((slot) => {
+                  const asset = assets[slot.ref];
+                  const original = textureMetadata?.[slot.ref];
+                  const showOriginal = comparing[slot.ref] && asset?.output;
+                  const mismatch = asset?.size && original
+                    && (asset.size.width !== original.width || asset.size.height !== original.height);
+                  return (
+                    <article className="custom-asset-card" key={slot.ref} data-replaced={asset ? '' : undefined}>
+                      <div className="custom-asset-preview">
+                        <img
+                          src={showOriginal ? resolveTexture(slot.ref) : asset?.output ?? resolveTexture(slot.ref)}
+                          alt=""
+                        />
+                        <span className="custom-asset-kind">{KIND_LABEL[slot.kind]}</span>
+                        {asset?.output && (
+                          <button
+                            type="button"
+                            className="custom-asset-compare"
+                            title={showOriginal ? 'Show imported file' : 'Show original file'}
+                            aria-label={showOriginal ? 'Show imported file' : 'Show original file'}
+                            aria-pressed={Boolean(showOriginal)}
+                            onClick={() => setComparing((current) => ({ ...current, [slot.ref]: !current[slot.ref] }))}
+                          >
+                            {showOriginal ? <EyeOff size={12} /> : <Eye size={12} />}
+                          </button>
+                        )}
+                        {busy[slot.ref] && (
+                          <div className="custom-asset-busy">
+                            <LoaderCircle className="custom-workbench-spinner" size={18} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="custom-asset-info">
+                        <div className="custom-asset-name">
+                          {slot.kind.startsWith('sticker') && <Sticker size={12} />}
+                          <span>{shortName(slot.ref)}</span>
+                        </div>
+                        <div className="custom-asset-path" title={slot.ref}>{slot.ref}</div>
+                        <div className="custom-asset-files">
+                          {asset?.color ? (
+                            <>
+                              <span className="custom-asset-file" title={asset.color.fileName}>
+                                {asset.color.fileName}{asset.color.isTga ? ' (embedded alpha)' : ''}
+                              </span>
+                              {asset.alpha && (
+                                <span className="custom-asset-file" title={asset.alpha.fileName}>
+                                  Alpha: {asset.alpha.fileName}
+                                  <button
+                                    type="button"
+                                    className="custom-asset-file-remove"
+                                    title="Remove the alpha mask"
+                                    aria-label="Remove the alpha mask"
+                                    onClick={() => void removeAlpha(slot.ref)}
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                </span>
+                              )}
+                              {asset.size && (
+                                <span className={mismatch ? 'custom-asset-warn' : undefined}>
+                                  {mismatch && <AlertTriangle size={10} />}
+                                  {asset.size.width} x {asset.size.height}
+                                  {mismatch && original ? ` (original ${original.width} x ${original.height})` : ''}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="custom-asset-hint">
+                              {original ? `Original ${original.width} x ${original.height}` : 'Original file'}
+                            </span>
+                          )}
+                          {errors[slot.ref] && <span className="custom-asset-error" role="alert">{errors[slot.ref]}</span>}
+                        </div>
+                        <div className="custom-asset-actions">
+                          <label className="custom-file-button" title="Import a PNG, JPG, WebP or TGA texture">
+                            <ImagePlus size={13} />
+                            <span>{asset?.color ? 'Replace' : 'Texture'}</span>
+                            <input
+                              type="file"
+                              accept=".png,.jpg,.jpeg,.webp,.tga"
+                              aria-label={`Import a texture for ${shortName(slot.ref)}`}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                // Clear the input so picking the same file
+                                // again after a reset still fires a change.
+                                event.target.value = '';
+                                void updateFile(slot, file, false);
+                              }}
+                            />
+                          </label>
+                          {!asset?.color?.isTga && (
+                            <label
+                              className="custom-file-button custom-file-button-secondary"
+                              title="Import a separate greyscale or transparent image to use as this texture's alpha channel"
+                            >
+                              <Layers size={12} />
+                              <span>Alpha</span>
+                              <input
+                                type="file"
+                                accept=".png,.jpg,.jpeg,.webp"
+                                aria-label={`Import an alpha mask for ${shortName(slot.ref)}`}
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0];
+                                  event.target.value = '';
+                                  void updateFile(slot, file, true);
+                                }}
+                              />
+                            </label>
+                          )}
+                          {asset && (
+                            <button
+                              type="button"
+                              className="custom-asset-reset"
+                              title="Restore the original file"
+                              aria-label={`Restore the original ${shortName(slot.ref)}`}
+                              onClick={() => resetSlot(slot.ref)}
+                            >
+                              <RotateCcw size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          ))
         )}
       </div>
     </section>
