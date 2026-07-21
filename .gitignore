@@ -2,3 +2,5 @@ node_modules
 dist/
 staging/
 .tmp/
+/TODO.md
+/PLAN.md
