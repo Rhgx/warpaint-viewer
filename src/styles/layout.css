@@ -1,0 +1,171 @@
+.app {
+  --catalog-width: 340px;
+  --controls-width: 256px;
+  display: grid;
+  grid-template-columns: var(--catalog-width) minmax(0, 1fr) var(--controls-width);
+  height: 100%;
+  overflow: hidden;
+  transition: grid-template-columns 190ms ease;
+}
+.app[data-catalog-hidden] {
+  --catalog-width: 0px;
+}
+.app[data-controls-hidden] {
+  --controls-width: 0px;
+}
+.app[data-catalog-hidden] > .sidebar {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-10px);
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 190ms ease, visibility 0s linear 190ms;
+}
+.app[data-controls-hidden] > .inspector {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(10px);
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 190ms ease, visibility 0s linear 190ms;
+}
+
+/* ---------- sidebar / warpaint list ---------- */
+.sidebar {
+  grid-column: 1;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition: opacity 150ms ease, transform 190ms ease, visibility 0s;
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 1100px) {
+  .app {
+    grid-template-columns: var(--catalog-width) minmax(0, 1fr);
+    grid-template-rows: 1fr auto;
+    grid-template-areas:
+      'sidebar stage'
+      'sidebar inspector';
+  }
+  .sidebar {
+    grid-area: sidebar;
+  }
+  .stage {
+    grid-area: stage;
+  }
+  .inspector {
+    grid-area: inspector;
+    max-height: 42vh;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+  .app[data-controls-hidden] > .inspector {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-top-color: transparent;
+    transform: translateY(10px);
+  }
+}
+/* Below 860px the sidebar/inspector stop taking grid space entirely and
+   become fixed slide-over panels above the stage instead, toggled by the
+   bottom tab strip. The canvas (inside .stage) is never unmounted and never
+   display:none here, since the panels just overlay it; only .stage's own
+   box shrinks (padding-bottom for the strip), so the WebGL context resizes
+   once when crossing this breakpoint, never when a panel opens or closes. */
+@media (max-width: 860px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    grid-template-areas: 'stage';
+  }
+  .stage {
+    padding-bottom: var(--mobile-tabstrip-h);
+  }
+  .warpaint-list {
+    min-width: 0;
+  }
+  .sidebar,
+  .inspector {
+    position: fixed;
+    top: 0;
+    bottom: var(--mobile-tabstrip-h);
+    z-index: 40;
+    width: min(88vw, 360px);
+    max-height: none;
+    box-shadow: var(--shadow-pop);
+    transition: transform 220ms ease;
+  }
+  .app[data-catalog-hidden] > .sidebar,
+  .app[data-controls-hidden] > .inspector {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform 220ms ease;
+  }
+  .app[data-catalog-hidden] > .sidebar {
+    transform: translateX(-100%);
+  }
+  .app[data-controls-hidden] > .inspector {
+    max-height: none;
+    padding: 10px;
+    border-top-color: var(--border);
+    transform: translateX(100%);
+  }
+  .stage-panel-toggle,
+  .custom-workbench-trigger,
+  .stage-toolbar-divider:first-of-type {
+    display: none;
+  }
+  .sidebar {
+    left: 0;
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    transform: translateX(-100%);
+  }
+  .inspector {
+    right: 0;
+    left: auto;
+    border-left: 1px solid var(--border);
+    border-top: none;
+    transform: translateX(100%);
+  }
+  .app[data-mobile-panel='catalog'] .sidebar {
+    transform: translateX(0);
+  }
+  .app[data-mobile-panel='controls'] .inspector {
+    transform: translateX(0);
+  }
+  .mobile-tabstrip {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    height: var(--mobile-tabstrip-h);
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
+}
+/* Placed after the 860px rule above (same specificity) so it wins when both
+   apply: the slide-over panels snap open/closed instead of sliding. */
+@media (max-width: 860px) and (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .inspector {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app,
+  .sidebar,
+  .inspector {
+    transition: none;
+  }
+}

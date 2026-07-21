@@ -1,0 +1,182 @@
+/* ---------- controls ---------- */
+.control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.control-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.control-label svg {
+  flex: none;
+  opacity: 0.85;
+}
+/* The randomize dice and undo buttons live inside the seed field as inline
+   adornments (one visual control instead of a row of buttons);
+   .seed-field-actions is a dedicated slot for both. */
+.seed-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+/* The seed is a full 64-bit decimal (up to 20 digits); the generic
+   .ui-num-input width is too narrow to show it without scrolling. It also
+   stands alone (no .ui-numfield group around it), so it needs its own panel
+   background and border to read as an input instead of bare text.
+   padding-right clears the two .seed-field-actions buttons. */
+.seed-input {
+  width: 172px;
+  min-height: var(--control-h);
+  padding-right: 52px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-fast);
+}
+.seed-input:hover {
+  border-color: var(--border-strong);
+}
+.seed-input:focus {
+  border-color: var(--accent);
+}
+.seed-field-actions {
+  position: absolute;
+  right: 3px;
+  display: flex;
+  gap: 2px;
+}
+.seed-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.seed-action-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--border);
+}
+.seed-action-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------- inspector (right panel) ---------- */
+.inspector {
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition: opacity 150ms ease, transform 190ms ease, max-height 190ms ease, padding 190ms ease, visibility 0s;
+}
+.inspector-section + .inspector-section {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.inspector-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 2px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.inspector-section-header:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.inspector-section-chevron {
+  flex: none;
+  transition: transform 140ms ease;
+}
+.inspector-section-chevron[data-collapsed] {
+  transform: rotate(-90deg);
+}
+.inspector-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 2px 10px;
+}
+.inspector .control {
+  align-items: stretch;
+  gap: 6px;
+}
+.inspector .control-label {
+  justify-content: flex-start;
+}
+.inspector .seed-input {
+  width: 100%;
+}
+.inspector .ui-slider-control,
+.inspector .ui-select-trigger {
+  width: 100%;
+}
+/* The wear control was sized for the old horizontal footer; in the panel it
+   must follow the column width or it forces a horizontal scrollbar. */
+.inspector .wear-slider {
+  width: 100%;
+}
+.inspector .ui-team-toggle {
+  width: 100%;
+}
+/* ---------- mobile bottom tab strip (<= 860px) ---------- */
+/* Markup always renders; hidden here by default and switched on inside the
+   860px breakpoint below so no matchMedia/JS is needed to show or hide it. */
+.mobile-tabstrip {
+  display: none;
+}
+.mobile-tab-btn {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 0;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.mobile-tab-btn[aria-pressed='true'] {
+  color: var(--accent);
+}
+

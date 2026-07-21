@@ -1,0 +1,57 @@
+/* ---------- stage action toolbar (top-right) ---------- */
+.stage-toolbar {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  backdrop-filter: blur(6px);
+}
+.stage-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.stage-toolbar-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.stage-toolbar-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.stage-toolbar-btn[data-feedback='success'] {
+  color: var(--pass);
+}
+.stage-toolbar-btn[data-feedback='error'] {
+  color: var(--fail);
+}
+.custom-workbench-trigger[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.stage-toolbar-btn[aria-pressed='false'] {
+  color: color-mix(in srgb, var(--text-dim) 55%, transparent);
+}
+.stage-toolbar-divider {
+  align-self: stretch;
+  width: 1px;
+  margin: 3px 1px;
+  background: var(--border);
+}
+

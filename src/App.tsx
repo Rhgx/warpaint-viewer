@@ -1,6 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Palette, SlidersHorizontal } from 'lucide-react';
-import './App.css';
+import './ui/WarpaintList.css';
+import './ui/StageToolbar.css';
+import './ui/Inspector.css';
+import './styles/stage.css';
+import './styles/layout.css';
 import type { Viewer } from './viewer/Viewer';
 import type { Compositor, ComposeResult } from './compositor/compositor';
 import type { RecipeNode } from './compositor/types';
