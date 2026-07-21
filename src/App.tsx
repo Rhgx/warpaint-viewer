@@ -239,7 +239,10 @@ function MainApp() {
   const selectedKit: PaintkitEntry | null =
     data && selectedKitId != null ? data.manifest.paintkits.find((p) => p.id === selectedKitId) ?? null : null;
   const selectedAssetKey = selectedKit && state.weaponKey ? `${selectedKit.id}|${state.weaponKey}` : '';
-  const assetOverrideScope = selectedAssetKey;
+  // Artwork refs are shared by a paintkit even when its weapon recipe changes.
+  // Keep one edit set per paintkit so imported textures follow weapon changes;
+  // recipe-specific refs that do not exist on the next weapon are simply unused.
+  const assetOverrideScope = selectedKit ? String(selectedKit.id) : '';
   const assetOverrides = assetOverrideCache[assetOverrideScope] ?? EMPTY_OVERRIDES;
   const activeTextureOverrides = useMemo(
     () => Object.fromEntries(

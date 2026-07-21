@@ -87,18 +87,89 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   });
 }
 
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const chunk = new Uint8Array(12 + data.length);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, data.length);
+  for (let i = 0; i < 4; i += 1) chunk[4 + i] = type.charCodeAt(i);
+  chunk.set(data, 8);
+
+  let crc = 0xffffffff;
+  for (let i = 4; i < 8 + data.length; i += 1) {
+    crc ^= chunk[i];
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  view.setUint32(8 + data.length, (crc ^ 0xffffffff) >>> 0);
+  return chunk;
+}
+
+function storeZlib(data: Uint8Array): Uint8Array {
+  const blockCount = Math.ceil(data.length / 0xffff);
+  const output = new Uint8Array(2 + data.length + blockCount * 5 + 4);
+  output.set([0x78, 0x01]); // zlib header: deflate with the fastest strategy
+  let sourceOffset = 0;
+  let outputOffset = 2;
+  while (sourceOffset < data.length) {
+    const length = Math.min(0xffff, data.length - sourceOffset);
+    output[outputOffset] = sourceOffset + length === data.length ? 1 : 0;
+    output[outputOffset + 1] = length & 0xff;
+    output[outputOffset + 2] = length >>> 8;
+    output[outputOffset + 3] = (~length) & 0xff;
+    output[outputOffset + 4] = ((~length) >>> 8) & 0xff;
+    output.set(data.subarray(sourceOffset, sourceOffset + length), outputOffset + 5);
+    sourceOffset += length;
+    outputOffset += length + 5;
+  }
+  let a = 1;
+  let b = 0;
+  for (let i = 0; i < data.length; i += 1) {
+    a = (a + data[i]) % 65521;
+    b = (b + a) % 65521;
+  }
+  new DataView(output.buffer).setUint32(outputOffset, ((b << 16) | a) >>> 0);
+  return output;
+}
+
+async function encodeRgbaPng(data: Uint8Array, width: number, height: number): Promise<string> {
+  // Canvas serialisation premultiplies RGB by alpha. That is correct for a
+  // displayed image, but corrupts TF2 textures where RGB and alpha are two
+  // independent data channels. Build the PNG bytes directly instead.
+  const scanlines = new Uint8Array(height * (1 + width * 4));
+  for (let y = 0; y < height; y += 1) {
+    const row = y * (1 + width * 4);
+    scanlines[row] = 0;
+    scanlines.set(data.subarray(y * width * 4, (y + 1) * width * 4), row + 1);
+  }
+  const compressed = typeof CompressionStream === 'undefined'
+    ? storeZlib(scanlines)
+    : new Uint8Array(await new Response(
+      new Blob([scanlines]).stream().pipeThrough(new CompressionStream('deflate')),
+    ).arrayBuffer());
+  const header = new Uint8Array(13);
+  const headerView = new DataView(header.buffer);
+  headerView.setUint32(0, width);
+  headerView.setUint32(4, height);
+  header.set([8, 6, 0, 0, 0], 8); // 8-bit RGBA, deflate, no interlace
+  const parts = [
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', compressed),
+    pngChunk('IEND', new Uint8Array()),
+  ];
+  const png = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    png.set(part, offset);
+    offset += part.length;
+  }
+  return readAsDataUrl(new File([png.buffer], 'decoded.png', { type: 'image/png' }));
+}
+
 async function decodeTga(file: File): Promise<string> {
   const { TGALoader } = await import('three/addons/loaders/TGALoader.js');
   const parsed = new TGALoader().parse(await file.arrayBuffer());
   if (!parsed.data || !parsed.width || !parsed.height) throw new Error('This TGA has no readable pixel data.');
-  const bytes = Uint8ClampedArray.from(parsed.data as ArrayLike<number>);
-  const canvas = document.createElement('canvas');
-  canvas.width = parsed.width;
-  canvas.height = parsed.height;
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('The browser could not decode this TGA.');
-  context.putImageData(new ImageData(bytes, parsed.width, parsed.height), 0, 0);
-  return canvas.toDataURL('image/png');
+  return encodeRgbaPng(Uint8Array.from(parsed.data as ArrayLike<number>), parsed.width, parsed.height);
 }
 
 async function readTexture(file: File, alphaOnly = false) {
