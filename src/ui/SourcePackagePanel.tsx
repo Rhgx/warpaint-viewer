@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { AlertTriangle, ChevronDown, Info, LoaderCircle, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ChevronDown, LoaderCircle, Trash2, Upload } from 'lucide-react';
 import type { SourceDiagnostic, SourcePackageFormat } from '../source/contracts';
 
 export type { SourcePackageFormat } from '../source/contracts';
@@ -89,6 +89,10 @@ export function SourcePackageImport({ state }: { state: SourcePackageState }) {
  */
 export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
   const { status, summary, diagnostics, onRemove } = state;
+  // Successful normalization and archive-safety observations are useful to
+  // developers, but give users nothing to act on. Keep them in package state
+  // while reserving the visible diagnostics area for problems.
+  const visibleDiagnostics = diagnostics.filter((diagnostic) => diagnostic.level !== 'info');
   const [expanded, setExpanded] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const detailsId = useId();
@@ -105,7 +109,7 @@ export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
     if (status !== 'mounted') setExpanded(false);
   }, [status]);
 
-  if (status === 'empty' && diagnostics.length === 0) return null;
+  if (status === 'empty' && visibleDiagnostics.length === 0) return null;
 
   return (
     <div className="source-package" data-status={status}>
@@ -171,11 +175,11 @@ export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
         </div>
       )}
 
-      {diagnostics.length > 0 && (
+      {visibleDiagnostics.length > 0 && (
         <ul className="source-package-diagnostics">
-          {diagnostics.map((diagnostic) => (
+          {visibleDiagnostics.map((diagnostic) => (
             <li key={diagnostic.id} data-level={diagnostic.level}>
-              {diagnostic.level === 'info' ? <Info size={11} /> : <AlertTriangle size={11} />}
+              <AlertTriangle size={11} />
               <span>
                 {diagnostic.message}
                 {diagnostic.detail && <code>{diagnostic.detail}</code>}
