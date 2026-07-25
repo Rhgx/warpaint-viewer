@@ -1,0 +1,211 @@
+/* Definitions tab: an imported proto_defs container's kits, listed as compact
+   rows (name/defindex/weapon count carry more meaning here than a texture
+   thumbnail would). Empty/importing states center within the tab; the loaded
+   state stacks a toolbar over a scrollable list, matching the Files tab. */
+.definitions-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.definitions-panel[data-status='empty'],
+.definitions-panel[data-status='importing'] {
+  align-items: center;
+  justify-content: center;
+}
+
+.definitions-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 340px;
+  padding: 20px 16px;
+  text-align: center;
+  color: var(--text-dim);
+}
+.definitions-empty svg { opacity: 0.8; }
+.definitions-empty strong { color: var(--text); font-size: 12px; }
+.definitions-empty span { font-size: 11px; line-height: 1.5; }
+
+.definitions-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.definitions-candidate {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 10.5px;
+}
+.definitions-candidate svg { flex: none; color: var(--accent); }
+.definitions-candidate-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.definitions-toolbar {
+  display: flex;
+  flex: none;
+  min-height: 40px;
+  padding: 7px 12px;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.definitions-search {
+  position: relative;
+  flex: 1 1 auto;
+  max-width: 220px;
+  display: flex;
+  align-items: center;
+}
+.definitions-search-icon { position: absolute; left: 8px; color: var(--text-dim); pointer-events: none; }
+.definitions-search .ui-input { padding-left: 25px; font-size: 11px; }
+.definitions-filename {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.definitions-count {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.definitions-btn {
+  display: flex;
+  flex: none;
+  min-height: 24px;
+  padding: 0 7px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 9.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.definitions-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.definitions-btn:focus-within,
+.definitions-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 1px;
+}
+.definitions-btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.definitions-btn[data-busy] { cursor: progress; opacity: 0.6; }
+.definitions-btn-primary { border-color: var(--accent); background: var(--accent); color: var(--accent-text); }
+.definitions-btn-primary:hover { filter: brightness(1.1); color: var(--accent-text); }
+.definitions-remove[data-confirm] {
+  border-color: color-mix(in srgb, var(--fail) 55%, var(--border));
+  background: color-mix(in srgb, var(--fail) 12%, var(--panel));
+  color: var(--fail);
+}
+
+.definitions-list {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+  padding: 8px 12px 12px;
+}
+.definitions-list-empty {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.definitions-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  transition: var(--transition-fast);
+}
+.definitions-row[data-loaded] { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.definitions-row[data-unsupported] { opacity: 0.55; }
+.definitions-row-main {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+.definitions-row-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.definitions-row-meta {
+  color: var(--text-dim);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.definitions-row-chip {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.definitions-row-chip[data-new] {
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.definitions-row-reason {
+  flex: none;
+  max-width: 160px;
+  color: var(--text-dim);
+  font-size: 9px;
+  font-style: italic;
+}
+.definitions-row-actions { display: flex; flex: none; gap: 5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .definitions-btn,
+  .definitions-row { transition: none; }
+}

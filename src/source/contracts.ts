@@ -21,6 +21,14 @@ export interface SourcePackage {
   readonly name: string;
   readonly format: SourcePackageFormat;
   readonly entries: ReadonlyMap<string, SourceEntry>;
+  /**
+   * True when this package had no materials/ directory anywhere, so its
+   * (wrapper-stripped) archive root was indexed as if it were the materials
+   * tree instead. VPKs and ordinary ZIPs with a real materials/ root always
+   * report false here. Consumers use this to allow a name-based texture
+   * fallback that would otherwise be too speculative for a well-formed pack.
+   */
+  readonly rootIsMaterials: boolean;
 
   has(path: string): boolean;
   read(path: string): Promise<Uint8Array>;

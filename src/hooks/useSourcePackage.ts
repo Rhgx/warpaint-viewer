@@ -4,11 +4,14 @@ import type { SourcePackage, SourcePackageOpenResult } from '../source/contracts
 import { isSupportedTexturePath, sourcePathExtension } from '../source/paths';
 import { SourceTextureProvider } from '../source/provider';
 
-type StaticPackageSummary = Omit<SourcePackageSummary, 'usedCount' | 'fallbackCount'>;
+type StaticPackageSummary = Omit<
+  SourcePackageSummary,
+  'usedCount' | 'fallbackCount' | 'nameMatchedCount' | 'ambiguousNameCount'
+>;
 
 // Package entry indexes never change after opening. Provider activity is much
 // more frequent than mounts, so retain the archive-derived fields and only
-// recalculate the two live counters on each UI sync.
+// recalculate the live counters on each UI sync.
 const staticSummaryCache = new WeakMap<SourcePackage, StaticPackageSummary>();
 
 function importDiagnostic(cause: unknown) {
@@ -38,6 +41,7 @@ function summaryFor(pkg: SourcePackage, provider: SourceTextureProvider): Source
   return {
     ...summary,
     usedCount: snapshot.usedPaths.size, fallbackCount: snapshot.fallbackIdentities.size,
+    nameMatchedCount: snapshot.nameMatchedPaths.size, ambiguousNameCount: snapshot.ambiguousNameMatches.size,
   };
 }
 
@@ -65,7 +69,7 @@ export function useSourcePackage(fallback: (ref: string) => string, onSuccessful
     if (!files.length) return;
     const operation = ++importOperationRef.current;
     const format = files.some((file) => file.name.toLowerCase().endsWith('.vpk')) ? 'vpk' : 'zip';
-    setState({ status: 'importing', summary: { name: files[0]?.name ?? 'package', format, entryCount: 0, materialsByExtension: [], usedCount: 0, fallbackCount: 0 }, diagnostics: [] });
+    setState({ status: 'importing', summary: { name: files[0]?.name ?? 'package', format, entryCount: 0, materialsByExtension: [], usedCount: 0, fallbackCount: 0, nameMatchedCount: 0, ambiguousNameCount: 0 }, diagnostics: [] });
     void (async () => {
       try {
         const zips = files.filter((file) => file.name.toLowerCase().endsWith('.zip'));

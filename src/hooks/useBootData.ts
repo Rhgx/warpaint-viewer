@@ -4,6 +4,7 @@ import type { DataSource } from '../data/loader';
 import type { ControlsState } from '../ui/Inspector';
 import type { BootState } from '../ui/BootLoader';
 import { parseUrlState, serializeUrlState } from '../urlState';
+import { isCustomKitId } from '../protodefs/types';
 
 const DEFAULT_WEAPON_KEY = 'c_rocketlauncher';
 const URL_SYNC_DEBOUNCE_MS = 300;
@@ -94,7 +95,9 @@ export function useBootData({ state, setState, selectedKitId, setSelectedKitId, 
     if (!bootSelectionAppliedRef.current) return;
     const handle = window.setTimeout(() => {
       const urlState = serializeUrlState(window.location.search, {
-        kitId: selectedKitId,
+        // Imported definitions live only in this tab's memory, so their ids
+        // would not resolve for whoever opens the link.
+        kitId: selectedKitId != null && isCustomKitId(selectedKitId) ? null : selectedKitId,
         weaponKey: state.weaponKey,
         seed: state.seed,
         wearIndex: state.wearIndex,

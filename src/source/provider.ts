@@ -1,12 +1,20 @@
 import type { TextureMetadata } from '../data/types';
 import type { SourceDiagnostic, SourcePackage } from './contracts';
-import { sourcePathExtension, sourceTextureCandidates, sourceTextureIdentity } from './paths';
+import { isSupportedTexturePath, sourcePathExtension, sourceTextureCandidates, sourceTextureIdentity } from './paths';
 
 export interface SourceTextureProviderSnapshot {
   package: SourcePackage | null;
   generation: number;
   usedPaths: ReadonlySet<string>;
   fallbackIdentities: ReadonlySet<string>;
+  /**
+   * Refs bound by filename rather than exact Source path (only possible for a
+   * `rootIsMaterials` package), keyed by the ref's texture identity and
+   * pointing at the package path it resolved to.
+   */
+  nameMatchedPaths: ReadonlyMap<string, string>;
+  /** Identities whose filename stem matched two or more package entries, so were deliberately left unmatched. */
+  ambiguousNameMatches: ReadonlySet<string>;
   diagnostics: readonly SourceDiagnostic[];
 }
 
@@ -21,6 +29,10 @@ export class SourceTextureProvider {
   #loads = new Map<string, Promise<string>>();
   #usedPaths = new Set<string>();
   #fallbackIdentities = new Set<string>();
+  #nameMatchedPaths = new Map<string, string>();
+  #ambiguousNameMatches = new Set<string>();
+  #nameIndexPackage: SourcePackage | null = null;
+  #nameIndexByStem: Map<string, string[]> | null = null;
   #diagnostics: SourceDiagnostic[] = [];
   #notificationPending = false;
   #notificationToken = 0;
@@ -36,7 +48,15 @@ export class SourceTextureProvider {
   get package(): SourcePackage | null { return this.#package; }
 
   snapshot(): SourceTextureProviderSnapshot {
-    return { package: this.#package, generation: this.#generation, usedPaths: this.#usedPaths, fallbackIdentities: this.#fallbackIdentities, diagnostics: this.#diagnostics };
+    return {
+      package: this.#package,
+      generation: this.#generation,
+      usedPaths: this.#usedPaths,
+      fallbackIdentities: this.#fallbackIdentities,
+      nameMatchedPaths: this.#nameMatchedPaths,
+      ambiguousNameMatches: this.#ambiguousNameMatches,
+      diagnostics: this.#diagnostics,
+    };
   }
 
   /** Sampling flags from an already-decoded VTF, if this Source path won. */
@@ -94,7 +114,19 @@ export class SourceTextureProvider {
     let candidates: string[];
     try { identity = sourceTextureIdentity(ref); candidates = sourceTextureCandidates(ref); }
     catch { return this.fallback(ref); }
-    const path = candidates.find((candidate) => pkg.has(candidate));
+    let path = candidates.find((candidate) => pkg.has(candidate));
+    // A rootIsMaterials package has no real materials/ tree to place a ref's
+    // exact path in, so as a last resort (never for an ordinary package, and
+    // never ahead of an exact hit) try binding by filename alone.
+    if (!path && pkg.rootIsMaterials) {
+      const nameMatch = this.#matchByName(pkg, identity);
+      if (nameMatch === 'ambiguous') {
+        if (consume && !this.#ambiguousNameMatches.has(identity)) { this.#ambiguousNameMatches.add(identity); this.#notifySoon(); }
+      } else if (nameMatch) {
+        path = nameMatch;
+        if (consume && this.#nameMatchedPaths.get(identity) !== nameMatch) { this.#nameMatchedPaths.set(identity, nameMatch); this.#notifySoon(); }
+      }
+    }
     if (!path) {
       if (consume && !this.#fallbackIdentities.has(identity)) { this.#fallbackIdentities.add(identity); this.#notifySoon(); }
       return this.fallback(ref);
@@ -117,6 +149,26 @@ export class SourceTextureProvider {
   #clearTransientState(): void {
     for (const url of this.#urls.values()) URL.revokeObjectURL(url);
     this.#urls.clear(); this.#metadata.clear(); this.#loads.clear(); this.#usedPaths.clear(); this.#fallbackIdentities.clear();
+    this.#nameMatchedPaths.clear(); this.#ambiguousNameMatches.clear();
+    this.#nameIndexPackage = null; this.#nameIndexByStem = null;
+  }
+
+  /**
+   * Binds an identity to a package entry sharing its filename stem. Two or
+   * more entries sharing a stem are ambiguous by design: guessing wrong would
+   * silently apply the wrong texture, so it is reported instead and left for
+   * the built-in fallback.
+   */
+  #matchByName(pkg: SourcePackage, identity: string): string | 'ambiguous' | undefined {
+    if (this.#nameIndexPackage !== pkg) {
+      this.#nameIndexPackage = pkg;
+      this.#nameIndexByStem = buildNameIndex(pkg);
+    }
+    const stem = identity.slice(identity.lastIndexOf('/') + 1);
+    const matches = this.#nameIndexByStem?.get(stem);
+    if (!matches || matches.length === 0) return undefined;
+    if (matches.length > 1) return 'ambiguous';
+    return matches[0];
   }
 
   async #load(pkg: SourcePackage, path: string, generation: number, fallbackRef: string): Promise<string> {
@@ -172,6 +224,27 @@ export class SourceTextureProvider {
     this.#notificationToken += 1;
     this.onChange?.();
   }
+}
+
+/**
+ * Groups a rootIsMaterials package's supported texture entries by filename
+ * stem (extension stripped, directories ignored), so a ref whose exact
+ * Source path is not in the package can still bind to a same-named file
+ * elsewhere in the pack, the way FlakFurnished-style packs expect an
+ * installer to repath their loose textures by hand.
+ */
+function buildNameIndex(pkg: SourcePackage): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const path of pkg.entries.keys()) {
+    if (!isSupportedTexturePath(path)) continue;
+    const extension = sourcePathExtension(path);
+    if (!extension) continue;
+    const filename = path.slice(path.lastIndexOf('/') + 1);
+    const stem = filename.slice(0, filename.length - (extension.length + 1));
+    const list = index.get(stem);
+    if (list) list.push(path); else index.set(stem, [path]);
+  }
+  return index;
 }
 
 async function decodePackageTexture(bytes: Uint8Array, extension: string): Promise<{ url: string; metadata?: Partial<TextureMetadata> }> {

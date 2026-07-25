@@ -1,15 +1,31 @@
-/* Source asset package bar. It sits immediately under the workbench header
-   and only exists while a package is mounted, importing, or reporting a failed
-   import, so an unused feature costs no height in a short drawer. */
+/* Package tab content: a mounted/importing bar plus its materials breakdown
+   and diagnostics, or an empty state when nothing is mounted yet. Fills the
+   tab panel and scrolls if the diagnostics list runs long. */
 .source-package {
-  flex: none;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
   background: var(--accent-soft);
   color: var(--text-dim);
   font-size: 9.5px;
 }
 .source-package[data-status='empty'] { background: none; }
+.source-package-empty {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 320px;
+  margin: 0 auto;
+  padding: 20px 16px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.source-package-empty svg { color: var(--text-dim); opacity: 0.8; }
 .source-package-row {
   display: flex;
   align-items: center;
@@ -54,11 +70,11 @@
   opacity: 0.55;
 }
 .source-package-stats > span[data-emphasis] { color: var(--text); font-weight: 600; }
+.source-package-stats > span[data-warn] { color: color-mix(in srgb, var(--fail) 75%, var(--text-dim)); }
 
 /* Shares the header's "Reset all" shape so the workbench has one button
    language across its toolbar, its package bar and its asset cards. */
-.source-package-btn,
-.source-package-header-import {
+.source-package-btn {
   display: flex;
   flex: none;
   min-height: 24px;
@@ -74,23 +90,17 @@
   cursor: pointer;
   transition: var(--transition-fast);
 }
-.source-package-btn:hover,
-.source-package-header-import:hover { color: var(--text); border-color: var(--border-strong); }
+.source-package-btn:hover { color: var(--text); border-color: var(--border-strong); }
 .source-package-btn:focus-within,
-.source-package-btn:focus-visible,
-.source-package-header-import:focus-within {
+.source-package-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 1px;
 }
-.source-package-btn input,
-.source-package-header-import input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.source-package-btn[data-busy],
-.source-package-header-import[data-busy] { cursor: progress; opacity: 0.6; }
-.source-package-btn svg,
-.source-package-header-import svg { flex: none; }
-.source-package-btn[aria-expanded='true'] { color: var(--text); }
-.source-package-btn[aria-expanded='true'] svg:last-child { transform: rotate(180deg); }
-.source-package-btn[aria-expanded] svg:last-child { transition: transform 140ms ease; }
+.source-package-btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.source-package-btn[data-busy] { cursor: progress; opacity: 0.6; }
+.source-package-btn svg { flex: none; }
+.source-package-btn-primary { border-color: var(--accent); background: var(--accent); color: var(--accent-text); }
+.source-package-btn-primary:hover { filter: brightness(1.1); color: var(--accent-text); }
 .source-package-remove[data-confirm] {
   border-color: color-mix(in srgb, var(--fail) 55%, var(--border));
   background: color-mix(in srgb, var(--fail) 12%, var(--panel));
@@ -165,8 +175,11 @@
   font-size: 12px;
   font-weight: 650;
   pointer-events: none;
+  text-align: center;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .source-package-btn[aria-expanded] svg:last-child { transition: none; }
+/* The "unroutable file" hint reuses the dropzone's overlay position but tints
+   toward failure instead of the accent, so it reads as a miss, not a target. */
+.source-package-dropzone[data-variant='hint'] {
+  background: color-mix(in srgb, var(--panel) 84%, var(--fail));
+  color: var(--fail);
 }

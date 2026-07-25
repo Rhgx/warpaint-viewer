@@ -55,6 +55,23 @@ function isHarmlessMetadataPath(path: string): boolean {
   return path === '__macosx' || path.startsWith('__macosx/');
 }
 
+/**
+ * Finds the wrapper suffix in front of a `materials` path component, given the
+ * path components beneath the archive's single top-level wrapper folder.
+ * `materials` only counts as a directory boundary: an interior occurrence
+ * always counts (something is nested under it), while a trailing occurrence
+ * only counts when the entry itself is that directory, not a file that
+ * happens to be named `materials` with no extension.
+ */
+function materialsSuffix(componentsAfterRoot: readonly string[], isDirectoryEntry: boolean): string | undefined {
+  for (let index = 0; index < componentsAfterRoot.length; index += 1) {
+    if (componentsAfterRoot[index] !== 'materials') continue;
+    if (index === componentsAfterRoot.length - 1 && !isDirectoryEntry) continue;
+    return componentsAfterRoot.slice(0, index).join('/');
+  }
+  return undefined;
+}
+
 function resolveLimits(configuredLimits: Partial<ZipSourcePackageLimits>): ZipSourcePackageLimits {
   const limits = { ...DEFAULT_ZIP_SOURCE_PACKAGE_LIMITS, ...configuredLimits };
   for (const [name, value] of Object.entries(limits)) {
@@ -70,6 +87,7 @@ class ZipSourcePackage implements SourcePackage {
   readonly entries: ReadonlyMap<string, SourceEntry>;
   readonly id: string;
   readonly name: string;
+  readonly rootIsMaterials: boolean;
   #disposed = false;
   private readonly reader: ZipReader<Blob>;
   private readonly indexedEntries: ReadonlyMap<string, IndexedZipEntry>;
@@ -82,6 +100,7 @@ class ZipSourcePackage implements SourcePackage {
     indexedEntries: ReadonlyMap<string, IndexedZipEntry>,
     entries: ReadonlyMap<string, SourceEntry>,
     limits: ZipSourcePackageLimits,
+    rootIsMaterials: boolean,
   ) {
     this.id = id;
     this.name = name;
@@ -89,6 +108,7 @@ class ZipSourcePackage implements SourcePackage {
     this.indexedEntries = indexedEntries;
     this.entries = entries;
     this.limits = limits;
+    this.rootIsMaterials = rootIsMaterials;
   }
 
   has(path: string): boolean {
@@ -159,23 +179,58 @@ export async function openZipSourcePackage(
     }
 
     // Mod ZIPs commonly wrap the Source tree in one descriptive folder (for
-    // example `Yeti Coated/materials/...`). Treat that single shared folder as
-    // presentation rather than part of the Source path. Multiple or nested
-    // roots remain ambiguous and are rejected below.
+    // example `Yeti Coated/materials/...`), sometimes several folders deep (for
+    // example `Skinned Submission/Skinned Textures/materials/...`). Treat every
+    // path component between the single shared top-level folder and the
+    // materials/ directory as presentation rather than part of the Source path.
+    // A wrapper is only ever the one top-level folder shared by every archive
+    // entry: genuinely separate top-level items (no shared folder) or more than
+    // one distinct materials/ directory beneath that folder remain ambiguous
+    // and are rejected below.
     const normalizedArchivePaths = entries.map((entry) => ({
       entry,
       path: normalizeSourcePath(entry.filename),
     })).filter(({ path }) => !isHarmlessMetadataPath(path));
     const hasDirectMaterialsRoot = normalizedArchivePaths.some(({ entry, path }) =>
       (path === 'materials' && entry.directory) || path.startsWith('materials/'));
+    const roots = new Set(normalizedArchivePaths.map(({ path }) => path.split('/')[0]));
+    const onlyRoot = roots.size === 1 ? roots.values().next().value as string | undefined : undefined;
+
     let wrapperRoot: string | undefined;
-    if (!hasDirectMaterialsRoot) {
-      const roots = new Set(normalizedArchivePaths.map(({ path }) => path.split('/')[0]));
-      const onlyRoot = roots.size === 1 ? roots.values().next().value as string | undefined : undefined;
-      if (onlyRoot && normalizedArchivePaths.some(({ entry, path }) =>
-        (path === `${onlyRoot}/materials` && entry.directory) || path.startsWith(`${onlyRoot}/materials/`))) {
+    let hasMaterialsRoot = hasDirectMaterialsRoot;
+    if (!hasDirectMaterialsRoot && onlyRoot) {
+      const nestedSuffixes = new Set<string>();
+      for (const { entry, path } of normalizedArchivePaths) {
+        if (path === onlyRoot || !path.startsWith(`${onlyRoot}/`)) continue;
+        const suffix = materialsSuffix(path.slice(onlyRoot.length + 1).split('/'), entry.directory);
+        if (suffix !== undefined) nestedSuffixes.add(suffix);
+      }
+      if (nestedSuffixes.size > 1) {
+        throw sourceError('ambiguous-materials-root', 'ZIP contains more than one materials/ directory beneath its wrapper folder; the package root is ambiguous.', file.name);
+      }
+      if (nestedSuffixes.size === 1) {
+        const suffix = nestedSuffixes.values().next().value as string;
+        wrapperRoot = suffix ? `${onlyRoot}/${suffix}` : onlyRoot;
+        hasMaterialsRoot = true;
+      } else {
+        // No materials/ directory anywhere beneath the single wrapper folder.
+        // Still strip it as a prefix; whether the stripped root becomes an
+        // implicit materials tree (see rootIsMaterials below) is decided once
+        // every entry's supported-texture status is known.
         wrapperRoot = onlyRoot;
       }
+    }
+
+    // A pack with no materials/ directory anywhere (see FlakFurnished) can
+    // still ship texture files, just laid out as though the archive root (once
+    // the wrapper folder, if any, is stripped) already were the materials
+    // tree. Only accept that reading when it would expose at least one
+    // supported texture; an archive with neither a materials/ directory nor
+    // any recognizable texture extension is simply not a Source package.
+    const hasAnySupportedTexture = normalizedArchivePaths.some(({ entry, path }) => !entry.directory && isSupportedTexturePath(path));
+    const rootIsMaterials = !hasMaterialsRoot && hasAnySupportedTexture;
+    if (!hasMaterialsRoot && !rootIsMaterials) {
+      throw sourceError('missing-materials-root', 'ZIP packages must contain materials/ at some depth, or otherwise ship recognizable texture files at their root.', file.name);
     }
 
     const diagnostics: SourceDiagnostic[] = [];
@@ -183,7 +238,6 @@ export async function openZipSourcePackage(
     const indexedEntries = new Map<string, IndexedZipEntry>();
     const normalizedPaths = new Set<string>();
     let totalExpandedBytes = 0;
-    let hasMaterialsRoot = false;
     let ignoredMetadataEntries = 0;
     let highCompressionEntryCount = 0;
     let highestCompressionRatio = 0;
@@ -204,16 +258,16 @@ export async function openZipSourcePackage(
         continue;
       }
       if (wrapperRoot && archivePath === wrapperRoot && entry.directory) continue;
-      const canonicalPath = wrapperRoot && archivePath.startsWith(`${wrapperRoot}/`)
+      const strippedPath = wrapperRoot && archivePath.startsWith(`${wrapperRoot}/`)
         ? archivePath.slice(wrapperRoot.length + 1)
         : archivePath;
+      // rootIsMaterials means the whole (stripped) archive stands in for the
+      // materials/ tree, so every path is addressed as if it lived under one.
+      const canonicalPath = rootIsMaterials ? `materials/${strippedPath}` : strippedPath;
       if (normalizedPaths.has(canonicalPath)) {
         throw sourceError('duplicate-path', 'ZIP contains paths that collide after Source path normalization.', canonicalPath);
       }
       normalizedPaths.add(canonicalPath);
-      if ((canonicalPath === 'materials' && entry.directory) || canonicalPath.startsWith('materials/')) {
-        hasMaterialsRoot = true;
-      }
       if (entry.encrypted) {
         throw sourceError('encrypted-entry', 'Encrypted ZIP entries are not supported.', entry.filename);
       }
@@ -246,15 +300,20 @@ export async function openZipSourcePackage(
       indexedEntries.set(canonicalPath, { source, zipEntry: entry });
     }
 
-    if (!hasMaterialsRoot) {
-      throw sourceError('missing-materials-root', 'ZIP packages must contain materials/ at the root or inside one wrapper directory.', file.name);
-    }
     if (wrapperRoot) {
       diagnostics.push({
         id: 'zip-wrapper-root',
         level: 'info',
-        message: 'Removed the package wrapper directory to create a Source-style root.',
+        message: `Removed the package wrapper ${wrapperRoot.includes('/') ? 'directories' : 'directory'} to create a Source-style root.`,
         detail: `${wrapperRoot}/`,
+      });
+    }
+    if (rootIsMaterials) {
+      diagnostics.push({
+        id: 'zip-root-is-materials',
+        level: 'info',
+        message: 'This package has no materials/ directory; treating its root as the materials tree so its texture files can still be matched by name.',
+        detail: wrapperRoot ? `${wrapperRoot}/` : file.name,
       });
     }
     if (highCompressionEntryCount > 0) {
@@ -284,10 +343,17 @@ export async function openZipSourcePackage(
       });
     }
 
-    const suggestedPaintkitId = wrapperRoot && /^\d+$/.test(wrapperRoot)
-      ? Number(wrapperRoot)
+    // A numeric wrapper folder is a common author convention for tagging a
+    // pack with its paint kit's defindex (`913/materials/...`). When the
+    // wrapper is several folders deep, the outermost numeric component wins:
+    // it is the folder the archive was actually built from, while a numeric
+    // folder found deeper inside (closer to materials/) is more likely an
+    // unrelated subfolder than a paintkit id.
+    const numericWrapperComponent = wrapperRoot?.split('/').find((component) => /^\d+$/.test(component));
+    const suggestedPaintkitId = numericWrapperComponent !== undefined && Number.isSafeInteger(Number(numericWrapperComponent))
+      ? Number(numericWrapperComponent)
       : undefined;
-    if (suggestedPaintkitId !== undefined && Number.isSafeInteger(suggestedPaintkitId)) {
+    if (suggestedPaintkitId !== undefined) {
       diagnostics.push({
         id: 'zip-paintkit-index',
         level: 'info',
@@ -303,11 +369,10 @@ export async function openZipSourcePackage(
         indexedEntries,
         sourceEntries,
         limits,
+        rootIsMaterials,
       ),
       diagnostics,
-      suggestedPaintkitId: suggestedPaintkitId !== undefined && Number.isSafeInteger(suggestedPaintkitId)
-        ? suggestedPaintkitId
-        : undefined,
+      suggestedPaintkitId,
     };
   } catch (error) {
     await reader.close().catch(() => undefined);

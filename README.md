@@ -11,6 +11,8 @@ A 1:1 recreation of the Team Fortress 2 lighting engine in Three.js, presented a
 - Select different lighting environments, viewing angles, sheens, and unusual effects.
 - Adjust the camera projection and field of view.
 - Export transparent PNG images at multiple resolutions.
+- Preview custom war paints: import your own definitions and textures and view
+  them on any supported weapon.
 
 ## Usage
 
@@ -27,6 +29,28 @@ Select a war paint, choose a supported weapon, and adjust its appearance using t
 
 Preset angles, projection options, field-of-view settings, and image export controls are available under **View**.
 
+### Custom war paints
+
+The panel under the viewer holds three tabs:
+
+- **Files** replaces any single texture the selected recipe reads, with PNG,
+  JPG, WebP, TGA, or VTF, and an optional separate alpha mask.
+- **Package** mounts a Source asset archive (`.zip` or `.vpk`) whose textures
+  then take priority over the built-in ones. Archives that keep their textures
+  under `materials/` at any depth are read as authored; an archive with no
+  `materials/` directory is treated as if its root were one, and its files are
+  matched to a recipe by name when no path matches.
+- **Definitions** imports a war paint's own definitions: the two JSON files a
+  custom paint ships (its operation and its definition, under any file names),
+  or a whole `proto_defs.vpd`. Imported paints appear in the catalog under
+  **Imported definitions**. JSON definitions are resolved against the base game
+  definitions in `public/data/protodefs-base.bin`, so a paint that reuses a
+  stock operation template still resolves.
+
+Any of these files can also be dropped anywhere on the panel; each is routed by
+its extension. Nothing is uploaded anywhere, and nothing persists across a
+reload.
+
 ## Development
 
 Requires Node 22+. Install dependencies with `npm install`, then:
@@ -39,6 +63,7 @@ Requires Node 22+. Install dependencies with `npm install`, then:
 | `npm run update:warpaints` | Regenerate `public/data` (manifest, recipe bundles, textures) from a local TF2 install |
 | `npm run extract:effects` | Regenerate unusual-effect particle data from TF2's PCF files |
 | `npm run extract:map-lighting` | Regenerate map lighting presets from TF2 BSP files |
+| `npm run gen:protodefs` | Regenerate the browser protobuf schema from `tools/proto/tf_proto_def_messages.proto` |
 
 The extraction scripts in `tools/` read a local Team Fortress 2 installation
 and write derived data into `public/data`; the app itself never needs the game
@@ -55,6 +80,13 @@ Developer harnesses:
   real assets required.
 - `tools/dev/selftest-driver.mjs` drives the selftest page in headless Edge
   over raw CDP (see its header comment for usage).
+- `node tools/verify-protodefs.mjs` resolves every shipped recipe variant
+  through the in-browser proto_defs decoder and compares it against both the
+  recipe bundles and the extraction pipeline, so a porting difference is told
+  apart from data that predates the installed game.
+- `node tools/verify-protodef-json.mjs <dir>` resolves community JSON war paint
+  definitions, and `node tools/verify-source-packages.mjs <zips>` reports how a
+  package's layout and texture references resolve.
 
 ## Credits
 

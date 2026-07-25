@@ -2,21 +2,40 @@
 // TF2 wiki. The game renders these live from the paintkit, so they cannot be
 // extracted from the VPKs; the wiki hosts the canonical renders. Kits the wiki
 // does not know keep the pattern swatch that extract.mjs already generated.
-//   node tools/fetch_warpaint_icons.mjs
+//
+// By default only fetches kits that need it: no icon file on disk at all, or
+// one extract.mjs's staging/swatch_icons.json says is still a generated
+// swatch rather than a real wiki render. Pass --force to refetch every kit.
+//   node tools/fetch_warpaint_icons.mjs [--force]
+//
+// This hits the network from update:warpaints, so it must never fail that
+// pipeline or destroy already-good icons: every failure here is caught and
+// logged, never thrown, and a kit's existing file is only overwritten once a
+// replacement has actually downloaded successfully.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
+const STAGING = path.join(ROOT, 'staging');
+const SWATCH_STATE_PATH = path.join(STAGING, 'swatch_icons.json');
 const API = 'https://wiki.teamfortress.com/w/api.php';
 const UA = 'warpaint-viewer-local-tool/1.0';
 const THUMB_WIDTH = 128;
 const WRITE_RETRIES = 5;
 
-const manifest = JSON.parse(fs.readFileSync(path.join(PUBLIC_DATA, 'manifest.json'), 'utf8'));
-const kits = manifest.paintkits;
-const weaponName = new Map(manifest.weapons.map((w) => [w.key, w.name]));
+const FORCE = process.argv.slice(2).includes('--force');
+
+function loadSwatchedIds() {
+  if (!fs.existsSync(SWATCH_STATE_PATH)) return new Set();
+  try { return new Set(JSON.parse(fs.readFileSync(SWATCH_STATE_PATH, 'utf8'))); } catch { return new Set(); }
+}
+
+function saveSwatchedIds(ids) {
+  fs.mkdirSync(STAGING, { recursive: true });
+  fs.writeFileSync(SWATCH_STATE_PATH, JSON.stringify([...ids].sort((a, b) => a - b)));
+}
 
 // War Paint can icons are per wear level; Factory New is the cleanest render.
 // Most paintkit proto defs below 200 are legacy decorated-weapon paints from
@@ -32,10 +51,6 @@ const EARLY_WAR_PAINT_COLLECTIONS = new Set([
 const isWarPaint = (kit) => kit.id >= FIRST_WAR_PAINT_ID || EARLY_WAR_PAINT_COLLECTIONS.has(kit.collection);
 const wikiPaintName = (kit) => kit.name === 'Sarsaparilla Sprayed' ? 'Sarsparilla Sprayed' : kit.name;
 const canTitle = (kit) => `File:Backpack ${wikiPaintName(kit)} War Paint Factory New.png`;
-const weaponTitle = (kit) => {
-  const name = weaponName.get(kit.weapons[0]);
-  return name ? `File:Backpack ${kit.name} ${name} Factory New.png` : null;
-};
 
 // api.php normalizes titles (underscores, casing); map normalized -> original.
 async function queryTitles(titles) {
@@ -71,26 +86,56 @@ async function writeIcon(file, data) {
   }
 }
 
-const warPaintKits = kits.filter(isWarPaint);
-const decoratedKits = kits.filter((kit) => !isWarPaint(kit));
-const canUrls = await queryTitles(warPaintKits.map(canTitle));
-const weaponUrls = await queryTitles(decoratedKits.map(weaponTitle).filter(Boolean));
-console.log(`[wiki-icons] spray-can icons: ${canUrls.size}, decorated weapon icons: ${weaponUrls.size}`);
+async function main() {
+  const manifest = JSON.parse(fs.readFileSync(path.join(PUBLIC_DATA, 'manifest.json'), 'utf8'));
+  const kits = manifest.paintkits;
+  const weaponName = new Map(manifest.weapons.map((w) => [w.key, w.name]));
+  const weaponTitle = (kit) => {
+    const name = weaponName.get(kit.weapons[0]);
+    return name ? `File:Backpack ${kit.name} ${name} Factory New.png` : null;
+  };
 
-let ok = 0;
-const misses = [];
-for (const kit of kits) {
-  const thumb = isWarPaint(kit)
-    ? canUrls.get(canTitle(kit))
-    : weaponUrls.get(weaponTitle(kit));
-  if (!thumb) { misses.push(kit.name); continue; }
-  const res = await fetch(thumb, { headers: { 'user-agent': UA } });
-  if (!res.ok) { misses.push(`${kit.name} (http ${res.status})`); continue; }
-  const buf = Buffer.from(await res.arrayBuffer());
-  await writeIcon(path.join(PUBLIC_DATA, `icons/paints/${kit.id}.png`), buf);
-  ok++;
-  if (ok % 50 === 0) console.log(`[wiki-icons] downloaded ${ok}...`);
-  await new Promise((r) => setTimeout(r, 60)); // stay polite
+  const swatchedIds = loadSwatchedIds();
+  const needsFetch = (kit) => {
+    if (FORCE) return true;
+    const iconPath = path.join(PUBLIC_DATA, `icons/paints/${kit.id}.png`);
+    return !fs.existsSync(iconPath) || swatchedIds.has(kit.id);
+  };
+  const candidates = kits.filter(needsFetch);
+  console.log(`[wiki-icons] ${candidates.length}/${kits.length} kits need a fetch${FORCE ? ' (--force)' : ''}`);
+  if (!candidates.length) return;
+
+  const warPaintKits = candidates.filter(isWarPaint);
+  const decoratedKits = candidates.filter((kit) => !isWarPaint(kit));
+  const canUrls = await queryTitles(warPaintKits.map(canTitle));
+  const weaponUrls = await queryTitles(decoratedKits.map(weaponTitle).filter(Boolean));
+  console.log(`[wiki-icons] spray-can icons: ${canUrls.size}, decorated weapon icons: ${weaponUrls.size}`);
+
+  let ok = 0;
+  const misses = [];
+  for (const kit of candidates) {
+    const thumb = isWarPaint(kit)
+      ? canUrls.get(canTitle(kit))
+      : weaponUrls.get(weaponTitle(kit));
+    if (!thumb) { misses.push(kit.name); continue; }
+    const res = await fetch(thumb, { headers: { 'user-agent': UA } });
+    if (!res.ok) { misses.push(`${kit.name} (http ${res.status})`); continue; }
+    const buf = Buffer.from(await res.arrayBuffer());
+    await writeIcon(path.join(PUBLIC_DATA, `icons/paints/${kit.id}.png`), buf);
+    swatchedIds.delete(kit.id); // now a real wiki render, not a placeholder swatch
+    ok++;
+    if (ok % 50 === 0) console.log(`[wiki-icons] downloaded ${ok}...`);
+    await new Promise((r) => setTimeout(r, 60)); // stay polite
+  }
+  saveSwatchedIds(swatchedIds);
+  console.log(`[wiki-icons] downloaded ${ok}, kept swatch fallback for ${misses.length}`);
+  if (misses.length) console.log('  misses:', misses.join(', '));
 }
-console.log(`[wiki-icons] downloaded ${ok}, kept swatch fallback for ${misses.length}`);
-if (misses.length) console.log('  misses:', misses.join(', '));
+
+try {
+  await main();
+} catch (error) {
+  // Best-effort by design: update:warpaints must still succeed (with whatever
+  // icons already exist) even if the wiki is unreachable or its API changes.
+  console.log(`[wiki-icons] skipped: ${error.message}`);
+}

@@ -56,6 +56,16 @@ interface UseComposedPaintOptions {
   engineReady: boolean;
   data: DataSource | null;
   selectedKit: PaintkitEntry | null;
+  /**
+   * Recipe lookup for the selected kit. Built-in kits fetch a shipped bundle
+   * and imported definitions resolve out of memory, so the caller decides.
+   */
+  resolveRecipe: (
+    kit: PaintkitEntry,
+    weaponKey: string,
+    team: ControlsState['team'],
+    wearIndex: number,
+  ) => Promise<RecipeNode | null>;
   selectedAssetKey: string;
   loadedAssetKey: string;
   state: ControlsState;
@@ -73,6 +83,7 @@ export function useComposedPaint({
   engineReady,
   data,
   selectedKit,
+  resolveRecipe,
   selectedAssetKey,
   loadedAssetKey,
   state,
@@ -208,7 +219,7 @@ export function useComposedPaint({
       }, COMPOSE_BADGE_DELAY_MS);
       const t0 = performance.now();
       try {
-        const sourceRecipe = await ds.getRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
+        const sourceRecipe = await resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
         if (cancelled) return;
         if (!sourceRecipe) {
           console.warn(`[warpaint-viewer] no recipe for ${composeKey}`);
@@ -262,7 +273,7 @@ export function useComposedPaint({
             if (composeCacheRef.current.has(key)) continue;
             await waitForIdle();
             if (cancelled || compositorRef.current !== comp) return;
-            const variantRecipe = await ds.getRecipe(selectedKit, state.weaponKey, variant.team, variant.wear);
+            const variantRecipe = await resolveRecipe(selectedKit, state.weaponKey, variant.team, variant.wear);
             if (!variantRecipe || cancelled) return;
             await comp.preload(variantRecipe);
             if (cancelled || compositorRef.current !== comp) return;
@@ -291,7 +302,7 @@ export function useComposedPaint({
       window.clearTimeout(badgeTimer);
       cancelPendingIdle?.();
     };
-  }, [engineReady, data, selectedKit, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
+  }, [engineReady, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
 
   return { composing, resetComposeKey, disposeCache };
 }

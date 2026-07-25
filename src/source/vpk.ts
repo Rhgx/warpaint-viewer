@@ -107,6 +107,8 @@ export class VpkSourcePackage implements SourcePackage {
   readonly id: string
   readonly name: string
   readonly entries: ReadonlyMap<string, VpkSourceEntry>
+  /** VPKs are always addressed by their real Source path; see contracts.ts. */
+  readonly rootIsMaterials = false
 
   #records: Map<string, VpkRecord>
   #disposed = false

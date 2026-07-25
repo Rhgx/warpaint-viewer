@@ -1,26 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type {
+  DragEvent as ReactDragEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react';
+import { Tabs } from '@base-ui/react/tabs';
 import {
   AlertTriangle,
   Eye,
   EyeOff,
   FileImage,
+  Files,
   ImagePlus,
   Layers,
   LoaderCircle,
   PackageOpen,
   RotateCcw,
+  ScrollText,
   Search,
   Sticker,
   X,
 } from 'lucide-react';
 import type { RecipeNode } from '../compositor/types';
 import type { TextureMetadata } from '../data/types';
+import type { CustomDefinitionsState } from '../protodefs/types';
 import { TextField } from './components';
-import { SourcePackageImport, SourcePackagePanel } from './SourcePackagePanel';
+import { SourcePackagePanel } from './SourcePackagePanel';
 import type { SourcePackageState } from './SourcePackagePanel';
+import { DefinitionsPanel } from './DefinitionsPanel';
 import './CustomWarpaintImport.css';
 import './SourcePackagePanel.css';
+import './DefinitionsPanel.css';
 
 export interface WarpaintAssetOverrides {
   revision: number;
@@ -28,6 +37,7 @@ export interface WarpaintAssetOverrides {
 }
 
 type SlotGroup = 'artwork' | 'mask' | 'support';
+export type WorkbenchTab = 'files' | 'package' | 'definitions';
 
 export interface WearRecipe {
   wearIndex: number;
@@ -41,7 +51,12 @@ interface AssetSlot {
 }
 
 export interface WarpaintAssetState {
-  color?: { dataUrl: string; fileName: string; isTga: boolean; hasEmbeddedAlpha?: boolean };
+  color?: {
+    dataUrl: string;
+    fileName: string;
+    isTga: boolean;
+    hasEmbeddedAlpha?: boolean;
+  };
   alpha?: { dataUrl: string; fileName: string };
   output?: string;
   size?: { width: number; height: number };
@@ -94,21 +109,30 @@ function collectSlots(recipes: WearRecipe[]): AssetSlot[] {
     if (slot.kind === 'sticker' && !ref.includes('/blank')) return 2;
     if (ref.includes('albedo')) return 3;
     if (slot.kind === 'mask' || slot.kind === 'sticker-mask') return 4;
-    if (ref.includes('ao') || ref.includes('wearblend') || ref.includes('/blank')) return 6;
+    if (
+      ref.includes('ao') ||
+      ref.includes('wearblend') ||
+      ref.includes('/blank')
+    )
+      return 6;
     return 5;
   };
   return [...slots.values()]
     .sort((a, b) => priority(a) - priority(b))
     .map((slot) => {
       const rank = priority(slot);
-      const group: SlotGroup = rank <= 2 ? 'artwork' : rank === 4 ? 'mask' : 'support';
+      const group: SlotGroup =
+        rank <= 2 ? 'artwork' : rank === 4 ? 'mask' : 'support';
       return { ...slot, group };
     });
 }
 
 function shortName(ref: string): string {
   const file = ref.split('/').pop() ?? ref;
-  return file.replace(/\.[^.]+$/, '').replace(/^p_/, '').replace(/[_-]+/g, ' ');
+  return file
+    .replace(/\.[^.]+$/, '')
+    .replace(/^p_/, '')
+    .replace(/[_-]+/g, ' ');
 }
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -144,11 +168,18 @@ function TexturePreview({
   useEffect(() => {
     let cancelled = false;
     setSrc(fallbackUrl);
-    if (!refPath || !resolvePackageTexture) return () => { cancelled = true; };
-    void resolvePackageTexture(refPath).then((url) => {
-      if (!cancelled) setSrc(url);
-    }).catch(() => undefined);
-    return () => { cancelled = true; };
+    if (!refPath || !resolvePackageTexture)
+      return () => {
+        cancelled = true;
+      };
+    void resolvePackageTexture(refPath)
+      .then((url) => {
+        if (!cancelled) setSrc(url);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [refPath, fallbackUrl, resolvePackageTexture, packageGeneration]);
   return <img src={src} alt="" />;
 }
@@ -163,7 +194,8 @@ function pngChunk(type: string, data: Uint8Array): Uint8Array {
   let crc = 0xffffffff;
   for (let i = 4; i < 8 + data.length; i += 1) {
     crc ^= chunk[i];
-    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    for (let bit = 0; bit < 8; bit += 1)
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
   }
   view.setUint32(8 + data.length, (crc ^ 0xffffffff) >>> 0);
   return chunk;
@@ -180,9 +212,12 @@ function storeZlib(data: Uint8Array): Uint8Array {
     output[outputOffset] = sourceOffset + length === data.length ? 1 : 0;
     output[outputOffset + 1] = length & 0xff;
     output[outputOffset + 2] = length >>> 8;
-    output[outputOffset + 3] = (~length) & 0xff;
-    output[outputOffset + 4] = ((~length) >>> 8) & 0xff;
-    output.set(data.subarray(sourceOffset, sourceOffset + length), outputOffset + 5);
+    output[outputOffset + 3] = ~length & 0xff;
+    output[outputOffset + 4] = (~length >>> 8) & 0xff;
+    output.set(
+      data.subarray(sourceOffset, sourceOffset + length),
+      outputOffset + 5,
+    );
     sourceOffset += length;
     outputOffset += length + 5;
   }
@@ -196,7 +231,11 @@ function storeZlib(data: Uint8Array): Uint8Array {
   return output;
 }
 
-async function encodeRgbaPng(data: Uint8Array, width: number, height: number): Promise<string> {
+async function encodeRgbaPng(
+  data: Uint8Array,
+  width: number,
+  height: number,
+): Promise<string> {
   // Canvas serialisation premultiplies RGB by alpha. That is correct for a
   // displayed image, but corrupts TF2 textures where RGB and alpha are two
   // independent data channels. Build the PNG bytes directly instead.
@@ -206,11 +245,16 @@ async function encodeRgbaPng(data: Uint8Array, width: number, height: number): P
     scanlines[row] = 0;
     scanlines.set(data.subarray(y * width * 4, (y + 1) * width * 4), row + 1);
   }
-  const compressed = typeof CompressionStream === 'undefined'
-    ? storeZlib(scanlines)
-    : new Uint8Array(await new Response(
-      new Blob([scanlines]).stream().pipeThrough(new CompressionStream('deflate')),
-    ).arrayBuffer());
+  const compressed =
+    typeof CompressionStream === 'undefined'
+      ? storeZlib(scanlines)
+      : new Uint8Array(
+          await new Response(
+            new Blob([scanlines])
+              .stream()
+              .pipeThrough(new CompressionStream('deflate')),
+          ).arrayBuffer(),
+        );
   const header = new Uint8Array(13);
   const headerView = new DataView(header.buffer);
   headerView.setUint32(0, width);
@@ -222,55 +266,89 @@ async function encodeRgbaPng(data: Uint8Array, width: number, height: number): P
     pngChunk('IDAT', compressed),
     pngChunk('IEND', new Uint8Array()),
   ];
-  const png = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
+  const png = new Uint8Array(
+    parts.reduce((length, part) => length + part.length, 0),
+  );
   let offset = 0;
   for (const part of parts) {
     png.set(part, offset);
     offset += part.length;
   }
-  return readAsDataUrl(new File([png.buffer], 'decoded.png', { type: 'image/png' }));
+  return readAsDataUrl(
+    new File([png.buffer], 'decoded.png', { type: 'image/png' }),
+  );
 }
 
 async function decodeTga(file: File): Promise<string> {
   const { TGALoader } = await import('three/addons/loaders/TGALoader.js');
   const parsed = new TGALoader().parse(await file.arrayBuffer());
-  if (!parsed.data || !parsed.width || !parsed.height) throw new Error('This TGA has no readable pixel data.');
-  return encodeRgbaPng(Uint8Array.from(parsed.data as ArrayLike<number>), parsed.width, parsed.height);
+  if (!parsed.data || !parsed.width || !parsed.height)
+    throw new Error('This TGA has no readable pixel data.');
+  return encodeRgbaPng(
+    Uint8Array.from(parsed.data as ArrayLike<number>),
+    parsed.width,
+    parsed.height,
+  );
 }
 
 async function decodeVtf(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   // The Worker client is loaded only when a VTF is selected. It retains an
   // in-process fallback for older browsers and test environments.
-  const { decodeVtfToPng, VtfDecodeError } = await import('../source/vtfDecode');
+  const { decodeVtfToPng, VtfDecodeError } =
+    await import('../source/vtfDecode');
   try {
     const decoded = await decodeVtfToPng(bytes, {
       maxPixels: MAX_VTF_PIXELS,
       limitDescription: '16 megapixel import limit',
     });
-    return readAsDataUrl(new File([decoded.png], 'decoded.png', { type: 'image/png' }));
+    return readAsDataUrl(
+      new File([decoded.png], 'decoded.png', { type: 'image/png' }),
+    );
   } catch (cause) {
-    const detail = cause instanceof Error ? cause.message : 'The image data could not be decoded.';
+    const detail =
+      cause instanceof Error
+        ? cause.message
+        : 'The image data could not be decoded.';
     const header = cause instanceof VtfDecodeError ? cause.header : undefined;
     // Header-size validation was historically reported without decode details.
     // Keep that actionable import error stable while retaining VTF metadata for
     // actual pixel-format/decompression failures.
-    if (detail.startsWith('VTF dimensions ')) throw new Error(`${file.name}: ${detail}`);
-    throw new Error(header
-      ? `${file.name}: VTF ${header.verMajor}.${header.verMinor}, format ${header.highResFormat}: ${detail}`
-      : `${file.name}: ${detail}`);
+    if (detail.startsWith('VTF dimensions '))
+      throw new Error(`${file.name}: ${detail}`);
+    throw new Error(
+      header
+        ? `${file.name}: VTF ${header.verMajor}.${header.verMinor}, format ${header.highResFormat}: ${detail}`
+        : `${file.name}: ${detail}`,
+    );
   }
 }
 
 async function readTexture(file: File, alphaOnly = false) {
   const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
-  if (!SUPPORTED_EXTENSIONS.includes(extension) || (alphaOnly && extension === 'tga')) {
-    throw new Error(alphaOnly ? 'Choose a PNG, JPG, or WebP alpha mask.' : 'Choose a PNG, JPG, WebP, TGA, or VTF texture.');
+  if (
+    !SUPPORTED_EXTENSIONS.includes(extension) ||
+    (alphaOnly && extension === 'tga')
+  ) {
+    throw new Error(
+      alphaOnly
+        ? 'Choose a PNG, JPG, or WebP alpha mask.'
+        : 'Choose a PNG, JPG, WebP, TGA, or VTF texture.',
+    );
   }
-  if (alphaOnly && extension === 'vtf') throw new Error('VTF textures contain their own alpha channel and cannot be used as a separate alpha mask.');
-  if (file.size > MAX_FILE_BYTES) throw new Error('Files must be 32 MB or smaller.');
+  if (alphaOnly && extension === 'vtf')
+    throw new Error(
+      'VTF textures contain their own alpha channel and cannot be used as a separate alpha mask.',
+    );
+  if (file.size > MAX_FILE_BYTES)
+    throw new Error('Files must be 32 MB or smaller.');
   return {
-    dataUrl: extension === 'tga' ? await decodeTga(file) : extension === 'vtf' ? await decodeVtf(file) : await readAsDataUrl(file),
+    dataUrl:
+      extension === 'tga'
+        ? await decodeTga(file)
+        : extension === 'vtf'
+          ? await decodeVtf(file)
+          : await readAsDataUrl(file),
     fileName: file.name,
     isTga: extension === 'tga',
     hasEmbeddedAlpha: extension === 'tga' || extension === 'vtf',
@@ -278,7 +356,10 @@ async function readTexture(file: File, alphaOnly = false) {
 }
 
 async function mergeAlpha(colorUrl: string, alphaUrl: string): Promise<string> {
-  const [color, alpha] = await Promise.all([loadImage(colorUrl), loadImage(alphaUrl)]);
+  const [color, alpha] = await Promise.all([
+    loadImage(colorUrl),
+    loadImage(alphaUrl),
+  ]);
   const canvas = document.createElement('canvas');
   canvas.width = color.naturalWidth;
   canvas.height = color.naturalHeight;
@@ -291,12 +372,19 @@ async function mergeAlpha(colorUrl: string, alphaUrl: string): Promise<string> {
   const maskPixels = context.getImageData(0, 0, canvas.width, canvas.height);
   let hasTransparency = false;
   for (let i = 3; i < maskPixels.data.length; i += 4) {
-    if (maskPixels.data[i] < 255) { hasTransparency = true; break; }
+    if (maskPixels.data[i] < 255) {
+      hasTransparency = true;
+      break;
+    }
   }
   for (let i = 0; i < colorPixels.data.length; i += 4) {
     colorPixels.data[i + 3] = hasTransparency
       ? maskPixels.data[i + 3]
-      : Math.round(maskPixels.data[i] * 0.299 + maskPixels.data[i + 1] * 0.587 + maskPixels.data[i + 2] * 0.114);
+      : Math.round(
+          maskPixels.data[i] * 0.299 +
+            maskPixels.data[i + 1] * 0.587 +
+            maskPixels.data[i + 2] * 0.114,
+        );
   }
   context.putImageData(colorPixels, 0, 0);
   return canvas.toDataURL('image/png');
@@ -324,6 +412,7 @@ export function CustomWarpaintWorkbench({
   sourcePackage,
   resolvePackageTexture,
   packageGeneration,
+  definitions,
   loading,
   open,
   initialOverrides,
@@ -331,6 +420,8 @@ export function CustomWarpaintWorkbench({
   onResetAll,
   onResize,
   onClose,
+  tab,
+  onTabChange,
 }: {
   recipes: WearRecipe[];
   resolveTexture: (ref: string) => string;
@@ -339,17 +430,28 @@ export function CustomWarpaintWorkbench({
   /** Async Source package resolver used only for the non-destructive preview. */
   resolvePackageTexture?: (ref: string) => Promise<string>;
   packageGeneration?: number;
+  definitions: CustomDefinitionsState;
   loading: boolean;
   open: boolean;
   initialOverrides: WarpaintAssetOverrides;
   onChange: (overrides: WarpaintAssetOverrides) => void;
   /** Reset all returns the entire workbench to built-ins, including its package. */
   onResetAll?: () => void;
+  /**
+   * The drawer remounts whenever the selected paint or weapon changes, which is
+   * how per-slot edits reset. The tab has to outlive that: importing a
+   * definition selects the paint it just added, and bouncing the user off the
+   * tab they are working in would look like the import did nothing.
+   */
+  tab: WorkbenchTab;
+  onTabChange: (tab: WorkbenchTab) => void;
   onResize: (height: number) => void;
   onClose: () => void;
 }) {
   const slots = useMemo(() => collectSlots(recipes), [recipes]);
-  const [assets, setAssets] = useState<Record<string, WarpaintAssetState>>(initialOverrides.assets);
+  const [assets, setAssets] = useState<Record<string, WarpaintAssetState>>(
+    initialOverrides.assets,
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [comparing, setComparing] = useState<Record<string, boolean>>({});
@@ -357,6 +459,7 @@ export function CustomWarpaintWorkbench({
   const [confirmReset, setConfirmReset] = useState(false);
   const [resizing, setResizing] = useState(false);
   const [dropping, setDropping] = useState(false);
+  const [dropHint, setDropHint] = useState(false);
   // dragenter/dragleave fire for every child the pointer crosses, so the cue
   // is driven by a depth count instead of the last event seen.
   const dragDepthRef = useRef(0);
@@ -381,9 +484,18 @@ export function CustomWarpaintWorkbench({
 
   useEffect(() => {
     if (!confirmReset) return;
-    const timer = window.setTimeout(() => setConfirmReset(false), RESET_CONFIRM_MS);
+    const timer = window.setTimeout(
+      () => setConfirmReset(false),
+      RESET_CONFIRM_MS,
+    );
     return () => window.clearTimeout(timer);
   }, [confirmReset]);
+
+  useEffect(() => {
+    if (!dropHint) return;
+    const timer = window.setTimeout(() => setDropHint(false), 2400);
+    return () => window.clearTimeout(timer);
+  }, [dropHint]);
 
   const commit = (next: Record<string, WarpaintAssetState>) => {
     assetsRef.current = next;
@@ -401,16 +513,26 @@ export function CustomWarpaintWorkbench({
     });
   };
 
-  const rebuild = async (asset: WarpaintAssetState): Promise<WarpaintAssetState> => {
+  const rebuild = async (
+    asset: WarpaintAssetState,
+  ): Promise<WarpaintAssetState> => {
     if (!asset.color) return { ...asset, output: undefined, size: undefined };
     const output = asset.alpha
       ? await mergeAlpha(asset.color.dataUrl, asset.alpha.dataUrl)
       : asset.color.dataUrl;
     const image = await loadImage(output);
-    return { ...asset, output, size: { width: image.naturalWidth, height: image.naturalHeight } };
+    return {
+      ...asset,
+      output,
+      size: { width: image.naturalWidth, height: image.naturalHeight },
+    };
   };
 
-  const updateFile = async (slot: AssetSlot, file: File | undefined, alphaOnly: boolean) => {
+  const updateFile = async (
+    slot: AssetSlot,
+    file: File | undefined,
+    alphaOnly: boolean,
+  ) => {
     if (!file) return;
     setSlotError(slot.ref, '');
     setBusy((current) => ({ ...current, [slot.ref]: true }));
@@ -418,11 +540,23 @@ export function CustomWarpaintWorkbench({
       const read = await readTexture(file, alphaOnly);
       const current = assetsRef.current[slot.ref] ?? {};
       const nextAsset: WarpaintAssetState = alphaOnly
-        ? { ...current, alpha: { dataUrl: read.dataUrl, fileName: read.fileName } }
-        : { ...current, color: read, alpha: read.hasEmbeddedAlpha ? undefined : current.alpha };
+        ? {
+            ...current,
+            alpha: { dataUrl: read.dataUrl, fileName: read.fileName },
+          }
+        : {
+            ...current,
+            color: read,
+            alpha: read.hasEmbeddedAlpha ? undefined : current.alpha,
+          };
       commit({ ...assetsRef.current, [slot.ref]: await rebuild(nextAsset) });
     } catch (cause) {
-      setSlotError(slot.ref, cause instanceof Error ? cause.message : 'The file could not be imported.');
+      setSlotError(
+        slot.ref,
+        cause instanceof Error
+          ? cause.message
+          : 'The file could not be imported.',
+      );
     } finally {
       setBusy((current) => {
         const next = { ...current };
@@ -478,7 +612,8 @@ export function CustomWarpaintWorkbench({
   // Package files can be dropped anywhere on the workbench, not just onto the
   // bar: the drawer is short, and hunting for a small well is worse than
   // treating the whole surface as the target.
-  const dragging = (event: ReactDragEvent<HTMLElement>) => [...event.dataTransfer.types].includes('Files');
+  const dragging = (event: ReactDragEvent<HTMLElement>) =>
+    [...event.dataTransfer.types].includes('Files');
   const dropHandlers = {
     onDragEnter: (event: ReactDragEvent<HTMLElement>) => {
       if (!dragging(event)) return;
@@ -500,17 +635,49 @@ export function CustomWarpaintWorkbench({
       dragDepthRef.current = 0;
       setDropping(false);
       const files = [...event.dataTransfer.files];
-      if (files.length) sourcePackage.onImport(files);
+      if (files.length === 0) return;
+      const extensionOf = (file: File) =>
+        file.name.split('.').pop()?.toLowerCase() ?? '';
+      const packageFiles = files.filter(
+        (file) => extensionOf(file) === 'zip' || extensionOf(file) === 'vpk',
+      );
+      // A war paint's definitions arrive either as one container or as the two
+      // JSON fragments its author wrote, so both extensions route here.
+      const definitionFiles = files.filter(
+        (file) => extensionOf(file) === 'vpd' || extensionOf(file) === 'json',
+      );
+      if (packageFiles.length) sourcePackage.onImport(packageFiles);
+      if (definitionFiles.length) definitions.onImport(definitionFiles);
+      // A mixed drop lands on the package tab (mounting textures is the more
+      // consequential half); a single-type drop always follows its own file.
+      if (packageFiles.length) onTabChange('package');
+      else if (definitionFiles.length) onTabChange('definitions');
+      else setDropHint(true);
     },
   };
 
   const query = filter.trim().toLowerCase();
-  const visible = slots.filter((slot) => !query
-    || shortName(slot.ref).toLowerCase().includes(query)
-    || slot.ref.toLowerCase().includes(query));
-  const groups = GROUP_ORDER
-    .map((group) => ({ group, items: visible.filter((slot) => slot.group === group) }))
-    .filter((entry) => entry.items.length > 0);
+  const visible = slots.filter(
+    (slot) =>
+      !query ||
+      shortName(slot.ref).toLowerCase().includes(query) ||
+      slot.ref.toLowerCase().includes(query),
+  );
+  const groups = GROUP_ORDER.map((group) => ({
+    group,
+    items: visible.filter((slot) => slot.group === group),
+  })).filter((entry) => entry.items.length > 0);
+
+  // Tab badges surface the other tabs' state without switching to them: the
+  // same replaced/total shape the Files toolbar already uses, a presence dot
+  // plus format for the package, and a loaded/total count for definitions.
+  const filesBadge =
+    replacedCount > 0 ? `${replacedCount}/${slots.length}` : `${slots.length}`;
+  const packageSummary =
+    sourcePackage.status === 'mounted' ? sourcePackage.summary : undefined;
+  const loadedDefinitionCount = definitions.kits.filter(
+    (kit) => kit.loaded,
+  ).length;
 
   return (
     <section
@@ -529,204 +696,351 @@ export function CustomWarpaintWorkbench({
         onPointerDown={startResize}
         onDoubleClick={() => onResize(0)}
       />
-      <header className="custom-workbench-header">
-        <div className="custom-workbench-search">
-          <Search className="custom-workbench-search-icon" size={13} />
-          <TextField
-            value={filter}
-            onChange={setFilter}
-            placeholder="Filter inputs..."
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && filter) {
-                event.preventDefault();
-                setFilter('');
-              }
-            }}
-          />
-        </div>
-        <div className="custom-workbench-summary">
-          <SourcePackageImport state={sourcePackage} />
-          <span>{replacedCount ? `${replacedCount} of ${slots.length} replaced` : `${slots.length} inputs`}</span>
-          {(replacedCount > 0 || sourcePackage.status === 'mounted') && (
-            <button
-              type="button"
-              className="custom-workbench-reset-all"
-              data-confirm={confirmReset ? '' : undefined}
-              onClick={() => (confirmReset ? resetAll() : setConfirmReset(true))}
-            >
-              <RotateCcw size={12} />
-              {confirmReset ? 'Discard all?' : 'Reset all'}
-            </button>
-          )}
+      <Tabs.Root
+        className="custom-workbench-tabs-root"
+        value={tab}
+        onValueChange={(value) => onTabChange(value as WorkbenchTab)}
+      >
+        <header className="custom-workbench-header">
+          <Tabs.List className="custom-workbench-tablist">
+            <Tabs.Tab value="files" className="custom-workbench-tab">
+              <Files size={13} />
+              <span>Files</span>
+              <span className="custom-workbench-tab-badge">{filesBadge}</span>
+            </Tabs.Tab>
+            <Tabs.Tab value="package" className="custom-workbench-tab">
+              <PackageOpen size={13} />
+              <span>Package</span>
+              {packageSummary && (
+                <span className="custom-workbench-tab-badge custom-workbench-tab-badge-dot">
+                  <span
+                    className="custom-workbench-tab-dot"
+                    aria-hidden="true"
+                  />
+                  {packageSummary.format}
+                </span>
+              )}
+            </Tabs.Tab>
+            <Tabs.Tab value="definitions" className="custom-workbench-tab">
+              <ScrollText size={13} />
+              <span>Definitions</span>
+              {definitions.status === 'loaded' && (
+                <span className="custom-workbench-tab-badge">
+                  {loadedDefinitionCount > 0
+                    ? `${loadedDefinitionCount}/${definitions.kits.length}`
+                    : definitions.kits.length}
+                </span>
+              )}
+            </Tabs.Tab>
+          </Tabs.List>
           <button
             type="button"
+            className="custom-workbench-close"
             title="Close custom warpaint files"
             aria-label="Close custom warpaint files"
             onClick={onClose}
           >
             <X size={16} />
           </button>
-        </div>
-      </header>
+        </header>
 
-      <SourcePackagePanel state={sourcePackage} />
-
-      {dropping && (
-        <div className="source-package-dropzone">
-          <PackageOpen size={18} />
-          Drop a Source .zip or .vpk to mount it
-        </div>
-      )}
-
-      <div className="custom-workbench-body">
-        {loading ? (
-          <div className="custom-workbench-empty"><LoaderCircle className="custom-workbench-spinner" size={20} /> Reading recipe inputs...</div>
-        ) : recipes.length === 0 ? (
-          <div className="custom-workbench-empty"><FileImage size={22} /> Select a warpaint to use as the editable recipe template.</div>
-        ) : groups.length === 0 ? (
-          <div className="custom-workbench-empty">
-            <Search size={18} /> No inputs match “{filter}”.
+        {dropping && (
+          <div className="source-package-dropzone">
+            <PackageOpen size={18} />
+            Drop a .zip/.vpk to mount a package, or a .vpd/.json to add definitions
           </div>
-        ) : (
-          groups.map(({ group, items }) => (
-            <div className="custom-asset-group" key={group}>
-              <div className="custom-asset-group-label">{GROUP_LABEL[group]}<span>{items.length}</span></div>
-              <div className="custom-asset-grid">
-                {items.map((slot) => {
-                  const asset = assets[slot.ref];
-                  const original = textureMetadata?.[slot.ref];
-                  const showOriginal = comparing[slot.ref] && asset?.output;
-                  const mismatch = asset?.size && original
-                    && (asset.size.width !== original.width || asset.size.height !== original.height);
-                  return (
-                    <article className="custom-asset-card" key={slot.ref} data-replaced={asset ? '' : undefined}>
-                      <div className="custom-asset-preview">
-                        <TexturePreview
-                          // Compare removes only the manual layer. It must
-                          // reveal a mounted package before falling through to
-                          // the built-in asset, matching the real resolver.
-                          refPath={showOriginal ? slot.ref : asset?.output ?? slot.ref}
-                          fallbackUrl={showOriginal ? resolveTexture(slot.ref) : asset?.output ?? resolveTexture(slot.ref)}
-                          resolvePackageTexture={resolvePackageTexture}
-                          packageGeneration={packageGeneration ?? 0}
-                        />
-                        <span className="custom-asset-kind">{KIND_LABEL[slot.kind]}</span>
-                        {asset?.output && (
-                          <button
-                            type="button"
-                            className="custom-asset-compare"
-                            title={showOriginal ? 'Show imported file' : 'Show original file'}
-                            aria-label={showOriginal ? 'Show imported file' : 'Show original file'}
-                            aria-pressed={Boolean(showOriginal)}
-                            onClick={() => setComparing((current) => ({ ...current, [slot.ref]: !current[slot.ref] }))}
-                          >
-                            {showOriginal ? <EyeOff size={12} /> : <Eye size={12} />}
-                          </button>
-                        )}
-                        {busy[slot.ref] && (
-                          <div className="custom-asset-busy">
-                            <LoaderCircle className="custom-workbench-spinner" size={18} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="custom-asset-info">
-                        <div className="custom-asset-name">
-                          {slot.kind.startsWith('sticker') && <Sticker size={12} />}
-                          <span>{shortName(slot.ref)}</span>
-                        </div>
-                        <div className="custom-asset-path" title={slot.ref}>{slot.ref}</div>
-                        <div className="custom-asset-files">
-                          {asset?.color ? (
-                            <>
-                              <span className="custom-asset-file" title={asset.color.fileName}>
-                                {asset.color.fileName}{(asset.color.hasEmbeddedAlpha ?? asset.color.isTga) ? ' (embedded alpha)' : ''}
-                              </span>
-                              {asset.alpha && (
-                                <span className="custom-asset-file" title={asset.alpha.fileName}>
-                                  Alpha: {asset.alpha.fileName}
-                                  <button
-                                    type="button"
-                                    className="custom-asset-file-remove"
-                                    title="Remove the alpha mask"
-                                    aria-label="Remove the alpha mask"
-                                    onClick={() => void removeAlpha(slot.ref)}
-                                  >
-                                    <X size={10} />
-                                  </button>
-                                </span>
-                              )}
-                              {asset.size && (
-                                <span className={mismatch ? 'custom-asset-warn' : undefined}>
-                                  {mismatch && <AlertTriangle size={10} />}
-                                  {asset.size.width} x {asset.size.height}
-                                  {mismatch && original ? ` (original ${original.width} x ${original.height})` : ''}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="custom-asset-hint">
-                              {original ? `Original ${original.width} x ${original.height}` : 'Original file'}
-                            </span>
-                          )}
-                          {errors[slot.ref] && <span className="custom-asset-error" role="alert">{errors[slot.ref]}</span>}
-                        </div>
-                        <div className="custom-asset-actions">
-                          <label className="custom-file-button" title="Import a PNG, JPG, WebP, TGA or VTF texture">
-                            <ImagePlus size={13} />
-                            <span>{asset?.color ? 'Replace' : 'Texture'}</span>
-                            <input
-                              type="file"
-                              accept=".png,.jpg,.jpeg,.webp,.tga,.vtf"
-                              aria-label={`Import a texture for ${shortName(slot.ref)}`}
-                              onChange={(event) => {
-                                const file = event.target.files?.[0];
-                                // Clear the input so picking the same file
-                                // again after a reset still fires a change.
-                                event.target.value = '';
-                                void updateFile(slot, file, false);
-                              }}
-                            />
-                          </label>
-                          {!(asset?.color && (asset.color.hasEmbeddedAlpha ?? asset.color.isTga)) && (
-                            <label
-                              className="custom-file-button custom-file-button-secondary"
-                              title="Import a separate greyscale or transparent image to use as this texture's alpha channel"
-                            >
-                              <Layers size={12} />
-                              <span>Alpha</span>
-                              <input
-                                type="file"
-                                accept=".png,.jpg,.jpeg,.webp"
-                                aria-label={`Import an alpha mask for ${shortName(slot.ref)}`}
-                                onChange={(event) => {
-                                  const file = event.target.files?.[0];
-                                  event.target.value = '';
-                                  void updateFile(slot, file, true);
-                                }}
-                              />
-                            </label>
-                          )}
-                          {asset && (
-                            <button
-                              type="button"
-                              className="custom-asset-reset"
-                              title="Restore the original file"
-                              aria-label={`Restore the original ${shortName(slot.ref)}`}
-                              onClick={() => resetSlot(slot.ref)}
-                            >
-                              <RotateCcw size={12} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
-          ))
         )}
-      </div>
+        {dropHint && (
+          <div className="source-package-dropzone" data-variant="hint">
+            <AlertTriangle size={18} />
+            That isn&apos;t a package or definitions file (.zip, .vpk, .vpd, .json)
+          </div>
+        )}
+
+        <Tabs.Panel value="files" className="custom-workbench-panel">
+          <div className="custom-workbench-toolbar">
+            <div className="custom-workbench-search">
+              <Search className="custom-workbench-search-icon" size={13} />
+              <TextField
+                value={filter}
+                onChange={setFilter}
+                placeholder="Filter inputs..."
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' && filter) {
+                    event.preventDefault();
+                    setFilter('');
+                  }
+                }}
+              />
+            </div>
+            <div className="custom-workbench-summary">
+              <span>
+                {replacedCount
+                  ? `${replacedCount} of ${slots.length} replaced`
+                  : `${slots.length} inputs`}
+              </span>
+              {(replacedCount > 0 || sourcePackage.status === 'mounted') && (
+                <button
+                  type="button"
+                  className="custom-workbench-reset-all"
+                  data-confirm={confirmReset ? '' : undefined}
+                  onClick={() =>
+                    confirmReset ? resetAll() : setConfirmReset(true)
+                  }
+                >
+                  <RotateCcw size={12} />
+                  {confirmReset ? 'Discard all?' : 'Reset all'}
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="custom-workbench-body">
+            {loading ? (
+              <div className="custom-workbench-empty">
+                <LoaderCircle className="custom-workbench-spinner" size={20} />{' '}
+                Reading recipe inputs...
+              </div>
+            ) : recipes.length === 0 ? (
+              <div className="custom-workbench-empty">
+                <FileImage size={22} /> Select a warpaint to use as the editable
+                recipe template.
+              </div>
+            ) : groups.length === 0 ? (
+              <div className="custom-workbench-empty">
+                <Search size={18} /> No inputs match “{filter}”.
+              </div>
+            ) : (
+              groups.map(({ group, items }) => (
+                <div className="custom-asset-group" key={group}>
+                  <div className="custom-asset-group-label">
+                    {GROUP_LABEL[group]}
+                    <span>{items.length}</span>
+                  </div>
+                  <div className="custom-asset-grid">
+                    {items.map((slot) => {
+                      const asset = assets[slot.ref];
+                      const original = textureMetadata?.[slot.ref];
+                      const showOriginal = comparing[slot.ref] && asset?.output;
+                      const mismatch =
+                        asset?.size &&
+                        original &&
+                        (asset.size.width !== original.width ||
+                          asset.size.height !== original.height);
+                      return (
+                        <article
+                          className="custom-asset-card"
+                          key={slot.ref}
+                          data-replaced={asset ? '' : undefined}
+                        >
+                          <div className="custom-asset-preview">
+                            <TexturePreview
+                              // Compare removes only the manual layer. It must
+                              // reveal a mounted package before falling through to
+                              // the built-in asset, matching the real resolver.
+                              refPath={
+                                showOriginal
+                                  ? slot.ref
+                                  : (asset?.output ?? slot.ref)
+                              }
+                              fallbackUrl={
+                                showOriginal
+                                  ? resolveTexture(slot.ref)
+                                  : (asset?.output ?? resolveTexture(slot.ref))
+                              }
+                              resolvePackageTexture={resolvePackageTexture}
+                              packageGeneration={packageGeneration ?? 0}
+                            />
+                            <span className="custom-asset-kind">
+                              {KIND_LABEL[slot.kind]}
+                            </span>
+                            {asset?.output && (
+                              <button
+                                type="button"
+                                className="custom-asset-compare"
+                                title={
+                                  showOriginal
+                                    ? 'Show imported file'
+                                    : 'Show original file'
+                                }
+                                aria-label={
+                                  showOriginal
+                                    ? 'Show imported file'
+                                    : 'Show original file'
+                                }
+                                aria-pressed={Boolean(showOriginal)}
+                                onClick={() =>
+                                  setComparing((current) => ({
+                                    ...current,
+                                    [slot.ref]: !current[slot.ref],
+                                  }))
+                                }
+                              >
+                                {showOriginal ? (
+                                  <EyeOff size={12} />
+                                ) : (
+                                  <Eye size={12} />
+                                )}
+                              </button>
+                            )}
+                            {busy[slot.ref] && (
+                              <div className="custom-asset-busy">
+                                <LoaderCircle
+                                  className="custom-workbench-spinner"
+                                  size={18}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <div className="custom-asset-info">
+                            <div className="custom-asset-name">
+                              {slot.kind.startsWith('sticker') && (
+                                <Sticker size={12} />
+                              )}
+                              <span>{shortName(slot.ref)}</span>
+                            </div>
+                            <div className="custom-asset-path" title={slot.ref}>
+                              {slot.ref}
+                            </div>
+                            <div className="custom-asset-files">
+                              {asset?.color ? (
+                                <>
+                                  <span
+                                    className="custom-asset-file"
+                                    title={asset.color.fileName}
+                                  >
+                                    {asset.color.fileName}
+                                    {(asset.color.hasEmbeddedAlpha ??
+                                    asset.color.isTga)
+                                      ? ' (embedded alpha)'
+                                      : ''}
+                                  </span>
+                                  {asset.alpha && (
+                                    <span
+                                      className="custom-asset-file"
+                                      title={asset.alpha.fileName}
+                                    >
+                                      Alpha: {asset.alpha.fileName}
+                                      <button
+                                        type="button"
+                                        className="custom-asset-file-remove"
+                                        title="Remove the alpha mask"
+                                        aria-label="Remove the alpha mask"
+                                        onClick={() =>
+                                          void removeAlpha(slot.ref)
+                                        }
+                                      >
+                                        <X size={10} />
+                                      </button>
+                                    </span>
+                                  )}
+                                  {asset.size && (
+                                    <span
+                                      className={
+                                        mismatch
+                                          ? 'custom-asset-warn'
+                                          : undefined
+                                      }
+                                    >
+                                      {mismatch && <AlertTriangle size={10} />}
+                                      {asset.size.width} x {asset.size.height}
+                                      {mismatch && original
+                                        ? ` (original ${original.width} x ${original.height})`
+                                        : ''}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="custom-asset-hint">
+                                  {original
+                                    ? `Original ${original.width} x ${original.height}`
+                                    : 'Original file'}
+                                </span>
+                              )}
+                              {errors[slot.ref] && (
+                                <span
+                                  className="custom-asset-error"
+                                  role="alert"
+                                >
+                                  {errors[slot.ref]}
+                                </span>
+                              )}
+                            </div>
+                            <div className="custom-asset-actions">
+                              <label
+                                className="custom-file-button"
+                                title="Import a PNG, JPG, WebP, TGA or VTF texture"
+                              >
+                                <ImagePlus size={13} />
+                                <span>
+                                  {asset?.color ? 'Replace' : 'Texture'}
+                                </span>
+                                <input
+                                  type="file"
+                                  accept=".png,.jpg,.jpeg,.webp,.tga,.vtf"
+                                  aria-label={`Import a texture for ${shortName(slot.ref)}`}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    // Clear the input so picking the same file
+                                    // again after a reset still fires a change.
+                                    event.target.value = '';
+                                    void updateFile(slot, file, false);
+                                  }}
+                                />
+                              </label>
+                              {!(
+                                asset?.color &&
+                                (asset.color.hasEmbeddedAlpha ??
+                                  asset.color.isTga)
+                              ) && (
+                                <label
+                                  className="custom-file-button custom-file-button-secondary"
+                                  title="Import a separate greyscale or transparent image to use as this texture's alpha channel"
+                                >
+                                  <Layers size={12} />
+                                  <span>Alpha</span>
+                                  <input
+                                    type="file"
+                                    accept=".png,.jpg,.jpeg,.webp"
+                                    aria-label={`Import an alpha mask for ${shortName(slot.ref)}`}
+                                    onChange={(event) => {
+                                      const file = event.target.files?.[0];
+                                      event.target.value = '';
+                                      void updateFile(slot, file, true);
+                                    }}
+                                  />
+                                </label>
+                              )}
+                              {asset && (
+                                <button
+                                  type="button"
+                                  className="custom-asset-reset"
+                                  title="Restore the original file"
+                                  aria-label={`Restore the original ${shortName(slot.ref)}`}
+                                  onClick={() => resetSlot(slot.ref)}
+                                >
+                                  <RotateCcw size={12} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="package" className="custom-workbench-panel">
+          <SourcePackagePanel state={sourcePackage} />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="definitions" className="custom-workbench-panel">
+          <DefinitionsPanel state={definitions} />
+        </Tabs.Panel>
+      </Tabs.Root>
     </section>
   );
 }

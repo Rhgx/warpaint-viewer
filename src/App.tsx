@@ -13,12 +13,15 @@ import { WarpaintList } from './ui/WarpaintList';
 import { Inspector } from './ui/Inspector';
 import type { ControlsState } from './ui/Inspector';
 import { StageToolbar } from './ui/StageToolbar';
-import type { WarpaintAssetOverrides, WearRecipe } from './ui/CustomWarpaintImport';
+import type { WarpaintAssetOverrides, WearRecipe, WorkbenchTab } from './ui/CustomWarpaintImport';
 import { BootLoader } from './ui/BootLoader';
 import { VIEW_ANGLES } from './viewer/presets';
 import { useBootData, randomSeed } from './hooks/useBootData';
 import { useComposedPaint } from './hooks/useComposedPaint';
 import { useSourcePackage } from './hooks/useSourcePackage';
+import { useCustomDefinitions } from './hooks/useCustomDefinitions';
+import { isCustomKitId } from './protodefs/types';
+import type { CustomDefinitionsState } from './protodefs/types';
 
 // Selftest page is code-split: it never loads in normal use.
 const SelfTestPage = lazy(() => import('./dev/selftest').then((m) => ({ default: m.SelfTestPage })));
@@ -57,6 +60,8 @@ function MainApp() {
   const [workbenchMounted, setWorkbenchMounted] = useState(false);
   // 0 keeps the CSS default drawer height; anything else is a user drag.
   const [workbenchHeight, setWorkbenchHeight] = useState(0);
+  // The drawer is keyed to remount per paint/weapon, so its tab lives out here.
+  const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>('files');
   const [editorRecipes, setEditorRecipes] = useState<WearRecipe[]>([]);
   const [editorLoading, setEditorLoading] = useState(false);
   const [assetOverrideCache, setAssetOverrideCache] = useState<Record<string, WarpaintAssetOverrides>>({});
@@ -80,32 +85,71 @@ function MainApp() {
 
   const { data, boot, advanceBoot } = useBootData({ state, setState, selectedKitId, setSelectedKitId, setError });
 
+  const { provider: sourceProvider, sourcePackage, packageGeneration, suggestedPaintkitId, removePackage } = useSourcePackage(
+    data?.resolveTexture ?? ((ref) => ref),
+    () => setAssetOverrideCache({}),
+  );
+  const getAssetUrl = useCallback((rel: string) => data?.getAssetUrl(rel) ?? null, [data]);
+  const definitions = useCustomDefinitions({
+    manifest: data?.manifest ?? null,
+    getAssetUrl,
+    provider: sourceProvider,
+    packageGeneration,
+  });
+
+  // Definitions imported from a proto_defs file join the catalog under their own
+  // collection. Everything downstream reads this merged list, so a custom kit is
+  // an ordinary catalog entry apart from where its recipe comes from.
+  const paintkits = useMemo<PaintkitEntry[]>(() => {
+    if (!data) return [];
+    return definitions.catalogKits.length
+      ? [...data.manifest.paintkits, ...definitions.catalogKits]
+      : data.manifest.paintkits;
+  }, [data, definitions.catalogKits]);
+
   const selectedKit: PaintkitEntry | null =
-    data && selectedKitId != null ? data.manifest.paintkits.find((p) => p.id === selectedKitId) ?? null : null;
+    selectedKitId != null ? paintkits.find((p) => p.id === selectedKitId) ?? null : null;
   const selectedAssetKey = selectedKit && state.weaponKey ? `${selectedKit.id}|${state.weaponKey}` : '';
   // Artwork refs are shared by a paintkit even when its weapon recipe changes.
   // Keep one edit set per paintkit so imported textures follow weapon changes;
   // recipe-specific refs that do not exist on the next weapon are simply unused.
   const assetOverrideScope = selectedKit ? String(selectedKit.id) : '';
   const assetOverrides = assetOverrideCache[assetOverrideScope] ?? EMPTY_OVERRIDES;
-  const { provider: sourceProvider, sourcePackage, packageGeneration, suggestedPaintkitId, removePackage } = useSourcePackage(
-    data?.resolveTexture ?? ((ref) => ref),
-    () => setAssetOverrideCache({}),
+
+  // One entry point for a recipe, whichever catalog the kit came from.
+  const { getRecipe: getImportedRecipe } = definitions;
+  const resolveRecipe = useCallback(
+    (kit: PaintkitEntry, weaponKey: string, team: ControlsState['team'], wearIndex: number) => (
+      isCustomKitId(kit.id)
+        ? getImportedRecipe(kit.id, weaponKey, team, wearIndex)
+        : data?.getRecipe(kit, weaponKey, team, wearIndex) ?? Promise.resolve(null)
+    ),
+    [data, getImportedRecipe],
   );
 
-  // A numeric ZIP wrapper is a conventional paintkit index. Switch only when
-  // it resolves to a real catalog entry; unknown numbers leave selection alone.
+  // An import can point at the kit it is meant for: a numeric ZIP wrapper is a
+  // conventional paintkit index, and a proto_defs file nominates its first new
+  // definition. Either way, switch only when it resolves to a catalog entry;
+  // unknown ids leave the current selection alone.
+  const suggestedKitId = definitions.suggestedKitId ?? suggestedPaintkitId;
+  // Re-importing is a deliberate act, so the same suggestion from a later
+  // import applies again; a merely re-rendered catalog does not re-apply it.
+  const suggestionToken = definitions.suggestedKitId !== undefined
+    ? `defs:${definitions.generation}:${definitions.suggestedKitId}`
+    : `pkg:${packageGeneration}:${suggestedPaintkitId}`;
+  const appliedSuggestionRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (!data || suggestedPaintkitId === undefined) return;
-    const kit = data.manifest.paintkits.find((entry) => entry.id === suggestedPaintkitId);
+    if (suggestedKitId === undefined || suggestionToken === appliedSuggestionRef.current) return;
+    const kit = paintkits.find((entry) => entry.id === suggestedKitId);
     if (!kit) return;
+    appliedSuggestionRef.current = suggestionToken;
     setSelectedKitId(kit.id);
     setState((current) => ({
       ...current,
       weaponKey: kit.weapons.includes(current.weaponKey) ? current.weaponKey : (kit.weapons[0] ?? current.weaponKey),
       team: kit.hasTeamTextures || current.sheen === 'team_shine' ? current.team : 'red',
     }));
-  }, [data, packageGeneration, suggestedPaintkitId]);
+  }, [paintkits, suggestedKitId, suggestionToken]);
   const resolvePackageTexture = useCallback((ref: string) => sourceProvider.resolvePreview(ref), [sourceProvider]);
   const activeTextureOverrides = useMemo(
     () => Object.fromEntries(
@@ -118,6 +162,7 @@ function MainApp() {
     engineReady,
     data,
     selectedKit,
+    resolveRecipe,
     selectedAssetKey,
     loadedAssetKey,
     state,
@@ -180,14 +225,14 @@ function MainApp() {
   // tab close, or navigation would discard any cached edit set.
   useEffect(() => {
     const hasCachedEdits = Object.values(assetOverrideCache).some((entry) => Object.keys(entry.assets).length > 0);
-    if (!hasCachedEdits && sourcePackage.status !== 'mounted') return;
+    if (!hasCachedEdits && sourcePackage.status !== 'mounted' && definitions.state.status !== 'loaded') return;
     const confirmLoss = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', confirmLoss);
     return () => window.removeEventListener('beforeunload', confirmLoss);
-  }, [assetOverrideCache, sourcePackage.status]);
+  }, [assetOverrideCache, sourcePackage.status, definitions.state.status]);
 
   // A blank catalog selection has no model/paint work to wait for. Once the
   // renderer environment is ready, the intentionally empty stage is ready too.
@@ -199,8 +244,8 @@ function MainApp() {
   // parallel with the lazily imported renderer/model setup.
   useEffect(() => {
     if (!data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) return;
-    void data.getRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
-  }, [data, selectedKit, state.weaponKey, state.team, state.wearIndex]);
+    void resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
+  }, [data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex]);
 
   // The editor lists every input the paint can use, not just the ones the
   // current wear happens to reach: per-wear recipes swap in dirt/blood/
@@ -219,8 +264,7 @@ function MainApp() {
       ? data.manifest.wearLevels.map((_, index) => index)
       : [state.wearIndex];
     void Promise.all(
-      wearIndexes.map((wearIndex) => data
-        .getRecipe(selectedKit, state.weaponKey, state.team, wearIndex)
+      wearIndexes.map((wearIndex) => resolveRecipe(selectedKit, state.weaponKey, state.team, wearIndex)
         .then((recipe) => ({ wearIndex, recipe }))),
     ).then((loaded) => {
       if (cancelled) return;
@@ -229,7 +273,7 @@ function MainApp() {
       if (!cancelled) setEditorLoading(false);
     });
     return () => { cancelled = true; };
-  }, [data, selectedKit, state.weaponKey, state.team, state.wearIndex]);
+  }, [data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex]);
 
   // Load the model when the weapon changes.
   useEffect(() => {
@@ -259,11 +303,13 @@ function MainApp() {
   // Archive replacement changes the answer for existing Source paths, so
   // release old source uploads and composite targets before the generation-keyed
   // compose starts. The provider ignores stale reads from the removed package.
+  // A re-imported definitions file reuses the same catalog ids, so the compose
+  // cache has to be dropped for it too or an edited paint would render stale.
   useEffect(() => {
     compositorRef.current?.invalidateTextures();
     disposeCache();
     resetComposeKey();
-  }, [packageGeneration, disposeCache, resetComposeKey]);
+  }, [packageGeneration, definitions.generation, disposeCache, resetComposeKey]);
 
   // Lighting.
   useEffect(() => {
@@ -317,7 +363,7 @@ function MainApp() {
   const onSelectKit = useCallback(
     (id: number) => {
       setSelectedKitId(id);
-      const kit = data?.manifest.paintkits.find((p) => p.id === id);
+      const kit = paintkits.find((p) => p.id === id);
       const next: Partial<ControlsState> = {};
       if (kit && !kit.weapons.includes(state.weaponKey)) {
         next.weaponKey = kit.weapons[0] ?? state.weaponKey;
@@ -327,7 +373,13 @@ function MainApp() {
       if (kit && !kit.hasTeamTextures && state.sheen !== 'team_shine') next.team = 'red';
       patch(next);
     },
-    [data, state.weaponKey, state.sheen, patch],
+    [paintkits, state.weaponKey, state.sheen, patch],
+  );
+
+  // Selecting a kit belongs to the app, so the hook leaves that hole for it.
+  const definitionsState = useMemo<CustomDefinitionsState>(
+    () => ({ ...definitions.state, onSelectKit }),
+    [definitions.state, onSelectKit],
   );
 
   const randomizeSeed = useCallback(() => patch({ seed: randomSeed() }), [patch]);
@@ -390,7 +442,9 @@ function MainApp() {
     }
   }
 
-  const paintIcons: Record<number, string> = {};
+  // Imported kits have no shipped thumbnail; theirs is resolved from the
+  // pattern texture the definition names, through the mounted package.
+  const paintIcons: Record<number, string> = { ...definitions.icons };
   for (const kit of data.manifest.paintkits) {
     const url = kit.icon ? data.getAssetUrl(kit.icon) : null;
     if (url) paintIcons[kit.id] = url;
@@ -413,7 +467,7 @@ function MainApp() {
     >
       <aside className="sidebar">
         <WarpaintList
-          paintkits={data.manifest.paintkits}
+          paintkits={paintkits}
           selectedId={selectedKitId}
           onSelect={onSelectKit}
           collectionIcons={collectionIcons}
@@ -478,6 +532,9 @@ function MainApp() {
               <CustomWarpaintWorkbench
                 key={`${selectedKitId ?? 'empty'}|${state.weaponKey}`}
                 recipes={editorRecipes}
+                definitions={definitionsState}
+                tab={workbenchTab}
+                onTabChange={setWorkbenchTab}
                 resolveTexture={data.resolveTexture}
                 textureMetadata={data.manifest.textures}
                 sourcePackage={sourcePackage}

@@ -13,6 +13,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -45,6 +46,56 @@ const COMPOSITE_1024_WEAPONS = new Set(['c_flameball', 'c_holymackerel', 'c_loch
 
 function log(...a) { console.log(...a); }
 function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
+
+// ---------------------------------------------------------------------------
+// Incremental build state: a size+mtime fingerprint of the source VPKs tells us
+// whether the game changed at all. Unchanged means every texture/icon whose
+// output already exists on disk can be skipped without touching vpk.exe. When
+// the VPKs did change we still extract (cheap), then hash the staged VTF bytes
+// so an unchanged texture inside a changed VPK still skips decode + encode.
+// ---------------------------------------------------------------------------
+
+const EXTRACT_STATE_PATH = path.join(STAGING, 'extract_state.json');
+
+function computeVpkFingerprint() {
+  const fp = {};
+  for (const p of [TEXTURES_VPK, MISC_VPK]) {
+    const st = fs.statSync(p);
+    fp[p] = { size: st.size, mtimeMs: st.mtimeMs };
+  }
+  return fp;
+}
+
+function vpkFingerprintMatches(prev, current) {
+  if (!prev) return false;
+  for (const p of Object.keys(current)) {
+    const a = prev[p];
+    const b = current[p];
+    if (!a || a.size !== b.size || a.mtimeMs !== b.mtimeMs) return false;
+  }
+  return true;
+}
+
+function loadExtractState() {
+  if (!fs.existsSync(EXTRACT_STATE_PATH)) return { vpkFingerprint: null, textureHashes: {}, iconHashes: {} };
+  try {
+    const parsed = JSON.parse(fs.readFileSync(EXTRACT_STATE_PATH, 'utf8'));
+    return {
+      vpkFingerprint: parsed.vpkFingerprint || null,
+      textureHashes: parsed.textureHashes || {},
+      iconHashes: parsed.iconHashes || {},
+    };
+  } catch {
+    return { vpkFingerprint: null, textureHashes: {}, iconHashes: {} };
+  }
+}
+
+function saveExtractState(state) {
+  ensureDir(STAGING);
+  fs.writeFileSync(EXTRACT_STATE_PATH, JSON.stringify(state));
+}
+
+function sha1(buf) { return crypto.createHash('sha1').update(buf).digest('hex'); }
 
 function pngHeaderDimensions(buf) {
   if (buf.length < 24 || buf.toString('ascii', 1, 4) !== 'PNG') return null;
@@ -191,6 +242,21 @@ function modelStem(modelPath) {
   return base.replace(/\.mdl$/i, '');
 }
 
+// items_game item definition index -> catalogued weapon key, for every item that
+// wears a model this viewer ships. A paintkit item definition template names its
+// weapon by items_game index, so an imported proto_def file can only be resolved
+// in the browser with this map. Reskins and festive/strange variants have their
+// own indexes and the same model, so this is deliberately many-to-one.
+function buildItemDefMap(itemsGame, weaponRegistry) {
+  const map = {};
+  for (const [index, item] of Object.entries(itemsGame.items)) {
+    if (!/^\d+$/.test(index) || !item || typeof item !== 'object') continue;
+    const key = modelStem(resolveItemField(itemsGame, item, 'model_player'));
+    if (key && weaponRegistry.has(key)) map[index] = key;
+  }
+  return map;
+}
+
 // ---------------------------------------------------------------------------
 // Step: decode proto defs
 // ---------------------------------------------------------------------------
@@ -210,7 +276,44 @@ function stepProtodefs() {
   fs.writeFileSync(path.join(dir, 'paintkit_operations.json'), JSON.stringify(operations, null, 1));
   fs.writeFileSync(path.join(dir, 'paintkit_variables.json'), JSON.stringify(variables, null, 1));
   log(`[protodefs] defs=${defs.length} itemDefs=${itemDefs.length} ops=${operations.length} vars=${variables.length}`);
-  return { defs, itemDefs, operations, variables };
+  return {
+    defs, itemDefs, operations, variables, byType: c.byType,
+  };
+}
+
+// Container defType values that never carry a paintkit definition itself: variables,
+// operations, item definitions and header-only prefabs. A community-authored proto_defs
+// JSON fragment (src/protodefs/jsonFragments.ts) supplies its own paintkit definition and
+// operation blocks, but references these by index, so the browser needs them shipped
+// separately from the 250 paintkit definitions (defType 9), which are 90%+ of the container's
+// bytes and are exactly what community files replace. Blocks are copied verbatim (still
+// raw protobuf payloads from parseContainer, never decoded), so parseContainer reads this
+// file with no new code on the browser side.
+const BASE_BLOB_DEF_TYPES = [
+  DEF_TYPE.PAINTKIT_VARIABLES,
+  DEF_TYPE.PAINTKIT_OPERATION,
+  DEF_TYPE.PAINTKIT_ITEM_DEFINITION,
+  10, // DEF_TYPE_HEADER_ONLY - not in tools/lib/proto.mjs's DEF_TYPE (that module only names the four types the pipeline decodes), but the container tags it the same way.
+];
+
+function stepProtodefsBase(byType) {
+  const chunks = [];
+  for (const defType of BASE_BLOB_DEF_TYPES) {
+    const list = byType[defType] || [];
+    const header = Buffer.alloc(8);
+    header.writeInt32LE(defType, 0);
+    header.writeInt32LE(list.length, 4);
+    chunks.push(header);
+    for (const block of list) {
+      const size = Buffer.alloc(4);
+      size.writeInt32LE(block.size, 0);
+      chunks.push(size, block.buffer);
+    }
+  }
+  const bytes = Buffer.concat(chunks);
+  const outPath = path.join(PUBLIC_DATA, 'protodefs-base.bin');
+  fs.writeFileSync(outPath, bytes);
+  log(`[protodefs-base] wrote ${outPath} (${bytes.length} bytes) for defTypes ${BASE_BLOB_DEF_TYPES.join(',')}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -239,12 +342,22 @@ async function main() {
   const onlyIdx = args.indexOf('--only');
   const only = onlyIdx >= 0 ? args[onlyIdx + 1] : null;
   const run = (name) => !only || only === name;
+  const FORCE = args.includes('--force');
 
   ensureDir(PUBLIC_DATA);
   ensureDir(STAGING);
 
-  const { defs, itemDefs, operations, variables } = stepProtodefs();
+  const extractState = loadExtractState();
+  const currentVpkFingerprint = computeVpkFingerprint();
+  const vpkChanged = FORCE || !vpkFingerprintMatches(extractState.vpkFingerprint, currentVpkFingerprint);
+  if (FORCE) log('[extract] --force: rebuilding textures and icons from scratch');
+  else if (vpkChanged) log('[extract] source vpks changed since last run; re-checking every texture and icon');
+  else log('[extract] source vpks unchanged; skipping textures and icons whose output already exists');
+
+  const { defs, itemDefs, operations, variables, byType } = stepProtodefs();
   const ctx = buildIndex(operations, itemDefs, variables);
+
+  if (run('protodefs-base')) stepProtodefsBase(byType);
 
   log('[items] parsing items_game.txt ...');
   const itemsGame = loadItemsGame();
@@ -388,8 +501,13 @@ async function main() {
 
   // Textures ----------------------------------------------------------------
   let textureMetadata = {};
-  if (run('textures')) textureMetadata = await extractAndDecodeTextures(allTextureRefs);
-  else {
+  if (run('textures')) {
+    const result = await extractAndDecodeTextures(allTextureRefs, { vpkChanged, force: FORCE, prevHashes: extractState.textureHashes });
+    textureMetadata = result.metadata;
+    extractState.textureHashes = result.hashes;
+    extractState.vpkFingerprint = currentVpkFingerprint;
+    saveExtractState(extractState);
+  } else {
     const metadataPath = path.join(STAGING, 'texture_metadata.json');
     if (fs.existsSync(metadataPath)) textureMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
   }
@@ -397,8 +515,12 @@ async function main() {
   // Backpack icons ------------------------------------------------------------
   let collectionIcons = {};
   if (run('icons') || run('manifest')) {
-    collectionIcons = extractIcons(itemsGame, weaponRegistry, machineByDisplay);
-    generatePaintIcons(manifestPaintkits, paintIconRefByKit);
+    const iconResult = extractIcons(itemsGame, weaponRegistry, machineByDisplay, { vpkChanged, force: FORCE, prevHashes: extractState.iconHashes });
+    collectionIcons = iconResult.collectionIcons;
+    extractState.iconHashes = iconResult.hashes;
+    extractState.vpkFingerprint = currentVpkFingerprint;
+    saveExtractState(extractState);
+    generatePaintIcons(manifestPaintkits, paintIconRefByKit, { force: FORCE });
   }
 
   // Manifest ----------------------------------------------------------------
@@ -431,7 +553,10 @@ async function main() {
     ensureDir(PUBLIC_DATA);
     fs.writeFileSync(path.join(PUBLIC_DATA, 'manifest.json'), JSON.stringify(manifest, null, 1));
     fs.writeFileSync(path.join(STAGING, 'weapon_models.json'), JSON.stringify(weaponModels, null, 1));
+    const itemDefMap = buildItemDefMap(itemsGame, weaponRegistry);
+    fs.writeFileSync(path.join(PUBLIC_DATA, 'item-defs.json'), JSON.stringify(itemDefMap));
     log(`[manifest] wrote manifest.json (${manifest.paintkits.length} paintkits, ${manifest.weapons.length} weapons)`);
+    log(`[manifest] wrote item-defs.json (${Object.keys(itemDefMap).length} item definition indexes)`);
     log(`[manifest] wrote staging/weapon_models.json (${Object.keys(weaponModels).length} weapons)`);
   }
 
@@ -677,34 +802,69 @@ function pickPaintIconRef(tree) {
   return patterns.find((r) => !/\/solid_/.test(r)) || patterns[0] || null;
 }
 
+// tools/fetch_warpaint_icons.mjs replaces these with real wiki renders of the
+// War Paint (spray can or painted weapon); the pattern swatch here only exists
+// as a fallback for a kit the wiki does not know, or before that script has
+// ever run. So this must never clobber a file it did not itself put there:
+// SWATCH_STATE_PATH records which kit ids currently hold a generated swatch
+// (as opposed to a real wiki render) so both this function and the fetcher can
+// tell the two apart.
+const SWATCH_STATE_PATH = path.join(STAGING, 'swatch_icons.json');
+
+function loadSwatchedIds() {
+  if (!fs.existsSync(SWATCH_STATE_PATH)) return new Set();
+  try { return new Set(JSON.parse(fs.readFileSync(SWATCH_STATE_PATH, 'utf8'))); } catch { return new Set(); }
+}
+
+function saveSwatchedIds(ids) {
+  ensureDir(STAGING);
+  fs.writeFileSync(SWATCH_STATE_PATH, JSON.stringify([...ids].sort((a, b) => a - b)));
+}
+
 // Downscale each kit's representative pattern PNG to a 96px swatch with
 // ImageMagick (already a dev dependency of this machine's pipeline; skipped
-// gracefully when unavailable).
-function generatePaintIcons(manifestPaintkits, paintIconRefByKit) {
+// gracefully when unavailable). Only ever runs for a kit with no icon file on
+// disk yet, or (with --force) one whose existing file is itself a swatch.
+function generatePaintIcons(manifestPaintkits, paintIconRefByKit, { force = false } = {}) {
   const probe = spawnSync('magick', ['-version'], { stdio: 'ignore', shell: false });
-  if (probe.error || probe.status !== 0) {
-    log('[icons] ImageMagick (magick) not found; skipping paintkit thumbnails');
-    return;
-  }
+  const magickAvailable = !(probe.error || probe.status !== 0);
+  if (!magickAvailable) log('[icons] ImageMagick (magick) not found; will not be able to swatch missing paintkit thumbnails');
+
   const outDir = path.join(PUBLIC_DATA, 'icons', 'paints');
   ensureDir(outDir);
-  let ok = 0;
+
+  const validIds = new Set(manifestPaintkits.map((k) => k.id));
+  const swatchedIds = new Set([...loadSwatchedIds()].filter((id) => validIds.has(id)));
+
+  let kept = 0;
+  let swatched = 0;
   let miss = 0;
   for (const kit of manifestPaintkits) {
+    const outRel = `icons/paints/${kit.id}.png`;
+    const outPath = path.join(PUBLIC_DATA, outRel);
+    const hasFile = fs.existsSync(outPath);
+
+    if (hasFile && !(force && swatchedIds.has(kit.id))) {
+      kit.icon = outRel;
+      kept++;
+      continue;
+    }
+    if (!magickAvailable) { miss++; continue; }
     const ref = paintIconRefByKit.get(kit.id);
     if (!ref) { miss++; continue; }
     const src = path.join(PUBLIC_DATA, ref);
     if (!fs.existsSync(src)) { miss++; continue; }
-    const outRel = `icons/paints/${kit.id}.png`;
-    const res = spawnSync('magick', [src, '-resize', '96x96^', '-gravity', 'center', '-extent', '96x96', path.join(PUBLIC_DATA, outRel)], { stdio: 'ignore', shell: false });
+    const res = spawnSync('magick', [src, '-resize', '96x96^', '-gravity', 'center', '-extent', '96x96', outPath], { stdio: 'ignore', shell: false });
     if (res.status === 0) {
       kit.icon = outRel;
-      ok++;
+      swatchedIds.add(kit.id);
+      swatched++;
     } else {
       miss++;
     }
   }
-  log(`[icons] wrote ${ok} paintkit thumbnails, ${miss} without one`);
+  saveSwatchedIds(swatchedIds);
+  log(`[icons] paintkit thumbnails: ${kept} kept, ${swatched} swatched, ${miss} without one`);
 }
 
 // ---------------------------------------------------------------------------
@@ -725,7 +885,7 @@ function slugify(s) {
 // Collection icons come from the case item whose collection_reference names the
 // collection; older collections without such a case simply get no icon and the
 // UI falls back to text-only rendering. Prefers the _large icon variant.
-function extractIcons(itemsGame, weaponRegistry, machineByDisplay) {
+function extractIcons(itemsGame, weaponRegistry, machineByDisplay, { vpkChanged = true, force = false, prevHashes = {} } = {}) {
   const tex = texListShared();
   const misc = miscList();
   const stagingDir = path.join(STAGING, 'extracted');
@@ -767,77 +927,127 @@ function extractIcons(itemsGame, weaponRegistry, machineByDisplay) {
     });
   }
 
-  const fromTex = [];
-  const fromMisc = [];
   for (const job of jobs) {
     job.vpkPath = job.candidates.find((c) => tex.has(c)) || null;
-    if (job.vpkPath) { fromTex.push(job.vpkPath); continue; }
-    job.vpkPath = job.candidates.find((c) => misc.has(c)) || null;
-    if (job.vpkPath) fromMisc.push(job.vpkPath);
+    job.vpkSource = TEXTURES_VPK;
+    if (!job.vpkPath) {
+      job.vpkPath = job.candidates.find((c) => misc.has(c)) || null;
+      job.vpkSource = MISC_VPK;
+    }
+    const outPath = path.join(PUBLIC_DATA, job.outRel);
+    job.outExists = fs.existsSync(outPath);
+    // Unchanged vpks + an output already on disk: nothing to extract, decode or encode.
+    job.skipExtraction = job.vpkPath && !force && !vpkChanged && job.outExists;
   }
+
+  const fromTex = jobs.filter((j) => j.vpkPath && !j.skipExtraction && j.vpkSource === TEXTURES_VPK).map((j) => j.vpkPath);
+  const fromMisc = jobs.filter((j) => j.vpkPath && !j.skipExtraction && j.vpkSource === MISC_VPK).map((j) => j.vpkPath);
   extractBatch(TEXTURES_VPK, fromTex, stagingDir);
   extractBatch(MISC_VPK, fromMisc, stagingDir);
 
-  let ok = 0;
+  let unchanged = 0;
+  let rebuilt = 0;
   let fail = 0;
+  const hashes = {};
   for (const job of jobs) {
     if (!job.vpkPath) { fail++; continue; }
+    const outPath = path.join(PUBLIC_DATA, job.outRel);
+    if (job.skipExtraction) {
+      job.assign(job.outRel);
+      if (prevHashes[job.outRel]) hashes[job.outRel] = prevHashes[job.outRel];
+      unchanged++;
+      continue;
+    }
     try {
-      const dec = decodeVTF(fs.readFileSync(path.join(stagingDir, job.vpkPath)));
-      const outPath = path.join(PUBLIC_DATA, job.outRel);
+      const buf = fs.readFileSync(path.join(stagingDir, job.vpkPath));
+      const hash = sha1(buf);
+      if (!force && job.outExists && prevHashes[job.outRel] === hash) {
+        job.assign(job.outRel);
+        hashes[job.outRel] = hash;
+        unchanged++;
+        continue;
+      }
+      const dec = decodeVTF(buf);
       ensureDir(path.dirname(outPath));
       fs.writeFileSync(outPath, encodePNG(dec.rgba, dec.width, dec.height));
       job.assign(job.outRel);
-      ok++;
+      hashes[job.outRel] = hash;
+      rebuilt++;
     } catch (e) {
       fail++;
       log(`[icons] failed ${job.outRel}: ${e.message}`);
     }
   }
-  log(`[icons] wrote ${ok} icons (${Object.keys(collectionIcons).length} collections), ${fail} unavailable`);
-  return collectionIcons;
+  log(`[icons] icons: ${unchanged} unchanged, ${rebuilt} (re)built (${Object.keys(collectionIcons).length} collections), ${fail} unavailable`);
+  return { collectionIcons, hashes };
 }
 
 // ---------------------------------------------------------------------------
 // Extract referenced VTFs from the vpks and decode to PNG.
 // ---------------------------------------------------------------------------
 
-async function extractAndDecodeTextures(allTextureRefs) {
+async function extractAndDecodeTextures(allTextureRefs, { vpkChanged = true, force = false, prevHashes = {} } = {}) {
   log(`[textures] indexing vpk contents ...`);
   const texList = listVPK(TEXTURES_VPK);
   const misc = miscList();
 
+  const metadataPath = path.join(STAGING, 'texture_metadata.json');
+  let prevMetadata = {};
+  if (fs.existsSync(metadataPath)) {
+    try { prevMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8')); } catch { prevMetadata = {}; }
+  }
+
   // Map public "textures/foo.webp" -> vpk "materials/foo.vtf".
-  const wanted = []; // { pub, vpk, vpkSource }
+  const wanted = []; // { pub, vpk, src }
   for (const pub of allTextureRefs) {
     const rel = pub.replace(/^textures\//, '').replace(/\.webp$/i, '');
     const vpkPath = `materials/${rel}.vtf`.toLowerCase();
     let src = null;
     if (texList.has(vpkPath)) src = 'tex';
     else if (misc.has(vpkPath)) src = 'misc';
-    wanted.push({ pub, vpk: vpkPath, src });
+    const outExists = fs.existsSync(path.join(PUBLIC_DATA, pub));
+    // Unchanged vpks + an output already on disk + metadata already known for it:
+    // nothing to extract, decode or encode for this texture at all.
+    const skipExtraction = src && !force && !vpkChanged && outExists && prevMetadata[pub];
+    wanted.push({
+      pub, vpk: vpkPath, src, outExists, skipExtraction,
+    });
   }
   const missing = wanted.filter((w) => !w.src);
   log(`[textures] ${wanted.length} referenced, ${missing.length} not present in vpks`);
 
   const stagingMat = path.join(STAGING, 'extracted');
   ensureDir(stagingMat);
-  const byTex = wanted.filter((w) => w.src === 'tex').map((w) => w.vpk);
-  const byMisc = wanted.filter((w) => w.src === 'misc').map((w) => w.vpk);
+  const byTex = wanted.filter((w) => w.src === 'tex' && !w.skipExtraction).map((w) => w.vpk);
+  const byMisc = wanted.filter((w) => w.src === 'misc' && !w.skipExtraction).map((w) => w.vpk);
   log(`[textures] extracting ${byTex.length} from textures.vpk, ${byMisc.length} from misc.vpk ...`);
   extractBatch(TEXTURES_VPK, byTex, stagingMat);
   extractBatch(MISC_VPK, byMisc, stagingMat);
 
   log('[textures] decoding VTF -> WebP (lossless) ...');
-  let ok = 0; let fail = 0;
+  let unchanged = 0; let reencoded = 0; let brandNew = 0; let fail = 0;
   const metadata = {};
+  const hashes = {};
   const failList = [];
   for (const w of wanted) {
     if (!w.src) { fail++; failList.push({ ...w, err: 'not in vpk' }); continue; }
-    const vtfPath = path.join(stagingMat, w.vpk);
     const outPath = path.join(PUBLIC_DATA, w.pub);
+    if (w.skipExtraction) {
+      metadata[w.pub] = prevMetadata[w.pub];
+      if (prevHashes[w.pub]) hashes[w.pub] = prevHashes[w.pub];
+      unchanged++;
+      continue;
+    }
+    const vtfPath = path.join(stagingMat, w.vpk);
     try {
       const buf = fs.readFileSync(vtfPath);
+      const hash = sha1(buf);
+      if (!force && w.outExists && prevHashes[w.pub] === hash && prevMetadata[w.pub]) {
+        metadata[w.pub] = prevMetadata[w.pub];
+        hashes[w.pub] = hash;
+        unchanged++;
+        continue;
+      }
       const dec = decodeVTF(buf);
       const hdr = parseVTFHeader(buf);
       metadata[w.pub] = {
@@ -846,6 +1056,7 @@ async function extractAndDecodeTextures(allTextureRefs) {
         pointSample: !!(hdr.flags & 0x1), trilinear: !!(hdr.flags & 0x2),
         anisotropic: !!(hdr.flags & 0x10), noMip: !!(hdr.flags & 0x100), noLod: !!(hdr.flags & 0x200),
       };
+      hashes[w.pub] = hash;
       ensureDir(path.dirname(outPath));
       // exact:true is required alongside lossless:true - without it libwebp is free to discard
       // RGB data under fully-transparent pixels, which the compositor still reads independently
@@ -853,39 +1064,43 @@ async function extractAndDecodeTextures(allTextureRefs) {
       await sharp(dec.rgba, { raw: { width: dec.width, height: dec.height, channels: 4 } })
         .webp({ lossless: true, effort: 4, exact: true })
         .toFile(outPath);
-      ok++;
-      if (ok % 200 === 0) log(`  ... ${ok} decoded`);
+      if (w.outExists) reencoded++; else brandNew++;
+      const done = reencoded + brandNew;
+      if (done % 200 === 0) log(`  ... ${done} (re)encoded`);
     } catch (e) {
       fail++;
       failList.push({ pub: w.pub, err: e.message });
     }
   }
-  log(`[textures] decoded ${ok}, failed ${fail}`);
+  log(`[textures] ${unchanged} unchanged, ${reencoded} re-encoded, ${brandNew} new, ${fail} failed`);
   if (failList.length) {
     fs.writeFileSync(path.join(STAGING, 'texture_failures.json'), JSON.stringify(failList, null, 1));
     log(`[textures] failure details -> staging/texture_failures.json`);
   }
-  fs.writeFileSync(path.join(STAGING, 'texture_metadata.json'), JSON.stringify(metadata));
+  fs.writeFileSync(metadataPath, JSON.stringify(metadata));
 
   // CMDLPanel (and therefore TF2's item inspection panel) always binds
   // materials/editor/cubemap as its local reflection cubemap. Keep the six
   // faces as a first-class viewer asset instead of synthesizing a gradient.
   const editorCubeVpk = 'materials/editor/cubemap.vtf';
   const editorCubeStage = path.join(stagingMat, editorCubeVpk);
-  try {
-    extractBatch(TEXTURES_VPK, [editorCubeVpk], stagingMat);
-    const faces = decodeVTFCubemap(fs.readFileSync(editorCubeStage));
-    const names = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
-    const outDir = path.join(PUBLIC_DATA, 'env', 'editor-cubemap');
-    ensureDir(outDir);
-    faces.forEach((face, i) => {
-      fs.writeFileSync(path.join(outDir, `${names[i]}.png`), encodePNG(face.rgba, face.width, face.height));
-    });
-    log('[textures] decoded TF2 editor cubemap (6 faces)');
-  } catch (e) {
-    log(`[textures] failed to decode TF2 editor cubemap: ${e.message}`);
+  const names = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
+  const outDir = path.join(PUBLIC_DATA, 'env', 'editor-cubemap');
+  const cubemapExists = names.every((n) => fs.existsSync(path.join(outDir, `${n}.png`)));
+  if (force || vpkChanged || !cubemapExists) {
+    try {
+      extractBatch(TEXTURES_VPK, [editorCubeVpk], stagingMat);
+      const faces = decodeVTFCubemap(fs.readFileSync(editorCubeStage));
+      ensureDir(outDir);
+      faces.forEach((face, i) => {
+        fs.writeFileSync(path.join(outDir, `${names[i]}.png`), encodePNG(face.rgba, face.width, face.height));
+      });
+      log('[textures] decoded TF2 editor cubemap (6 faces)');
+    } catch (e) {
+      log(`[textures] failed to decode TF2 editor cubemap: ${e.message}`);
+    }
   }
-  return metadata;
+  return { metadata, hashes };
 }
 
 // ---------------------------------------------------------------------------

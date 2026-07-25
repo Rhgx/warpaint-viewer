@@ -58,10 +58,94 @@
 }
 .custom-workbench-resizer:hover::after,
 .custom-workbench-resizer[data-resizing]::after { opacity: 1; }
+/* Header holds only the tab row and the close button, kept compact so the
+   drawer's own toolbar (filter/summary or the package/definitions bar) still
+   fits underneath it at the minimum panel height. */
+.custom-workbench-tabs-root {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
 .custom-workbench-header {
   flex: none;
   display: flex;
-  min-height: 48px;
+  min-height: 34px;
+  padding: 4px 6px 4px 4px;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.custom-workbench-tablist {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: stretch;
+  gap: 2px;
+}
+.custom-workbench-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.custom-workbench-tab svg { flex: none; }
+.custom-workbench-tab:hover { color: var(--text); background: var(--panel-2); }
+.custom-workbench-tab[data-active] { color: var(--text); background: var(--panel-2); }
+.custom-workbench-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.custom-workbench-tab[data-active] .custom-workbench-tab-badge { color: var(--text); }
+.custom-workbench-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.custom-workbench-close {
+  display: grid;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.custom-workbench-close:hover { background: var(--panel-2); color: var(--text); }
+
+/* Each tab panel owns its own toolbar/body pair, filling whatever height the
+   header left behind. */
+.custom-workbench-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  outline: none;
+}
+.custom-workbench-toolbar {
+  flex: none;
+  display: flex;
+  min-height: 40px;
   padding: 7px 10px 7px 12px;
   align-items: center;
   gap: 10px;
@@ -95,19 +179,6 @@
   font-size: 9.5px;
   white-space: nowrap;
 }
-.custom-workbench-summary > button:last-child {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-dim);
-  cursor: pointer;
-}
-.custom-workbench-summary > button:last-child:hover { background: var(--panel-2); color: var(--text); }
 .custom-workbench-reset-all {
   display: flex;
   min-height: 24px;
