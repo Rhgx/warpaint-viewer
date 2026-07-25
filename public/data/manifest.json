@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-07-15T15:53:24.377Z",
+ "generatedAt": "2026-07-25T17:26:54.583Z",
  "paintkits": [
   {
    "id": 0,
@@ -11396,6 +11396,8 @@
    "key": "c_amputator",
    "name": "Amputator",
    "model": "models/c_amputator.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_amputator.png",
    "material": {
     "phongExponent": 25,
@@ -11425,14 +11427,14 @@
     "rimLightExponent": 15,
     "rimLightBoost": 2,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_atom_launcher",
    "name": "Air Strike",
    "model": "models/c_atom_launcher.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_atom_launcher.png",
    "material": {
     "phongExponent": 5,
@@ -11466,14 +11468,14 @@
     "rimLightExponent": 2,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_back_scratcher",
    "name": "Back Scratcher",
    "model": "models/c_back_scratcher.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_back_scratcher.png",
    "material": {
     "phongExponent": 10,
@@ -11503,14 +11505,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_battleaxe",
    "name": "Scotsman's Skullcutter",
    "model": "models/c_battleaxe.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_battleaxe.png",
    "material": {
     "phongExponent": 5,
@@ -11540,14 +11542,14 @@
     "rimLightExponent": 10,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_bazaar_sniper",
    "name": "Bazaar Bargain",
    "model": "models/c_bazaar_sniper.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_bazaar_sniper.png",
    "material": {
     "phongExponent": 10,
@@ -11577,14 +11579,14 @@
     "rimLightExponent": 20,
     "rimLightBoost": 0.25,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_blackbox",
    "name": "Black Box",
    "model": "models/c_blackbox.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_blackbox.png",
    "material": {
     "phongExponent": 30,
@@ -11614,14 +11616,14 @@
     "rimLightExponent": 20,
     "rimLightBoost": 0.5,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_claidheamohmor",
    "name": "Claidheamh Mòr",
    "model": "models/c_claidheamohmor.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_claidheamohmor.png",
    "material": {
     "phongExponent": 12,
@@ -11651,14 +11653,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_crusaders_crossbow",
    "name": "Crusader's Crossbow",
    "model": "models/c_crusaders_crossbow.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_crusaders_crossbow.png",
    "material": {
     "phongExponent": 25,
@@ -11688,14 +11690,14 @@
     "rimLightExponent": 15,
     "rimLightBoost": 2,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_degreaser",
    "name": "Degreaser",
    "model": "models/c_degreaser.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_degreaser.png",
    "material": {
     "phongExponent": null,
@@ -11725,14 +11727,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_demo_cannon",
    "name": "Loose Cannon",
    "model": "models/c_demo_cannon.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_demo_cannon.png",
    "material": {
     "phongExponent": 20,
@@ -11762,14 +11764,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_demo_sultan_sword",
    "name": "Persian Persuader",
    "model": "models/c_demo_sultan_sword.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_demo_sultan_sword.png",
    "material": {
     "phongExponent": 25,
@@ -11799,14 +11801,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 2,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_detonator",
    "name": "Detonator",
    "model": "models/c_detonator.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_detonator.png",
    "material": {
     "phongExponent": 30,
@@ -11836,14 +11838,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_flameball",
    "name": "Dragon's Fury",
    "model": "models/c_flameball.glb",
+   "compositeWidth": 1024,
+   "compositeHeight": 1024,
    "icon": "icons/weapons/c_flameball.png",
    "material": {
     "phongExponent": null,
@@ -11873,14 +11875,14 @@
     "rimLightExponent": 2,
     "rimLightBoost": 2.5,
     "rimMask": true
-   },
-   "compositeWidth": 1024,
-   "compositeHeight": 1024
+   }
   },
   {
    "key": "c_flamethrower",
    "name": "Flame Thrower",
    "model": "models/c_flamethrower.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_flamethrower.png",
    "material": {
     "phongExponent": null,
@@ -11910,14 +11912,14 @@
     "rimLightExponent": 2,
     "rimLightBoost": 2.5,
     "rimMask": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_gatling_gun",
    "name": "Brass Beast",
    "model": "models/c_gatling_gun.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_gatling_gun.png",
    "material": {
     "phongExponent": 20,
@@ -11951,14 +11953,14 @@
     "rimLightExponent": 20,
     "rimLightBoost": 0.25,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_grenadelauncher",
    "name": "Grenade Launcher",
    "model": "models/c_grenadelauncher.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_grenadelauncher.png",
    "material": {
     "phongExponent": 20,
@@ -11988,14 +11990,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_holymackerel",
    "name": "Holy Mackerel",
    "model": "models/c_holymackerel.glb",
+   "compositeWidth": 1024,
+   "compositeHeight": 1024,
    "icon": "icons/weapons/c_holymackerel.png",
    "material": {
     "phongExponent": 25,
@@ -12025,14 +12027,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 1024,
-   "compositeHeight": 1024
+   }
   },
   {
    "key": "c_jag",
    "name": "Jag",
    "model": "models/c_jag.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_jag.png",
    "material": {
     "phongExponent": 15,
@@ -12062,14 +12064,14 @@
     "rimLightExponent": 20,
     "rimLightBoost": 0.25,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_knife",
    "name": "Knife",
    "model": "models/c_knife.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_knife.png",
    "material": {
     "phongExponent": 25,
@@ -12099,14 +12101,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 2,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_lochnload",
    "name": "Loch-n-Load",
    "model": "models/c_lochnload.glb",
+   "compositeWidth": 1024,
+   "compositeHeight": 1024,
    "icon": "icons/weapons/c_lochnload.png",
    "material": {
     "phongExponent": 15,
@@ -12136,14 +12138,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1.5,
     "rimMask": false
-   },
-   "compositeWidth": 1024,
-   "compositeHeight": 1024
+   }
   },
   {
    "key": "c_medigun",
    "name": "Medi Gun",
    "model": "models/c_medigun.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_medigun.png",
    "material": {
     "phongExponent": null,
@@ -12173,14 +12175,14 @@
     "rimLightExponent": 2,
     "rimLightBoost": 2.5,
     "rimMask": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_minigun",
    "name": "Minigun",
    "model": "models/c_minigun.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_minigun.png",
    "material": {
     "phongExponent": null,
@@ -12210,14 +12212,14 @@
     "rimLightExponent": 2,
     "rimLightBoost": 2,
     "rimMask": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_pistol",
    "name": "Pistol",
    "model": "models/c_pistol.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_pistol.png",
    "material": {
     "phongExponent": null,
@@ -12247,14 +12249,14 @@
     "rimLightExponent": 2,
     "rimLightBoost": 2.5,
     "rimMask": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_powerjack",
    "name": "Powerjack",
    "model": "models/c_powerjack.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_powerjack.png",
    "material": {
     "phongExponent": null,
@@ -12284,14 +12286,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_quadball",
    "name": "Iron Bomber",
    "model": "models/c_quadball.glb",
+   "compositeWidth": 1024,
+   "compositeHeight": 1024,
    "icon": "icons/weapons/c_quadball.png",
    "material": {
     "phongExponent": 15,
@@ -12321,14 +12323,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1.5,
     "rimMask": false
-   },
-   "compositeWidth": 1024,
-   "compositeHeight": 1024
+   }
   },
   {
    "key": "c_reserve_shooter",
    "name": "Reserve Shooter",
    "model": "models/c_reserve_shooter.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_reserve_shooter.png",
    "material": {
     "phongExponent": 25,
@@ -12358,14 +12360,14 @@
     "rimLightExponent": 10,
     "rimLightBoost": 1.5,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_revolver",
    "name": "Revolver",
    "model": "models/c_revolver.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_revolver.png",
    "material": {
     "phongExponent": null,
@@ -12395,14 +12397,14 @@
     "rimLightExponent": 1,
     "rimLightBoost": 1.5,
     "rimMask": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_riding_crop",
    "name": "Disciplinary Action",
    "model": "models/c_riding_crop.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_riding_crop.png",
    "material": {
     "phongExponent": 15,
@@ -12432,14 +12434,14 @@
     "rimLightExponent": 12,
     "rimLightBoost": 0.1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_rocketlauncher",
    "name": "Rocket Launcher",
    "model": "models/c_rocketlauncher.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_rocketlauncher.png",
    "material": {
     "phongExponent": null,
@@ -12469,14 +12471,14 @@
     "rimLightExponent": 2,
     "rimLightBoost": 2.5,
     "rimMask": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_russian_riot",
    "name": "Family Business",
    "model": "models/c_russian_riot.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_russian_riot.png",
    "material": {
     "phongExponent": 25,
@@ -12506,14 +12508,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 2,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_scattergun",
    "name": "Scattergun",
    "model": "models/c_scattergun.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_scattergun.png",
    "material": {
     "phongExponent": null,
@@ -12543,14 +12545,14 @@
     "rimLightExponent": 1,
     "rimLightBoost": 1.5,
     "rimMask": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_scimitar",
    "name": "Shahanshah",
    "model": "models/c_scimitar.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_scimitar.png",
    "material": {
     "phongExponent": 10,
@@ -12580,14 +12582,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_scorch_shot",
    "name": "Scorch Shot",
    "model": "models/c_scorch_shot.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_scorch_shot.png",
    "material": {
     "phongExponent": 10,
@@ -12617,14 +12619,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_shortstop",
    "name": "Shortstop",
    "model": "models/c_shortstop.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_shortstop.png",
    "material": {
     "phongExponent": 25,
@@ -12654,14 +12656,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 2,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_shotgun",
    "name": "Shotgun",
    "model": "models/c_shotgun.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_shotgun.png",
    "material": {
     "phongExponent": null,
@@ -12691,14 +12693,14 @@
     "rimLightExponent": 1,
     "rimLightBoost": 2.25,
     "rimMask": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_smg",
    "name": "SMG",
    "model": "models/c_smg.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_smg.png",
    "material": {
     "phongExponent": null,
@@ -12728,14 +12730,14 @@
     "rimLightExponent": 1,
     "rimLightBoost": 2.25,
     "rimMask": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_sniperrifle",
    "name": "Sniper Rifle",
    "model": "models/c_sniperrifle.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_sniperrifle.png",
    "material": {
     "phongExponent": null,
@@ -12765,14 +12767,14 @@
     "rimLightExponent": 1,
     "rimLightBoost": 3,
     "rimMask": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_soda_popper",
    "name": "Soda Popper",
    "model": "models/c_soda_popper.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_soda_popper.png",
    "material": {
     "phongExponent": 15,
@@ -12802,14 +12804,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_stickybomb_launcher",
    "name": "Stickybomb Launcher",
    "model": "models/c_stickybomb_launcher.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_stickybomb_launcher.png",
    "material": {
     "phongExponent": null,
@@ -12839,14 +12841,14 @@
     "rimLightExponent": 1,
     "rimLightBoost": 3,
     "rimMask": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_tele_shotgun",
    "name": "Rescue Ranger",
    "model": "models/c_tele_shotgun.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_tele_shotgun.png",
    "material": {
     "phongExponent": 25,
@@ -12890,14 +12892,14 @@
      1
     ],
     "modelGlowColor": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_tomislav",
    "name": "Tomislav",
    "model": "models/c_tomislav.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_tomislav.png",
    "material": {
     "phongExponent": 25,
@@ -12927,14 +12929,14 @@
     "rimLightExponent": 20,
     "rimLightBoost": 0.25,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_trenchgun",
    "name": "Panic Attack",
    "model": "models/c_trenchgun.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_trenchgun.png",
    "material": {
     "phongExponent": 17,
@@ -12964,14 +12966,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 1,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_ubersaw",
    "name": "Übersaw",
    "model": "models/c_ubersaw.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_ubersaw.png",
    "material": {
     "phongExponent": 25,
@@ -13015,14 +13017,14 @@
      1
     ],
     "modelGlowColor": true
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_winger_pistol",
    "name": "Winger",
    "model": "models/c_winger_pistol.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_winger_pistol.png",
    "material": {
     "phongExponent": 25,
@@ -13052,14 +13054,14 @@
     "rimLightExponent": 4,
     "rimLightBoost": 2,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   },
   {
    "key": "c_wrench",
    "name": "Wrench",
    "model": "models/c_wrench.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
    "icon": "icons/weapons/c_wrench.png",
    "material": {
     "phongExponent": 15,
@@ -13089,9 +13091,7 @@
     "rimLightExponent": 20,
     "rimLightBoost": 0.25,
     "rimMask": false
-   },
-   "compositeWidth": 2048,
-   "compositeHeight": 2048
+   }
   }
  ],
  "materials": {
@@ -15117,81 +15117,6 @@
    "modelGlowColor": true
   }
  },
- "collectionIcons": {
-  "Concealed Killer Collection": "icons/collections/concealed_killer_collection.png",
-  "Craftsmann Collection": "icons/collections/craftsmann_collection.png",
-  "Teufort Collection": "icons/collections/teufort_collection.png",
-  "Powerhouse Collection": "icons/collections/powerhouse_collection.png",
-  "Gun Mettle Cosmetics Collection": "icons/collections/gunmettlecosmetics_collection.png",
-  "Quarantined Collection": "icons/collections/invasion_collection_01_lootlist.png",
-  "Confidential Collection": "icons/collections/invasion_collection_02_lootlist.png",
-  "Gargoyle Collection": "icons/collections/halloween2015_collection_lootlist.png",
-  "Harvest Collection": "icons/collections/tough_break_drop_collection_01.png",
-  "Gentlemanne's Collection": "icons/collections/tough_break_drop_collection_02.png",
-  "Pyroland Collection": "icons/collections/tough_break_case_collection_01_pyroland.png",
-  "Warbird Collection": "icons/collections/tough_break_case_collection_02_warbirds.png",
-  "Tough Break Cosmetics Collection": "icons/collections/toughbreakcosmetics_collection.png",
-  "Mayflower Cosmetics Collection": "icons/collections/mayflowercosmetics_collection.png",
-  "Creepy Crawly Collection": "icons/collections/halloween2016_collection_lootlist.png",
-  "Winter 2016 Cosmetics Collection": "icons/collections/winter2016_cosmetics_collection.png",
-  "Rainy Day Cosmetics Collection": "icons/collections/rainydaycosmetics_collection.png",
-  "Abominable Cosmetic Collection": "icons/collections/campaign3cosmetics_case1_collection.png",
-  "Unleash the Beast Cosmetic Collection": "icons/collections/campaign3cosmetics_case2_collection.png",
-  "Decorated War Hero Collection": "icons/collections/campaign3paintkits_contract1_collection.png",
-  "Contract Campaigner Collection": "icons/collections/campaign3paintkits_contract2_collection.png",
-  "Jungle Jackpot Collection": "icons/collections/campaign3paintkits_case1_collection.png",
-  "Infernal Reward Collection": "icons/collections/campaign3paintkits_case2_collection.png",
-  "Winter 2017 Collection": "icons/collections/winter2017paintkits_collection.png",
-  "Winter 2017 Cosmetics Collection": "icons/collections/winter2017cosmetics_collection.png",
-  "Blue Moon Cosmetics Collection": "icons/collections/bluemooncosmetics_collection.png",
-  "Violet Vermin Collection": "icons/collections/halloween2018_collection.png",
-  "Scream Fortress X Collection": "icons/collections/halloween2018paintkits_collection.png",
-  "Winter 2018 Cosmetics Collection": "icons/collections/winter2018cosmetics_collection.png",
-  "Summer 2019 Cosmetics Collection": "icons/collections/summer2019cosmetics_collection.png",
-  "Spooky Spoils Collection": "icons/collections/halloween2019_collection.png",
-  "Winter 2019 Cosmetics Collection": "icons/collections/winter2019cosmetics_collection.png",
-  "Winter 2019 Collection": "icons/collections/winter2019paintkits_collection.png",
-  "Summer 2020 Cosmetics Collection": "icons/collections/summer2020cosmetics_collection.png",
-  "Wicked Windfall Collection": "icons/collections/halloween2020_collection.png",
-  "Scream Fortress XII Collection": "icons/collections/halloween2020paintkits_collection.png",
-  "Winter 2020 Cosmetics Collection": "icons/collections/winter2020cosmetics_collection.png",
-  "Winter 2020 Collection": "icons/collections/winter2020paintkits_collection.png",
-  "Summer 2021 Cosmetics Collection": "icons/collections/summer2021cosmetics_collection.png",
-  "Crimson Cache Collection": "icons/collections/halloween2021_collection.png",
-  "Scream Fortress XIII Collection": "icons/collections/halloween2021paintkits_collection.png",
-  "Winter 2021 Cosmetics Collection": "icons/collections/winter2021cosmetics_collection.png",
-  "Summer 2022 Cosmetics Collection": "icons/collections/summer2022cosmetics_collection.png",
-  "Ghoulish Gains Collection": "icons/collections/halloween2022_collection.png",
-  "Scream Fortress XIV Collection": "icons/collections/halloween2022paintkits_collection.png",
-  "Winter 2022 Cosmetics Collection": "icons/collections/winter2022cosmetics_collection.png",
-  "Summer 2023 Cosmetics Collection": "icons/collections/summer2023cosmetics_collection.png",
-  "Summer 2023 Collection": "icons/collections/summer2023paintkits_collection.png",
-  "Bone-Chilling Bonanza Collection": "icons/collections/halloween2023_collection.png",
-  "Winter 2023 Cosmetics Collection": "icons/collections/winter2023cosmetics_collection.png",
-  "Summer 2024 Cosmetics Collection": "icons/collections/summer2024cosmetics_collection.png",
-  "Terrifying Trove Collection": "icons/collections/halloween2024_collection.png",
-  "Scream Fortress XVI Collection": "icons/collections/halloween2024paintkits_collection.png",
-  "Winter 2024 Cosmetics Collection": "icons/collections/winter2024cosmetics_collection.png",
-  "Summer 2025 Cosmetics Collection": "icons/collections/summer2025cosmetics_collection.png",
-  "Spectral Stash Collection": "icons/collections/halloween2025_collection.png",
-  "Winter 2025 Cosmetics Collection": "icons/collections/winter2025cosmetics_collection.png",
-  "Summer 2026 Cosmetics Collection": "icons/collections/summer2026cosmetics_collection.png",
-  "Summer 2026 Collection": "icons/collections/summer2026paintkits_collection.png"
- },
- "wearLevels": [
-  0.2,
-  0.4,
-  0.6,
-  0.8,
-  1
- ],
- "wearNames": [
-  "Factory New",
-  "Minimal Wear",
-  "Field-Tested",
-  "Well-Worn",
-  "Battle Scarred"
- ],
  "textures": {
   "textures/models/weapons/c_models/c_pistol/p_pistol_ao.webp": {
    "width": 2048,
@@ -22741,6 +22666,18 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/stickers/blank_s.webp": {
+   "width": 32,
+   "height": 32,
+   "mipCount": 6,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/yeti/banana_blood_buckets.webp": {
    "width": 2048,
    "height": 2048,
@@ -27433,6 +27370,30 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/cig/stickers/crest_heavy001_s.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/crest_balloonicorn001_s.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/cig/stickers/crest_soldier001.webp": {
    "width": 1024,
    "height": 1024,
@@ -27445,7 +27406,31 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/cig/stickers/crest_soldier001_s.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/cig/stickers/crest_scout001.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/crest_scout001_s.webp": {
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
@@ -27470,6 +27455,18 @@
    "noLod": false
   },
   "textures/patterns/cig/stickers/crest_demo001.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/crest_demo001_s.webp": {
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
@@ -27637,6 +27634,18 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/cig/stickers/crest_spy001_s.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/models/weapons/c_models/c_wrench/p_wrench_groups02.webp": {
    "width": 2048,
    "height": 2048,
@@ -27650,6 +27659,18 @@
    "noLod": false
   },
   "textures/patterns/cig/stickers/crest_engy001.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/crest_engy001_s.webp": {
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
@@ -27889,6 +27910,18 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/cig/stickers/crest_medic001_s.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/models/weapons/c_models/c_rocketlauncher/p_rocketlauncher_groups03.webp": {
    "width": 2048,
    "height": 2048,
@@ -27997,7 +28030,115 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/cig/stickers/roulette_ball_s.webp": {
+   "width": 512,
+   "height": 512,
+   "mipCount": 10,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/chip_soldier001_black_s.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/chip_soldier001_yellow_s.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/chip_soldier001_purple_s.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/chip_soldier001_green_s.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/chip_balloonicorn001_s.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/roulette_diamond_s.webp": {
+   "width": 256,
+   "height": 256,
+   "mipCount": 9,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/cig_pinup_soldier_s.webp": {
+   "width": 512,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/cig/stickers/crest_sniper001.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": true,
+   "clampT": true,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/stickers/crest_sniper001_s.webp": {
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
@@ -28231,6 +28372,18 @@
    "mipCount": 12,
    "clampS": false,
    "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/combat/sticker_messerschmitt_s.webp": {
+   "width": 512,
+   "height": 512,
+   "mipCount": 10,
+   "clampS": true,
+   "clampT": true,
    "pointSample": false,
    "trilinear": false,
    "anisotropic": false,
@@ -28765,18 +28918,6 @@
    "noMip": false,
    "noLod": false
   },
-  "textures/models/weapons/c_models/c_knife/c_knife.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
   "textures/models/weapons/c_models/c_medigun/c_medigun_exp.webp": {
    "width": 2048,
    "height": 2048,
@@ -28802,18 +28943,6 @@
    "noLod": false
   },
   "textures/models/weapons/c_models/c_revolver/c_revolver_exp.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/weapons/c_models/c_rocketlauncher/c_rocketlauncher.webp": {
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
@@ -28897,70 +29026,10 @@
    "noMip": false,
    "noLod": false
   },
-  "textures/models/weapons/c_models/c_ubersaw/c_ubersaw.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
   "textures/models/weapons/c_models/c_ubersaw/c_ubersaw_selfillummask.webp": {
    "width": 128,
    "height": 128,
    "mipCount": 8,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_amputator/c_amputator.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_atom_launcher/c_atom_launcher.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_back_scratcher/c_back_scratcher.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_battleaxe/c_battleaxe.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
    "clampS": false,
    "clampT": false,
    "pointSample": false,
@@ -28981,246 +29050,6 @@
    "noMip": false,
    "noLod": false
   },
-  "textures/models/workshop/weapons/c_models/c_bazaar_sniper/c_bazaar_sniper.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_blackbox/c_blackbox.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_claidheamohmor/c_claidheamohmor.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_crusaders_crossbow/c_crusaders_crossbow.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_demo_cannon/c_demo_cannon.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_demo_sultan_sword/c_demo_sultan_sword.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_detonator/c_detonator.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_gatling_gun/c_gatling_gun.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_holymackerel/c_holymackerel.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_jag/c_jag.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_lochnload/c_lochnload.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_quadball/c_quadball.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_reserve_shooter/c_reserve_shooter.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_riding_crop/c_riding_crop.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_russian_riot/c_russian_riot.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_scimitar/c_scimitar.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_scorch_shot/c_scorch_shot.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_shortstop/c_shortstop.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_soda_popper/c_soda_popper.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_tele_shotgun/c_tele_shotgun.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
   "textures/models/workshop/weapons/c_models/c_tele_shotgun/c_tele_shotgun_illum.webp": {
    "width": 128,
    "height": 128,
@@ -29232,270 +29061,81 @@
    "anisotropic": false,
    "noMip": false,
    "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_tomislav/c_tomislav.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_trenchgun/c_trenchgun.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/models/workshop/weapons/c_models/c_winger_pistol/c_winger_pistol.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/stickers/blank_s.webp": {
-   "width": 32,
-   "height": 32,
-   "mipCount": 6,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/crest_heavy001_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/crest_balloonicorn001_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/crest_soldier001_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/crest_scout001_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/crest_demo001_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/crest_spy001_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/crest_engy001_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/crest_medic001_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/roulette_ball_s.webp": {
-   "width": 512,
-   "height": 512,
-   "mipCount": 10,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/chip_soldier001_black_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/chip_soldier001_yellow_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/chip_soldier001_purple_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/chip_soldier001_green_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/chip_balloonicorn001_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/roulette_diamond_s.webp": {
-   "width": 256,
-   "height": 256,
-   "mipCount": 9,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/cig_pinup_soldier_s.webp": {
-   "width": 512,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/cig/stickers/crest_sniper001_s.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
-  "textures/patterns/combat/sticker_messerschmitt_s.webp": {
-   "width": 512,
-   "height": 512,
-   "mipCount": 10,
-   "clampS": true,
-   "clampT": true,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
   }
- }
+ },
+ "collectionIcons": {
+  "Concealed Killer Collection": "icons/collections/concealed_killer_collection.png",
+  "Craftsmann Collection": "icons/collections/craftsmann_collection.png",
+  "Teufort Collection": "icons/collections/teufort_collection.png",
+  "Powerhouse Collection": "icons/collections/powerhouse_collection.png",
+  "Gun Mettle Cosmetics Collection": "icons/collections/gunmettlecosmetics_collection.png",
+  "Quarantined Collection": "icons/collections/invasion_collection_01_lootlist.png",
+  "Confidential Collection": "icons/collections/invasion_collection_02_lootlist.png",
+  "Gargoyle Collection": "icons/collections/halloween2015_collection_lootlist.png",
+  "Harvest Collection": "icons/collections/tough_break_drop_collection_01.png",
+  "Gentlemanne's Collection": "icons/collections/tough_break_drop_collection_02.png",
+  "Pyroland Collection": "icons/collections/tough_break_case_collection_01_pyroland.png",
+  "Warbird Collection": "icons/collections/tough_break_case_collection_02_warbirds.png",
+  "Tough Break Cosmetics Collection": "icons/collections/toughbreakcosmetics_collection.png",
+  "Mayflower Cosmetics Collection": "icons/collections/mayflowercosmetics_collection.png",
+  "Creepy Crawly Collection": "icons/collections/halloween2016_collection_lootlist.png",
+  "Winter 2016 Cosmetics Collection": "icons/collections/winter2016_cosmetics_collection.png",
+  "Rainy Day Cosmetics Collection": "icons/collections/rainydaycosmetics_collection.png",
+  "Abominable Cosmetic Collection": "icons/collections/campaign3cosmetics_case1_collection.png",
+  "Unleash the Beast Cosmetic Collection": "icons/collections/campaign3cosmetics_case2_collection.png",
+  "Decorated War Hero Collection": "icons/collections/campaign3paintkits_contract1_collection.png",
+  "Contract Campaigner Collection": "icons/collections/campaign3paintkits_contract2_collection.png",
+  "Jungle Jackpot Collection": "icons/collections/campaign3paintkits_case1_collection.png",
+  "Infernal Reward Collection": "icons/collections/campaign3paintkits_case2_collection.png",
+  "Winter 2017 Collection": "icons/collections/winter2017paintkits_collection.png",
+  "Winter 2017 Cosmetics Collection": "icons/collections/winter2017cosmetics_collection.png",
+  "Blue Moon Cosmetics Collection": "icons/collections/bluemooncosmetics_collection.png",
+  "Violet Vermin Collection": "icons/collections/halloween2018_collection.png",
+  "Scream Fortress X Collection": "icons/collections/halloween2018paintkits_collection.png",
+  "Winter 2018 Cosmetics Collection": "icons/collections/winter2018cosmetics_collection.png",
+  "Summer 2019 Cosmetics Collection": "icons/collections/summer2019cosmetics_collection.png",
+  "Spooky Spoils Collection": "icons/collections/halloween2019_collection.png",
+  "Winter 2019 Cosmetics Collection": "icons/collections/winter2019cosmetics_collection.png",
+  "Winter 2019 Collection": "icons/collections/winter2019paintkits_collection.png",
+  "Summer 2020 Cosmetics Collection": "icons/collections/summer2020cosmetics_collection.png",
+  "Wicked Windfall Collection": "icons/collections/halloween2020_collection.png",
+  "Scream Fortress XII Collection": "icons/collections/halloween2020paintkits_collection.png",
+  "Winter 2020 Cosmetics Collection": "icons/collections/winter2020cosmetics_collection.png",
+  "Winter 2020 Collection": "icons/collections/winter2020paintkits_collection.png",
+  "Summer 2021 Cosmetics Collection": "icons/collections/summer2021cosmetics_collection.png",
+  "Crimson Cache Collection": "icons/collections/halloween2021_collection.png",
+  "Scream Fortress XIII Collection": "icons/collections/halloween2021paintkits_collection.png",
+  "Winter 2021 Cosmetics Collection": "icons/collections/winter2021cosmetics_collection.png",
+  "Summer 2022 Cosmetics Collection": "icons/collections/summer2022cosmetics_collection.png",
+  "Ghoulish Gains Collection": "icons/collections/halloween2022_collection.png",
+  "Scream Fortress XIV Collection": "icons/collections/halloween2022paintkits_collection.png",
+  "Winter 2022 Cosmetics Collection": "icons/collections/winter2022cosmetics_collection.png",
+  "Summer 2023 Cosmetics Collection": "icons/collections/summer2023cosmetics_collection.png",
+  "Summer 2023 Collection": "icons/collections/summer2023paintkits_collection.png",
+  "Bone-Chilling Bonanza Collection": "icons/collections/halloween2023_collection.png",
+  "Winter 2023 Cosmetics Collection": "icons/collections/winter2023cosmetics_collection.png",
+  "Summer 2024 Cosmetics Collection": "icons/collections/summer2024cosmetics_collection.png",
+  "Terrifying Trove Collection": "icons/collections/halloween2024_collection.png",
+  "Scream Fortress XVI Collection": "icons/collections/halloween2024paintkits_collection.png",
+  "Winter 2024 Cosmetics Collection": "icons/collections/winter2024cosmetics_collection.png",
+  "Summer 2025 Cosmetics Collection": "icons/collections/summer2025cosmetics_collection.png",
+  "Spectral Stash Collection": "icons/collections/halloween2025_collection.png",
+  "Winter 2025 Cosmetics Collection": "icons/collections/winter2025cosmetics_collection.png",
+  "Summer 2026 Cosmetics Collection": "icons/collections/summer2026cosmetics_collection.png",
+  "Summer 2026 Collection": "icons/collections/summer2026paintkits_collection.png"
+ },
+ "wearLevels": [
+  0.2,
+  0.4,
+  0.6,
+  0.8,
+  1
+ ],
+ "wearNames": [
+  "Factory New",
+  "Minimal Wear",
+  "Field-Tested",
+  "Well-Worn",
+  "Battle Scarred"
+ ]
 }
