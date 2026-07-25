@@ -298,7 +298,12 @@ function texturePublicPath(ref: string | undefined | null): string | null {
   p = p.replace(/^materials\//i, '');
   // Some workshop refs carry a stray source-image extension (e.g. foo.tga); strip any of them.
   p = p.replace(/\.(vtf|tga|psd|png|webp)$/i, '');
-  return `textures/${p}.webp`;
+  // Source treats material paths case-insensitively and the pipeline writes
+  // every file lowercased, so a ref's casing is not meaningful. Community
+  // definitions do use mixed case (one asks for patterns/blank_White), which
+  // would 404 against the shipped textures on any case-sensitive host. No
+  // shipped recipe contains an uppercase ref, so this is a no-op for them.
+  return `textures/${p}.webp`.toLowerCase();
 }
 
 // ---------------------------------------------------------------------------

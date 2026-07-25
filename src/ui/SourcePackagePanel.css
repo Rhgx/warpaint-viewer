@@ -25,7 +25,9 @@
   font-size: 11px;
   line-height: 1.5;
 }
-.source-package-empty svg { color: var(--text-dim); opacity: 0.8; }
+/* Only the illustrative icon is dimmed. A descendant selector here also caught
+   the import button's icon, leaving it grey against the button's own text. */
+.source-package-empty > svg { color: var(--text-dim); opacity: 0.8; }
 .source-package-row {
   display: flex;
   align-items: center;

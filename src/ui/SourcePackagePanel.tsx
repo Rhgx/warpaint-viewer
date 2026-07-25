@@ -4,6 +4,7 @@ import {
   LoaderCircle,
   PackageOpen,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import type {
   SourceDiagnostic,
@@ -72,7 +73,7 @@ function ImportPicker({
   const busy = state.status === 'importing';
   return (
     <label className={className} data-busy={busy ? '' : undefined}>
-      <PackageOpen size={12} />
+      <Upload size={12} />
       <span>{label}</span>
       <input
         type="file"
