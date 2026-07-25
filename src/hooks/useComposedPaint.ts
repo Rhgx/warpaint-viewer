@@ -6,6 +6,7 @@ import type { DataSource } from '../data/loader';
 import type { PaintkitEntry } from '../data/types';
 import type { ControlsState } from '../ui/Inspector';
 import type { WarpaintAssetOverrides } from '../ui/CustomWarpaintImport';
+import { isCustomKitId } from '../protodefs/types';
 
 const COMPOSE_BADGE_DELAY_MS = 250;
 const IDLE_TIMEOUT_MS = 2_000;
@@ -289,7 +290,13 @@ export function useComposedPaint({
         })();
       } catch (e) {
         console.error('[warpaint-viewer] compose failed:', e);
-        if (!firstPaintLoggedRef.current) setError(`Failed to prepare initial warpaint: ${String(e)}`);
+        // A failure on the built-in catalogue means the shipped data is broken,
+        // which is worth the fatal screen. An imported paint is user input and
+        // must never be able to take the app down: leave the previous paint on
+        // the mesh and let the drawer report what went wrong.
+        if (!firstPaintLoggedRef.current && !isCustomKitId(selectedKit.id)) {
+          setError(`Failed to prepare initial warpaint: ${String(e)}`);
+        }
       } finally {
         window.clearTimeout(badgeTimer);
         if (!cancelled) setComposing(false);

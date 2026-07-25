@@ -25,6 +25,9 @@ export interface TextureCacheBudgetHints {
 
 const MIB = 1024 * 1024;
 
+// One console warning per ref for the whole session, not one per composite.
+const reportedMissing = new Set<string>();
+
 /**
  * Pick an LRU budget that leaves room for the viewer, compositor targets, and
  * the rest of the page. Source textures can be reloaded; avoiding a GPU reset
@@ -96,6 +99,8 @@ export class TextureCache {
   private pinned = new Set<string>();
   private metadata: Record<string, TextureMetadata>;
   private metadataResolver: ((ref: string) => Partial<TextureMetadata> | undefined) | undefined;
+  /** Refs that would not load and are standing in as white. */
+  readonly missing = new Set<string>();
 
   constructor(resolve: TextureResolver, budgetBytes = textureCacheBudgetBytes(), metadata: Record<string, TextureMetadata> = {}, metadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined) {
     this.resolve = resolve;
@@ -142,7 +147,7 @@ export class TextureCache {
       settled: false,
       failed: false,
     };
-    entry.promise = Promise.resolve(this.resolve(ref)).then((url) => new Promise<THREE.Texture>((resolve, reject) => {
+    entry.promise = Promise.resolve(this.resolve(ref)).then((url) => new Promise<THREE.Texture>((resolve) => {
       this.loader.load(
         url,
         (tex) => {
@@ -184,7 +189,23 @@ export class TextureCache {
         () => {
           entry.settled = true;
           entry.failed = true;
-          reject(new Error(`failed to load texture: ${ref} (${url})`));
+          // An input that will not load must not take the whole composite with
+          // it. An imported war paint routinely names a texture its author did
+          // not ship, and the recipe is otherwise perfectly renderable, so
+          // stand in white: the neutral element of the multiply chains that
+          // dominate these recipes, which leaves the rest of the paint intact
+          // instead of blacking out the weapon or failing the app outright.
+          this.missing.add(ref);
+          if (!reportedMissing.has(ref)) {
+            reportedMissing.add(ref);
+            console.warn(`[warpaint-viewer] missing texture, substituting white: ${ref} (${url})`);
+          }
+          const placeholder = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+          placeholder.colorSpace = THREE.NoColorSpace;
+          placeholder.needsUpdate = true;
+          entry.bytes = 4;
+          this.totalBytes += entry.bytes;
+          resolve(placeholder);
         },
       );
     }));
