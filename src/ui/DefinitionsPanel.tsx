@@ -202,11 +202,8 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
             <ScrollText size={22} />
             <strong>No definitions imported</strong>
             <span>
-              Import a custom war paint's definition files: either the two JSON
-              files it ships (its operation and its definition, in any naming
-              scheme), or a whole proto_defs.vpd container. Mounting the paint's
-              ZIP on the Package tab finds them for you. Textures always come
-              from the mounted package.
+              Import a paint's JSON files or a proto_defs.vpd. Mounting its ZIP
+              on the Package tab finds them for you.
             </span>
             <ImportPicker state={state} label="Import definitions" />
           </div>
