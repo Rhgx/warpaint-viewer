@@ -6,7 +6,7 @@ import { SourceTextureProvider } from '../source/provider';
 
 type StaticPackageSummary = Omit<
   SourcePackageSummary,
-  'usedCount' | 'fallbackCount' | 'nameMatchedCount' | 'ambiguousNameCount'
+  'usedCount' | 'fallbackCount' | 'nameMatchedCount' | 'ambiguousNameCount' | 'appliedMaterialPaths'
 >;
 
 // Package entry indexes never change after opening. Provider activity is much
@@ -24,8 +24,11 @@ function summaryFor(pkg: SourcePackage, provider: SourceTextureProvider): Source
   let summary = staticSummaryCache.get(pkg);
   if (!summary) {
     const counts = new Map<string, number>();
+    let materialCount = 0;
     for (const entry of pkg.entries.values()) {
-      if (!entry.path.startsWith('materials/') || !isSupportedTexturePath(entry.path)) continue;
+      if (!entry.path.startsWith('materials/')) continue;
+      if (sourcePathExtension(entry.path) === 'vmt') { materialCount += 1; continue; }
+      if (!isSupportedTexturePath(entry.path)) continue;
       const extension = sourcePathExtension(entry.path) ?? 'other';
       counts.set(extension, (counts.get(extension) ?? 0) + 1);
     }
@@ -33,6 +36,7 @@ function summaryFor(pkg: SourcePackage, provider: SourceTextureProvider): Source
       name: pkg.name,
       format: pkg.format,
       entryCount: pkg.entries.size,
+      materialCount,
       materialsByExtension: [...counts].sort(([a], [b]) => a.localeCompare(b)).map(([extension, count]) => ({ extension, count })),
     };
     staticSummaryCache.set(pkg, summary);
@@ -42,19 +46,32 @@ function summaryFor(pkg: SourcePackage, provider: SourceTextureProvider): Source
     ...summary,
     usedCount: snapshot.usedPaths.size, fallbackCount: snapshot.fallbackIdentities.size,
     nameMatchedCount: snapshot.nameMatchedPaths.size, ambiguousNameCount: snapshot.ambiguousNameMatches.size,
+    appliedMaterialPaths: [...new Set(snapshot.materialPaths.values())],
   };
 }
 
 /** UI state and transactional ZIP/VPK mounting for the single active package. */
-export function useSourcePackage(fallback: (ref: string) => string, onSuccessfulImport: () => void) {
+export function useSourcePackage(
+  fallback: (ref: string) => string,
+  onSuccessfulImport: () => void,
+  hasBuiltIn: (ref: string) => boolean = () => true,
+) {
   const [activityRevision, setActivityRevision] = useState(0);
   const [state, setState] = useState<Pick<SourcePackageState, 'status' | 'diagnostics' | 'summary'>>({ status: 'empty', diagnostics: [] });
   const [suggestedPaintkitId, setSuggestedPaintkitId] = useState<number | undefined>();
   const fallbackRef = useRef(fallback);
+  const hasBuiltInRef = useRef(hasBuiltIn);
   const importOperationRef = useRef(0);
   fallbackRef.current = fallback;
+  hasBuiltInRef.current = hasBuiltIn;
   const providerRef = useRef<SourceTextureProvider | null>(null);
-  if (!providerRef.current) providerRef.current = new SourceTextureProvider((ref) => fallbackRef.current(ref), () => setActivityRevision((value) => value + 1));
+  if (!providerRef.current) {
+    providerRef.current = new SourceTextureProvider(
+      (ref) => fallbackRef.current(ref),
+      () => setActivityRevision((value) => value + 1),
+      (ref) => hasBuiltInRef.current(ref),
+    );
+  }
   const provider = providerRef.current;
 
   const sync = useCallback(() => {
@@ -69,7 +86,7 @@ export function useSourcePackage(fallback: (ref: string) => string, onSuccessful
     if (!files.length) return;
     const operation = ++importOperationRef.current;
     const format = files.some((file) => file.name.toLowerCase().endsWith('.vpk')) ? 'vpk' : 'zip';
-    setState({ status: 'importing', summary: { name: files[0]?.name ?? 'package', format, entryCount: 0, materialsByExtension: [], usedCount: 0, fallbackCount: 0, nameMatchedCount: 0, ambiguousNameCount: 0 }, diagnostics: [] });
+    setState({ status: 'importing', summary: { name: files[0]?.name ?? 'package', format, entryCount: 0, materialsByExtension: [], usedCount: 0, fallbackCount: 0, nameMatchedCount: 0, ambiguousNameCount: 0, materialCount: 0, appliedMaterialPaths: [] }, diagnostics: [] });
     void (async () => {
       try {
         const zips = files.filter((file) => file.name.toLowerCase().endsWith('.zip'));

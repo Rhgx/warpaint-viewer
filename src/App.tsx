@@ -88,6 +88,7 @@ function MainApp() {
   const { provider: sourceProvider, sourcePackage, packageGeneration, suggestedPaintkitId, removePackage } = useSourcePackage(
     data?.resolveTexture ?? ((ref) => ref),
     () => setAssetOverrideCache({}),
+    (ref) => !!data?.manifest.textures?.[ref],
   );
   const getAssetUrl = useCallback((rel: string) => data?.getAssetUrl(rel) ?? null, [data]);
   const definitions = useCustomDefinitions({
@@ -285,11 +286,19 @@ function MainApp() {
     setLoadedAssetKey('');
     advanceBoot(48, 'Loading initial weapon…');
     const overrideId = selectedKit?.materialOverrides?.[state.weaponKey];
-    const material = (overrideId && data.manifest.materials?.[overrideId]) || weapon.material;
+    const builtInMaterial = (overrideId && data.manifest.materials?.[overrideId]) || weapon.material;
+    // A mounted package may ship its own VMT for this weapon, which the game
+    // would load in place of the stock material. Its parameters replace the
+    // baked-in ones wholesale, the way a Source material does.
+    const applyMaterial = sourceProvider.resolveMaterial(state.weaponKey, overrideId)
+      .then((packaged) => viewer.applyMaterialParams(
+        packaged?.material ?? builtInMaterial,
+        (ref) => sourceProvider.resolve(ref),
+      ));
     void Promise.all([
       viewer.ready(),
       viewer.loadModel(data.getModelUrl(state.weaponKey)),
-      viewer.applyMaterialParams(material, (ref) => sourceProvider.resolve(ref)),
+      applyMaterial,
     ]).then(() => {
       if (cancelled) return;
       setLoadedAssetKey(selectedAssetKey);

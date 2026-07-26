@@ -1,6 +1,7 @@
 import type { TextureMetadata } from '../data/types';
 import type { SourceDiagnostic, SourcePackage } from './contracts';
 import { isSupportedTexturePath, sourcePathExtension, sourceTextureCandidates, sourceTextureIdentity } from './paths';
+import { readPackageWeaponMaterial, type PackageMaterial } from './vmt';
 
 export interface SourceTextureProviderSnapshot {
   package: SourcePackage | null;
@@ -15,6 +16,8 @@ export interface SourceTextureProviderSnapshot {
   nameMatchedPaths: ReadonlyMap<string, string>;
   /** Identities whose filename stem matched two or more package entries, so were deliberately left unmatched. */
   ambiguousNameMatches: ReadonlySet<string>;
+  /** Weapon key -> the package VMT currently standing in for its material. */
+  materialPaths: ReadonlyMap<string, string>;
   diagnostics: readonly SourceDiagnostic[];
 }
 
@@ -33,15 +36,26 @@ export class SourceTextureProvider {
   #ambiguousNameMatches = new Set<string>();
   #nameIndexPackage: SourcePackage | null = null;
   #nameIndexByStem: Map<string, string[]> | null = null;
+  #materials = new Map<string, Promise<PackageMaterial | null>>();
+  #materialPaths = new Map<string, string>();
   #diagnostics: SourceDiagnostic[] = [];
   #notificationPending = false;
   #notificationToken = 0;
   private readonly fallback: (ref: string) => string;
   private readonly onChange: (() => void) | undefined;
+  private readonly hasBuiltIn: (ref: string) => boolean;
 
-  constructor(fallback: (ref: string) => string, onChange?: () => void) {
+  constructor(
+    fallback: (ref: string) => string,
+    onChange?: () => void,
+    /** Whether the viewer ships a texture, used to keep import warnings to
+     * inputs that really have nowhere to come from. Assumes it does when the
+     * caller cannot say. */
+    hasBuiltIn: (ref: string) => boolean = () => true,
+  ) {
     this.fallback = fallback;
     this.onChange = onChange;
+    this.hasBuiltIn = hasBuiltIn;
   }
 
   get generation(): number { return this.#generation; }
@@ -55,6 +69,7 @@ export class SourceTextureProvider {
       fallbackIdentities: this.#fallbackIdentities,
       nameMatchedPaths: this.#nameMatchedPaths,
       ambiguousNameMatches: this.#ambiguousNameMatches,
+      materialPaths: this.#materialPaths,
       diagnostics: this.#diagnostics,
     };
   }
@@ -146,10 +161,101 @@ export class SourceTextureProvider {
     return url;
   }
 
+  /**
+   * The material this package supplies for a weapon, or null to keep the
+   * viewer's built-in one. War paint packs ship replacement VMTs alongside
+   * their textures (a glow pass, an alpha-tested body, different phong), and
+   * manifest.json only ever carries the stock weapon material.
+   */
+  async resolveMaterial(weaponKey: string, materialOverrideId?: string): Promise<PackageMaterial | null> {
+    const pkg = this.#package;
+    if (!pkg || !weaponKey) return null;
+    const key = `${this.#generation}:${weaponKey}:${materialOverrideId ?? ''}`;
+    const cached = this.#materials.get(key);
+    if (cached) return cached;
+    const generation = this.#generation;
+    const load = this.#loadMaterial(pkg, weaponKey, materialOverrideId, generation);
+    this.#materials.set(key, load);
+    return load;
+  }
+
+  async #loadMaterial(
+    pkg: SourcePackage,
+    weaponKey: string,
+    materialOverrideId: string | undefined,
+    generation: number,
+  ): Promise<PackageMaterial | null> {
+    const lookup = await readPackageWeaponMaterial(pkg, weaponKey, materialOverrideId);
+    // A package removed or replaced mid-read must leave no trace behind.
+    if (generation !== this.#generation || pkg !== this.#package) return null;
+    if (lookup.status === 'none') return null;
+    if (lookup.status === 'ambiguous') {
+      this.#addDiagnostic({
+        id: `material-ambiguous:${weaponKey}`,
+        level: 'warning',
+        message: `Several materials in this package are named ${weaponKey}.vmt, so the built-in material was kept.`,
+        detail: lookup.paths.join(', '),
+      });
+      return null;
+    }
+    if (lookup.status === 'failed') {
+      this.#addDiagnostic({
+        id: `material-failed:${lookup.path}`,
+        level: 'warning',
+        message: 'Could not read this package material; the built-in one was used instead.',
+        detail: `${lookup.path}: ${lookup.message}`,
+      });
+      return null;
+    }
+
+    const { material } = lookup;
+    this.#recordUsed(material.path);
+    if (this.#materialPaths.get(weaponKey) !== material.path) {
+      this.#materialPaths.set(weaponKey, material.path);
+      this.#notifySoon();
+    }
+    if (material.nameMatched) {
+      this.#addDiagnostic({
+        id: `material-name-matched:${material.path}`,
+        level: 'info',
+        message: 'Bound this material by file name; the package does not place it at a Source material path.',
+        detail: material.path,
+      });
+    }
+    if (material.unsupported.length) {
+      this.#addDiagnostic({
+        id: `material-unsupported:${material.path}`,
+        level: 'warning',
+        message: `This material uses ${listPhrase(material.unsupported)}, which this viewer does not reproduce.`,
+        detail: material.path,
+      });
+    }
+    // Naming a stock TF2 texture the package does not carry is normal and
+    // resolves against the built-ins. Only inputs neither side has are worth
+    // a warning, because those simply do not get drawn.
+    const unresolvable = material.missingTextures.filter((ref) => !this.hasBuiltIn(ref));
+    if (unresolvable.length) {
+      this.#addDiagnostic({
+        id: `material-missing-textures:${material.path}`,
+        level: 'warning',
+        message: `This material names ${unresolvable.length.toLocaleString()} texture${unresolvable.length === 1 ? '' : 's'} that neither the package nor this viewer has, so ${unresolvable.length === 1 ? 'it is' : 'they are'} left out.`,
+        detail: unresolvable.join(', '),
+      });
+    }
+    return material;
+  }
+
+  #addDiagnostic(diagnostic: SourceDiagnostic): void {
+    if (this.#diagnostics.some((entry) => entry.id === diagnostic.id)) return;
+    this.#diagnostics.push(diagnostic);
+    this.#notifySoon();
+  }
+
   #clearTransientState(): void {
     for (const url of this.#urls.values()) URL.revokeObjectURL(url);
     this.#urls.clear(); this.#metadata.clear(); this.#loads.clear(); this.#usedPaths.clear(); this.#fallbackIdentities.clear();
     this.#nameMatchedPaths.clear(); this.#ambiguousNameMatches.clear();
+    this.#materials.clear(); this.#materialPaths.clear();
     this.#nameIndexPackage = null; this.#nameIndexByStem = null;
   }
 
@@ -224,6 +330,11 @@ export class SourceTextureProvider {
     this.#notificationToken += 1;
     this.onChange?.();
   }
+}
+
+function listPhrase(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
 /**

@@ -32,6 +32,10 @@ export interface SourcePackageSummary {
    */
   nameMatchedCount: number;
   ambiguousNameCount: number;
+  /** `.vmt` files under materials/, whether or not any weapon uses them. */
+  materialCount: number;
+  /** Package paths of the materials standing in for a weapon's built-in one. */
+  appliedMaterialPaths: string[];
 }
 
 export interface SourcePackageState {
@@ -156,6 +160,18 @@ export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
             <span data-emphasis="">
               {summary.usedCount.toLocaleString()} used
             </span>
+            {summary.appliedMaterialPaths.length > 0 ? (
+              <span
+                data-emphasis=""
+                title={`This package's material replaces the viewer's built-in one: ${summary.appliedMaterialPaths.join(', ')}`}
+              >
+                {summary.appliedMaterialPaths.length.toLocaleString()} VMT applied
+              </span>
+            ) : summary.materialCount > 0 && (
+              <span title="This package ships materials, but none of them is named for a weapon the viewer can show yet. Pick the weapon the material was authored for.">
+                {plural(summary.materialCount, 'VMT')}
+              </span>
+            )}
             {summary.fallbackCount > 0 && (
               <span title="Recipe inputs this package does not provide, which fall back to the viewer's built-in textures">
                 {summary.fallbackCount.toLocaleString()} built-in
