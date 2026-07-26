@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import * as THREE from 'three';
-import { Compositor } from '../compositor';
+import { Compositor, textureUvMatrix } from '../compositor/compositor';
 import type { RecipeNode } from '../compositor/types';
 import { createUnusualEffect } from '../viewer/particles';
 
@@ -430,6 +430,18 @@ export function SelfTestPage() {
     const out: Result[] = [];
 
     (async () => {
+      // Source composes texture transforms as R * S * T about UV origin.
+      // This specifically guards authored offsets such as Heatcast Black Box's
+      // scale=2, translateV=.335 from regressing to a centered transform.
+      const transformedUv = new THREE.Vector2(0.1, 0.2).applyMatrix3(
+        textureUvMatrix(90, 0.25, 0.5, 2, false, false),
+      );
+      out.push({
+        name: 'Texture transform uses Source R * S * T order',
+        pass: Math.abs(transformedUv.x - -1.4) < 1e-6 && Math.abs(transformedUv.y - 0.7) < 1e-6,
+        got: [transformedUv.x, transformedUv.y],
+        expected: [-1.4, 0.7],
+      });
       for (const c of cases) {
         const res = await comp.compose(c.recipe, '1');
         const buf = comp.readPixels(res.target);

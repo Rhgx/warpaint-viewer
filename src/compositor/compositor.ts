@@ -38,6 +38,33 @@ const IDENTITY_TRANSFORM: ResolvedTransform = {
   flipU: false, flipV: false,
 };
 
+// Match CTCTextureStage::ComputeRandomValuesThis in Source:
+//   MatrixBuildRotateZ(matrix, rotation);
+//   matrix = matrix.Scale(scale);
+//   MatrixTranslate(matrix, translation);
+// MatrixTranslate post-multiplies, so column-vector UVs are transformed by
+// R * S * T. The transform is deliberately about the UV origin; centering it
+// changes authored translations whenever scale or rotation is non-identity.
+export function textureUvMatrix(
+  rotationDeg: number,
+  translateU: number,
+  translateV: number,
+  scale: number,
+  flipU: boolean,
+  flipV: boolean,
+): THREE.Matrix3 {
+  const rad = (rotationDeg * Math.PI) / 180;
+  const c = Math.cos(rad);
+  const s = Math.sin(rad);
+  const sx = scale * (flipU ? -1 : 1);
+  const sy = scale * (flipV ? -1 : 1);
+  return new THREE.Matrix3().set(
+    c * sx, -s * sy, c * sx * translateU - s * sy * translateV,
+    s * sx, c * sy, s * sx * translateU + c * sy * translateV,
+    0, 0, 1,
+  );
+}
+
 interface EvaluatedInput {
   texture: THREE.Texture;
   transform: ResolvedTransform;
@@ -226,27 +253,6 @@ export class Compositor {
     this.renderer.setRenderTarget(prev);
   }
 
-  private uvMatrix(rotationDeg: number, tu: number, tv: number, scale: number, flipU: boolean, flipV: boolean): THREE.Matrix3 {
-    // uv' = translate + R * S * (uv - 0.5) + 0.5, applied to a homogeneous vec3.
-    const rad = (rotationDeg * Math.PI) / 180;
-    const c = Math.cos(rad);
-    const s = Math.sin(rad);
-    const sx = scale * (flipU ? -1 : 1);
-    const sy = scale * (flipV ? -1 : 1);
-    // Compose about center 0.5,0.5 then translate.
-    const m = new THREE.Matrix3();
-    // column-major set(): three's Matrix3.set takes row-major args.
-    // Build M = T(0.5+tu,0.5+tv) * R * S * T(-0.5,-0.5)
-    const t1 = new THREE.Matrix3().set(1, 0, -0.5, 0, 1, -0.5, 0, 0, 1);
-    const S = new THREE.Matrix3().set(sx, 0, 0, 0, sy, 0, 0, 0, 1);
-    const R = new THREE.Matrix3().set(c, -s, 0, s, c, 0, 0, 0, 1);
-    const t2 = new THREE.Matrix3().set(1, 0, 0.5 + tu, 0, 1, 0.5 + tv, 0, 0, 1);
-    m.multiplyMatrices(t2, R);
-    m.multiply(S);
-    m.multiply(t1);
-    return m;
-  }
-
   // Set ALL sampler uniforms for a pass. Unused slots get a dummy texture.
   // CRITICAL: the fragment shader declares uTex0/1/2 as active samplers in every
   // mode, so three.js binds whatever the uniforms reference on EVERY draw. If a
@@ -300,7 +306,7 @@ export class Compositor {
       (adjusts[index].value as THREE.Vector3).set(t.black, t.white, t.gamma);
       srgb[index].value = 1;
       (matrices[index].value as THREE.Matrix3).copy(
-        this.uvMatrix(t.rotationDeg, t.translateU, t.translateV, t.scale, t.flipU, t.flipV),
+        textureUvMatrix(t.rotationDeg, t.translateU, t.translateV, t.scale, t.flipU, t.flipV),
       );
     });
   }
@@ -392,7 +398,7 @@ export class Compositor {
         u.uSrgb2.value = 1;
         (u.uAdjust0.value as THREE.Vector3).set(t.black, t.white, t.gamma);
         (u.uUv0.value as THREE.Matrix3).copy(
-          this.uvMatrix(t.rotationDeg, t.translateU, t.translateV, t.scale, t.flipU, t.flipV),
+          textureUvMatrix(t.rotationDeg, t.translateU, t.translateV, t.scale, t.flipU, t.flipV),
         );
         (u.uAdjust1.value as THREE.Vector3).set(node.black, node.white, node.gamma);
         (u.uDestTl.value as THREE.Vector2).set(node.destTl[0], node.destTl[1]);
