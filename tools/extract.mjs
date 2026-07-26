@@ -381,6 +381,16 @@ async function main() {
   const paintIconRefByKit = new Map(); // paintkit id -> representative pattern texture ref
   const weaponRegistry = new Map(); // weaponKey -> { key, name, itemDefIndex, modelPath }
   const allTextureRefs = new Set();
+  // Lightwarps are shipped whole rather than only where a stock weapon material
+  // names one. A custom VMT imported at runtime (src/source/vmt.ts) is free to
+  // ask for any of them, and regularly does: Ghastly Guns lights its weapons
+  // with the Pyro's. There are only ~37 in the game and each is a ramp of a few
+  // KB, so the whole set costs less than guessing which ones authors will want.
+  for (const vpkPath of compositorVpkPaths) {
+    if (!/lightwarp[^/]*\.vtf$/i.test(vpkPath)) continue;
+    const ref = texturePublicPath(vpkPath);
+    if (ref) allTextureRefs.add(ref);
+  }
   const recipesToWrite = []; // { kitId, key, tree }
   const skipped = [];
   let recipeCount = 0;
