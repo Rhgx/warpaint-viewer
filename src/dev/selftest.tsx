@@ -442,6 +442,16 @@ export function SelfTestPage() {
         got: [transformedUv.x, transformedUv.y],
         expected: [-1.4, 0.7],
       });
+      const flippedUv = new THREE.Vector2(0.1, 0.2).applyMatrix3(
+        textureUvMatrix(45, 0, 0, 1, true, false),
+      );
+      out.push({
+        name: 'Texture flip applies after rotation',
+        pass: Math.abs(flippedUv.x - 1.070710678) < 1e-6
+          && Math.abs(flippedUv.y - 0.212132034) < 1e-6,
+        got: [flippedUv.x, flippedUv.y],
+        expected: [1.070710678, 0.212132034],
+      });
       for (const c of cases) {
         const res = await comp.compose(c.recipe, '1');
         const buf = comp.readPixels(res.target);

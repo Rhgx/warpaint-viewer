@@ -43,8 +43,12 @@ const IDENTITY_TRANSFORM: ResolvedTransform = {
 //   matrix = matrix.Scale(scale);
 //   MatrixTranslate(matrix, translation);
 // MatrixTranslate post-multiplies, so column-vector UVs are transformed by
-// R * S * T. The transform is deliberately about the UV origin; centering it
-// changes authored translations whenever scale or rotation is non-identity.
+// R * S * T. Source applies its optional U/V reflection to the resulting
+// texture coordinates, so the full order is F * R * S * T. Folding the flip
+// into S instead would reflect the input axis before rotation; at 45 degrees
+// that changes a stripe's slope rather than only mirroring the stripe texture.
+// The transform is deliberately about the UV origin; centering it changes
+// authored translations whenever scale or rotation is non-identity.
 export function textureUvMatrix(
   rotationDeg: number,
   translateU: number,
@@ -56,11 +60,13 @@ export function textureUvMatrix(
   const rad = (rotationDeg * Math.PI) / 180;
   const c = Math.cos(rad);
   const s = Math.sin(rad);
-  const sx = scale * (flipU ? -1 : 1);
-  const sy = scale * (flipV ? -1 : 1);
+  const fx = flipU ? -1 : 1;
+  const fy = flipV ? -1 : 1;
+  const tx = scale * (c * translateU - s * translateV);
+  const ty = scale * (s * translateU + c * translateV);
   return new THREE.Matrix3().set(
-    c * sx, -s * sy, c * sx * translateU - s * sy * translateV,
-    s * sx, c * sy, s * sx * translateU + c * sy * translateV,
+    fx * c * scale, fx * -s * scale, fx * tx + (flipU ? 1 : 0),
+    fy * s * scale, fy * c * scale, fy * ty + (flipV ? 1 : 0),
     0, 0, 1,
   );
 }
