@@ -195,17 +195,21 @@ const KNOWN_SHADERS = new Set(['vertexlitgeneric', 'unlitgeneric', 'skin', 'weap
 /**
  * VMT parameters that visibly change a weapon in game but that this viewer
  * does not reproduce, so an imported material can say so rather than silently
- * dropping them. Detail blending is the notable one: modes 5 and 6 (the modes
- * war paint packs use for a wear pass) feed Source's self-illumination rather
- * than the albedo, so leaving them out is closer than guessing at the blend.
+ * dropping them.
  */
 const UNSUPPORTED_PARAMETERS: { key: string; label: string }[] = [
-  { key: '$detail', label: 'detail/wear texture blending' },
   { key: '$translucent', label: 'sorted translucency' },
   { key: '$additive', label: 'additive blending' },
   { key: '$envmapmask', label: 'a separate env-map mask texture' },
   { key: '$blendtintbybasealpha', label: 'base-alpha tint blending' },
 ];
+
+/**
+ * Detail blend modes this viewer implements, which is every TCOMBINE_* mode
+ * from common_ps_fxc.h except the two self-shadowed-bump ones: those read the
+ * detail texture as an ssbump basis, and nothing in the viewer produces one.
+ */
+const SUPPORTED_DETAIL_MODES = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
 export interface ParsedVmt {
   shader: string;
@@ -240,6 +244,8 @@ export function parseWeaponMaterialVmt(text: string): ParsedVmt {
   const selfIllum = vmtBool(body, '$selfillum');
   const selfIllumMask = selfIllum ? texturePublicPath(kvString(kvGet(body, '$selfillummask'))) : null;
   const emissiveBlend = vmtBool(body, '$emissiveblendenabled');
+  const detailTexture = texturePublicPath(kvString(kvGet(body, '$detail')));
+  const detailBlendMode = Math.trunc(vmtNumber(body, '$detailblendmode', 0));
 
   const material: WeaponMaterial = {
     phongExponent: phongExponent ? phongExponent[0] : null,
@@ -274,14 +280,27 @@ export function parseWeaponMaterialVmt(text: string): ParsedVmt {
       // A material that asks for alpha testing without naming a cutoff gets
       // the shader's own default rather than "discard nothing".
       alphaTestReference: vmtNumber(body, '$alphatestreference', 0.5) || 0.5,
+      // Without this the test is a binary cut, which is not what a war paint
+      // whose composited alpha sits just over the reference is asking for.
+      alphaToCoverage: vmtBool(body, '$allowalphatocoverage'),
     } : {}),
+    // Defaults from vertexlitgeneric_dx9_helper.cpp InitParamsVertexLitGeneric.
+    ...(detailTexture && SUPPORTED_DETAIL_MODES.has(detailBlendMode) ? {
+      detailTexture,
+      detailBlendMode,
+      detailScale: vmtNumber(body, '$detailscale', 4),
+      detailBlendFactor: vmtNumber(body, '$detailblendfactor', 1),
+      detailTint: vmtColor(body, '$detailtint', [1, 1, 1]),
+    } : {}),
+    // Defaults from the SHADER_PARAM declarations in vertexlitgeneric_dx9.cpp.
     ...(emissiveBlend ? {
       emissiveBlend: true,
       emissiveBlendStrength: vmtNumber(body, '$emissiveblendstrength', 1),
       emissiveBlendTint: vmtColor(body, '$emissiveblendtint', [1, 1, 1]),
       emissiveBlendBaseTexture: texturePublicPath(kvString(kvGet(body, '$emissiveblendbasetexture'))),
       emissiveBlendTexture: texturePublicPath(kvString(kvGet(body, '$emissiveblendtexture'))),
-      emissiveBlendScrollVector: [scroll?.[0] ?? 0, scroll?.[1] ?? 0] as [number, number],
+      emissiveBlendFlowTexture: texturePublicPath(kvString(kvGet(body, '$emissiveblendflowtexture'))),
+      emissiveBlendScrollVector: [scroll?.[0] ?? 0.11, scroll?.[1] ?? 0.124] as [number, number],
     } : {}),
   };
 
@@ -290,8 +309,10 @@ export function parseWeaponMaterialVmt(text: string): ParsedVmt {
     material.phongExponentTexture,
     material.lightwarpTexture,
     material.selfIllumMask,
+    material.detailTexture,
     material.emissiveBlendBaseTexture,
     material.emissiveBlendTexture,
+    material.emissiveBlendFlowTexture,
   ].filter((ref): ref is string => !!ref);
 
   const unsupported = UNSUPPORTED_PARAMETERS
@@ -301,12 +322,8 @@ export function parseWeaponMaterialVmt(text: string): ParsedVmt {
   if (!KNOWN_SHADERS.has(shader.toLowerCase())) {
     unsupported.push(`the ${shader} shader (drawn as VertexLitGeneric)`);
   }
-  // The emissive pass is reproduced as strength * tint * base * mask, with the
-  // scroll vector animating the base sample. A flow texture distorts that
-  // sample in game, which only shows up once something is actually scrolling.
-  const scrolls = (scroll?.[0] ?? 0) !== 0 || (scroll?.[1] ?? 0) !== 0;
-  if (emissiveBlend && scrolls && kvGet(body, '$emissiveblendflowtexture') !== undefined) {
-    unsupported.push('emissive flow distortion');
+  if (detailTexture && !SUPPORTED_DETAIL_MODES.has(detailBlendMode)) {
+    unsupported.push(`detail blend mode ${detailBlendMode}`);
   }
 
   return { shader, material, textureRefs, unsupported };

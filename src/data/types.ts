@@ -31,14 +31,25 @@ export interface WeaponMaterial {
   // pipeline never writes them into manifest.json.
   alphaTest?: boolean;
   alphaTestReference?: number;
+  /**
+   * $allowalphatocoverage. Turns the tested alpha into multisample coverage,
+   * so a material whose alpha sits just above the reference renders partly
+   * see-through instead of simply passing the test.
+   */
+  alphaToCoverage?: boolean;
+  /** $detail and friends, combined per common_ps_fxc.h TextureCombine. */
+  detailTexture?: string | null;
+  detailScale?: number;
+  detailBlendFactor?: number;
+  detailBlendMode?: number;
+  detailTint?: [number, number, number] | null;
+  /** $EmissiveBlendEnabled: a second additive pass over the weapon. */
   emissiveBlend?: boolean;
   emissiveBlendStrength?: number;
   emissiveBlendTint?: [number, number, number] | null;
-  /** The glowing color texture ($EmissiveBlendBaseTexture). */
   emissiveBlendBaseTexture?: string | null;
-  /** The mask that decides where the glow shows ($EmissiveBlendTexture). */
   emissiveBlendTexture?: string | null;
-  /** UV units per second the glow scrolls by. */
+  emissiveBlendFlowTexture?: string | null;
   emissiveBlendScrollVector?: [number, number];
 }
 

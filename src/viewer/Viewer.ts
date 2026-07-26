@@ -15,6 +15,13 @@ import {
   SHEEN_MASK_FRAMES,
 } from './sheen';
 import type { SheenAssets, SheenFrameData } from './sheen';
+import {
+  createEmissiveMaterial,
+  configureEmissiveTexture,
+  whiteTexture,
+  EMISSIVE_DEFAULT_SCROLL,
+  EMISSIVE_DEFAULT_STRENGTH,
+} from './emissive';
 import { createUnusualEffect, setParticlePointScale } from './particles';
 import type { UnusualEffect } from './particles';
 import type { WeaponMaterial } from '../data/types';
@@ -54,12 +61,7 @@ export class Viewer {
   private exponentTexture: THREE.Texture | null = null;
   private lightwarpTexture: THREE.Texture | null = null;
   private selfIllumTexture: THREE.Texture | null = null;
-  private emissiveBaseTexture: THREE.Texture | null = null;
-  private emissiveMaskTexture: THREE.Texture | null = null;
-  // $EmissiveBlendScrollVector, in UV units per second. Non-zero only for an
-  // imported material that asks the glow to move; the render loop then keeps
-  // frames coming the way it does for the sheen sweep.
-  private emissiveScroll = new THREE.Vector2();
+  private detailTexture: THREE.Texture | null = null;
   private materialLoadToken = 0;
   private tf2Uniforms = {
     uTf2PhongEnabled: { value: 0 },
@@ -88,13 +90,13 @@ export class Viewer {
     uTf2SelfIllumFresnel: { value: 0 },
     uTf2SelfIllumFresnelParams: { value: new THREE.Vector4(1, 0, 1, 1) },
     uTf2EnvTint: { value: new THREE.Color(0, 0, 0) },
-    uTf2EmissiveBlend: { value: 0 },
-    uTf2EmissiveStrength: { value: 1 },
-    uTf2EmissiveTint: { value: new THREE.Color(1, 1, 1) },
-    uTf2EmissiveBaseMap: { value: null as THREE.Texture | null },
-    uTf2EmissiveMaskMap: { value: null as THREE.Texture | null },
-    uTf2EmissiveUseMask: { value: 0 },
-    uTf2EmissiveOffset: { value: new THREE.Vector2() },
+    uTf2AlphaTestRef: { value: 0 },
+    uTf2Detail: { value: 0 },
+    uTf2DetailMap: { value: null as THREE.Texture | null },
+    uTf2DetailMode: { value: 0 },
+    uTf2DetailScale: { value: 4 },
+    uTf2DetailFactor: { value: 1 },
+    uTf2DetailTint: { value: new THREE.Color(1, 1, 1) },
     uTf2AmbientCube: { value: Array.from({ length: 6 }, () => new THREE.Vector3(0.4, 0.4, 0.4)) },
     uTf2AmbientBasis: { value: new THREE.Matrix3() },
   };
@@ -129,6 +131,14 @@ export class Viewer {
   private sheenElapsed = 0;
   private sheenFrameData: SheenFrameData = { scaleX: 1, offsetX: 0, scaleY: 1, offsetY: 0, sweepAxis: 0, sideAxis: 1 };
   private meshIsLens: boolean[] = [];
+
+  // $EmissiveBlend pass: like the sheen, a second material over per-mesh
+  // clones of the weapon geometry, created on demand by an imported material.
+  private emissiveMaterial: THREE.ShaderMaterial | null = null;
+  private emissiveMeshes: THREE.Mesh[] = [];
+  private emissiveTextures: THREE.Texture[] = [];
+  private emissiveEnabled = false;
+  private emissiveElapsed = 0;
 
   // Orthographic projection: derived every frame from the perspective camera,
   // which InspectControls always drives.
@@ -249,12 +259,15 @@ export class Viewer {
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
     this.lastTime = now;
     const controlsAnimating = this.controls.update(dt);
-    const emissiveAnimating = this.tf2Uniforms.uTf2EmissiveBlend.value > 0 && this.emissiveScroll.lengthSq() > 0;
-    if (emissiveAnimating) {
-      // Wrapped into one UV tile so a long session cannot drift the offset out
-      // of the range where float precision still resolves texels.
-      const offset = this.tf2Uniforms.uTf2EmissiveOffset.value;
-      offset.set((offset.x + this.emissiveScroll.x * dt) % 1, (offset.y + this.emissiveScroll.y * dt) % 1);
+    // The pass reads $time, which only moves the picture when the scroll
+    // vector is non-zero. Wrapped so a long session cannot drift the sample
+    // out of the range where float precision still resolves texels.
+    const scroll: THREE.Vector2 | undefined = this.emissiveMaterial?.uniforms.uEmissiveScroll.value;
+    const emissiveAnimating = this.emissiveEnabled && !!scroll && scroll.lengthSq() > 0;
+    if (emissiveAnimating && this.emissiveMaterial) {
+      const period = Math.max(1 / Math.max(Math.abs(scroll.x), Math.abs(scroll.y)), 1);
+      this.emissiveElapsed = (this.emissiveElapsed + dt) % period;
+      this.emissiveMaterial.uniforms.uEmissiveTime.value = this.emissiveElapsed;
     }
     // Panning is a framing operation, not physical movement through the map.
     // Move the light rig with the model's translation, but not its rotation.
@@ -575,14 +588,53 @@ uniform float uTf2PhongBoost, uTf2PhongExponent, uTf2PhongExponentFactor;
 uniform float uTf2UseExponentMap, uTf2UseLightwarp, uTf2HalfLambert, uTf2AlbedoTint, uTf2UsePhongTint;
 uniform float uTf2RimLight, uTf2RimExponent, uTf2RimBoost, uTf2RimMask;
 uniform float uTf2SelfIllum, uTf2SelfIllumFresnel, uTf2UseSelfIllumMask;
-uniform float uTf2EmissiveBlend, uTf2EmissiveStrength, uTf2EmissiveUseMask;
-uniform sampler2D uTf2ExponentMap, uTf2LightwarpMap, uTf2SelfIllumMaskMap;
-uniform sampler2D uTf2EmissiveBaseMap, uTf2EmissiveMaskMap;
-uniform vec3 uTf2PhongTint, uTf2Fresnel, uTf2SelfIllumTint, uTf2EnvTint, uTf2EmissiveTint;
-uniform vec2 uTf2EmissiveOffset;
+uniform float uTf2AlphaTestRef;
+uniform float uTf2Detail, uTf2DetailMode, uTf2DetailScale, uTf2DetailFactor;
+uniform sampler2D uTf2ExponentMap, uTf2LightwarpMap, uTf2SelfIllumMaskMap, uTf2DetailMap;
+uniform vec3 uTf2PhongTint, uTf2Fresnel, uTf2SelfIllumTint, uTf2EnvTint, uTf2DetailTint;
 uniform vec4 uTf2SelfIllumFresnelParams;
 uniform vec3 uTf2AmbientCube[6];
 uniform mat3 uTf2AmbientBasis;
+// common_ps_fxc.h TextureCombine, verbatim apart from dropping the modes that
+// need inputs this viewer has no equivalent for (ssbump). Mode numbers are the
+// TCOMBINE_* values a VMT names through $detailblendmode.
+vec4 tf2TextureCombine( vec4 baseColor, vec4 detailColor, float mode, float blendFactor ) {
+  if ( mode == 7.0 ) { // MOD2X_SELECT_TWO_PATTERNS
+    vec3 dc = vec3( mix( detailColor.r, detailColor.a, baseColor.a ) );
+    baseColor.rgb *= mix( vec3( 1.0 ), 2.0 * dc, blendFactor );
+  }
+  if ( mode == 0.0 ) // RGB_EQUALS_BASE_x_DETAILx2
+    baseColor.rgb *= mix( vec3( 1.0 ), 2.0 * detailColor.rgb, blendFactor );
+  if ( mode == 1.0 ) // RGB_ADDITIVE
+    baseColor.rgb += blendFactor * detailColor.rgb;
+  if ( mode == 2.0 ) // DETAIL_OVER_BASE
+    baseColor.rgb = mix( baseColor.rgb, detailColor.rgb, blendFactor * detailColor.a );
+  if ( mode == 3.0 ) // FADE
+    baseColor = mix( baseColor, detailColor, blendFactor );
+  if ( mode == 4.0 ) { // BASE_OVER_DETAIL
+    baseColor.rgb = mix( baseColor.rgb, detailColor.rgb, blendFactor * ( 1.0 - baseColor.a ) );
+    baseColor.a = detailColor.a;
+  }
+  if ( mode == 8.0 ) // MULTIPLY
+    baseColor = mix( baseColor, baseColor * detailColor, blendFactor );
+  if ( mode == 9.0 ) // MASK_BASE_BY_DETAIL_ALPHA
+    baseColor.a = mix( baseColor.a, baseColor.a * detailColor.a, blendFactor );
+  return baseColor;
+}
+// TextureCombinePostLighting: modes 5 and 6 leave the albedo alone and add to
+// the lit diffuse instead, which is why a war paint's wear pass shows up as
+// light rather than as a darker albedo.
+vec3 tf2TextureCombinePostLighting( vec3 litBaseColor, vec4 detailColor, float mode, float blendFactor ) {
+  if ( mode == 5.0 ) // RGB_ADDITIVE_SELFILLUM
+    litBaseColor += blendFactor * detailColor.rgb;
+  if ( mode == 6.0 ) { // RGB_ADDITIVE_SELFILLUM_THRESHOLD_FADE
+    float f = blendFactor - 0.5;
+    float fMult = ( f >= 0.0 ) ? 1.0 / blendFactor : 4.0 * blendFactor;
+    float fAdd = ( f >= 0.0 ) ? 1.0 - fMult : -0.5 * fMult;
+    litBaseColor += saturate( fMult * detailColor.rgb + fAdd );
+  }
+  return litBaseColor;
+}
 vec3 tf2AmbientLight( vec3 worldNormal ) {
   vec3 sourceNormal = normalize( uTf2AmbientBasis * worldNormal );
   vec3 n2 = sourceNormal * sourceNormal;
@@ -614,7 +666,33 @@ float specularStrength = uTf2PhongEnabled * uTf2PhongBoost * tf2SpecMask;`,
         `#ifdef USE_MAP
   vec4 sampledDiffuseColor = sRGBTransferEOTF( texture2D( map, vMapUv ) );
   diffuseColor *= sampledDiffuseColor;
+#endif
+// $detail, sampled at base UV * $detailscale (the detail transform is the base
+// transform scaled, see BaseVSShader SetVertexShaderTextureScaledTransform).
+// Kept in scope because modes 5 and 6 need it again after lighting.
+vec4 tf2DetailColor = vec4( 1.0 );
+#ifdef USE_MAP
+if ( uTf2Detail > 0.0 ) {
+  vec4 tf2DetailTexel = texture2D( uTf2DetailMap, vMapUv * uTf2DetailScale );
+  // vertexlitgeneric_dx9_helper.cpp loads $detail with TEXTUREFLAGS_SRGB for
+  // every blend mode except Mod2X, which reads it raw.
+  tf2DetailColor = uTf2DetailMode == 0.0 ? tf2DetailTexel : sRGBTransferEOTF( tf2DetailTexel );
+  tf2DetailColor.rgb *= uTf2DetailTint;
+  diffuseColor = tf2TextureCombine( diffuseColor, tf2DetailColor, uTf2DetailMode, uTf2DetailFactor );
+}
 #endif`,
+      );
+
+      // Source's alpha test, which is a plain compare against the reference.
+      // three's own chunk instead remaps alpha through
+      // smoothstep( alphaTest, alphaTest + fwidth( a ), a ) whenever alpha to
+      // coverage is on, to antialias the cut edge of a foliage-style texture.
+      // A war paint's alpha is flat across the whole weapon, so fwidth is zero
+      // there and that remap snaps every fragment back to fully opaque, losing
+      // exactly the partial coverage $allowalphatocoverage asks for.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <alphatest_fragment>',
+        `if ( uTf2AlphaTestRef > 0.0 && diffuseColor.a < uTf2AlphaTestRef ) discard;`,
       );
 
       const normalChunk = THREE.ShaderChunk.normal_fragment_maps
@@ -702,26 +780,18 @@ float tf2BaseSelfIllumMask = mix( diffuseColor.a, tf2SeparateSelfIllumMask, uTf2
 float tf2SelfIllumMask = uTf2SelfIllum * tf2BaseSelfIllumMask * tf2SelfIllumFresnelMask;
 float tf2SelfIllumBrightness = mix( 1.0, uTf2SelfIllumFresnelParams.w, uTf2SelfIllumFresnel );
 vec3 tf2LitDiffuse = reflectedLight.directDiffuse + tf2AmbientDiffuse;
+// vertexlit_and_unlit_generic_ps2x.fxc combines the detail texture into the
+// lit diffuse before self-illumination and before specular is added.
+if ( uTf2Detail > 0.0 ) {
+  tf2LitDiffuse = tf2TextureCombinePostLighting( tf2LitDiffuse, tf2DetailColor, uTf2DetailMode, uTf2DetailFactor );
+}
 tf2LitDiffuse = mix(
   tf2LitDiffuse,
   diffuseColor.rgb * uTf2SelfIllumTint * tf2SelfIllumBrightness,
   tf2SelfIllumMask
 );
 vec3 outgoingLight = tf2LitDiffuse + reflectedLight.directSpecular
-  + reflectedLight.indirectSpecular + tf2AmbientRim + totalEmissiveRadiance;
-// $EmissiveBlend: an unlit pass laid over the shaded weapon, which war paint
-// packs use for glow (see the "VMT's" folder of a pack like ghastly_guns).
-// The base texture carries the glow's color, the blend texture masks where it
-// shows, and $EmissiveBlendScrollVector slides the color sample over time.
-// Source additionally distorts that sample by a flow texture, which is not
-// reproduced here; packs leave the flow map white and the vector at zero.
-#ifdef USE_MAP
-if ( uTf2EmissiveBlend > 0.0 ) {
-  vec3 tf2EmissiveColor = sRGBTransferEOTF( texture2D( uTf2EmissiveBaseMap, vMapUv + uTf2EmissiveOffset ) ).rgb;
-  float tf2EmissiveMask = mix( 1.0, texture2D( uTf2EmissiveMaskMap, vMapUv ).r, uTf2EmissiveUseMask );
-  outgoingLight += uTf2EmissiveStrength * uTf2EmissiveTint * tf2EmissiveColor * tf2EmissiveMask;
-}
-#endif`,
+  + reflectedLight.indirectSpecular + tf2AmbientRim + totalEmissiveRadiance;`,
       );
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <envmap_fragment>',
@@ -740,7 +810,7 @@ if ( uTf2EmissiveBlend > 0.0 ) {
 #endif`,
       );
     };
-    this.material.customProgramCacheKey = () => 'tf2-vertexlit-v7-emissiveblend';
+    this.material.customProgramCacheKey = () => 'tf2-vertexlit-v8-detail-alphatest';
   }
 
   async applyMaterialParams(mat: WeaponMaterial, resolveTexture: (ref: string) => string | Promise<string> = (ref) => ref): Promise<void> {
@@ -775,15 +845,26 @@ if ( uTf2EmissiveBlend > 0.0 ) {
     );
     u.uTf2HalfLambert.value = mat.halfLambert ? 1 : 0;
     u.uTf2EnvTint.value.setRGB(...mat.envmapTint);
-    u.uTf2EmissiveBlend.value = mat.emissiveBlend ? 1 : 0;
-    u.uTf2EmissiveStrength.value = mat.emissiveBlendStrength ?? 1;
-    u.uTf2EmissiveTint.value.setRGB(...(mat.emissiveBlendTint ?? [1, 1, 1]));
-    u.uTf2EmissiveOffset.value.set(0, 0);
-    this.emissiveScroll.fromArray(mat.emissiveBlendScrollVector ?? [0, 0]);
-    // $alphatest cuts the weapon out by the composite's alpha channel. Only an
-    // imported material asks for it; stock war paints spend that channel on
-    // the phong/env mask instead, where discarding would erase the weapon.
-    this.material.alphaTest = mat.alphaTest ? (mat.alphaTestReference ?? 0.5) : 0;
+    u.uTf2Detail.value = mat.detailTexture ? 1 : 0;
+    u.uTf2DetailMode.value = mat.detailBlendMode ?? 0;
+    u.uTf2DetailScale.value = mat.detailScale ?? 4;
+    u.uTf2DetailFactor.value = mat.detailBlendFactor ?? 1;
+    u.uTf2DetailTint.value.setRGB(...(mat.detailTint ?? [1, 1, 1]));
+    // $alphatest cuts the weapon out by the composite's alpha channel, and
+    // $allowalphatocoverage turns that same alpha into multisample coverage so
+    // the cut is a partial fade rather than a hard edge. Together they are how
+    // a pack makes a see-through paint: Ghastly Guns composites a flat alpha
+    // just above its 0.5 reference, which passes the test everywhere and then
+    // draws at roughly half coverage. Only imported materials ask for either;
+    // stock war paints spend that channel on the phong/env mask instead.
+    u.uTf2AlphaTestRef.value = mat.alphaTest ? (mat.alphaTestReference ?? 0.5) : 0;
+    // The test itself is done in this material's own shader (see
+    // installTf2Shader), so three's alphaTest stays off. alphaToCoverage is
+    // still set, both to turn on GL sample coverage and because three uses it
+    // to decide whether the fragment keeps its alpha at all: without it the
+    // OPAQUE define forces alpha to 1 and there is no coverage to sample.
+    this.material.alphaTest = 0;
+    this.material.alphaToCoverage = !!mat.alphaTest && !!mat.alphaToCoverage;
     this.material.specular.setRGB(1, 1, 1);
     this.material.shininess = THREE.MathUtils.clamp(mat.phongExponent ?? 5, 1, 300);
     this.material.reflectivity = 1;
@@ -795,10 +876,9 @@ if ( uTf2EmissiveBlend > 0.0 ) {
     this.exponentTexture?.dispose();
     this.lightwarpTexture?.dispose();
     this.selfIllumTexture?.dispose();
-    this.emissiveBaseTexture?.dispose();
-    this.emissiveMaskTexture?.dispose();
+    this.detailTexture?.dispose();
     this.normalTexture = this.exponentTexture = this.lightwarpTexture = this.selfIllumTexture = null;
-    this.emissiveBaseTexture = this.emissiveMaskTexture = null;
+    this.detailTexture = null;
     this.material.normalMap = null;
     u.uTf2ExponentMap.value = null;
     u.uTf2LightwarpMap.value = null;
@@ -806,9 +886,7 @@ if ( uTf2EmissiveBlend > 0.0 ) {
     u.uTf2UseLightwarp.value = 0;
     u.uTf2UseSelfIllumMask.value = 0;
     u.uTf2SelfIllumMaskMap.value = null;
-    u.uTf2EmissiveBaseMap.value = null;
-    u.uTf2EmissiveMaskMap.value = null;
-    u.uTf2EmissiveUseMask.value = 0;
+    u.uTf2DetailMap.value = null;
 
     const loads: Promise<void>[] = [];
     if (mat.normalMap) loads.push(Promise.resolve(resolveTexture(mat.normalMap)).then((url) => this.texLoader.loadAsync(url)).then((t) => {
@@ -856,31 +934,95 @@ if ( uTf2EmissiveBlend > 0.0 ) {
         this.invalidate();
       }).catch(() => undefined));
     }
-    if (mat.emissiveBlend && mat.emissiveBlendBaseTexture) {
-      loads.push(Promise.resolve(resolveTexture(mat.emissiveBlendBaseTexture)).then((url) => this.texLoader.loadAsync(url)).then((t) => {
+    if (mat.detailTexture) {
+      loads.push(Promise.resolve(resolveTexture(mat.detailTexture)).then((url) => this.texLoader.loadAsync(url)).then((t) => {
         if (token !== this.materialLoadToken || this.disposed) { t.dispose(); return; }
-        // Decoded in the shader alongside the composite, so the glow color and
-        // the weapon underneath come out of the same transfer function.
+        // Decoded in the shader instead of here, because Mod2X reads the
+        // detail texture raw while every other blend mode reads it as sRGB.
         t.colorSpace = THREE.NoColorSpace; t.flipY = false;
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        this.emissiveBaseTexture = t; u.uTf2EmissiveBaseMap.value = t;
+        this.detailTexture = t; u.uTf2DetailMap.value = t;
         this.renderer.initTexture(t);
         this.invalidate();
       }).catch(() => undefined));
     }
-    if (mat.emissiveBlend && mat.emissiveBlendTexture) {
-      loads.push(Promise.resolve(resolveTexture(mat.emissiveBlendTexture)).then((url) => this.texLoader.loadAsync(url)).then((t) => {
-        if (token !== this.materialLoadToken || this.disposed) { t.dispose(); return; }
-        t.colorSpace = THREE.NoColorSpace; t.flipY = false;
-        t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        this.emissiveMaskTexture = t; u.uTf2EmissiveMaskMap.value = t; u.uTf2EmissiveUseMask.value = 1;
-        this.renderer.initTexture(t);
-        this.invalidate();
-      }).catch(() => undefined));
-    }
+    loads.push(this.applyEmissivePass(mat, resolveTexture, token));
     this.material.needsUpdate = true;
     await Promise.all(loads);
     this.invalidate();
+  }
+
+  /**
+   * $EmissiveBlendEnabled is a second additive pass over the weapon rather
+   * than a term in the lit shader (see src/viewer/emissive.ts), so it gets its
+   * own material, its own copies of the meshes, and its own textures.
+   */
+  private async applyEmissivePass(
+    mat: WeaponMaterial,
+    resolveTexture: (ref: string) => string | Promise<string>,
+    token: number,
+  ): Promise<void> {
+    for (const texture of this.emissiveTextures) texture.dispose();
+    this.emissiveTextures = [];
+    const strength = mat.emissiveBlendStrength ?? EMISSIVE_DEFAULT_STRENGTH;
+    // vertexlitgeneric_dx9.cpp skips the pass entirely at zero strength.
+    this.emissiveEnabled = !!mat.emissiveBlend && strength > 0 && !!mat.emissiveBlendBaseTexture;
+    if (!this.emissiveEnabled) {
+      this.teardownEmissiveMeshes();
+      return;
+    }
+    if (!this.emissiveMaterial) this.emissiveMaterial = createEmissiveMaterial(this.material.side);
+    const u = this.emissiveMaterial.uniforms;
+    u.uEmissiveStrength.value = strength;
+    u.uEmissiveTint.value.setRGB(...(mat.emissiveBlendTint ?? [1, 1, 1]));
+    u.uEmissiveScroll.value.fromArray(mat.emissiveBlendScrollVector ?? EMISSIVE_DEFAULT_SCROLL);
+    u.uEmissiveTime.value = 0;
+    this.emissiveElapsed = 0;
+    // A missing flow or emissive map would sample as black and swallow the
+    // glow, so both fall back to the white texture the fxc's math expects.
+    const white = whiteTexture();
+    u.uEmissiveBaseMap.value = null;
+    u.uEmissiveFlowMap.value = white;
+    u.uEmissiveMap.value = white;
+
+    const slots: [string | null | undefined, 'uEmissiveBaseMap' | 'uEmissiveFlowMap' | 'uEmissiveMap'][] = [
+      [mat.emissiveBlendBaseTexture, 'uEmissiveBaseMap'],
+      [mat.emissiveBlendFlowTexture, 'uEmissiveFlowMap'],
+      [mat.emissiveBlendTexture, 'uEmissiveMap'],
+    ];
+    await Promise.all(slots.map(([ref, slot]) => (ref
+      ? Promise.resolve(resolveTexture(ref)).then((url) => this.texLoader.loadAsync(url)).then((t) => {
+        if (token !== this.materialLoadToken || this.disposed) { t.dispose(); return; }
+        configureEmissiveTexture(t);
+        this.emissiveTextures.push(t);
+        if (this.emissiveMaterial) this.emissiveMaterial.uniforms[slot].value = t;
+        this.renderer.initTexture(t);
+      }).catch(() => undefined)
+      : Promise.resolve())));
+    if (token !== this.materialLoadToken || this.disposed) return;
+    // Without a glow color there is nothing to add, and the pass would tint
+    // the weapon by whatever the fallback white maps happened to multiply out.
+    this.emissiveEnabled = !!this.emissiveMaterial.uniforms.uEmissiveBaseMap.value;
+    if (this.emissiveEnabled) this.rebuildEmissiveMeshes();
+    else this.teardownEmissiveMeshes();
+    this.invalidate();
+  }
+
+  private teardownEmissiveMeshes() {
+    for (const mesh of this.emissiveMeshes) this.centerGroup.remove(mesh);
+    this.emissiveMeshes = [];
+  }
+
+  private rebuildEmissiveMeshes() {
+    this.teardownEmissiveMeshes();
+    if (!this.emissiveEnabled || !this.emissiveMaterial) return;
+    for (let i = 0; i < this.meshes.length; i++) {
+      if (this.meshIsLens[i]) continue;
+      const mesh = new THREE.Mesh(this.meshes[i].geometry, this.emissiveMaterial);
+      mesh.renderOrder = 1;
+      this.centerGroup.add(mesh);
+      this.emissiveMeshes.push(mesh);
+    }
   }
 
   // Geometry cache: switching weapons back and forth never refetches a GLB.
@@ -890,6 +1032,7 @@ if ( uTf2EmissiveBlend > 0.0 ) {
 
   private setMeshGeometries(parts: Array<{ geometry: THREE.BufferGeometry; materialName: string }>, fromCache: boolean) {
     this.teardownSheenMeshes();
+    this.teardownEmissiveMeshes();
     for (const mesh of this.meshes) {
       this.centerGroup.remove(mesh);
       // Cached geometries are shared and disposed with the cache, not per swap.
@@ -901,11 +1044,13 @@ if ( uTf2EmissiveBlend > 0.0 ) {
     this.centerGroup.add(...this.meshes);
     this.frameCamera(parts.map((part) => part.geometry));
     if (this.sheenId !== 'none' && this.sheenMaterial) this.rebuildSheenMeshes();
+    if (this.emissiveEnabled) this.rebuildEmissiveMeshes();
     this.invalidate();
   }
 
   private clearModel() {
     this.teardownSheenMeshes();
+    this.teardownEmissiveMeshes();
     for (const mesh of this.meshes) {
       this.centerGroup.remove(mesh);
       if (!this.currentGeoCached) mesh.geometry.dispose();
@@ -1060,8 +1205,9 @@ if ( uTf2EmissiveBlend > 0.0 ) {
     this.exponentTexture?.dispose();
     this.lightwarpTexture?.dispose();
     this.selfIllumTexture?.dispose();
-    this.emissiveBaseTexture?.dispose();
-    this.emissiveMaskTexture?.dispose();
+    this.detailTexture?.dispose();
+    this.emissiveMaterial?.dispose();
+    for (const texture of this.emissiveTextures) texture.dispose();
     this.envMap.dispose();
     if (!this.currentGeoCached) for (const mesh of this.meshes) mesh.geometry.dispose();
     for (const p of this.geoCache.values()) p.then((parts) => parts.forEach((part) => part.geometry.dispose())).catch(() => undefined);
