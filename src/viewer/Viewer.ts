@@ -632,12 +632,24 @@ export class Viewer {
     // stock war paints spend that channel on the phong/env mask instead.
     u.uTf2AlphaTestRef.value = mat.alphaTest ? (mat.alphaTestReference ?? 0.5) : 0;
     // The test itself is done in this material's own shader (see
-    // installTf2Shader), so three's alphaTest stays off. alphaToCoverage is
-    // still set, both to turn on GL sample coverage and because three uses it
-    // to decide whether the fragment keeps its alpha at all: without it the
-    // OPAQUE define forces alpha to 1 and there is no coverage to sample.
+    // installTf2Shader), so three's alphaTest stays off.
+    //
+    // The partial coverage is blended rather than sampled. GL turns the
+    // fragment's alpha into a multisample coverage mask but still writes that
+    // same alpha into the covered samples, and this canvas is composited over
+    // the page (a backplate, or the stage behind it) by its alpha. A half
+    // covered pixel would then land at alpha 0.5 * 0.5, letting the backplate
+    // through twice: once through the coverage and again through the weapon's
+    // own pixels, which washes the weapon out instead of making it see-through.
+    // Ordinary alpha blending writes the coverage into the alpha channel
+    // correctly, is not quantised to the sample count, and does not depend on
+    // the context actually granting multisampling.
     this.material.alphaTest = 0;
-    this.material.alphaToCoverage = !!mat.alphaTest && !!mat.alphaToCoverage;
+    this.material.alphaToCoverage = false;
+    this.material.transparent = !!mat.alphaTest && !!mat.alphaToCoverage;
+    // Still a depth writer: like Source's coverage mask, the weapon shows one
+    // surface blended over the background, not its own far side as well.
+    this.material.depthWrite = true;
     this.material.specular.setRGB(1, 1, 1);
     this.material.shininess = THREE.MathUtils.clamp(mat.phongExponent ?? 5, 1, 300);
     this.material.reflectivity = 1;

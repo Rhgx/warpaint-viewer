@@ -52,6 +52,9 @@ export async function loadSheenAssets(): Promise<SheenAssets> {
   return { maskTexture, cubeTexture, maskFrames: json.maskFrames };
 }
 
+// gl_Position comes from three's own chunks: this pass is a copy of the
+// weapon's geometry sitting exactly on top of it, and a transform written out
+// by hand rounds differently to the weapon's, which fights the depth test.
 const SHEEN_VERTEX = /* glsl */ `
 varying vec3 vSheenModelPos;
 varying vec3 vSheenWorldNormal;
@@ -59,9 +62,9 @@ varying vec3 vSheenWorldViewVector;
 void main() {
   vSheenModelPos = position;
   vSheenWorldNormal = mat3( modelMatrix ) * normal;
-  vec4 sheenWorldPos = modelMatrix * vec4( position, 1.0 );
-  vSheenWorldViewVector = sheenWorldPos.xyz - cameraPosition;
-  gl_Position = projectionMatrix * viewMatrix * sheenWorldPos;
+  vSheenWorldViewVector = ( modelMatrix * vec4( position, 1.0 ) ).xyz - cameraPosition;
+  #include <begin_vertex>
+  #include <project_vertex>
 }
 `;
 

@@ -30,17 +30,29 @@ import * as THREE from 'three';
 export const EMISSIVE_DEFAULT_SCROLL: [number, number] = [0.11, 0.124];
 export const EMISSIVE_DEFAULT_STRENGTH = 1;
 
+// This pass draws a copy of the weapon's own geometry, exactly coincident with
+// it, so its depth has to come out bit for bit the same as the weapon's or the
+// depth test rejects the glow on a shifting speckle of pixels as the model
+// turns. three's chunks are used verbatim for that reason: writing the same
+// transform out by hand is not enough, since
+// projectionMatrix * modelViewMatrix * position multiplies the two matrices
+// together first and rounds differently to the weapon's two matrix by vector
+// products.
 const EMISSIVE_VERTEX = /* glsl */ `
 varying vec2 vEmissiveUv;
 void main() {
   vEmissiveUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+  #include <begin_vertex>
+  #include <project_vertex>
 }
 `;
 
+// sRGBTransferEOTF and linearToOutputTexel come from the fragment prefix three
+// prepends to every ShaderMaterial; including <colorspace_pars_fragment> here
+// as well would redefine them and fail the compile, which silently costs the
+// whole pass (the draw still issues, against a program that never linked).
 const EMISSIVE_FRAGMENT = /* glsl */ `
 #include <common>
-#include <colorspace_pars_fragment>
 uniform sampler2D uEmissiveBaseMap;
 uniform sampler2D uEmissiveFlowMap;
 uniform sampler2D uEmissiveMap;
@@ -57,6 +69,10 @@ void main() {
   // Alpha stays zero as in the fxc, so the pass adds light without ever
   // reducing what the weapon already wrote to the frame.
   gl_FragColor = vec4( baseColor * emissiveColor * uEmissiveTint * uEmissiveStrength, 0.0 );
+  // The pass belongs to the same frame as the weapon under it: Source adds it
+  // into the HDR buffer and tone maps the result, so the glow has to take the
+  // preset's exposure too or it reads as half strength on the brighter maps.
+  #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
 `;

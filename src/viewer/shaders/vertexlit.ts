@@ -116,13 +116,14 @@ if ( uTf2Detail > 0.0 ) {
 }
 #endif`;
 
-// Source's alpha test, which is a plain compare against the reference. three's
-// own chunk instead remaps alpha through
-// smoothstep( alphaTest, alphaTest + fwidth( a ), a ) whenever alpha to
-// coverage is on, to antialias the cut edge of a foliage-style texture. A war
-// paint's alpha is flat across the whole weapon, so fwidth is zero there and
-// that remap snaps every fragment back to fully opaque, losing exactly the
-// partial coverage $allowalphatocoverage asks for.
+// Source's alpha test, which is a plain compare against the reference. It runs
+// here, against a uniform, so that an imported material switching it on costs
+// no recompile, and because three's own chunk can remap alpha through
+// smoothstep( alphaTest, alphaTest + fwidth( a ), a ) to antialias the cut edge
+// of a foliage-style texture. A war paint's alpha is flat across the whole
+// weapon, so fwidth is zero there and that remap would snap every fragment back
+// to fully opaque, losing exactly the see-through $allowalphatocoverage asks
+// for. Whatever survives the compare keeps its alpha and is blended by it.
 const ALPHA_TEST = /* glsl */ `if ( uTf2AlphaTestRef > 0.0 && diffuseColor.a < uTf2AlphaTestRef ) discard;`;
 
 const PHONG_MATERIAL = /* glsl */ `BlinnPhongMaterial material;
