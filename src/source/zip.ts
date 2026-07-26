@@ -56,18 +56,16 @@ function isHarmlessMetadataPath(path: string): boolean {
 }
 
 /**
- * Finds the wrapper suffix in front of a `materials` path component, given the
- * path components beneath the archive's single top-level wrapper folder.
- * `materials` only counts as a directory boundary: an interior occurrence
- * always counts (something is nested under it), while a trailing occurrence
- * only counts when the entry itself is that directory, not a file that
- * happens to be named `materials` with no extension.
+ * Finds the first `materials` directory component in an archive path.
+ * A trailing component only counts for an explicit directory entry, so a file
+ * that merely happens to be named `materials` is left alone.
  */
-function materialsSuffix(componentsAfterRoot: readonly string[], isDirectoryEntry: boolean): string | undefined {
-  for (let index = 0; index < componentsAfterRoot.length; index += 1) {
-    if (componentsAfterRoot[index] !== 'materials') continue;
-    if (index === componentsAfterRoot.length - 1 && !isDirectoryEntry) continue;
-    return componentsAfterRoot.slice(0, index).join('/');
+function materialsComponentIndex(path: string, isDirectoryEntry: boolean): number | undefined {
+  const components = path.split('/');
+  for (let index = 0; index < components.length; index += 1) {
+    if (components[index] !== 'materials') continue;
+    if (index === components.length - 1 && !isDirectoryEntry) continue;
+    return index;
   }
   return undefined;
 }
@@ -180,45 +178,39 @@ export async function openZipSourcePackage(
 
     // Mod ZIPs commonly wrap the Source tree in one descriptive folder (for
     // example `Yeti Coated/materials/...`), sometimes several folders deep (for
-    // example `Skinned Submission/Skinned Textures/materials/...`). Treat every
-    // path component between the single shared top-level folder and the
-    // materials/ directory as presentation rather than part of the Source path.
-    // A wrapper is only ever the one top-level folder shared by every archive
-    // entry: genuinely separate top-level items (no shared folder) or more than
-    // one distinct materials/ directory beneath that folder remain ambiguous
-    // and are rejected below.
+    // example `Skinned Submission/Skinned Textures/materials/...`). Authors also
+    // regularly bundle several variants, each with its own materials/ folder.
+    // Treat the wrappers as presentation and overlay every materials/ tree at
+    // the canonical Source root. Just like mounting multiple Source packages,
+    // distinct paths merge while an exact normalized path collision is rejected.
     const normalizedArchivePaths = entries.map((entry) => ({
       entry,
       path: normalizeSourcePath(entry.filename),
     })).filter(({ path }) => !isHarmlessMetadataPath(path));
-    const hasDirectMaterialsRoot = normalizedArchivePaths.some(({ entry, path }) =>
-      (path === 'materials' && entry.directory) || path.startsWith('materials/'));
+    const materialRootPrefixes = new Set<string>();
+    for (const { entry, path } of normalizedArchivePaths) {
+      const materialIndex = materialsComponentIndex(path, entry.directory);
+      if (materialIndex === undefined) continue;
+      materialRootPrefixes.add(path.split('/').slice(0, materialIndex).join('/'));
+    }
+    const hasMaterialsRoot = materialRootPrefixes.size > 0;
+    const mergesMaterialRoots = materialRootPrefixes.size > 1;
     const roots = new Set(normalizedArchivePaths.map(({ path }) => path.split('/')[0]));
     const onlyRoot = roots.size === 1 ? roots.values().next().value as string | undefined : undefined;
 
     let wrapperRoot: string | undefined;
-    let hasMaterialsRoot = hasDirectMaterialsRoot;
-    if (!hasDirectMaterialsRoot && onlyRoot) {
-      const nestedSuffixes = new Set<string>();
-      for (const { entry, path } of normalizedArchivePaths) {
-        if (path === onlyRoot || !path.startsWith(`${onlyRoot}/`)) continue;
-        const suffix = materialsSuffix(path.slice(onlyRoot.length + 1).split('/'), entry.directory);
-        if (suffix !== undefined) nestedSuffixes.add(suffix);
-      }
-      if (nestedSuffixes.size > 1) {
-        throw sourceError('ambiguous-materials-root', 'ZIP contains more than one materials/ directory beneath its wrapper folder; the package root is ambiguous.', file.name);
-      }
-      if (nestedSuffixes.size === 1) {
-        const suffix = nestedSuffixes.values().next().value as string;
-        wrapperRoot = suffix ? `${onlyRoot}/${suffix}` : onlyRoot;
-        hasMaterialsRoot = true;
-      } else {
-        // No materials/ directory anywhere beneath the single wrapper folder.
-        // Still strip it as a prefix; whether the stripped root becomes an
-        // implicit materials tree (see rootIsMaterials below) is decided once
-        // every entry's supported-texture status is known.
-        wrapperRoot = onlyRoot;
-      }
+    if (materialRootPrefixes.size === 1) {
+      wrapperRoot = materialRootPrefixes.values().next().value || undefined;
+    } else if (mergesMaterialRoots) {
+      // There is no single path down to materials/, but a shared outer wrapper
+      // is still safe to remove from non-material files such as readmes.
+      wrapperRoot = onlyRoot;
+    } else if (onlyRoot) {
+      // No materials/ directory anywhere beneath the single wrapper folder.
+      // Still strip it as a prefix; whether the stripped root becomes an
+      // implicit materials tree (see rootIsMaterials below) is decided once
+      // every entry's supported-texture status is known.
+      wrapperRoot = onlyRoot;
     }
 
     // A pack with no materials/ directory anywhere (see FlakFurnished) can
@@ -239,6 +231,8 @@ export async function openZipSourcePackage(
     const normalizedPaths = new Set<string>();
     let totalExpandedBytes = 0;
     let ignoredMetadataEntries = 0;
+    let deduplicatedMaterialEntryCount = 0;
+    let firstDeduplicatedMaterialPath: string | undefined;
     let highCompressionEntryCount = 0;
     let highestCompressionRatio = 0;
     let highestCompressionPath: string | undefined;
@@ -261,16 +255,21 @@ export async function openZipSourcePackage(
       const strippedPath = wrapperRoot && archivePath.startsWith(`${wrapperRoot}/`)
         ? archivePath.slice(wrapperRoot.length + 1)
         : archivePath;
+      const materialIndex = materialsComponentIndex(strippedPath, entry.directory);
       // rootIsMaterials means the whole (stripped) archive stands in for the
       // materials/ tree, so every path is addressed as if it lived under one.
-      const canonicalPath = rootIsMaterials ? `materials/${strippedPath}` : strippedPath;
-      if (normalizedPaths.has(canonicalPath)) {
-        throw sourceError('duplicate-path', 'ZIP contains paths that collide after Source path normalization.', canonicalPath);
-      }
-      normalizedPaths.add(canonicalPath);
+      // With real material roots, discard any remaining variant wrapper and
+      // overlay the path from materials/ downward.
+      const canonicalPath = rootIsMaterials
+        ? `materials/${strippedPath}`
+        : materialIndex === undefined
+          ? strippedPath
+          : strippedPath.split('/').slice(materialIndex).join('/');
       if (entry.encrypted) {
         throw sourceError('encrypted-entry', 'Encrypted ZIP entries are not supported.', entry.filename);
       }
+      // Several overlaid trees naturally contain their own materials/
+      // directory entries. Only files participate in collision detection.
       if (entry.directory) continue;
 
       const size = ensureFiniteNonNegative(entry.uncompressedSize, 'Uncompressed entry size', entry.filename);
@@ -296,6 +295,24 @@ export async function openZipSourcePackage(
         compressedSize,
         crc32: entry.signature >>> 0,
       };
+      if (normalizedPaths.has(canonicalPath)) {
+        const existing = sourceEntries.get(canonicalPath);
+        // Variant bundles often repeat a shared utility texture in each
+        // materials/ tree. Matching size and ZIP CRC mean both entries carry
+        // the same bytes, so mounting either one has identical Source behavior.
+        if (
+          mergesMaterialRoots &&
+          canonicalPath.startsWith('materials/') &&
+          existing?.size === source.size &&
+          existing.crc32 === source.crc32
+        ) {
+          deduplicatedMaterialEntryCount += 1;
+          firstDeduplicatedMaterialPath ??= canonicalPath;
+          continue;
+        }
+        throw sourceError('duplicate-path', 'ZIP contains conflicting files at the same path after merging its materials/ directories.', canonicalPath);
+      }
+      normalizedPaths.add(canonicalPath);
       sourceEntries.set(canonicalPath, source);
       indexedEntries.set(canonicalPath, { source, zipEntry: entry });
     }
@@ -306,6 +323,22 @@ export async function openZipSourcePackage(
         level: 'info',
         message: `Removed the package wrapper ${wrapperRoot.includes('/') ? 'directories' : 'directory'} to create a Source-style root.`,
         detail: `${wrapperRoot}/`,
+      });
+    }
+    if (mergesMaterialRoots) {
+      diagnostics.push({
+        id: 'zip-merged-materials-roots',
+        level: 'info',
+        message: `Merged ${materialRootPrefixes.size.toLocaleString()} materials/ directories into one Source-style materials tree.`,
+        detail: [...materialRootPrefixes].map((prefix) => prefix ? `${prefix}/materials/` : 'materials/').join(', '),
+      });
+    }
+    if (deduplicatedMaterialEntryCount > 0) {
+      diagnostics.push({
+        id: 'zip-duplicate-material-file',
+        level: 'warning',
+        message: `Ignored ${deduplicatedMaterialEntryCount.toLocaleString()} duplicate ${deduplicatedMaterialEntryCount === 1 ? 'file' : 'files'}.`,
+        detail: firstDeduplicatedMaterialPath,
       });
     }
     if (rootIsMaterials) {
