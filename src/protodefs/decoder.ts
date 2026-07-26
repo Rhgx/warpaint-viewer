@@ -505,9 +505,11 @@ function resolveStage(
     for (const st of many(s.sticker)) {
       const base = texturePublicPath(varFieldValue(st.base, dict));
       if (base) textureRefs.add(base);
+      const rawWeight = varFieldValue(st.weight, dict);
+      const weight = rawWeight === undefined || rawWeight.trim() === '' ? 1 : Number(rawWeight);
       const entry: { base: string; weight: number; spec?: string } = {
         base: base ?? '',
-        weight: Number(varFieldValue(st.weight, dict)) || 1,
+        weight: Number.isFinite(weight) ? weight : 1,
       };
       const specVal = varFieldValue(st.spec, dict);
       if (specVal) {

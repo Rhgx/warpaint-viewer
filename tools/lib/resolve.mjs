@@ -229,7 +229,9 @@ function resolveStage(stage, ctx, dict, team, textureRefs) {
     for (const st of s.sticker || []) {
       const base = texturePublicPath(varFieldValue(st.base, dict));
       if (base) textureRefs.add(base);
-      const entry = { base, weight: Number(varFieldValue(st.weight, dict)) || 1 };
+      const rawWeight = varFieldValue(st.weight, dict);
+      const weight = rawWeight === undefined || rawWeight.trim() === '' ? 1 : Number(rawWeight);
+      const entry = { base, weight: Number.isFinite(weight) ? weight : 1 };
       const specVal = varFieldValue(st.spec, dict);
       if (specVal) { entry.spec = texturePublicPath(specVal); if (entry.spec) textureRefs.add(entry.spec); }
       stickers.push(entry);
