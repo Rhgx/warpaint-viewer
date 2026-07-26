@@ -479,8 +479,9 @@ export class Viewer {
   }
 
   // Renders at `scale`x resolution with no background so the PNG carries
-  // alpha. The canvas drawing buffer isn't preserved, so pixels must be read
-  // synchronously off the same render (no await in between).
+  // alpha. Capture uses an offscreen target rather than resizing the live
+  // canvas: the animation loop can keep running while PNG encoding completes
+  // without observing temporary renderer or camera state.
   //
   // The buffer can't go through canvas.toBlob() directly: additive passes
   // (unusual particles, sheens) add color while leaving destination alpha
@@ -493,89 +494,86 @@ export class Viewer {
   // rescaled to keep color * alpha unchanged. Over dark backgrounds this
   // reproduces the glow exactly; opaque weapon pixels pass through untouched.
   async captureScreenshot(scale = 2): Promise<Blob> {
-    const prevPixelRatio = this.renderer.getPixelRatio();
-    const prevSize = new THREE.Vector2();
-    this.renderer.getSize(prevSize);
-    const prevBackground = this.scene.background;
-    const prevAspect = this.camera.aspect;
     const w = this.canvas.clientWidth || 1;
     const h = this.canvas.clientHeight || 1;
+    const width = w * scale;
+    const height = h * scale;
+    const target = new THREE.WebGLRenderTarget(width, height, {
+      depthBuffer: true,
+      stencilBuffer: false,
+      samples: 4,
+    });
+    target.texture.colorSpace = this.renderer.outputColorSpace;
+    const prevTarget = this.renderer.getRenderTarget();
+    const prevBackground = this.scene.background;
+    const raw = new Uint8Array(width * height * 4);
     try {
       this.scene.background = null;
-      this.renderer.setPixelRatio(1);
-      this.renderer.setSize(w * scale, h * scale, false);
-      this.camera.aspect = w / h;
-      this.camera.updateProjectionMatrix();
+      setParticlePointScale(height);
+      this.renderer.setRenderTarget(target);
       if (this.projectionMode === 'orthographic') {
         this.syncOrthoCamera();
         this.renderer.render(this.scene, this.orthoCamera);
       } else {
         this.renderer.render(this.scene, this.camera);
       }
-
-      const width = w * scale;
-      const height = h * scale;
-      const gl = this.renderer.getContext();
-      const raw = new Uint8Array(width * height * 4);
-      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, raw);
-
-      // readPixels rows run bottom-up; ImageData expects top-down.
-      const image = new ImageData(width, height);
-      const out = image.data;
-      let minX = width;
-      let minY = height;
-      let maxX = -1;
-      let maxY = -1;
-      for (let y = 0; y < height; y++) {
-        const src = (height - 1 - y) * width * 4;
-        const dst = y * width * 4;
-        for (let x = 0; x < width * 4; x += 4) {
-          const r = raw[src + x];
-          const g = raw[src + x + 1];
-          const b = raw[src + x + 2];
-          const a = raw[src + x + 3];
-          const cover = Math.max(a, r, g, b);
-          if (cover === 0) continue; // fully empty, ImageData is zeroed
-          out[dst + x] = Math.min(255, Math.round((r * 255) / cover));
-          out[dst + x + 1] = Math.min(255, Math.round((g * 255) / cover));
-          out[dst + x + 2] = Math.min(255, Math.round((b * 255) / cover));
-          out[dst + x + 3] = cover;
-          const pixelX = x / 4;
-          minX = Math.min(minX, pixelX);
-          minY = Math.min(minY, y);
-          maxX = Math.max(maxX, pixelX);
-          maxY = Math.max(maxY, y);
-        }
-      }
-
-      // Trim transparent stage space while retaining enough breathing room
-      // around the weapon and any unusual/sheen pixels. Scale the padding so
-      // screenshots framed at 1x and 4x have the same visual margin.
-      const hasContent = maxX >= minX && maxY >= minY;
-      const padding = Math.max(8, Math.round(24 * scale));
-      const cropLeft = hasContent ? Math.max(0, minX - padding) : 0;
-      const cropTop = hasContent ? Math.max(0, minY - padding) : 0;
-      const cropRight = hasContent ? Math.min(width, maxX + 1 + padding) : width;
-      const cropBottom = hasContent ? Math.min(height, maxY + 1 + padding) : height;
-      const scratch = document.createElement('canvas');
-      scratch.width = cropRight - cropLeft;
-      scratch.height = cropBottom - cropTop;
-      const ctx = scratch.getContext('2d');
-      if (!ctx) throw new Error('[warpaint-viewer] screenshot canvas 2d context unavailable');
-      ctx.putImageData(image, -cropLeft, -cropTop);
-      const blob = await new Promise<Blob | null>((resolve) => {
-        scratch.toBlob(resolve, 'image/png');
-      });
-      if (!blob) throw new Error('[warpaint-viewer] screenshot capture failed');
-      return blob;
+      this.renderer.readRenderTargetPixels(target, 0, 0, width, height, raw);
     } finally {
-      this.renderer.setPixelRatio(prevPixelRatio);
-      this.renderer.setSize(prevSize.x, prevSize.y, false);
+      this.renderer.setRenderTarget(prevTarget);
       this.scene.background = prevBackground;
-      this.camera.aspect = prevAspect;
-      this.camera.updateProjectionMatrix();
-      this.invalidate();
+      setParticlePointScale(h * this.renderer.getPixelRatio());
+      target.dispose();
     }
+
+    // Render-target rows run bottom-up; ImageData expects top-down.
+    const image = new ImageData(width, height);
+    const out = image.data;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < height; y++) {
+      const src = (height - 1 - y) * width * 4;
+      const dst = y * width * 4;
+      for (let x = 0; x < width * 4; x += 4) {
+        const r = raw[src + x];
+        const g = raw[src + x + 1];
+        const b = raw[src + x + 2];
+        const a = raw[src + x + 3];
+        const cover = Math.max(a, r, g, b);
+        if (cover === 0) continue; // fully empty, ImageData is zeroed
+        out[dst + x] = Math.min(255, Math.round((r * 255) / cover));
+        out[dst + x + 1] = Math.min(255, Math.round((g * 255) / cover));
+        out[dst + x + 2] = Math.min(255, Math.round((b * 255) / cover));
+        out[dst + x + 3] = cover;
+        const pixelX = x / 4;
+        minX = Math.min(minX, pixelX);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, pixelX);
+        maxY = Math.max(maxY, y);
+      }
+    }
+
+    // Trim transparent stage space while retaining enough breathing room
+    // around the weapon and any unusual/sheen pixels. Scale the padding so
+    // screenshots framed at 1x and 4x have the same visual margin.
+    const hasContent = maxX >= minX && maxY >= minY;
+    const padding = Math.max(8, Math.round(24 * scale));
+    const cropLeft = hasContent ? Math.max(0, minX - padding) : 0;
+    const cropTop = hasContent ? Math.max(0, minY - padding) : 0;
+    const cropRight = hasContent ? Math.min(width, maxX + 1 + padding) : width;
+    const cropBottom = hasContent ? Math.min(height, maxY + 1 + padding) : height;
+    const scratch = document.createElement('canvas');
+    scratch.width = cropRight - cropLeft;
+    scratch.height = cropBottom - cropTop;
+    const ctx = scratch.getContext('2d');
+    if (!ctx) throw new Error('[warpaint-viewer] screenshot canvas 2d context unavailable');
+    ctx.putImageData(image, -cropLeft, -cropTop);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      scratch.toBlob(resolve, 'image/png');
+    });
+    if (!blob) throw new Error('[warpaint-viewer] screenshot capture failed');
+    return blob;
   }
 
   private installTf2Shader() {

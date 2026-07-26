@@ -31,6 +31,7 @@ const SCREENSHOT_SCALE_OPTIONS = [
   { value: '1', label: '1x' },
   { value: '2', label: '2x' },
   { value: '4', label: '4x' },
+  { value: '8', label: '8x' },
 ];
 
 // A collapsible group of controls. Expanded by default; each section keeps
