@@ -43,6 +43,16 @@ const LOC_ENGLISH = `${TF}/resource/tf_english.txt`;
 const WEAR_LEVELS = [0.2, 0.4, 0.6, 0.8, 1.0];
 const WEAR_NAMES = ['Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn', 'Battle Scarred'];
 const COMPOSITE_1024_WEAPONS = new Set(['c_flameball', 'c_holymackerel', 'c_lochnload', 'c_quadball']);
+// Stock assets used by community proto definitions but not referenced by any
+// currently shipped Valve recipe. Keep them in the browser bundle so imported
+// definitions can fall back to TF2 exactly like built-in recipe inputs do.
+const CUSTOM_DEFINITION_TEXTURE_REFS = [
+  'textures/models/workshop/weapons/c_models/c_blackbox/p_blackbox_groups_02.webp',
+  'textures/models/weapons/c_models/c_flameball/p_flameball_ao.webp',
+  'textures/models/weapons/c_models/c_knife/p_knife_albedo_engraving.webp',
+  'textures/models/weapons/c_models/c_stickybomb_launcher/p_stickybomb_launcher_groups_03.webp',
+  'textures/models/weapons/c_models/c_stickybomb_launcher/p_stickybomb_launcher_groups_05.webp',
+];
 
 function log(...a) { console.log(...a); }
 function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
@@ -391,6 +401,7 @@ async function main() {
     const ref = texturePublicPath(vpkPath);
     if (ref) allTextureRefs.add(ref);
   }
+  for (const ref of CUSTOM_DEFINITION_TEXTURE_REFS) allTextureRefs.add(ref);
   const recipesToWrite = []; // { kitId, key, tree }
   const skipped = [];
   let recipeCount = 0;

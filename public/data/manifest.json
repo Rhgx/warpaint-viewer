@@ -15562,6 +15562,66 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/models/workshop/weapons/c_models/c_blackbox/p_blackbox_groups_02.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/models/weapons/c_models/c_flameball/p_flameball_ao.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/models/weapons/c_models/c_knife/p_knife_albedo_engraving.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/models/weapons/c_models/c_stickybomb_launcher/p_stickybomb_launcher_groups_03.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/models/weapons/c_models/c_stickybomb_launcher/p_stickybomb_launcher_groups_05.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/models/weapons/c_models/c_pistol/p_pistol_ao.webp": {
    "width": 2048,
    "height": 2048,
