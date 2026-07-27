@@ -77,6 +77,9 @@
 }
 
 /* ---------- inspector (right panel) ---------- */
+/* Its captions and detent labels are chrome, not content: a drag that misses
+   a slider by a few pixels would otherwise anchor a text selection and sweep
+   it across the panel. Inputs opt back in so the seed stays copyable. */
 .inspector {
   grid-column: 3;
   display: flex;
@@ -92,7 +95,11 @@
   opacity: 1;
   visibility: visible;
   transform: translateX(0);
+  user-select: none;
   transition: opacity 150ms ease, transform 190ms ease, max-height 190ms ease, padding 190ms ease, visibility 0s;
+}
+.inspector input {
+  user-select: text;
 }
 .inspector-section + .inspector-section {
   border-top: 1px solid var(--border);
