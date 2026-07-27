@@ -155,6 +155,11 @@
 .canvas-hint.dismissed {
   opacity: 0;
 }
+/* The definitions prompt takes the bottom-center slot while it is up, so the
+   hint steps above it rather than sitting underneath. */
+.canvas-wrap[data-prompt] .canvas-hint {
+  bottom: 62px;
+}
 
 /* ---------- stage identity header (top-left) ---------- */
 /* Stacks above the composing badge so the two never collide; both are

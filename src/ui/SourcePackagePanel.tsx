@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   LoaderCircle,
+  OctagonAlert,
   PackageOpen,
   Trash2,
   Upload,
@@ -231,8 +232,14 @@ export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
       {visibleDiagnostics.length > 0 && (
         <ul className="source-package-diagnostics">
           {visibleDiagnostics.map((diagnostic) => (
+            // Shape carries the severity alongside the color, so the two levels
+            // stay apart for anyone the yellow/red split does not reach.
             <li key={diagnostic.id} data-level={diagnostic.level}>
-              <AlertTriangle size={11} />
+              {diagnostic.level === 'error' ? (
+                <OctagonAlert size={11} />
+              ) : (
+                <AlertTriangle size={11} />
+              )}
               <span>
                 {diagnostic.message}
                 {diagnostic.detail && <code>{diagnostic.detail}</code>}

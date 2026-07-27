@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   LoaderCircle,
+  OctagonAlert,
   PackageSearch,
   ScrollText,
   Search,
@@ -178,8 +179,14 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
   const diagnosticsList = visibleDiagnostics.length > 0 && (
     <ul className="source-package-diagnostics">
       {visibleDiagnostics.map((diagnostic) => (
+        // Errors take the octagon and warnings the triangle, matching the
+        // package panel's list.
         <li key={diagnostic.id} data-level={diagnostic.level}>
-          <AlertTriangle size={11} />
+          {diagnostic.level === 'error' ? (
+            <OctagonAlert size={11} />
+          ) : (
+            <AlertTriangle size={11} />
+          )}
           <span>
             {diagnostic.message}
             {diagnostic.detail && <code>{diagnostic.detail}</code>}

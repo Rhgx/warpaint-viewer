@@ -72,7 +72,7 @@
   opacity: 0.55;
 }
 .source-package-stats > span[data-emphasis] { color: var(--text); font-weight: 600; }
-.source-package-stats > span[data-warn] { color: color-mix(in srgb, var(--fail) 75%, var(--text-dim)); }
+.source-package-stats > span[data-warn] { color: var(--warn); font-weight: 600; }
 
 /* Shares the header's "Reset all" shape so the workbench has one button
    language across its toolbar, its package bar and its asset cards. */
@@ -154,7 +154,7 @@
 }
 .source-package-diagnostics li svg { flex: none; margin-top: 2px; }
 .source-package-diagnostics li[data-level='error'] { color: var(--fail); font-weight: 600; }
-.source-package-diagnostics li[data-level='warning'] { color: color-mix(in srgb, var(--fail) 65%, var(--text-dim)); }
+.source-package-diagnostics li[data-level='warning'] { color: var(--warn); }
 .source-package-diagnostics code {
   margin-left: 4px;
   font-family: ui-monospace, monospace;

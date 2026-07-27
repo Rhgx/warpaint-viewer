@@ -13,6 +13,9 @@
   --red: #b8383b;
   --blu: #3a6ea5;
   --pass: #1f8a4c;
+  /* Diagnostics split by severity: --warn is for things that changed the
+     result but left it usable, --fail only for outright failures. */
+  --warn: #a56b00;
   --fail: #c23b3b;
   color-scheme: light dark;
 
@@ -64,6 +67,7 @@
     --red: #d24b4e;
     --blu: #5a8fd0;
     --pass: #46c07a;
+    --warn: #e0a83c;
     --fail: #e06060;
     --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35);
     /* Dark panels contrast fine with the raw grade colors, so let more of

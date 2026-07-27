@@ -1,0 +1,119 @@
+/* Bottom-center prompt over the stage, offering the definitions a freshly
+   mounted package turned out to carry. The Definitions tab makes the same
+   offer, but it sits behind a drawer that is usually closed, so without this
+   nothing on screen says the package has more in it than textures. */
+.definitions-prompt {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(480px, calc(100% - 20px));
+  padding: 8px 8px 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-pop);
+  animation: definitions-prompt-in 220ms ease;
+}
+.definitions-prompt > svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.definitions-prompt-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.definitions-prompt-text strong {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+}
+.definitions-prompt-path {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.definitions-prompt-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+/* The Definitions tab's primary button, restated here rather than imported:
+   this prompt loads with the app shell, and its panel lives in the workbench's
+   lazy chunk, which should stay out of the initial payload. One step up in
+   size, since this one floats over the stage instead of sitting in a panel. */
+.definitions-prompt-import {
+  display: flex;
+  flex: none;
+  min-height: 26px;
+  padding: 0 10px;
+  align-items: center;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.definitions-prompt-import:hover {
+  filter: brightness(1.1);
+}
+.definitions-prompt-import:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 1px;
+}
+.definitions-prompt-dismiss {
+  display: flex;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.definitions-prompt-dismiss:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
+.definitions-prompt-dismiss:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 1px;
+}
+
+@keyframes definitions-prompt-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .definitions-prompt {
+    animation: none;
+  }
+}

@@ -13,6 +13,7 @@ import { WarpaintList } from './ui/WarpaintList';
 import { Inspector } from './ui/Inspector';
 import type { ControlsState } from './ui/Inspector';
 import { StageToolbar } from './ui/StageToolbar';
+import { DefinitionsPrompt } from './ui/DefinitionsPrompt';
 import type { WarpaintAssetOverrides, WearRecipe, WorkbenchTab } from './ui/CustomWarpaintImport';
 import { BootLoader } from './ui/BootLoader';
 import { VIEW_ANGLES } from './viewer/presets';
@@ -391,6 +392,24 @@ function MainApp() {
     [definitions.state, onSelectKit],
   );
 
+  // A mounted package often carries the definitions its textures belong to, but
+  // the Definitions tab that says so is behind a drawer most people never open.
+  // Ask over the stage instead, once per package: importing or dismissing
+  // answers it, and so does importing definitions from anywhere else.
+  const { packageCandidate } = definitions.state;
+  const candidateKey = packageCandidate ? `${packageGeneration}:${packageCandidate.path}` : '';
+  const candidateKeyRef = useRef(candidateKey);
+  candidateKeyRef.current = candidateKey;
+  const [answeredCandidateKey, setAnsweredCandidateKey] = useState('');
+  useEffect(() => {
+    if (definitions.generation > 0) setAnsweredCandidateKey(candidateKeyRef.current);
+  }, [definitions.generation]);
+  const promptedCandidate = packageCandidate
+    && candidateKey !== answeredCandidateKey
+    && definitions.state.status !== 'importing'
+    ? packageCandidate
+    : null;
+
   const randomizeSeed = useCallback(() => patch({ seed: randomSeed() }), [patch]);
 
   const onViewAngle = useCallback((id: string) => {
@@ -486,6 +505,7 @@ function MainApp() {
       <main className="stage">
         <div
           className="canvas-wrap"
+          data-prompt={promptedCandidate ? '' : undefined}
           onPointerDown={() => setHintDismissed(true)}
           onWheel={() => setHintDismissed(true)}
         >
@@ -529,6 +549,19 @@ function MainApp() {
           <div className={`canvas-hint${hintDismissed ? ' dismissed' : ''}`}>
             drag to rotate, scroll to zoom, right-drag to pan, double-click to reset
           </div>
+          {promptedCandidate && (
+            <DefinitionsPrompt
+              path={promptedCandidate.path}
+              onImport={() => {
+                promptedCandidate.onLoad();
+                // Land on the tab that will show what was imported, whether the
+                // drawer is open now or opened later.
+                setWorkbenchTab('definitions');
+                setAnsweredCandidateKey(candidateKey);
+              }}
+              onDismiss={() => setAnsweredCandidateKey(candidateKey)}
+            />
+          )}
         </div>
         <div
           className="custom-workbench-slot"
