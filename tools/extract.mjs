@@ -4,6 +4,8 @@
 //
 // Produces:
 //   public/data/manifest.json
+//   public/data/protodefs-full.bin        (the whole container, for the export builder)
+//   public/data/protodefs-loc/<lang>.txt  (paintkit name tokens, one file per language)
 //   public/data/recipes/<paintkitId>.json  ({ trees, variants }; variants key =
 //                                            <weaponKey>_<team>[_w<n>] -> trees index)
 //   public/data/textures/<vpk path minus materials/>.webp   (lossless, compositor input)
@@ -344,6 +346,53 @@ function collectSlots(def) {
 }
 
 // ---------------------------------------------------------------------------
+// Export builder snapshot
+// ---------------------------------------------------------------------------
+//
+// The export builder splices a new paintkit into a complete proto_defs container
+// and names it in a complete localization file, then ships both inside the pack.
+// Neither can be a partial file: anything under tf/custom/ SHADOWS the game's own
+// copy rather than merging with it, so a stub would strip every other war paint's
+// definition or name from the player's client.
+//
+// protodefs-base.bin (above) stays as it is. It carries only the four defTypes a
+// community JSON fragment references, which is all the viewer needs to RESOLVE an
+// imported paint. Writing a pack needs the paintkit definitions too, hence a
+// second, whole-container copy.
+
+const LOC_PROTO_PATTERN = /^tf_proto_obj_defs_([a-z]+)\.txt$/i;
+
+// Whichever TF2 build these files came from. A pack built against a stale
+// snapshot removes any paint added since, so the number is carried into the
+// manifest, shown in the export panel, and repeated in the pack's README.
+function readGameBuild() {
+  try {
+    const inf = fs.readFileSync(`${TF}/steam.inf`, 'utf8');
+    return /^PatchVersion=(.+)$/m.exec(inf)?.[1].trim() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function stepExportSnapshot() {
+  fs.copyFileSync(VPD, path.join(PUBLIC_DATA, 'protodefs-full.bin'));
+  log(`[export-snapshot] wrote protodefs-full.bin (${fs.statSync(VPD).size} bytes)`);
+
+  const outDir = path.join(PUBLIC_DATA, 'protodefs-loc');
+  ensureDir(outDir);
+  const languages = [];
+  for (const entry of fs.readdirSync(`${TF}/resource`)) {
+    const language = LOC_PROTO_PATTERN.exec(entry)?.[1].toLowerCase();
+    if (!language) continue;
+    // Copied byte for byte: these are UTF-16LE with a BOM and CRLF line endings,
+    // and the engine's KeyValues reader is unforgiving about all three.
+    fs.copyFileSync(`${TF}/resource/${entry}`, path.join(outDir, `${language}.txt`));
+    languages.push(language);
+  }
+  log(`[export-snapshot] wrote protodefs-loc/ (${languages.length} languages: ${languages.sort().join(', ')})`);
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -368,6 +417,7 @@ async function main() {
   const ctx = buildIndex(operations, itemDefs, variables);
 
   if (run('protodefs-base')) stepProtodefsBase(byType);
+  if (run('export-snapshot')) stepExportSnapshot();
 
   log('[items] parsing items_game.txt ...');
   const itemsGame = loadItemsGame();
@@ -546,6 +596,13 @@ async function main() {
 
   // Manifest ----------------------------------------------------------------
   if (run('manifest') || run('recipes')) {
+    // Read back for the same reason the textures field below explains: a
+    // partial run must not drop what a full run established.
+    let previousManifest = null;
+    try {
+      previousManifest = JSON.parse(fs.readFileSync(path.join(PUBLIC_DATA, 'manifest.json'), 'utf8'));
+    } catch { /* first run, or unreadable: fall through to whatever this run has */ }
+
     const weapons = [...weaponRegistry.values()]
       .sort((a, b) => a.key.localeCompare(b.key))
       .map((w) => {
@@ -563,10 +620,15 @@ async function main() {
       }); });
     const manifest = {
       generatedAt: new Date().toISOString(),
+      gameBuild: readGameBuild(),
       paintkits: manifestPaintkits,
       weapons,
       materials: materialOverrides,
-      textures: textureMetadata,
+      // Texture metadata is produced by the textures step. `--only manifest`
+      // does not run it, so writing the empty map would silently delete all
+      // 1,200 entries the compositor and the exporter read their dimensions and
+      // sampling flags from. Keep whatever the last full run wrote instead.
+      textures: Object.keys(textureMetadata).length ? textureMetadata : previousManifest?.textures ?? textureMetadata,
       collectionIcons,
       wearLevels: WEAR_LEVELS,
       wearNames: WEAR_NAMES,
