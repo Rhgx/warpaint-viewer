@@ -6,6 +6,7 @@ import type {
 import { Tabs } from '@base-ui/react/tabs';
 import {
   AlertTriangle,
+  Download,
   Eye,
   EyeOff,
   FileImage,
@@ -14,6 +15,7 @@ import {
   Layers,
   LoaderCircle,
   PackageOpen,
+  Plus,
   RotateCcw,
   ScrollText,
   Search,
@@ -27,6 +29,8 @@ import { TextField } from './components';
 import { SourcePackagePanel } from './SourcePackagePanel';
 import type { SourcePackageState } from './SourcePackagePanel';
 import { DefinitionsPanel } from './DefinitionsPanel';
+import { ExportPanel } from './ExportPanel';
+import type { ExportDefinitionsContext, ExportItem } from './ExportPanel';
 import './CustomWarpaintImport.css';
 import './SourcePackagePanel.css';
 import './DefinitionsPanel.css';
@@ -37,7 +41,7 @@ export interface WarpaintAssetOverrides {
 }
 
 type SlotGroup = 'artwork' | 'mask' | 'support';
-export type WorkbenchTab = 'files' | 'package' | 'definitions';
+export type WorkbenchTab = 'files' | 'package' | 'definitions' | 'export';
 
 export interface WearRecipe {
   wearIndex: number;
@@ -422,10 +426,24 @@ export function CustomWarpaintWorkbench({
   onClose,
   tab,
   onTabChange,
+  paintName,
+  weaponName,
+  gameBuild,
+  snapshotDate,
+  exportDefinitions,
 }: {
   recipes: WearRecipe[];
   resolveTexture: (ref: string) => string;
   textureMetadata?: Record<string, TextureMetadata>;
+  /** Names the export writes into the pack's README and default file name. */
+  paintName?: string;
+  weaponName?: string;
+  /** TF2 build the shipped data snapshot came from. */
+  gameBuild?: string | null;
+  /** When that snapshot was taken, which is the part people can act on. */
+  snapshotDate?: string | null;
+  /** Definition and package sources for the Export tab, supplied by the app. */
+  exportDefinitions?: ExportDefinitionsContext;
   sourcePackage: SourcePackageState;
   /** Async Source package resolver used only for the non-destructive preview. */
   resolvePackageTexture?: (ref: string) => Promise<string>;
@@ -612,6 +630,23 @@ export function CustomWarpaintWorkbench({
   // Package files can be dropped anywhere on the workbench, not just onto the
   // bar: the drawer is short, and hunting for a small well is worse than
   // treating the whole surface as the target.
+  // Extensions decide where a file goes, so dropping and picking behave the
+  // same and nobody has to classify a file before handing it over.
+  const routeImportedFiles = (files: File[]) => {
+    const extensionOf = (file: File) => file.name.split('.').pop()?.toLowerCase() ?? '';
+    const packageFiles = files.filter(
+      (file) => extensionOf(file) === 'zip' || extensionOf(file) === 'vpk',
+    );
+    const definitionFiles = files.filter(
+      (file) => extensionOf(file) === 'vpd' || extensionOf(file) === 'json',
+    );
+    if (packageFiles.length) sourcePackage.onImport(packageFiles);
+    if (definitionFiles.length) definitions.onImport(definitionFiles);
+    if (packageFiles.length) onTabChange('package');
+    else if (definitionFiles.length) onTabChange('definitions');
+    else setDropHint(true);
+  };
+
   const dragging = (event: ReactDragEvent<HTMLElement>) =>
     [...event.dataTransfer.types].includes('Files');
   const dropHandlers = {
@@ -635,24 +670,7 @@ export function CustomWarpaintWorkbench({
       dragDepthRef.current = 0;
       setDropping(false);
       const files = [...event.dataTransfer.files];
-      if (files.length === 0) return;
-      const extensionOf = (file: File) =>
-        file.name.split('.').pop()?.toLowerCase() ?? '';
-      const packageFiles = files.filter(
-        (file) => extensionOf(file) === 'zip' || extensionOf(file) === 'vpk',
-      );
-      // A war paint's definitions arrive either as one container or as the two
-      // JSON fragments its author wrote, so both extensions route here.
-      const definitionFiles = files.filter(
-        (file) => extensionOf(file) === 'vpd' || extensionOf(file) === 'json',
-      );
-      if (packageFiles.length) sourcePackage.onImport(packageFiles);
-      if (definitionFiles.length) definitions.onImport(definitionFiles);
-      // A mixed drop lands on the package tab (mounting textures is the more
-      // consequential half); a single-type drop always follows its own file.
-      if (packageFiles.length) onTabChange('package');
-      else if (definitionFiles.length) onTabChange('definitions');
-      else setDropHint(true);
+      if (files.length) routeImportedFiles(files);
     },
   };
 
@@ -678,6 +696,19 @@ export function CustomWarpaintWorkbench({
   const loadedDefinitionCount = definitions.kits.filter(
     (kit) => kit.loaded,
   ).length;
+
+  // The export needs each replaced slot's kind, which only the slot list knows,
+  // so the pairing happens here rather than in the panel.
+  const exportItems = useMemo<ExportItem[]>(
+    () =>
+      slots.flatMap((slot) => {
+        const asset = assets[slot.ref];
+        return asset?.output
+          ? [{ ref: slot.ref, kind: slot.kind, output: asset.output, size: asset.size }]
+          : [];
+      }),
+    [slots, assets],
+  );
 
   return (
     <section
@@ -708,31 +739,74 @@ export function CustomWarpaintWorkbench({
               <span>Files</span>
               <span className="custom-workbench-tab-badge">{filesBadge}</span>
             </Tabs.Tab>
-            <Tabs.Tab value="package" className="custom-workbench-tab">
-              <PackageOpen size={13} />
-              <span>Package</span>
-              {packageSummary && (
-                <span className="custom-workbench-tab-badge custom-workbench-tab-badge-dot">
-                  <span
-                    className="custom-workbench-tab-dot"
-                    aria-hidden="true"
-                  />
-                  {packageSummary.format}
-                </span>
-              )}
-            </Tabs.Tab>
-            <Tabs.Tab value="definitions" className="custom-workbench-tab">
-              <ScrollText size={13} />
-              <span>Definitions</span>
-              {definitions.status === 'loaded' && (
-                <span className="custom-workbench-tab-badge">
-                  {loadedDefinitionCount > 0
-                    ? `${loadedDefinitionCount}/${definitions.kits.length}`
-                    : definitions.kits.length}
-                </span>
+            <Tabs.Tab value="export" className="custom-workbench-tab">
+              <Download size={13} />
+              <span>Export</span>
+              {replacedCount > 0 && (
+                <span className="custom-workbench-tab-badge">{replacedCount}</span>
               )}
             </Tabs.Tab>
           </Tabs.List>
+
+          {/* What has been brought in, rather than places to go. Files and
+              Export are the two surfaces you work in; an archive and a set of
+              definitions are state you need to see while working in them, which
+              is exactly what a tab hides. These stay readable from every tab and
+              open their own detail when there is something to say. */}
+          <div className="workbench-sources">
+            {/* Plain buttons rather than Tabs.Tab: base-ui's tab triggers must
+                live inside a Tabs.List, and these belong beside it, not in it.
+                The Root's value is controlled here anyway, so selecting one
+                still shows its panel. */}
+            <button
+              type="button"
+              className="workbench-source"
+              data-loaded={sourcePackage.status === 'mounted' ? '' : undefined}
+              data-selected={tab === 'package' ? '' : undefined}
+              aria-pressed={tab === 'package'}
+              onClick={() => onTabChange('package')}
+              title={packageSummary ? `${packageSummary.name} (${packageSummary.format.toUpperCase()})` : 'No archive mounted'}
+            >
+              <PackageOpen size={12} />
+              <span>
+                {packageSummary
+                  ? `${packageSummary.name} · ${packageSummary.usedCount || packageSummary.entryCount} files`
+                  : 'No archive'}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="workbench-source"
+              data-loaded={definitions.status === 'loaded' ? '' : undefined}
+              data-selected={tab === 'definitions' ? '' : undefined}
+              aria-pressed={tab === 'definitions'}
+              onClick={() => onTabChange('definitions')}
+              title={definitions.fileName ?? 'No definitions imported'}
+            >
+              <ScrollText size={12} />
+              <span>
+                {definitions.status === 'loaded'
+                  ? `${loadedDefinitionCount || definitions.kits.length} paint${(loadedDefinitionCount || definitions.kits.length) === 1 ? '' : 's'}`
+                  : 'No definitions'}
+              </span>
+            </button>
+            <label className="workbench-source workbench-source-import" title="Import an archive or a war paint's definitions">
+              <Plus size={12} />
+              <span>Import</span>
+              <input
+                type="file"
+                accept=".zip,.vpk,.vpd,.json"
+                multiple
+                aria-label="Import an archive or war paint definitions"
+                onChange={(event) => {
+                  const files = [...(event.target.files ?? [])];
+                  event.target.value = '';
+                  if (files.length) routeImportedFiles(files);
+                }}
+              />
+            </label>
+          </div>
+
           <button
             type="button"
             className="custom-workbench-close"
@@ -779,6 +853,16 @@ export function CustomWarpaintWorkbench({
                   ? `${replacedCount} of ${slots.length} replaced`
                   : `${slots.length} inputs`}
               </span>
+              {replacedCount > 0 && (
+                <button
+                  type="button"
+                  className="custom-workbench-reset-all"
+                  onClick={() => onTabChange('export')}
+                >
+                  <Download size={12} />
+                  Export
+                </button>
+              )}
               {(replacedCount > 0 || sourcePackage.status === 'mounted') && (
                 <button
                   type="button"
@@ -1033,12 +1117,34 @@ export function CustomWarpaintWorkbench({
           </div>
         </Tabs.Panel>
 
-        <Tabs.Panel value="package" className="custom-workbench-panel">
-          <SourcePackagePanel state={sourcePackage} />
-        </Tabs.Panel>
+        {/* Not Tabs.Panel: base-ui only activates a panel that has a matching
+            trigger inside Tabs.List, and these are reached from the source chips
+            in the header instead. Rendered conditionally on the same tab value,
+            so the drawer still shows exactly one surface at a time. */}
+        {tab === 'package' && (
+          <div className="custom-workbench-panel" role="region" aria-label="Mounted archive">
+            <SourcePackagePanel state={sourcePackage} />
+          </div>
+        )}
 
-        <Tabs.Panel value="definitions" className="custom-workbench-panel">
-          <DefinitionsPanel state={definitions} />
+        {tab === 'definitions' && (
+          <div className="custom-workbench-panel" role="region" aria-label="Imported definitions">
+            <DefinitionsPanel state={definitions} />
+          </div>
+        )}
+
+        <Tabs.Panel value="export" className="custom-workbench-panel">
+          <ExportPanel
+            items={exportItems}
+            loading={loading}
+            textureMetadata={textureMetadata}
+            paintName={paintName}
+            weaponName={weaponName}
+            gameBuild={gameBuild}
+            snapshotDate={snapshotDate}
+            definitions={exportDefinitions}
+            onGoToTab={onTabChange}
+          />
         </Tabs.Panel>
       </Tabs.Root>
     </section>

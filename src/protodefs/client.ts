@@ -5,7 +5,8 @@
 
 import type { DecodedContainer } from './decoder';
 import type {
-  ProtoDefIndex, ProtoDefJsonFragment, ProtoDefOpenOptions, ProtoDefRecipe, ProtoDefSource,
+  ProtoDefIndex, ProtoDefJsonFragment, ProtoDefKitMessages, ProtoDefOpenOptions, ProtoDefRecipe,
+  ProtoDefSource,
 } from './types';
 
 type Team = 'red' | 'blu';
@@ -58,6 +59,12 @@ class InProcessSource {
     if (!this.decoded) return null;
     const { resolveKitRecipe } = await import('./decoder');
     return resolveKitRecipe(this.decoded, defindex, weaponKey, team, wearIndex);
+  }
+
+  async exportKit(defindex: number): Promise<ProtoDefKitMessages | null> {
+    if (!this.decoded) return null;
+    const { extractKitMessages } = await import('./decoder');
+    return extractKitMessages(this.decoded, defindex);
   }
 
   dispose(): void {
@@ -168,6 +175,16 @@ export class ProtoDefClient implements ProtoDefSource {
       return (await this.post({ kind: 'resolveRecipe', defindex, weaponKey, team, wearIndex })) as ProtoDefRecipe | null;
     } catch {
       return (await this.ensureFallback()).resolveRecipe(defindex, weaponKey, team, wearIndex);
+    }
+  }
+
+  async exportKit(defindex: number): Promise<ProtoDefKitMessages | null> {
+    if (this.fallback) return this.fallback.exportKit(defindex);
+    if (!this.worker) return (await this.ensureFallback()).exportKit(defindex);
+    try {
+      return (await this.post({ kind: 'exportKit', defindex })) as ProtoDefKitMessages | null;
+    } catch {
+      return (await this.ensureFallback()).exportKit(defindex);
     }
   }
 

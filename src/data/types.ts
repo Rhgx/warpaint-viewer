@@ -79,6 +79,12 @@ export interface PaintkitEntry {
 
 export interface Manifest {
   generatedAt: string;
+  /**
+   * TF2 PatchVersion the shipped game-data snapshots came from (steam.inf), or
+   * null when the pipeline could not read it. The export builder shows this so
+   * anyone on a newer build knows to point it at their own files instead.
+   */
+  gameBuild?: string | null;
   paintkits: PaintkitEntry[];
   weapons: WeaponEntry[];
   materials?: Record<string, WeaponMaterial>;

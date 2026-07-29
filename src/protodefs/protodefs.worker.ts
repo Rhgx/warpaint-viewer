@@ -5,7 +5,7 @@
 // is what actually holds that memory, so the main thread's heap stays small and
 // dispose() can release it all at once by just dropping the reference.
 
-import { decodeProtoDefs, decodeProtoDefsFromJson, resolveKitRecipe } from './decoder';
+import { decodeProtoDefs, decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipe } from './decoder';
 import type { DecodedContainer } from './decoder';
 import type { ProtoDefJsonFragment, ProtoDefOpenOptions } from './types';
 
@@ -35,12 +35,18 @@ interface ResolveRecipeRequest {
   wearIndex: number;
 }
 
+interface ExportKitRequest {
+  id: number;
+  kind: 'exportKit';
+  defindex: number;
+}
+
 interface DisposeRequest {
   id: number;
   kind: 'dispose';
 }
 
-type Request = OpenRequest | OpenJsonRequest | ResolveRecipeRequest | DisposeRequest;
+type Request = OpenRequest | OpenJsonRequest | ResolveRecipeRequest | ExportKitRequest | DisposeRequest;
 
 let decoded: DecodedContainer | null = null;
 
@@ -71,6 +77,10 @@ self.onmessage = (event: MessageEvent<Request>) => {
         if (!decoded) { reply(request.id, null); break; }
         const recipe = resolveKitRecipe(decoded, request.defindex, request.weaponKey, request.team, request.wearIndex);
         reply(request.id, recipe);
+        break;
+      }
+      case 'exportKit': {
+        reply(request.id, decoded ? extractKitMessages(decoded, request.defindex) : null);
         break;
       }
       case 'dispose': {

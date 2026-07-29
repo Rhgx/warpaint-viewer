@@ -1,6 +1,12 @@
 import type { TextureMetadata } from '../data/types';
 import type { SourceDiagnostic, SourcePackage } from './contracts';
-import { isSupportedTexturePath, sourcePathExtension, sourceTextureCandidates, sourceTextureIdentity } from './paths';
+import {
+  isSupportedTexturePath,
+  normalizeSourcePath,
+  sourcePathExtension,
+  sourceTextureCandidates,
+  sourceTextureIdentity,
+} from './paths';
 import { readPackageWeaponMaterial, type PackageMaterial } from './vmt';
 
 export interface SourceTextureProviderSnapshot {
@@ -118,6 +124,56 @@ export class SourceTextureProvider {
    */
   async resolvePreview(ref: string): Promise<string> {
     return this.#resolve(ref, false);
+  }
+
+  /**
+   * Which package entry a ref binds to, or undefined when the package does not
+   * carry it, without loading anything.
+   *
+   * Shares #resolve's rules on purpose. The export builder has to pack exactly
+   * what the viewer is drawing, and community packs make that non-obvious:
+   * Flak Furnished, for example, asks for `patterns/FFV3/` while shipping its
+   * textures loose at the archive root, so only the filename fallback below
+   * binds them. An
+   * export that matched on exact paths alone would quietly ship a pack missing
+   * the very artwork on screen.
+   */
+  packagePathFor(ref: string): string | undefined {
+    const pkg = this.#package;
+    if (!pkg) return undefined;
+    let identity: string;
+    let candidates: string[];
+    try { identity = sourceTextureIdentity(ref); candidates = sourceTextureCandidates(ref); }
+    catch { return undefined; }
+    const exact = candidates.find((candidate) => pkg.has(candidate));
+    if (exact) return exact;
+    if (!pkg.rootIsMaterials) return undefined;
+    const nameMatch = this.#matchByName(pkg, identity);
+    return nameMatch && nameMatch !== 'ambiguous' ? nameMatch : undefined;
+  }
+
+  /**
+   * Resolves an arbitrary canonical Source file path into the mounted package.
+   *
+   * Rootless community packages often keep VMTs and dependent textures in
+   * installer-oriented folders rather than at the paths their definitions
+   * name. Exact paths still win; a unique filename match mirrors the repair
+   * used by the viewer. Export writes the bytes under the requested canonical
+   * path, never this returned read path.
+   */
+  packagePathForFile(requestedPath: string): string | undefined {
+    const pkg = this.#package;
+    if (!pkg) return undefined;
+    let canonical: string;
+    try { canonical = normalizeSourcePath(requestedPath); }
+    catch { return undefined; }
+    if (pkg.has(canonical)) return canonical;
+    if (!pkg.rootIsMaterials) return undefined;
+    const filename = canonical.slice(canonical.lastIndexOf('/') + 1);
+    const matches = [...pkg.entries.keys()].filter(
+      (path) => path.slice(path.lastIndexOf('/') + 1) === filename,
+    );
+    return matches.length === 1 ? matches[0] : undefined;
   }
 
   async #resolve(ref: string, consume: boolean): Promise<string> {

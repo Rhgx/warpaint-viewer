@@ -12,6 +12,7 @@ import {
 } from '../protodefs/types';
 import type {
   CustomDefinitionKitRow,
+  ProtoDefKitMessages,
   CustomDefinitionsState,
   ProtoDefIndex,
   ProtoDefJsonFragment,
@@ -37,6 +38,8 @@ export interface CustomDefinitions {
   /** Thumbnail URLs by catalog id, resolved through the mounted package. */
   icons: Record<number, string>;
   getRecipe: (kitId: number, weaponKey: string, team: Team, wearIndex: number) => Promise<RecipeNode | null>;
+  /** An imported kit's definition and operation, for the export builder. */
+  exportKit: (kitId: number) => Promise<ProtoDefKitMessages | null>;
   /** Catalog id to select after an import, changing only when a new one lands. */
   suggestedKitId: number | undefined;
   /** Bumped by every successful open, so repeat imports are distinguishable. */
@@ -404,6 +407,17 @@ export function useCustomDefinitions({
     return pending;
   }, [hasTexture]);
 
+  // The export builder needs an imported kit's own definition and operation
+  // messages so it can write them into a proto_defs container the game loads.
+  // Routed through the hook rather than by handing out the source, so the
+  // loaded container stays owned in one place.
+  const exportKit = useCallback(
+    (kitId: number): Promise<ProtoDefKitMessages | null> => (
+      loadedRef.current?.source.exportKit(customKitDefindex(kitId)) ?? Promise.resolve(null)
+    ),
+    [],
+  );
+
   const state = useMemo<CustomDefinitions['state']>(() => ({
     status,
     fileName,
@@ -416,8 +430,8 @@ export function useCustomDefinitions({
   }), [status, fileName, kitRows, diagnostics, packageCandidate, onImport, onToggleKit, onRemove]);
 
   return useMemo(
-    () => ({ state, catalogKits, icons, getRecipe, suggestedKitId, generation }),
-    [state, catalogKits, icons, getRecipe, suggestedKitId, generation],
+    () => ({ state, catalogKits, icons, getRecipe, exportKit, suggestedKitId, generation }),
+    [state, catalogKits, icons, getRecipe, exportKit, suggestedKitId, generation],
   );
 }
 

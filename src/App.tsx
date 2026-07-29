@@ -21,6 +21,8 @@ import { useBootData, randomSeed } from './hooks/useBootData';
 import { useComposedPaint } from './hooks/useComposedPaint';
 import { useSourcePackage } from './hooks/useSourcePackage';
 import { useCustomDefinitions } from './hooks/useCustomDefinitions';
+import { sourceTextureIdentity } from './source/paths';
+import { collectTextureRefs, exportPathFor, resolvePackageTextures } from './export/plan';
 import { isCustomKitId } from './protodefs/types';
 import type { CustomDefinitionsState } from './protodefs/types';
 
@@ -249,11 +251,12 @@ function MainApp() {
     void resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
   }, [data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex]);
 
-  // The editor lists every input the paint can use, not just the ones the
-  // current wear happens to reach: per-wear recipes swap in dirt/blood/
-  // scratch/burnt-albedo textures at some levels only, and those inputs must
-  // stay editable whatever the wear slider says. Bundles are cached, so the
-  // extra wear levels cost no extra requests.
+  // The editor and exporter list every input the paint can use, not just the
+  // ones the current wear or team happens to reach. Team-aware operation
+  // stages resolve texture_red and texture_blue to different refs; collecting
+  // only the selected team produced packs whose definition referenced BLU
+  // artwork that was never included. Bundles are cached, so the extra
+  // team/wear resolutions cost no extra network requests.
   useEffect(() => {
     if (!data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) {
       setEditorRecipes([]);
@@ -265,9 +268,12 @@ function MainApp() {
     const wearIndexes = selectedKit.perWear
       ? data.manifest.wearLevels.map((_, index) => index)
       : [state.wearIndex];
+    const teams = selectedKit.hasTeamTextures ? (['red', 'blu'] as const) : [state.team];
     void Promise.all(
-      wearIndexes.map((wearIndex) => resolveRecipe(selectedKit, state.weaponKey, state.team, wearIndex)
-        .then((recipe) => ({ wearIndex, recipe }))),
+      teams.flatMap((team) =>
+        wearIndexes.map((wearIndex) => resolveRecipe(selectedKit, state.weaponKey, team, wearIndex)
+          .then((recipe) => ({ wearIndex, recipe }))),
+      ),
     ).then((loaded) => {
       if (cancelled) return;
       setEditorRecipes(loaded.flatMap(({ wearIndex, recipe }) => recipe ? [{ wearIndex, recipe }] : []));
@@ -409,6 +415,62 @@ function MainApp() {
     && definitions.state.status !== 'importing'
     ? packageCandidate
     : null;
+
+  // What the Export tab needs beyond the hand-replaced textures: the selected
+  // paint's own definitions, and the package textures the compositor read.
+  // Both are fetched only when an export actually runs, so opening the tab
+  // costs nothing.
+  const { exportKit } = definitions;
+  const exportDefinitions = useMemo(() => {
+    // Which of this paint's textures the mounted package supplies, answered
+    // from the recipe rather than from what has been rendered so far, so the
+    // count is right the moment the tab opens.
+    const pkg = sourceProvider.package;
+    const refs = collectTextureRefs(editorRecipes.map((entry) => entry.recipe));
+    const supplied = pkg ? resolvePackageTextures(refs, (ref: string) => sourceProvider.packagePathFor(ref)) : [];
+    const unresolvedTextureRefs = refs.filter((ref) => {
+      if (!sourceTextureIdentity(ref).startsWith('materials/patterns/')) return false;
+      if (sourceProvider.packagePathFor(ref)) return false;
+      return !data?.manifest.textures?.[ref];
+    });
+    return {
+      isImported: selectedKit ? isCustomKitId(selectedKit.id) : false,
+      builtInKits: (data?.manifest.paintkits ?? []).map((kit) => ({ defindex: kit.id, name: kit.name })),
+      loadKitMessages: async () => (
+        selectedKit && isCustomKitId(selectedKit.id) ? exportKit(selectedKit.id) : null
+      ),
+      packageFiles: async () => {
+        if (!pkg) return [];
+        const { collectPackageFiles } = await import('./export/bundle');
+        // Files the user replaced by hand win over the package's copy, matching
+        // what the viewer is rendering.
+        const replaced = new Set(
+          Object.keys(activeTextureOverrides).map((ref) => `${sourceTextureIdentity(ref)}.vtf`),
+        );
+        return collectPackageFiles(
+          supplied.map(({ ref, path }) => ({ path, writeAs: exportPathFor(ref) })),
+          (path) => pkg.read(path),
+          replaced,
+        );
+      },
+      materialFiles: async (overrides: readonly string[]) => {
+        if (!pkg) return { files: [], missing: [...overrides], repaired: [] };
+        const { collectMaterialFiles } = await import('./export/bundle');
+        return collectMaterialFiles(
+          overrides,
+          (path: string) => sourceProvider.packagePathForFile(path),
+          (path: string) => pkg.read(path),
+        );
+      },
+      packageFileCount: supplied.length,
+      packageMounted: Boolean(pkg),
+      unresolvedTextureRefs,
+    };
+    // packageGeneration is what marks a mount or removal: the provider keeps
+    // its own identity across both, so without it this would keep answering for
+    // whatever archive was mounted first.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, selectedKit, exportKit, sourceProvider, packageGeneration, editorRecipes, activeTextureOverrides]);
 
   const randomizeSeed = useCallback(() => patch({ seed: randomSeed() }), [patch]);
 
@@ -579,6 +641,11 @@ function MainApp() {
                 onTabChange={setWorkbenchTab}
                 resolveTexture={data.resolveTexture}
                 textureMetadata={data.manifest.textures}
+                paintName={selectedKit?.name}
+                weaponName={weaponName}
+                gameBuild={data.manifest.gameBuild}
+                snapshotDate={data.manifest.generatedAt}
+                exportDefinitions={exportDefinitions}
                 sourcePackage={sourcePackage}
                 resolvePackageTexture={resolvePackageTexture}
                 packageGeneration={packageGeneration}

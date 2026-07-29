@@ -18,8 +18,15 @@ const STAGING = path.join(ROOT, 'staging');
 const BUILD_DIR = path.join(STAGING, 'source-packages-verify');
 const DEFAULT_PACKS_DIR = 'C:/Users/TR/Downloads/example-warapints';
 
-const PACKS = ['Invisible_V2.zip', 'Skinned Submission.zip', 'FlakFurnished.ZIP'];
-const REFS = ['patterns/skinned/skin_main', 'invisible_warpaint/black', 'patterns/FFV3/logo', 'patterns/FFV3/tf2logo'];
+const PACKS = ['Invisible_V2.zip', 'Skinned Submission.zip', 'FlakFurnished.ZIP', 'ghastly_guns.ZIP'];
+const REFS = [
+  'patterns/skinned/skin_main',
+  'invisible_warpaint/black',
+  'patterns/FFV3/logo',
+  'patterns/FFV3/tf2logo',
+  'patterns/ghostgun/albedo_overlay',
+  'patterns/ghostgun/light_green_solid',
+];
 
 function bundleModule() {
   fs.mkdirSync(BUILD_DIR, { recursive: true });
@@ -28,6 +35,9 @@ function bundleModule() {
     "export { openZipSourcePackage } from '../src/source/zip';",
     "export { SourceTextureProvider } from '../src/source/provider';",
     "export { sourceTextureCandidates, sourceTextureIdentity } from '../src/source/paths';",
+    "export { collectPackageFiles } from '../src/export/bundle';",
+    "export { collectMaterialFiles } from '../src/export/bundle';",
+    "export { exportPathFor } from '../src/export/plan';",
     '',
   ].join('\n'));
   // Spawn vite's bin through node rather than npx: npx resolves differently on
@@ -47,7 +57,15 @@ function bundleModule() {
 }
 
 console.log('[verify] bundling the browser Source package layer ...');
-const { openZipSourcePackage, SourceTextureProvider, sourceTextureCandidates, sourceTextureIdentity } = await import(bundleModule());
+const {
+  collectPackageFiles,
+  collectMaterialFiles,
+  exportPathFor,
+  openZipSourcePackage,
+  SourceTextureProvider,
+  sourceTextureCandidates,
+  sourceTextureIdentity,
+} = await import(bundleModule());
 
 const packsDir = process.argv[2] ?? DEFAULT_PACKS_DIR;
 let ok = true;
@@ -114,6 +132,38 @@ for (const fileName of PACKS) {
     else if (snapshot.ambiguousNameMatches.has(identity)) outcome = 'ambiguous (left unmatched)';
     else outcome = 'unmatched (built-in fallback)';
     console.log(`  ${ref}: ${outcome}`);
+
+    const packagePath = provider.packagePathFor(ref);
+    if (packagePath) {
+      const writeAs = exportPathFor(ref);
+      const copied = await collectPackageFiles(
+        [{ path: packagePath, writeAs }],
+        (entryPath) => pkg.read(entryPath),
+        new Set(),
+      );
+      if (copied.length !== 1 || copied[0].path !== writeAs) {
+        console.error(`  [FAIL] export mapped ${packagePath} to ${copied[0]?.path ?? '(nothing)'}, expected ${writeAs}`);
+        ok = false;
+      } else {
+        console.log(`    export -> ${copied[0].path}`);
+      }
+    }
+  }
+
+  if (fileName.toLowerCase() === 'ghastly_guns.zip') {
+    const requested = 'models/paintkits/ghost/c_shotgun';
+    const materialPath = `materials/${requested}.vmt`;
+    const materialFiles = await collectMaterialFiles(
+      [requested],
+      (entryPath) => provider.packagePathForFile(entryPath),
+      (entryPath) => pkg.read(entryPath),
+    );
+    if (!materialFiles.files.some((file) => file.path === materialPath)) {
+      console.error(`  [FAIL] loose c_shotgun.vmt was not exported as ${materialPath}`);
+      ok = false;
+    } else {
+      console.log(`  material export -> ${materialPath}`);
+    }
   }
   provider.dispose();
 }
