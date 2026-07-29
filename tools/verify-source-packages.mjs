@@ -164,6 +164,13 @@ for (const fileName of PACKS) {
     } else {
       console.log(`  material export -> ${materialPath}`);
     }
+    const emissivePath = 'materials/patterns/ghostgun/light_green_solid.vtf';
+    if (!materialFiles.files.some((file) => file.path === emissivePath)) {
+      console.error(`  [FAIL] unquoted $EmissiveBlendBaseTexture dependency was not exported as ${emissivePath}`);
+      ok = false;
+    } else {
+      console.log(`  material dependency export -> ${emissivePath}`);
+    }
   }
   provider.dispose();
 }

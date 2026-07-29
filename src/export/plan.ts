@@ -85,8 +85,13 @@ export function collectMaterialOverrides(definition: Record<string, unknown>): s
  */
 export function collectVmtTextureRefs(vmt: string): string[] {
   const refs = new Set<string>();
-  for (const match of vmt.matchAll(/"\$[a-z0-9_]+"\s*"([^"]+)"/gi)) {
-    const value = match[1].trim().replace(/\\/g, '/');
+  // KeyValues permits both keys and values to be quoted or bare. Community
+  // VMTs commonly mix the two styles (Ghastly Guns, for example, writes
+  // `$EmissiveBlendBaseTexture "patterns/ghostgun/light_green_solid"`).
+  // Keep the value capture deliberately path-shaped so numeric/vector material
+  // parameters and braces are not mistaken for dependencies.
+  for (const match of vmt.matchAll(/(?:"\$[a-z0-9_]+"|\$[a-z0-9_]+)\s+(?:"([^"]+)"|([^\s{}"]+))/gi)) {
+    const value = (match[1] ?? match[2] ?? '').trim().replace(/\\/g, '/');
     // Values that are numbers, vectors or booleans are parameters, not paths.
     if (!value || /^[\d\s.[\]-]+$/.test(value) || value.includes(' ')) continue;
     refs.add(value.replace(/\.vtf$/i, ''));
