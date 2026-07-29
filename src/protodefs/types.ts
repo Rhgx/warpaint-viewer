@@ -88,6 +88,15 @@ export interface ProtoDefJsonFragment {
  * megabytes), so an implementation is expected to hold them off the main
  * thread and release them on dispose().
  */
+/**
+ * A kit's two defining messages, as decoded plain objects, for the export
+ * builder to re-encode into a spliced container.
+ */
+export interface ProtoDefKitMessages {
+  definition: Record<string, unknown>;
+  operation: Record<string, unknown>;
+}
+
 export interface ProtoDefSource {
   open(bytes: Uint8Array, options: ProtoDefOpenOptions): Promise<ProtoDefIndex>;
   /**
@@ -107,6 +116,12 @@ export interface ProtoDefSource {
     team: 'red' | 'blu',
     wearIndex: number,
   ): Promise<ProtoDefRecipe | null>;
+  /**
+   * The definition and operation for one kit, so it can be written into a
+   * proto_defs container the game will load. Null when nothing is open or the
+   * kit names an operation the container does not hold.
+   */
+  exportKit(defindex: number): Promise<ProtoDefKitMessages | null>;
   dispose(): void;
 }
 

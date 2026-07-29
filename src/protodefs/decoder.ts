@@ -788,6 +788,34 @@ export function decodeProtoDefsFromJson(
   }, options);
 }
 
+/**
+ * The two messages the export builder needs to splice a kit into someone's
+ * proto_defs: the paint kit definition and the operation it reads.
+ *
+ * Returned as plain decoded objects, the same shape decodeType() produces, so
+ * src/export/protoWrite.ts can re-encode them with the same schema. The
+ * operation is looked up through the definition's own `operation_template`
+ * pointer, which is how a paint that reuses a stock Valve operation still
+ * resolves: it comes back with whatever operation the definition names, stock
+ * or authored.
+ */
+export function extractKitMessages(
+  decoded: DecodedContainer,
+  defindex: number,
+): { definition: Record<string, unknown>; operation: Record<string, unknown> } | null {
+  const kit = decoded.kitsByDefindex.get(defindex);
+  if (!kit) return null;
+  const definition = kit.def as unknown as Record<string, unknown>;
+  const reference = definition.operation_template;
+  const operationDefindex = reference !== null && typeof reference === 'object'
+    ? (reference as Record<string, unknown>).defindex
+    : undefined;
+  if (typeof operationDefindex !== 'number') return null;
+  const operation = decoded.ctx.opByIdx.get(operationDefindex);
+  if (!operation) return null;
+  return { definition, operation: operation as unknown as Record<string, unknown> };
+}
+
 export function resolveKitRecipe(
   decoded: DecodedContainer,
   defindex: number,
