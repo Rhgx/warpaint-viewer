@@ -1,0 +1,361 @@
+/* Export tab.
+   The drawer this lives in is wide and short (it starts around 260px tall and
+   the stage above it wants the rest), so the panel reads across rather than
+   down: the decisions sit in columns, the contents summary sits beside them
+   instead of below, and the action bar never scrolls away. The previous stack
+   put the most consequential choice under a long file list, in the one axis
+   this surface does not have. */
+.export-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  /* The stage narrows as the catalog and inspector open, so this panel's width
+     has little to do with the window's. Query the panel itself. */
+  container-type: inline-size;
+}
+.export-panel[data-status='empty'] {
+  align-items: center;
+  justify-content: center;
+}
+
+.export-grid {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: start;
+  gap: 0;
+  grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.4fr) minmax(210px, 1fr);
+  overflow-y: auto;
+}
+/* Without imported definitions there is no middle column to place. */
+.export-grid:has(> .export-col:nth-child(2):last-child) {
+  grid-template-columns: minmax(180px, 1fr) minmax(210px, 1fr);
+}
+
+.export-col {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-right: 1px solid var(--border);
+}
+.export-col:last-child { border-right: none; }
+
+.export-col-title {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.export-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.export-field > span {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.export-field-hint {
+  color: var(--warn);
+  font-size: 9.5px;
+  font-style: normal;
+}
+
+/* Segmented control: both options visible, the chosen one filled. */
+.export-segmented {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.export-segment {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 5px 8px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.export-segment:last-child { border-right: none; }
+.export-segment:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--text); }
+.export-segment[data-active] {
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+.export-segment:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.export-note,
+.export-callout {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.5;
+}
+/* A notice, not a selection: accent-soft is reserved for the chosen segment, so
+   this reads as a raised surface instead. One border, evenly rounded: an accent
+   bar down one side of a rounded box reads as a clipped edge rather than a cue. */
+.export-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: auto;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.export-callout svg { flex: none; margin-top: 2px; color: var(--accent); }
+.export-callout code {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+}
+.export-note a,
+.export-callout a { color: var(--accent); }
+
+
+/* The file column scrolls on its own so a long list never pushes the rest of
+   the panel around. */
+.export-col-files { min-height: 0; }
+.export-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.export-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.export-row-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: ui-monospace, monospace;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.export-row-meta,
+.export-row-size { flex: none; color: var(--text-dim); font-size: 9px; }
+
+.export-picker {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+.export-picker-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.export-picker-search svg {
+  position: absolute;
+  left: 7px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.export-picker-search :where(input) { padding-left: 24px; }
+.export-picker-list {
+  display: flex;
+  /* Four rows at the shared control height, so the list reads as a list
+     without taking the column over. */
+  max-height: 122px;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  overflow-y: auto;
+}
+.export-picker-option {
+  padding: 4px 7px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.export-picker-option:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); }
+.export-picker-option[data-selected] { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+.export-picker-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.export-picker-empty {
+  margin: 0;
+  padding: 6px 7px;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+/* Messages. A caution is something to decide about before exporting; a result
+   describes the pack that was just built. They used to render identically. */
+.export-messages {
+  display: flex;
+  flex: none;
+  max-height: 92px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  overflow-y: auto;
+}
+.export-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.export-message svg { flex: none; margin-top: 2px; }
+.export-message[data-kind='caution'] { color: var(--text-dim); }
+.export-message[data-kind='caution'] svg { color: var(--warn); }
+.export-message[data-kind='result'] { color: var(--text-dim); opacity: 0.9; }
+.export-message[data-kind='result'] svg { color: var(--accent); }
+
+.export-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--border);
+}
+.export-total {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.export-error {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  color: var(--fail);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.export-done {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.export-action { flex: none; }
+.export-action:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* A narrow stage cannot hold three columns legibly: drop to two, then to one.
+   Keyed to the panel, so opening the inspector reflows this without the window
+   changing size at all. */
+@container (max-width: 900px) {
+  .export-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .export-col-files { grid-column: 1 / -1; border-right: none; border-top: 1px solid var(--border); }
+}
+@container (max-width: 560px) {
+  .export-grid,
+  .export-grid:has(> .export-col:nth-child(2):last-child) {
+    grid-template-columns: 1fr;
+  }
+  .export-col {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .export-col:last-child { border-bottom: none; }
+  .export-col-files { border-top: none; }
+}
+
+/* Empty state: the three ways to give this tab something to pack, as the
+   actions themselves rather than a sentence describing where to click. */
+.export-empty-routes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+.export-empty-routes button {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.export-empty-routes button:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.export-empty-routes button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Base definitions: a statement of what is already handled, with a way out for
+   the few people who need one. Deliberately not a warning or a required field.
+   Everyone on the shipped snapshot should read this and move on. */
+.export-base {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 10px;
+}
+.export-base-label { flex: none; color: var(--text-dim); }
+.export-base-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.export-base-action {
+  position: relative;
+  flex: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.export-base-action:hover { color: var(--accent); }
+.export-base-action:focus-within,
+.export-base-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.export-base-action input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

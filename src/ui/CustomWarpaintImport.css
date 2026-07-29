@@ -389,3 +389,87 @@
   .custom-workbench { transition: none; }
   .custom-workbench-spinner { animation: none; }
 }
+
+/* One control size across every tab in this drawer.
+   These grew apart: text inputs sat at 28px with 13px text, select triggers at
+   29px, the export segments at 23px/10px and the buttons at 24px/9.5px, so a
+   single row could hold three different heights. Everything interactive here is
+   now --control-h tall with the same label size, scoped to the workbench so the
+   inspector's own density is left alone.
+
+   Written as compound selectors rather than :where(), which contributes no
+   specificity: these have to outrank the per-panel rules they normalize, and
+   those live in stylesheets that load after this one. */
+.custom-workbench .definitions-btn,
+.custom-workbench .source-package-btn,
+.custom-workbench .custom-file-button,
+.custom-workbench .export-segment,
+.custom-workbench .export-picker-option,
+.custom-workbench .ui-select-trigger,
+.custom-workbench .export-field input,
+.custom-workbench .export-picker-search input {
+  min-height: var(--control-h);
+  font-size: 11px;
+}
+.custom-workbench .definitions-btn,
+.custom-workbench .source-package-btn,
+.custom-workbench .custom-file-button {
+  padding-inline: 9px;
+}
+
+/* Source chips.
+   Sources are state, not destinations: an archive and a set of definitions are
+   things you have, while Files and Export are things you do. Keeping them in the
+   header means what is loaded stays readable from whichever tab you are working
+   in, and costs no vertical space in a drawer that has none to spare. Selecting
+   one still opens its detail in the panel below, so nothing is lost. */
+.workbench-sources {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding-right: 8px;
+}
+.workbench-source {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+.workbench-source svg { flex: none; opacity: 0.85; }
+.workbench-source span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workbench-source:hover { border-color: var(--border-strong); color: var(--text); }
+/* Loaded reads as a filled state; empty stays quiet rather than alarming. */
+.workbench-source[data-loaded] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.workbench-source[data-selected] {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.workbench-source:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.workbench-source-import { position: relative; }
+.workbench-source-import input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.workbench-source-import:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@container (max-width: 720px) {
+  .workbench-source:not(.workbench-source-import) span { display: none; }
+}
