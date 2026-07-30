@@ -7,6 +7,9 @@
 import type { SourceDiagnostic, SourceEntry, SourcePackage, SourcePackageOpenResult } from './contracts'
 import { SourcePackageError } from './contracts'
 import { normalizeSourcePath } from './paths'
+import { crc32Chunks } from './crc32'
+export { crc32 } from './crc32'
+import { VpkTreeReader } from './vpkParser'
 
 const VPK_SIGNATURE = 0x55aa1234
 const DIRECTORY_ARCHIVE_INDEX = 0x7fff
@@ -343,7 +346,10 @@ function parseTree(
   packageName: string,
   limits: Limits,
 ): Map<string, VpkRecord> {
-  const reader = new TreeReader(tree)
+  const reader = new VpkTreeReader(
+    tree,
+    (message) => new VpkPackageError('vpk-invalid-tree', message),
+  )
   const records = new Map<string, VpkRecord>()
   const missingSegments = new Set<string>()
 
@@ -477,91 +483,4 @@ function formatCrc32(value: number): string {
 function formatBytes(value: number): string {
   if (value < MEBIBYTE) return `${Math.ceil(value / 1024).toLocaleString()} KiB`
   return `${(value / MEBIBYTE).toLocaleString(undefined, { maximumFractionDigits: 1 })} MiB`
-}
-
-const CRC32_TABLE = buildCrc32Table()
-
-export function crc32(bytes: Uint8Array): number {
-  return crc32Chunks(bytes)
-}
-
-function crc32Chunks(...chunks: readonly Uint8Array[]): number {
-  let value = 0xffffffff
-  for (const bytes of chunks) {
-    for (const byte of bytes) value = CRC32_TABLE[(value ^ byte) & 0xff] ^ (value >>> 8)
-  }
-  return (value ^ 0xffffffff) >>> 0
-}
-
-function buildCrc32Table(): Uint32Array {
-  const table = new Uint32Array(256)
-  for (let index = 0; index < table.length; index += 1) {
-    let value = index
-    for (let bit = 0; bit < 8; bit += 1) value = (value & 1) === 1 ? (value >>> 1) ^ 0xedb88320 : value >>> 1
-    table[index] = value >>> 0
-  }
-  return table
-}
-
-class TreeReader {
-  #offset = 0
-  readonly #decoder = new TextDecoder('utf-8', { fatal: true })
-  readonly #bytes: Uint8Array
-
-  constructor(bytes: Uint8Array) {
-    this.#bytes = bytes
-  }
-
-  get done(): boolean {
-    return this.#offset === this.#bytes.byteLength
-  }
-
-  string(context: string): string {
-    const start = this.#offset
-    while (this.#offset < this.#bytes.byteLength && this.#bytes[this.#offset] !== 0) this.#offset += 1
-    if (this.#offset === this.#bytes.byteLength) {
-      throw new VpkPackageError('vpk-invalid-tree', `VPK ${context} string is missing its null terminator.`)
-    }
-    let value: string
-    try {
-      value = this.#decoder.decode(this.#bytes.subarray(start, this.#offset))
-    } catch {
-      throw new VpkPackageError('vpk-invalid-tree', `VPK ${context} string is not valid UTF-8.`)
-    }
-    this.#offset += 1
-    return value
-  }
-
-  uint16(context: string): number {
-    this.#ensure(2, context)
-    const value = this.#bytes[this.#offset] | (this.#bytes[this.#offset + 1] << 8)
-    this.#offset += 2
-    return value
-  }
-
-  uint32(context: string): number {
-    this.#ensure(4, context)
-    const value = (
-      this.#bytes[this.#offset]
-      | (this.#bytes[this.#offset + 1] << 8)
-      | (this.#bytes[this.#offset + 2] << 16)
-      | (this.#bytes[this.#offset + 3] << 24)
-    ) >>> 0
-    this.#offset += 4
-    return value
-  }
-
-  bytes(length: number, context: string): Uint8Array {
-    this.#ensure(length, context)
-    if (length === 0) return EMPTY_BYTES
-    const value = this.#bytes.subarray(this.#offset, this.#offset + length)
-    this.#offset += length
-    return value
-  }
-
-  #ensure(length: number, context: string): void {
-    if (this.#offset + length > this.#bytes.byteLength) {
-      throw new VpkPackageError('vpk-invalid-tree', `VPK tree is truncated while reading ${context}.`)
-    }
-  }
 }
