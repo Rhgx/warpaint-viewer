@@ -1,7 +1,4 @@
-export interface BootState {
-  progress: number;
-  label: string;
-}
+import type { BootState } from '../../app/types';
 
 export function BootLoader({ boot }: { boot: BootState }) {
   return (

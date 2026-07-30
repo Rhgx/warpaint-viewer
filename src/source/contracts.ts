@@ -73,3 +73,24 @@ export interface SourcePackageOpenResult {
   /** War paint index inferred from a numeric package wrapper directory. */
   suggestedPaintkitId?: number;
 }
+
+export interface SourcePackageSummary {
+  name: string;
+  format: SourcePackageFormat;
+  entryCount: number;
+  materialsByExtension: { extension: string; count: number }[];
+  usedCount: number;
+  fallbackCount: number;
+  nameMatchedCount: number;
+  ambiguousNameCount: number;
+  materialCount: number;
+  appliedMaterialPaths: string[];
+}
+
+export interface SourcePackageState {
+  status: 'empty' | 'importing' | 'mounted';
+  summary?: SourcePackageSummary;
+  diagnostics: SourceDiagnostic[];
+  onImport: (files: File[]) => void;
+  onRemove: () => void;
+}

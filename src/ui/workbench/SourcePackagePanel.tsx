@@ -10,43 +10,11 @@ import {
 import type {
   SourceDiagnostic,
   SourcePackageFormat,
-} from '../source/contracts';
+} from '../../source/contracts';
 
-export type { SourcePackageFormat } from '../source/contracts';
+export type { SourcePackageFormat } from '../../source/contracts';
 export type SourcePackageDiagnostic = SourceDiagnostic;
-
-export interface SourcePackageSummary {
-  name: string;
-  format: SourcePackageFormat;
-  /** Every indexed entry, including `models/` and other unconsumed directories. */
-  entryCount: number;
-  /** Indexed entries under `materials/`, grouped by extension. */
-  materialsByExtension: { extension: string; count: number }[];
-  /** Package files the current recipe has actually read so far. */
-  usedCount: number;
-  /** Recipe inputs the package did not provide, which fell back to built-ins. */
-  fallbackCount: number;
-  /**
-   * Refs bound by file name because this package has no materials/ tree to
-   * place them under, and refs left unbound because their file name was not
-   * unique. Both stay zero for a package with a real materials/ root.
-   */
-  nameMatchedCount: number;
-  ambiguousNameCount: number;
-  /** `.vmt` files under materials/, whether or not any weapon uses them. */
-  materialCount: number;
-  /** Package paths of the materials standing in for a weapon's built-in one. */
-  appliedMaterialPaths: string[];
-}
-
-export interface SourcePackageState {
-  status: 'empty' | 'importing' | 'mounted';
-  /** Present while importing and after a successful mount. */
-  summary?: SourcePackageSummary;
-  diagnostics: SourcePackageDiagnostic[];
-  onImport: (files: File[]) => void;
-  onRemove: () => void;
-}
+import type { SourcePackageState, SourcePackageSummary } from '../../source/contracts';
 
 export const SOURCE_PACKAGE_ACCEPT = '.zip,.vpk';
 

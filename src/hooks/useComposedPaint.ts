@@ -4,8 +4,8 @@ import type { Compositor, ComposeResult } from '../compositor/compositor';
 import type { RecipeNode } from '../compositor/types';
 import type { DataSource } from '../data/loader';
 import type { PaintkitEntry } from '../data/types';
-import type { ControlsState } from '../ui/Inspector';
-import type { WarpaintAssetOverrides } from '../ui/CustomWarpaintImport';
+import type { ControlsState } from '../viewer/controls';
+import type { WarpaintAssetOverrides } from '../workbench/types';
 import { isCustomKitId } from '../protodefs/types';
 
 const COMPOSE_BADGE_DELAY_MS = 250;

@@ -8,48 +8,18 @@ import {
   PackageCheck,
   Search,
 } from 'lucide-react';
-import type { TextureMetadata } from '../data/types';
-import type { ProtoDefKitMessages } from '../protodefs/types';
-import type { ExportCompression, ExportTextureKind } from '../export/plan';
-import { estimateBytes, exportPathFor, sanitizePackName, warningsFor } from '../export/plan';
-import { TextField } from './components';
+import type { TextureMetadata } from '../../data/types';
+import type { ExportCompression } from '../../export/plan';
+import { estimateBytes, exportPathFor, sanitizePackName, warningsFor } from '../../export/plan';
+import { useWarpaintExport } from '../../hooks/useWarpaintExport';
+import type {
+  ExportDefinitionsContext,
+  ExportItem,
+} from '../../workbench/exportTypes';
+import { TextField } from '../common/controls';
 import './ExportPanel.css';
 
-/** One replaced slot, as the Files tab holds it. */
-export interface ExportItem {
-  ref: string;
-  kind: ExportTextureKind;
-  /** The merged replacement image, as a data URL. */
-  output: string;
-  size?: { width: number; height: number };
-}
-
-/** What the app can contribute beyond the hand-replaced textures. */
-export interface ExportDefinitionsContext {
-  /** True when the selected paint came from imported definitions. */
-  isImported: boolean;
-  /** Built-in kits, for the overwrite target picker. */
-  builtInKits: { defindex: number; name: string }[];
-  /** The selected paint's two messages, fetched on demand. */
-  loadKitMessages: () => Promise<ProtoDefKitMessages | null>;
-  /** Package textures the compositor actually read, for passthrough. */
-  packageFiles: () => Promise<{ path: string; data: Uint8Array }[]>;
-  /** How many package files are available, for the summary line. */
-  packageFileCount: number;
-  /** True when an archive is mounted, whether or not it matched anything. */
-  packageMounted: boolean;
-  /** Custom pattern refs supplied by neither the package nor the stock data. */
-  unresolvedTextureRefs: string[];
-  /**
-   * The VMTs a definition names, plus their own textures, out of the package.
-   * A new paint kit cannot render without these.
-   */
-  materialFiles: (overrides: readonly string[]) => Promise<{
-    files: { path: string; data: Uint8Array }[];
-    missing: string[];
-    repaired: string[];
-  }>;
-}
+export type { ExportDefinitionsContext, ExportItem } from '../../workbench/exportTypes';
 
 export interface ExportPanelProps {
   items: ExportItem[];
@@ -237,10 +207,6 @@ export function ExportPanel({
   // Null means the shipped snapshot, which is the case for almost everyone.
   const [baseContainer, setBaseContainer] = useState<{ name: string; bytes: Uint8Array } | null>(null);
   const [baseError, setBaseError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [done, setDone] = useState('');
-  const [buildNotes, setBuildNotes] = useState<string[]>([]);
 
   // The app already knows which of the two situations it is in, so it does not
   // ask. A paint from imported definitions has to carry them or it cannot show
@@ -248,6 +214,22 @@ export function ExportPanel({
   // textures replaced. There is nothing to splice in the second case, so the
   // whole section stays out of the way.
   const writesDefinitions = Boolean(definitions?.isImported);
+  const { busy, error, done, buildNotes, runExport } = useWarpaintExport({
+    items,
+    textureMetadata,
+    definitions,
+    writesDefinitions,
+    definitionsMode,
+    targetDefindex,
+    inGameName,
+    packName,
+    container,
+    compression,
+    paintName,
+    weaponName,
+    gameBuild,
+    snapshotDate,
+  });
 
   const snapshotDay = formatSnapshotDate(snapshotDate);
   const snapshotLabel = snapshotDay
@@ -305,7 +287,7 @@ export function ExportPanel({
     setBaseError('');
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const { parseProtoDefGroups } = await import('../export/protoWrite');
+      const { parseProtoDefGroups } = await import('../../export/protoWrite');
       const groups = parseProtoDefGroups(bytes);
       if (!groups.some((group) => group.defType === 9 && group.payloads.length > 0)) {
         throw new Error('This file has no war paint definitions in it.');
@@ -313,109 +295,6 @@ export function ExportPanel({
       setBaseContainer({ name: file.name, bytes });
     } catch (cause) {
       setBaseError(cause instanceof Error ? cause.message : 'That file could not be read as proto_defs.');
-    }
-  };
-
-  const runExport = async () => {
-    setBusy(true);
-    setError('');
-    setDone('');
-    try {
-      const extras: { path: string; data: Uint8Array }[] = [];
-      const notes: string[] = [];
-
-      // A mounted package's textures are already game ready, so they ride along
-      // untouched. Never optional: a pack whose artwork lives in the package
-      // would otherwise install a definition with nothing to draw.
-      if (definitions && definitions.packageFileCount > 0) {
-        extras.push(...(await definitions.packageFiles()));
-      }
-
-      // Imported definitions are unsigned. They are usable with the
-      // custom_items_games client plugin while TF2 runs with -insecure; the UI
-      // and generated README make that prerequisite explicit.
-      if (writesDefinitions && definitions) {
-        if (definitionsMode === 'overwrite' && !targetDefindex) {
-          throw new Error('Choose which war paint this should replace, or add it as a new one instead.');
-        }
-        const kit = await definitions.loadKitMessages();
-        if (!kit) throw new Error('This war paint’s definitions could not be read. Re-import them and try again.');
-        const [{ buildDefinitionFiles }, { loadSnapshotContainer, loadSnapshotLocalizations }] = await Promise.all([
-          import('../export/definitions'),
-          import('../export/snapshot'),
-        ]);
-        const [baseContainer, localization] = await Promise.all([
-          loadSnapshotContainer(),
-          inGameName.trim() ? loadSnapshotLocalizations() : Promise.resolve(new Map<string, Uint8Array>()),
-        ]);
-        const { collectMaterialOverrides } = await import('../export/plan');
-        const overrides = collectMaterialOverrides(kit.definition);
-        if (overrides.length) {
-          const materials = await definitions.materialFiles(overrides);
-          extras.push(...materials.files);
-          if (materials.repaired.length) {
-            notes.push(
-              `${materials.repaired.length} material${materials.repaired.length === 1 ? '' : 's'} the definition names `
-              + `(${materials.repaired[0]}) only existed in the package under the other "c_" spelling, so the pack carries `
-              + 'a copy under the name the definition asks for.',
-            );
-          }
-          if (materials.missing.length) {
-            notes.push(
-              `${materials.missing.length} of the ${overrides.length} materials this paint names are not in the mounted package `
-              + `(for example ${materials.missing[0]}). Without them the game has nothing to draw the paint with.`,
-            );
-          }
-        }
-
-        const built = buildDefinitionFiles({
-          baseContainer,
-          kit,
-          mode: definitionsMode === 'append' ? 'append' : 'overwrite',
-          targetDefindex: definitionsMode === 'overwrite' ? Number(targetDefindex) : undefined,
-          name: inGameName,
-          localization,
-        });
-        extras.push(...built.files);
-        notes.push(...built.warnings);
-      }
-
-      // The exporter pulls in the VTF and DXT encoders, which nobody viewing a
-      // paint ever needs, so it stays out of the main bundle until asked for.
-      const { buildWarpaintExport } = await import('../export/bundle');
-      const result = await buildWarpaintExport(
-        items.map((item) => ({
-          ref: item.ref,
-          source: item.output,
-          kind: item.kind,
-          metadata: textureMetadata?.[item.ref],
-        })),
-        {
-          packName,
-          container: container as 'zip' | 'vpk',
-          compression: compression as ExportCompression,
-          paintName,
-          weaponName,
-          gameBuild,
-          snapshotDate,
-          requiresDefinitionBypass: writesDefinitions,
-        },
-        extras,
-      );
-      if (notes.length) setBuildNotes(notes);
-      const url = URL.createObjectURL(result.blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = result.fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      setDone(`${result.fileName} (${formatSize(result.blob.size)})`);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The export could not be built.');
-    } finally {
-      setBusy(false);
     }
   };
 

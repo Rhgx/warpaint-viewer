@@ -12,9 +12,9 @@ import {
 import type {
   CustomDefinitionKitRow,
   CustomDefinitionsState,
-} from '../protodefs/types';
-import { PROTO_DEFS_ACCEPT } from '../protodefs/types';
-import { TextField } from './components';
+} from '../../protodefs/types';
+import { PROTO_DEFS_ACCEPT } from '../../protodefs/types';
+import { TextField } from '../common/controls';
 import './SourcePackagePanel.css';
 import './DefinitionsPanel.css';
 

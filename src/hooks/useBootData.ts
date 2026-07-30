@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadDataSource } from '../data/loader';
 import type { DataSource } from '../data/loader';
-import type { ControlsState } from '../ui/Inspector';
-import type { BootState } from '../ui/BootLoader';
+import type { ControlsState } from '../viewer/controls';
+import type { BootState } from '../app/types';
 import { parseUrlState, serializeUrlState } from '../urlState';
 import { isCustomKitId } from '../protodefs/types';
 

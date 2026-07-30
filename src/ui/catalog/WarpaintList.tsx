@@ -2,8 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { ScrollArea } from '@base-ui/react/scroll-area';
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, LayoutGrid, List, Search, X } from 'lucide-react';
-import { AssetIcon, SelectField, TextField } from './components';
-import type { PaintkitEntry } from '../data/types';
+import { AssetIcon, SelectField, TextField } from '../common/controls';
+import type { PaintkitEntry } from '../../data/types';
 
 interface CollectionRow {
   name: string;

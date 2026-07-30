@@ -5,24 +5,12 @@ import {
 } from 'lucide-react';
 import {
   Control, IconSelectField, SelectField, SliderField, SwatchSelectField, TeamToggle, WearSliderField,
-} from './components';
-import type { IconOption, SwatchOption } from './components';
-import { LIGHTING_PRESETS } from '../viewer/lighting';
-import { SHEEN_PRESETS, UNUSUAL_PRESETS, VIEW_ANGLES } from '../viewer/presets';
-import type { Manifest, Team } from '../data/types';
-
-export interface ControlsState {
-  weaponKey: string;
-  wearIndex: number;
-  team: Team;
-  seed: string;
-  preset: string;
-  sheen: string;
-  unusual: string;
-  fov: number;
-  projection: 'perspective' | 'orthographic';
-  screenshotScale: number;
-}
+} from '../common/controls';
+import type { IconOption, SwatchOption } from '../common/controls';
+import { LIGHTING_PRESETS } from '../../viewer/lighting';
+import { SHEEN_PRESETS, UNUSUAL_PRESETS, VIEW_ANGLES } from '../../viewer/presets';
+import type { Manifest } from '../../data/types';
+import type { ControlsState } from '../../viewer/controls';
 
 const rgbCss = ([r, g, b]: [number, number, number]) =>
   `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
