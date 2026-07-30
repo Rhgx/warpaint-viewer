@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { ScrollArea } from '@base-ui/react/scroll-area';
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, LayoutGrid, List, Search, X } from 'lucide-react';
@@ -38,6 +38,75 @@ function byGradeThenName(a: PaintkitEntry, b: PaintkitEntry): number {
   const rankDiff = (GRADE_RANK[b.grade ?? ''] ?? 0) - (GRADE_RANK[a.grade ?? ''] ?? 0);
   return rankDiff !== 0 ? rankDiff : a.name.localeCompare(b.name);
 }
+
+const PaintTile = memo(function PaintTile({
+  kit,
+  selected,
+  icon,
+  prioritizeIcon,
+  onSelect,
+}: {
+  kit: PaintkitEntry;
+  selected: boolean;
+  icon: string | undefined;
+  prioritizeIcon: boolean;
+  onSelect: (id: number) => void;
+}) {
+  const select = useCallback(() => onSelect(kit.id), [kit.id, onSelect]);
+  return (
+    <button
+      type="button"
+      data-kit-id={kit.id}
+      className={`warpaint-tile${selected ? ' selected' : ''}`}
+      onClick={select}
+      data-grade={kit.grade}
+      title={kit.name}
+      aria-label={kit.name}
+    >
+      <AssetIcon
+        src={icon}
+        size={48}
+        loading={prioritizeIcon ? 'eager' : 'lazy'}
+        fetchPriority={prioritizeIcon ? 'high' : 'auto'}
+      />
+    </button>
+  );
+});
+
+const PaintListItem = memo(function PaintListItem({
+  kit,
+  selected,
+  icon,
+  prioritizeIcon,
+  onSelect,
+}: {
+  kit: PaintkitEntry;
+  selected: boolean;
+  icon: string | undefined;
+  prioritizeIcon: boolean;
+  onSelect: (id: number) => void;
+}) {
+  const select = useCallback(() => onSelect(kit.id), [kit.id, onSelect]);
+  return (
+    <button
+      type="button"
+      data-kit-id={kit.id}
+      className={`warpaint-item${selected ? ' selected' : ''}`}
+      onClick={select}
+      data-grade={kit.grade}
+    >
+      <span className="warpaint-item-icon">
+        <AssetIcon
+          src={icon}
+          size={42}
+          loading={prioritizeIcon ? 'eager' : 'lazy'}
+          fetchPriority={prioritizeIcon ? 'high' : 'auto'}
+        />
+      </span>
+      <span className="warpaint-item-name">{kit.name}</span>
+    </button>
+  );
+});
 
 // Counts how many grid tiles share the first tile's row inside `group`, used
 // to turn ArrowUp/ArrowDown into a row-height jump in grid view. Falls back
@@ -149,11 +218,15 @@ export function WarpaintList({
       byCollection.set(key, arr);
     }
     for (const arr of byCollection.values()) arr.sort(byGradeThenName);
-    const sorted = [...byCollection.entries()].sort(
-      (a, b) => Math.min(...a[1].map((p) => p.id)) - Math.min(...b[1].map((p) => p.id)),
+    // `collections` already computed every collection's minimum id and applied
+    // the requested direction. Reuse that ordering rather than allocating two
+    // id arrays and scanning them again on every sort comparison.
+    const collectionOrder = new Map(collections.map((collection, index) => [collection.name, index]));
+    return [...byCollection.entries()].sort(
+      (a, b) => (collectionOrder.get(a[0]) ?? Number.MAX_SAFE_INTEGER)
+        - (collectionOrder.get(b[0]) ?? Number.MAX_SAFE_INTEGER),
     );
-    return reversed ? sorted.reverse() : sorted;
-  }, [paintkits, q, isFiltering, activeCollection, reversed]);
+  }, [paintkits, q, isFiltering, activeCollection, collections]);
 
   // Flat, filtered kit order used for keyboard navigation; matches the order
   // the groups render in, independent of grid vs. list layout.
@@ -296,45 +369,26 @@ export function WarpaintList({
                 {view === 'grid' ? (
                   <div className="warpaint-tile-grid">
                     {kits.map((kit) => (
-                      <button
-                        type="button"
+                      <PaintTile
                         key={kit.id}
-                        data-kit-id={kit.id}
-                        className={`warpaint-tile${kit.id === selectedId ? ' selected' : ''}`}
-                        onClick={() => onSelect(kit.id)}
-                        data-grade={kit.grade}
-                        title={kit.name}
-                        aria-label={kit.name}
-                      >
-                        <AssetIcon
-                          src={paintIcons[kit.id]}
-                          size={48}
-                          loading={prioritizePaintIcons ? 'eager' : 'lazy'}
-                          fetchPriority={prioritizePaintIcons ? 'high' : 'auto'}
-                        />
-                      </button>
+                        kit={kit}
+                        selected={kit.id === selectedId}
+                        icon={paintIcons[kit.id]}
+                        prioritizeIcon={prioritizePaintIcons}
+                        onSelect={onSelect}
+                      />
                     ))}
                   </div>
                 ) : (
                   kits.map((kit) => (
-                    <button
-                      type="button"
+                    <PaintListItem
                       key={kit.id}
-                      data-kit-id={kit.id}
-                      className={`warpaint-item${kit.id === selectedId ? ' selected' : ''}`}
-                      onClick={() => onSelect(kit.id)}
-                      data-grade={kit.grade}
-                    >
-                      <span className="warpaint-item-icon">
-                        <AssetIcon
-                          src={paintIcons[kit.id]}
-                          size={42}
-                          loading={prioritizePaintIcons ? 'eager' : 'lazy'}
-                          fetchPriority={prioritizePaintIcons ? 'high' : 'auto'}
-                        />
-                      </span>
-                      <span className="warpaint-item-name">{kit.name}</span>
-                    </button>
+                      kit={kit}
+                      selected={kit.id === selectedId}
+                      icon={paintIcons[kit.id]}
+                      prioritizeIcon={prioritizePaintIcons}
+                      onSelect={onSelect}
+                    />
                   ))
                 )}
               </div>

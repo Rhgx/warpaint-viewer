@@ -99,14 +99,18 @@ export class TextureCache {
   private pinned = new Set<string>();
   private metadata: Record<string, TextureMetadata>;
   private metadataResolver: ((ref: string) => Partial<TextureMetadata> | undefined) | undefined;
+  private maxAnisotropy: number;
   /** Refs that would not load and are standing in as white. */
   readonly missing = new Set<string>();
 
-  constructor(resolve: TextureResolver, budgetBytes = textureCacheBudgetBytes(), metadata: Record<string, TextureMetadata> = {}, metadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined) {
+  constructor(resolve: TextureResolver, budgetBytes = textureCacheBudgetBytes(), metadata: Record<string, TextureMetadata> = {}, metadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined, maxAnisotropy = 1) {
     this.resolve = resolve;
     this.budget = budgetBytes;
     this.metadata = metadata;
     this.metadataResolver = metadataResolver;
+    // Eight samples is a useful quality ceiling for these source textures;
+    // importantly, never request more than the active renderer supports.
+    this.maxAnisotropy = Math.max(1, Math.min(8, maxAnisotropy));
   }
 
   keyFor(ref: string, opts: LoadOpts = {}): string {
@@ -176,7 +180,7 @@ export class TextureCache {
               ? tex.magFilter
               : meta?.pointSample ? THREE.NearestMipmapNearestFilter
                 : meta?.trilinear || meta?.anisotropic ? THREE.LinearMipmapLinearFilter : THREE.LinearMipmapNearestFilter;
-            if (meta?.anisotropic) tex.anisotropy = 16;
+            if (meta?.anisotropic) tex.anisotropy = this.maxAnisotropy;
           }
           tex.needsUpdate = true;
           entry.settled = true;

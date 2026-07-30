@@ -112,6 +112,7 @@ export class Compositor {
       textureCacheBudgetBytes({ maxTextureSize: this.renderer.capabilities.maxTextureSize }),
       opts.textureMetadata,
       opts.textureMetadataResolver,
+      this.renderer.capabilities.getMaxAnisotropy(),
     );
 
     this.material = new THREE.RawShaderMaterial({

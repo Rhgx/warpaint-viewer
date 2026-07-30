@@ -256,7 +256,12 @@ export class SystemInstance {
   private emitters: EmitterConfig[];
   private hasKillOp: boolean;
   private particles: SimParticle[];
+  // Reused by setChildCps. Kept sorted by spawnIndex and bounded to only
+  // the prefix an operator can address, avoiding filter/sort allocations in
+  // the per-frame hot path.
+  private oldestAliveScratch: SimParticle[] = [];
   private slotCount: number;
+  private uvRectsDirty = false;
 
   private defaultRadius: number;
   private defaultColor: THREE.Color;
@@ -350,12 +355,12 @@ export class SystemInstance {
         this.uvRects[i * 4 + 3] = 1;
       }
       this.geometry = new THREE.BufferGeometry();
-      this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
-      this.geometry.setAttribute('aSize', new THREE.BufferAttribute(this.sizes, 1));
-      this.geometry.setAttribute('aAlpha', new THREE.BufferAttribute(this.alphas, 1));
-      this.geometry.setAttribute('aColor', new THREE.BufferAttribute(this.colors, 3));
-      this.geometry.setAttribute('aFrame', new THREE.BufferAttribute(this.frames, 1));
-      this.geometry.setAttribute('aRotation', new THREE.BufferAttribute(this.rotations, 1));
+      this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
+      this.geometry.setAttribute('aSize', new THREE.BufferAttribute(this.sizes, 1).setUsage(THREE.DynamicDrawUsage));
+      this.geometry.setAttribute('aAlpha', new THREE.BufferAttribute(this.alphas, 1).setUsage(THREE.DynamicDrawUsage));
+      this.geometry.setAttribute('aColor', new THREE.BufferAttribute(this.colors, 3).setUsage(THREE.DynamicDrawUsage));
+      this.geometry.setAttribute('aFrame', new THREE.BufferAttribute(this.frames, 1).setUsage(THREE.DynamicDrawUsage));
+      this.geometry.setAttribute('aRotation', new THREE.BufferAttribute(this.rotations, 1).setUsage(THREE.DynamicDrawUsage));
       this.geometry.setAttribute('aUvRect', new THREE.BufferAttribute(this.uvRects, 4));
 
       this.material = new THREE.ShaderMaterial({
@@ -399,7 +404,7 @@ export class SystemInstance {
     return -1;
   }
 
-  private spawnParticle(p: SimParticle) {
+  private spawnParticle(p: SimParticle, slotIndex: number) {
     p.alive = true;
     p.age = 0;
     p.lifetime = 1;
@@ -586,6 +591,15 @@ export class SystemInstance {
     // spawned particle snaps straight onto the path instead of flashing at
     // its initializer-chosen spawn point for one frame.
     this.applyConstraints(p);
+
+    if (this.points) {
+      const uvOffset = slotIndex * 4;
+      this.uvRects[uvOffset] = p.uvRect[0];
+      this.uvRects[uvOffset + 1] = p.uvRect[1];
+      this.uvRects[uvOffset + 2] = p.uvRect[2];
+      this.uvRects[uvOffset + 3] = p.uvRect[3];
+      this.uvRectsDirty = true;
+    }
   }
 
   private applyConstraints(p: SimParticle) {
@@ -666,7 +680,7 @@ export class SystemInstance {
           for (let i = 0; i < em.count; i++) {
             const idx = this.findDeadSlot();
             if (idx < 0) break;
-            this.spawnParticle(this.particles[idx]);
+            this.spawnParticle(this.particles[idx], idx);
           }
         }
       } else {
@@ -676,7 +690,7 @@ export class SystemInstance {
           this.emitAccumulators[e] -= 1;
           const idx = this.findDeadSlot();
           if (idx < 0) { this.emitAccumulators[e] %= 1; break; }
-          this.spawnParticle(this.particles[idx]);
+          this.spawnParticle(this.particles[idx], idx);
         }
       }
     }
@@ -882,7 +896,17 @@ export class SystemInstance {
     for (const op of this.ops) {
       if (op.kind === 'setChildCps') {
         const s = op.setChildCps!;
-        const alive = this.particles.filter((p) => p.alive).sort((a, b) => a.spawnIndex - b.spawnIndex);
+        const needed = s.firstParticle + s.count;
+        const alive = this.oldestAliveScratch;
+        alive.length = 0;
+        for (const particle of this.particles) {
+          if (!particle.alive) continue;
+          let insertAt = alive.length;
+          while (insertAt > 0 && alive[insertAt - 1].spawnIndex > particle.spawnIndex) insertAt--;
+          if (insertAt >= needed) continue;
+          alive.splice(insertAt, 0, particle);
+          if (alive.length > needed) alive.pop();
+        }
         for (let k = 0; k < s.count; k++) {
           const src = alive[s.firstParticle + k];
           if (!src) break;
@@ -924,7 +948,10 @@ export class SystemInstance {
       (this.geometry.attributes.aColor as THREE.BufferAttribute).needsUpdate = true;
       (this.geometry.attributes.aFrame as THREE.BufferAttribute).needsUpdate = true;
       (this.geometry.attributes.aRotation as THREE.BufferAttribute).needsUpdate = true;
-      (this.geometry.attributes.aUvRect as THREE.BufferAttribute).needsUpdate = true;
+      if (this.uvRectsDirty) {
+        (this.geometry.attributes.aUvRect as THREE.BufferAttribute).needsUpdate = true;
+        this.uvRectsDirty = false;
+      }
     }
 
     for (const child of this.children) child.update(dt);
@@ -944,10 +971,6 @@ export class SystemInstance {
     const frameCount = this.material ? (this.material.uniforms.uFrames.value as number) : 1;
     this.frames[i] = p.lifetime > 0 ? Math.min(frameCount - 1, (p.age / p.lifetime) * frameCount) : 0;
     this.rotations[i] = rotationRad;
-    this.uvRects[i * 4] = p.uvRect[0];
-    this.uvRects[i * 4 + 1] = p.uvRect[1];
-    this.uvRects[i * 4 + 2] = p.uvRect[2];
-    this.uvRects[i * 4 + 3] = p.uvRect[3];
   }
 
   countAlive(): number {

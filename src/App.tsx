@@ -258,7 +258,10 @@ function MainApp() {
   // artwork that was never included. Bundles are cached, so the extra
   // team/wear resolutions cost no extra network requests.
   useEffect(() => {
-    if (!data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) {
+    // Keep this editor-only fan-out off the normal viewer path. Once mounted,
+    // the workbench remains alive while its drawer is closed, so continue
+    // keeping its recipes current after the user's first open.
+    if (!workbenchMounted || !data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) {
       setEditorRecipes([]);
       setEditorLoading(false);
       return;
@@ -281,7 +284,7 @@ function MainApp() {
       if (!cancelled) setEditorLoading(false);
     });
     return () => { cancelled = true; };
-  }, [data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex]);
+  }, [workbenchMounted, data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex]);
 
   // Load the model when the weapon changes.
   useEffect(() => {

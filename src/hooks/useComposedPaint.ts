@@ -22,14 +22,29 @@ type IdleCallbackWindow = Window & {
   cancelIdleCallback?: (handle: number) => void;
 };
 
+type ResourceAwareNavigator = Navigator & {
+  deviceMemory?: number;
+  connection?: {
+    saveData?: boolean;
+  };
+};
+
 // A composite can occupy several MB of GPU memory. Retain the fast-path LRU on
 // desktop machines, but do not reserve eight render targets on constrained
 // devices simply to make infrequently-used wear variants instantaneous.
 function composeCacheLimit(): number {
-  const nav = navigator as Navigator & { deviceMemory?: number };
+  const nav = navigator as ResourceAwareNavigator;
   if ((nav.deviceMemory !== undefined && nav.deviceMemory <= 4) || nav.hardwareConcurrency <= 4) return 4;
   if (nav.deviceMemory !== undefined && nav.deviceMemory <= 8) return 6;
   return 8;
+}
+
+function allowSpeculativeCompose(): boolean {
+  const nav = navigator as ResourceAwareNavigator;
+  return document.visibilityState === 'visible'
+    && !nav.connection?.saveData
+    && (nav.deviceMemory === undefined || nav.deviceMemory > 4)
+    && nav.hardwareConcurrency > 4;
 }
 
 export function applyTextureOverrides(node: RecipeNode, textures: Record<string, string>): RecipeNode {
@@ -150,14 +165,17 @@ export function useComposedPaint({
       }
     };
 
-    const likelyVariants = () => {
-      const variants: Array<{ team: ControlsState['team']; wear: number }> = [];
-      if (Object.keys(activeTextureOverrides).length) return variants;
-      if (selectedKit.perWear) {
-        for (let wear = 0; wear < 5; wear++) if (wear !== state.wearIndex) variants.push({ team: state.team, wear });
+    const likelyVariant = (): { team: ControlsState['team']; wear: number } | null => {
+      if (Object.keys(activeTextureOverrides).length || !allowSpeculativeCompose()) return null;
+      // A team toggle preserves every other control and is the strongest next
+      // interaction. Otherwise warm only the closest wear category.
+      if (selectedKit.hasTeamTextures) {
+        return { team: state.team === 'red' ? 'blu' : 'red', wear: state.wearIndex };
       }
-      if (selectedKit.hasTeamTextures) variants.push({ team: state.team === 'red' ? 'blu' : 'red', wear: state.wearIndex });
-      return variants;
+      if (!selectedKit.perWear) return null;
+      const wearCount = ds.manifest.wearLevels.length;
+      const adjacentWear = state.wearIndex + 1 < wearCount ? state.wearIndex + 1 : state.wearIndex - 1;
+      return adjacentWear >= 0 ? { team: state.team, wear: adjacentWear } : null;
     };
 
     // Keep speculative decoding and rendering off the first-paint path. The
@@ -263,30 +281,28 @@ export function useComposedPaint({
           }
         }
 
-        // Once the requested paint is visible, warm sticker alternatives and
-        // likely wear/team variants only during browser idle periods. Both the
-        // broad preload and the composite render are gated separately because
-        // either can become expensive with a custom package.
+        // Once the requested paint is visible, warm at most one likely variant
+        // during browser idle periods. Avoid speculative downloads and GPU
+        // targets on hidden tabs, data-saver connections, and low-end devices.
         void (async () => {
-          for (const variant of likelyVariants()) {
-            if (cancelled || compositorRef.current !== comp) return;
-            const key = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${variant.team}|${variant.wear}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}`;
-            if (composeCacheRef.current.has(key)) continue;
-            await waitForIdle();
-            if (cancelled || compositorRef.current !== comp) return;
-            const variantRecipe = await resolveRecipe(selectedKit, state.weaponKey, variant.team, variant.wear);
-            if (!variantRecipe || cancelled) return;
-            await comp.preload(variantRecipe);
-            if (cancelled || compositorRef.current !== comp) return;
-            await waitForIdle();
-            if (cancelled || compositorRef.current !== comp) return;
-            const warmed = await comp.compose(variantRecipe, state.seed, dimensions);
-            if (cancelled || compositorRef.current !== comp) {
-              comp.releaseResult(warmed);
-              return;
-            }
-            cacheResult(key, warmed, comp);
+          const variant = likelyVariant();
+          if (!variant || cancelled || compositorRef.current !== comp) return;
+          const key = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${variant.team}|${variant.wear}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}`;
+          if (composeCacheRef.current.has(key)) return;
+          await waitForIdle();
+          if (cancelled || compositorRef.current !== comp || !allowSpeculativeCompose()) return;
+          const variantRecipe = await resolveRecipe(selectedKit, state.weaponKey, variant.team, variant.wear);
+          if (!variantRecipe || cancelled) return;
+          await comp.preload(variantRecipe);
+          if (cancelled || compositorRef.current !== comp || !allowSpeculativeCompose()) return;
+          await waitForIdle();
+          if (cancelled || compositorRef.current !== comp || !allowSpeculativeCompose()) return;
+          const warmed = await comp.compose(variantRecipe, state.seed, dimensions);
+          if (cancelled || compositorRef.current !== comp || !allowSpeculativeCompose()) {
+            comp.releaseResult(warmed);
+            return;
           }
+          cacheResult(key, warmed, comp);
         })();
       } catch (e) {
         console.error('[warpaint-viewer] compose failed:', e);
