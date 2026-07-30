@@ -1,12 +1,11 @@
 // Shared logic for turning an unusual-effect PCF systems map (as parsed from
-// weapon_unusual_hot.pcf etc., see extractUnusuals() in extract-effects.mjs) into
+// weapon_unusual_hot.pcf etc., see extractUnusuals() in tools/extract/effects.mjs) into
 // pre-resolved per-(effect, weapon) bundles: { root: "<systemName>", systems: {
 // "<name>": <systemDef>, ... } }, where systems holds the root plus its transitive
 // children copied verbatim.
 //
-// Used by both tools/repack-unusuals.mjs (one-shot migration of the legacy
-// monolithic unusuals.json) and tools/extract-effects.mjs (which emits the
-// bundles directly from freshly-parsed PCF data), so the selection/closure logic
+// Used by tools/extract/effects.mjs, which emits bundles directly from
+// freshly-parsed PCF data, so the selection/closure logic
 // exists exactly once.
 
 // Maps a viewer effect id to the .pcf's top-level key in the old unusuals.json /

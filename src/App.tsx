@@ -1,26 +1,27 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Eye, Palette, SlidersHorizontal } from 'lucide-react';
-import './ui/WarpaintList.css';
-import './ui/StageToolbar.css';
-import './ui/Inspector.css';
+import './ui/catalog/WarpaintList.css';
+import './ui/stage/StageToolbar.css';
+import './ui/stage/Inspector.css';
 import './styles/stage.css';
 import './styles/layout.css';
 import type { Viewer } from './viewer/Viewer';
 import type { Compositor } from './compositor/compositor';
 import type { PaintkitEntry } from './data/types';
-import { WarpaintList } from './ui/WarpaintList';
-import { Inspector } from './ui/Inspector';
-import type { ControlsState } from './ui/Inspector';
-import { StageToolbar } from './ui/StageToolbar';
-import { DefinitionsPrompt } from './ui/DefinitionsPrompt';
-import type { WarpaintAssetOverrides, WearRecipe, WorkbenchTab } from './ui/CustomWarpaintImport';
-import { BootLoader } from './ui/BootLoader';
+import { WarpaintList } from './ui/catalog/WarpaintList';
+import { Inspector } from './ui/stage/Inspector';
+import type { ControlsState } from './viewer/controls';
+import { StageToolbar } from './ui/stage/StageToolbar';
+import { DefinitionsPrompt } from './ui/workbench/DefinitionsPrompt';
+import type { WarpaintAssetOverrides, WearRecipe, WorkbenchTab } from './workbench/types';
+import { BootLoader } from './ui/boot/BootLoader';
 import { VIEW_ANGLES } from './viewer/presets';
 import { useBootData, randomSeed } from './hooks/useBootData';
 import { useComposedPaint } from './hooks/useComposedPaint';
 import { useSourcePackage } from './hooks/useSourcePackage';
 import { useCustomDefinitions } from './hooks/useCustomDefinitions';
+import { useScreenshotActions } from './hooks/useScreenshotActions';
 import { sourceTextureIdentity } from './source/paths';
 import { collectTextureRefs, exportPathFor, resolvePackageTextures } from './export/plan';
 import { isCustomKitId } from './protodefs/types';
@@ -30,7 +31,7 @@ import type { CustomDefinitionsState } from './protodefs/types';
 const SelfTestPage = lazy(() => import('./dev/selftest').then((m) => ({ default: m.SelfTestPage })));
 // The custom-file UI includes texture decoders and a large interactive editor.
 // It is not needed to view a paint, so mount it only after the drawer opens.
-const CustomWarpaintWorkbench = lazy(() => import('./ui/CustomWarpaintImport').then((m) => ({ default: m.CustomWarpaintWorkbench })));
+const CustomWarpaintWorkbench = lazy(() => import('./ui/workbench/CustomWarpaintWorkbench').then((m) => ({ default: m.CustomWarpaintWorkbench })));
 
 const SEED_HISTORY_CAP = 20;
 
@@ -482,38 +483,17 @@ function MainApp() {
     viewerRef.current?.setViewAngle(preset);
   }, []);
 
-  // Save/Copy image/Copy link are called from StageToolbar, which wraps each
-  // in its own try/catch (console.error + a brief X on failure) and drives a
-  // shared "capturing" state for the two that hit the viewer's capture path;
-  // these just do the work and let failures propagate.
-  const onScreenshot = useCallback(async () => {
-    const viewer = viewerRef.current;
-    if (!viewer) throw new Error('Viewer not ready');
-    const blob = await viewer.captureScreenshot(state.screenshotScale);
-    const kitName = selectedKit?.name
-      ? selectedKit.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-      : '';
-    const filename = `${kitName || 'warpaint'}_${state.weaponKey}_seed${state.seed}.png`;
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  }, [selectedKit, state.weaponKey, state.seed, state.screenshotScale]);
-
-  const onCopyImage = useCallback(async () => {
-    const viewer = viewerRef.current;
-    if (!viewer) throw new Error('Viewer not ready');
-    const blob = await viewer.captureScreenshot(state.screenshotScale);
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-  }, [state.screenshotScale]);
-
-  const onCopyLink = useCallback(async () => {
-    await navigator.clipboard.writeText(location.href);
-  }, []);
+  const {
+    saveImage: onScreenshot,
+    copyImage: onCopyImage,
+    copyLink: onCopyLink,
+  } = useScreenshotActions({
+    viewerRef,
+    paintName: selectedKit?.name,
+    weaponKey: state.weaponKey,
+    seed: state.seed,
+    scale: state.screenshotScale,
+  });
 
   if (error) return <div className="fatal">Failed to start: {error}</div>;
   if (!data) return <BootLoader boot={boot} />;

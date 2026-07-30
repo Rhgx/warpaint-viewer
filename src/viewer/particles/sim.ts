@@ -1,174 +1,22 @@
 import * as THREE from 'three';
 import type { EmitterConfig, ParsedConstraint, ParsedInit, ParsedOp, UnusualSystemDef } from './parse';
 import { parseConstraints, parseEmitters, parseInitializers, parseOperators } from './parse';
-import type { AttachmentAnchor, ParticleIndex, ParticleSheet } from './util';
+import type { ParticleIndex, ParticleSheet } from './util';
 import { colorFromArray, dotTexture, numOr, resolveParticleTexture, warnOnce } from './util';
-
-// ---------------------------------------------------------------------------
-// Control points
-//
-// One shared table per effect (Source children inherit the parent's control
-// points), CP 0..5 anchored to the unusual_0..unusual_5 attachments, plus
-// dynamic per-system overrides written by "Set child control points from
-// particle positions" and "Set Control Point Positions".
-// ---------------------------------------------------------------------------
-
-export class ControlPoint {
-  // Geometry-space anchor; null for dynamic CPs driven by operators.
-  anchor: AttachmentAnchor | null;
-  worldPos = new THREE.Vector3();
-  worldQuat = new THREE.Quaternion();
-  prevPos = new THREE.Vector3();
-  prevQuat = new THREE.Quaternion();
-  deltaPos = new THREE.Vector3();
-  deltaQuat = new THREE.Quaternion();
-  vel = new THREE.Vector3();
-  private initialized = false;
-
-  constructor(anchor: AttachmentAnchor | null) {
-    this.anchor = anchor;
-    if (anchor) {
-      this.worldPos.copy(anchor.pos);
-      this.worldQuat.copy(anchor.quat);
-    }
-  }
-
-  setFromAnchorMatrix(matrix: THREE.Matrix4, matrixQuat: THREE.Quaternion) {
-    if (!this.anchor) return;
-    this.worldPos.copy(this.anchor.pos).applyMatrix4(matrix);
-    this.worldQuat.copy(matrixQuat).multiply(this.anchor.quat);
-  }
-
-  // Called once per frame before any system ticks: derives the frame-to-frame
-  // motion that PATTACH_POINT_FOLLOW gives the game's control points.
-  beginFrame(dt: number) {
-    if (!this.initialized) {
-      this.prevPos.copy(this.worldPos);
-      this.prevQuat.copy(this.worldQuat);
-      this.initialized = true;
-    }
-    this.deltaPos.subVectors(this.worldPos, this.prevPos);
-    this.deltaQuat.copy(this.prevQuat).invert().premultiply(this.worldQuat);
-    this.vel.copy(this.deltaPos).divideScalar(Math.max(dt, 1e-5));
-  }
-
-  endFrame() {
-    this.prevPos.copy(this.worldPos);
-    this.prevQuat.copy(this.worldQuat);
-  }
-
-  // Dynamic CPs are created mid-frame (after beginFrame already ran for the
-  // registered set); prime the prev-frame state so the first Movement Lock
-  // pass sees zero motion instead of a garbage delta from the origin.
-  prime() {
-    this.prevPos.copy(this.worldPos);
-    this.prevQuat.copy(this.worldQuat);
-    this.deltaPos.set(0, 0, 0);
-    this.deltaQuat.identity();
-    this.vel.set(0, 0, 0);
-    this.initialized = true;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Renderer
-// ---------------------------------------------------------------------------
-
-// Shared by every particle system's ShaderMaterial: refreshed by the Viewer
-// on resize so gl_PointSize approximates screen-space size the way three's
-// own PointsMaterial sizeAttenuation does (size * (height*0.5) / -mvPosition.z).
-const sheenPointScale = { value: 600 };
-export function setParticlePointScale(pixelHeight: number) {
-  sheenPointScale.value = Math.max(1, pixelHeight) * 0.5;
-}
-
-const PARTICLE_VERTEX = /* glsl */ `
-attribute float aSize;
-attribute float aAlpha;
-attribute vec3 aColor;
-attribute float aFrame;
-attribute float aRotation;
-attribute vec4 aUvRect;
-uniform float uPointScale;
-varying float vAlpha;
-varying vec3 vColor;
-varying float vFrame;
-varying float vRotation;
-varying vec4 vUvRect;
-void main() {
-  vAlpha = aAlpha;
-  vColor = aColor;
-  vFrame = aFrame;
-  vRotation = aRotation;
-  vUvRect = aUvRect;
-  vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
-  gl_Position = projectionMatrix * mvPosition;
-  // Projection-aware size: projectionMatrix[1][1] is cot(fovY/2) in
-  // perspective, so this tracks FOV changes exactly like the weapon mesh
-  // does, and falls out correctly in orthographic mode too (w = 1,
-  // projectionMatrix[1][1] = 2/(top-bottom)) instead of dividing by depth.
-  gl_PointSize = aSize * uPointScale * projectionMatrix[1][1] / gl_Position.w;
-}
-`;
-
-const PARTICLE_FRAGMENT = /* glsl */ `
-uniform sampler2D uMap;
-uniform float uFrames;
-varying float vAlpha;
-varying vec3 vColor;
-varying float vFrame;
-varying float vRotation;
-varying vec4 vUvRect;
-void main() {
-  // Sprite roll (PARTICLE_ATTRIBUTE_ROTATION): rotate the point sprite's UV
-  // around its center; texels that rotate outside the quad are dropped.
-  vec2 pc = gl_PointCoord - 0.5;
-  float cr = cos( vRotation );
-  float sr = sin( vRotation );
-  pc = vec2( cr * pc.x - sr * pc.y, sr * pc.x + cr * pc.y ) + 0.5;
-  if ( pc.x < 0.0 || pc.x > 1.0 || pc.y < 0.0 || pc.y > 1.0 ) discard;
-  float raw = 1.0 - pc.y;
-  // Animated sprites (multi-frame VTF strips): each particle plays its own
-  // frame, matching render_animated_sprites rather than freezing on frame 0.
-  // Sheets and strips never co-occur in the extracted data (a sheet-bearing
-  // material always has exactly one strip frame), so this reduces to plain
-  // (pc.x, raw) whenever a sheet is in play and uFrames is 1.
-  float frame = clamp( floor( vFrame + 0.5 ), 0.0, uFrames - 1.0 );
-  vec2 uv = vec2( pc.x, ( raw + ( uFrames - 1.0 - frame ) ) / uFrames );
-  // Sprite-sheet cell (PARTICLE_ATTRIBUTE_SEQUENCE_NUMBER): crop into the
-  // chosen cell instead of sampling the whole contact sheet. vUvRect is
-  // (0,0,1,1) for materials with no sheet, so this is a no-op identity map.
-  uv = mix( vUvRect.xy, vUvRect.zw, uv );
-  vec4 tex = texture2D( uMap, uv );
-  float a = tex.a * vAlpha;
-  if ( a < 0.004 ) discard;
-  gl_FragColor = vec4( tex.rgb * vColor, a );
-  #include <colorspace_fragment>
-}
-`;
-
-// Source's $additive is SRC_ALPHA/ONE on color only; the game renders into an
-// opaque scene so backbuffer alpha never matters there. Here the canvas is
-// transparent over a CSS backplate, so the additive pass must leave the
-// destination alpha untouched: otherwise a full-alpha additive texture (most
-// of them decode to alpha=255 everywhere) occludes the backplate as a black
-// square.
-function applyAdditiveBlending(material: THREE.ShaderMaterial) {
-  material.blending = THREE.CustomBlending;
-  material.blendEquation = THREE.AddEquation;
-  material.blendSrc = THREE.SrcAlphaFactor;
-  material.blendDst = THREE.OneFactor;
-  material.blendEquationAlpha = THREE.AddEquation;
-  material.blendSrcAlpha = THREE.ZeroFactor;
-  material.blendDstAlpha = THREE.OneFactor;
-}
+import { ControlPoint } from './controlPoint';
+import {
+  PARTICLE_FRAGMENT,
+  PARTICLE_VERTEX,
+  applyAdditiveBlending,
+  particlePointScale,
+} from './particleRenderer';
+import { applyParticleConstraints } from './constraints';
+import { biasCurve, lerp, lerpExp, randInUnitBall, smooth } from './math';
+export { ControlPoint } from './controlPoint';
+export { setParticlePointScale } from './particleRenderer';
 
 const MAX_PARTICLES_CAP = 512;
 const DEG2RAD = Math.PI / 180;
-
-// ---------------------------------------------------------------------------
-// Simulation
-// ---------------------------------------------------------------------------
 
 interface SimParticle {
   alive: boolean;
@@ -199,32 +47,6 @@ const tmpV1 = new THREE.Vector3();
 const tmpV2 = new THREE.Vector3();
 const tmpV3 = new THREE.Vector3();
 const tmpC1 = new THREE.Color();
-
-function biasCurve(t: number, bias: number): number {
-  if (bias <= 0 || bias >= 1 || bias === 0.5) return t;
-  return t / ((1 / bias - 2) * (1 - t) + 1);
-}
-
-function smooth(t: number): number {
-  return t * t * (3 - 2 * t);
-}
-
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
-// RandomFloatExp equivalent: biases the blend factor by an exponent the way
-// the SDK's random ranges do.
-function lerpExp(a: number, b: number, exp: number): number {
-  return lerp(a, b, Math.pow(Math.random(), Math.max(exp, 1e-6)));
-}
-
-function randInUnitBall(out: THREE.Vector3): THREE.Vector3 {
-  do {
-    out.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
-  } while (out.lengthSq() > 1 || out.lengthSq() < 1e-12);
-  return out;
-}
 
 export class SystemInstance {
   readonly name: string;
@@ -367,7 +189,7 @@ export class SystemInstance {
         uniforms: {
           uMap: { value: dotTexture() },
           uFrames: { value: 1 },
-          uPointScale: sheenPointScale,
+          uPointScale: particlePointScale,
         },
         vertexShader: PARTICLE_VERTEX,
         fragmentShader: PARTICLE_FRAGMENT,
@@ -603,54 +425,11 @@ export class SystemInstance {
   }
 
   private applyConstraints(p: SimParticle) {
-    for (const c of this.constraints) {
-      if (c.kind === 'pathBetweenCps') this.applyPathConstraint(p, c.path!);
-    }
-  }
-
-  // C_OP_ConstrainDistanceToPath: clamps the particle to lie within
-  // [minDistance, maxDistance] of a point that travels along the quadratic
-  // path start -> mid -> end as the particle ages, reaching the end at
-  // travelTime. With min = max = 0 (every case in our extracted data) this
-  // hard-snaps the particle onto the path, which is the entire motion model
-  // for the energy orb and the isotope/cool barrel systems.
-  private applyPathConstraint(p: SimParticle, c: NonNullable<ParsedConstraint['path']>) {
-    const start = this.getCp(c.startCp, this);
-    const end = this.getCp(c.endCp, this);
-    const b = THREE.MathUtils.clamp(p.age / c.travelTime, 0, 1);
-
-    // Bulge is always 0 in the extracted data, so mid is a plain lerp with no
-    // perpendicular offset; structure still routes through midPointPosition.
-    tmpV1.copy(start.worldPos).lerp(end.worldPos, c.midPointPosition); // mid
-    tmpV2.copy(start.worldPos).lerp(tmpV1, b); // lerp(start, mid, b)
-    tmpV3.copy(tmpV1).lerp(end.worldPos, b); // lerp(mid, end, b)
-    tmpV2.lerp(tmpV3, b); // pathPoint (quadratic bezier at t = b)
-
-    let maxDist = c.maxDistance;
-    if (c.maxDistanceMiddle >= 0 || c.maxDistanceEnd >= 0) {
-      const mid = c.maxDistanceMiddle >= 0 ? c.maxDistanceMiddle : c.maxDistance;
-      const endD = c.maxDistanceEnd >= 0 ? c.maxDistanceEnd : c.maxDistance;
-      maxDist = b <= 0.5 ? lerp(c.maxDistance, mid, b / 0.5) : lerp(mid, endD, (b - 0.5) / 0.5);
-    }
-
-    tmpV3.subVectors(p.pos, tmpV2); // d = pos - pathPoint
-    const dist = tmpV3.length();
-    if (dist > maxDist) {
-      if (dist < 1e-8) p.pos.copy(tmpV2);
-      else p.pos.copy(tmpV2).addScaledVector(tmpV3, maxDist / dist);
-    } else if (dist < c.minDistance) {
-      if (dist < 1e-8) {
-        // No direction to push out along; fall back to the start->end
-        // tangent so a fully degenerate d doesn't leave the particle stuck
-        // exactly on the path point when minDistance is positive.
-        tmpV3.subVectors(end.worldPos, start.worldPos);
-        if (tmpV3.lengthSq() < 1e-12) tmpV3.set(1, 0, 0);
-        tmpV3.normalize();
-      } else {
-        tmpV3.multiplyScalar(1 / dist);
-      }
-      p.pos.copy(tmpV2).addScaledVector(tmpV3, c.minDistance);
-    }
+    applyParticleConstraints(
+      p,
+      this.constraints,
+      (index) => this.getCp(index, this),
+    );
   }
 
   // Rigidly carries every alive particle in this system (and its children)

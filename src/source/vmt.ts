@@ -4,7 +4,7 @@ import { isSupportedTexturePath, normalizeSourcePath, sourcePathExtension, sourc
 
 // Runtime VMT support for imported packages.
 //
-// tools/extract.mjs reads each stock weapon's VMT out of the game VPKs and
+// tools/extract/warpaints.mjs reads each stock weapon's VMT out of the game VPKs and
 // bakes it into manifest.json, so the built-in war paints never need a parser
 // in the browser. Community war paints do: packs routinely ship replacement
 // materials next to their textures (see the "VMT's/" folder of ghastly_guns,
@@ -12,12 +12,10 @@ import { isSupportedTexturePath, normalizeSourcePath, sourcePathExtension, sourc
 // baked-in weapon material says nothing about those.
 //
 // This is the same VMT -> WeaponMaterial mapping the pipeline performs
-// (tools/extract.mjs resolveWeaponMaterials), ported so a mounted package can
+// (tools/extract/warpaints.mjs resolveWeaponMaterials), ported so a mounted package can
 // override the material the same way the game would.
 
-// ---------------------------------------------------------------------------
 // KeyValues
-// ---------------------------------------------------------------------------
 
 export type KvValue = string | KvBlock | (string | KvBlock)[];
 export interface KvBlock { [key: string]: KvValue }
@@ -127,9 +125,7 @@ export function kvGet(block: KvBlock | undefined, key: string): KvValue | undefi
   return undefined;
 }
 
-// ---------------------------------------------------------------------------
 // VMT -> WeaponMaterial
-// ---------------------------------------------------------------------------
 
 function kvString(value: KvValue | undefined): string | undefined {
   if (typeof value === 'string') return value;
@@ -329,15 +325,13 @@ export function parseWeaponMaterialVmt(text: string): ParsedVmt {
   return { shader, material, textureRefs, unsupported };
 }
 
-// ---------------------------------------------------------------------------
 // Package lookup
-// ---------------------------------------------------------------------------
 
 /**
  * Where a package would place the material for this weapon, most specific
  * first. A war paint's material override is what the game actually loads for
  * a painted weapon, so a package replacing it outranks the plain weapon
- * material. The rest mirror the model paths tools/extract.mjs resolves
+ * material. The rest mirror the model paths tools/extract/warpaints.mjs resolves
  * (`c_models/<key>/<key>` for most weapons, `workshop/` for the Steam
  * Workshop imports, and the two flatter historical layouts).
  */

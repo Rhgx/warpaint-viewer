@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 
-// ---------------------------------------------------------------------------
 // TF2's VertexLitGeneric/Skin controls, layered onto three's MeshPhongMaterial.
 //
 // This is not a standalone shader: three compiles its own phong program and
@@ -14,7 +13,6 @@ import * as THREE from 'three';
 // Ports are noted against the SDK file they came from
 // (materialsystem/stdshaders). The uniforms these read are created and driven
 // by the Viewer; adding one here means adding it to tf2Uniforms as well.
-// ---------------------------------------------------------------------------
 
 /**
  * three caches compiled programs across materials, so anything that changes

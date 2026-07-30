@@ -184,7 +184,7 @@ export function applyMat3x4(m, v) {
 // Melee weapons are genuinely authored head/blade along +Y (up out of the
 // gripping fist); that is correct and left as-is.
 //
-// Shared by mdl2gltf.mjs (mesh vertices) and extract-attachments.mjs
+// Shared by mdl2gltf.mjs (mesh vertices) and tools/extract/attachments.mjs
 // (unusual/muzzle attachment points), so both land in the identical frame.
 export function rootFrameTransforms(mdl) {
   const ptb = mdl.bones[0]?.poseToBone;

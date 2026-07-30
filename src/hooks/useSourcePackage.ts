@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { SourcePackageState, SourcePackageSummary } from '../ui/SourcePackagePanel';
-import type { SourcePackage, SourcePackageOpenResult } from '../source/contracts';
+import type { SourcePackage, SourcePackageOpenResult, SourcePackageState, SourcePackageSummary } from '../source/contracts';
 import { isSupportedTexturePath, sourcePathExtension } from '../source/paths';
 import { SourceTextureProvider } from '../source/provider';
 

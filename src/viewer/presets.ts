@@ -4,13 +4,11 @@
 // chunk into the main bundle. src/viewer/Viewer.ts imports these directly for
 // the viewer engine's own use.
 
-// ---------------------------------------------------------------------------
 // Killstreak sheens
 //
 // TF2 renders a killstreak sheen as a second render pass over the weapon
 // (materialsystem/stdshaders/weapon_sheen_pass_ps2x.fxc), driven by
 // CProxyAnimatedWeaponSheen (game/client/tf/c_tf_player.cpp).
-// ---------------------------------------------------------------------------
 
 export interface SheenPreset {
   id: string;
@@ -40,9 +38,7 @@ export function getSheen(id: string): SheenPreset {
   return SHEEN_PRESETS.find((preset) => preset.id === id) ?? SHEEN_PRESETS[0];
 }
 
-// ---------------------------------------------------------------------------
 // Unusual weapon effects
-// ---------------------------------------------------------------------------
 
 export interface UnusualPreset {
   id: string;
@@ -57,9 +53,7 @@ export const UNUSUAL_PRESETS: UnusualPreset[] = [
   { id: 'energy_orb', label: 'Energy Orb' },
 ];
 
-// ---------------------------------------------------------------------------
 // View angle presets
-// ---------------------------------------------------------------------------
 
 export interface ViewAnglePreset {
   id: string;

@@ -1,15 +1,15 @@
 // Pure proto_defs decoder + recipe resolver. No DOM, no worker globals: this
 // module only touches its arguments and the bundled schema/proto runtime, so
 // it can run identically on the main thread, inside protodefs.worker.ts, or
-// (for tools/verify-protodefs.mjs) inside a Node-side SSR bundle.
+// (for tools/verify/protodefs.mjs) inside a Node-side SSR bundle.
 //
 // This is a behavioural port of three Node pipeline files:
 //   tools/lib/proto.mjs     -> loadRoot/decodeType (protobufjs/light instead of full protobufjs)
 //   tools/lib/resolve.mjs   -> buildIndex/resolveRecipe and all its parse helpers
-//   tools/extract.mjs       -> collectSlots, pickPaintIconRef/PAINT_ICON_JUNK, and the
+//   tools/extract/warpaints.mjs -> collectSlots, pickPaintIconRef/PAINT_ICON_JUNK, and the
 //                              per-kit weapon/perWear/isNew bookkeeping in the main loop
 //
-// Deliberately NOT ported: addImplicitStickerSpecs (tools/extract.mjs). That rule needs
+// Deliberately NOT ported: addImplicitStickerSpecs (tools/extract/warpaints.mjs). That rule needs
 // to check whether a `<base>_s` texture actually exists in the mounted Source package,
 // which this module has no access to; the caller applies it afterwards on the main thread.
 
@@ -22,6 +22,18 @@ import type {
 import { parseContainer } from './container';
 import { normalizeProtoDefFragments } from './jsonFragments';
 import schemaJson from './schema.generated.json';
+import {
+  asItem, many,
+  type CombineStageMsg, type HeaderMsg, type ItemDefinitionMsg, type ItemMsg,
+  type Many, type OperationMsg, type OperationNodeMsg, type OperationStageMsg,
+  type PaintkitDefinitionMsg, type VarDefMsg, type VarFieldMsg,
+} from './messages';
+import {
+  applyVarDefOverrides, applyVarFieldOverrides, buildVarDict, parseBool,
+  parseInverseRange, parseRange, parseRangeDiv255, parseVec2, texturePublicPath,
+  varFieldValue, type VarEntry,
+} from './values';
+import { buildResolveCtx, type ResolveCtx } from './resolve';
 
 // ---------------------------------------------------------------------------
 // Container defType values (tools/lib/proto.mjs DEF_TYPE / MSG_FOR_DEFTYPE).
@@ -63,155 +75,11 @@ const ICON_REF_CAP = 64;
 // with { arrays: false }, so a repeated field with exactly one entry decodes to
 // the bare value rather than a one-element array; `Many<T>` models that and
 // `many()` normalizes it back to an array, mirroring the `Array.isArray(x) ? x
-// : [x]` checks in tools/extract.mjs and tools/lib/resolve.mjs.
+// : [x]` checks in tools/extract/warpaints.mjs and tools/lib/resolve.mjs.
 // ---------------------------------------------------------------------------
 
-type Many<T> = T | T[] | undefined;
-
-function many<T>(value: Many<T>): T[] {
-  if (value === undefined) return [];
-  return Array.isArray(value) ? value : [value];
-}
-
-interface VarDefMsg {
-  name: string;
-  value?: string;
-  inherit?: boolean;
-}
-
-interface VarFieldMsg {
-  variable?: string;
-  float?: number;
-  double?: number;
-  uint32?: number;
-  uint64?: number;
-  sint32?: number;
-  sint64?: number;
-  bool?: boolean;
-  string?: string;
-}
-
-interface HeaderMsg {
-  defindex: number;
-  name?: string;
-  variables?: Many<VarDefMsg>;
-}
-
-interface DefIdMsg {
-  defindex: number;
-  type?: number;
-}
-
-interface ItemDataMsg {
-  can_apply_paintkit?: boolean;
-  material_override?: string;
-  variable?: Many<VarFieldMsg>;
-}
-
-interface ItemMsg {
-  item_definition_template: DefIdMsg;
-  data?: ItemDataMsg;
-}
-
-interface DefinitionEntryMsg {
-  operation_template?: DefIdMsg;
-  variable?: Many<VarFieldMsg>;
-}
-
-interface ItemDefinitionMsg {
-  header: HeaderMsg;
-  item_definition_index: number;
-  variable_template?: DefIdMsg;
-  definition?: Many<DefinitionEntryMsg>;
-}
-
-interface TextureStageMsg {
-  texture?: VarFieldMsg;
-  texture_red?: VarFieldMsg;
-  texture_blue?: VarFieldMsg;
-  adjust_black?: VarFieldMsg;
-  adjust_offset?: VarFieldMsg;
-  adjust_gamma?: VarFieldMsg;
-  rotation?: VarFieldMsg;
-  translate_u?: VarFieldMsg;
-  translate_v?: VarFieldMsg;
-  scale_uv?: VarFieldMsg;
-  flip_u?: VarFieldMsg;
-  flip_v?: VarFieldMsg;
-}
-
-interface CombineStageMsg {
-  adjust_black?: VarFieldMsg;
-  adjust_offset?: VarFieldMsg;
-  adjust_gamma?: VarFieldMsg;
-  rotation?: VarFieldMsg;
-  translate_u?: VarFieldMsg;
-  translate_v?: VarFieldMsg;
-  scale_uv?: VarFieldMsg;
-  flip_u?: VarFieldMsg;
-  flip_v?: VarFieldMsg;
-  operation_node?: Many<OperationNodeMsg>;
-}
-
-interface SelectStageMsg {
-  groups?: VarFieldMsg;
-  select?: Many<VarFieldMsg>;
-}
-
-interface StickerMsg {
-  base?: VarFieldMsg;
-  weight?: VarFieldMsg;
-  spec?: VarFieldMsg;
-}
-
-interface StickerStageMsg {
-  sticker?: Many<StickerMsg>;
-  dest_tl?: VarFieldMsg;
-  dest_tr?: VarFieldMsg;
-  dest_bl?: VarFieldMsg;
-  adjust_black?: VarFieldMsg;
-  adjust_offset?: VarFieldMsg;
-  adjust_gamma?: VarFieldMsg;
-  operation_node?: Many<OperationNodeMsg>;
-}
-
-interface OperationStageMsg {
-  texture_lookup?: TextureStageMsg;
-  combine_add?: CombineStageMsg;
-  combine_lerp?: CombineStageMsg;
-  combine_multiply?: CombineStageMsg;
-  select?: SelectStageMsg;
-  apply_sticker?: StickerStageMsg;
-}
-
-interface OperationNodeMsg {
-  stage?: OperationStageMsg;
-  operation_template?: DefIdMsg;
-}
-
-interface OperationMsg {
-  header: HeaderMsg;
-  operation_node?: Many<OperationNodeMsg>;
-}
-
-interface PaintkitDefinitionMsg {
-  header: HeaderMsg;
-  loc_desctoken?: string;
-  operation_template?: DefIdMsg;
-  has_team_textures?: boolean;
-  item?: Many<ItemMsg>;
-  // Named weapon slot fields (see WEAPON_SLOTS), each an optional ItemMsg.
-  [slotName: string]: unknown;
-}
-
-function asItem(value: unknown): ItemMsg | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const candidate = value as Partial<ItemMsg>;
-  return candidate.item_definition_template ? (candidate as ItemMsg) : undefined;
-}
-
 // One slot on a paintkit definition: a named field or a repeated `item` entry,
-// resolved to the weapon it paints (tools/extract.mjs collectSlots + the
+// resolved to the weapon it paints (tools/extract/warpaints.mjs collectSlots + the
 // itemDef/weaponKey resolution inlined into the extract main loop).
 interface ResolvedSlot {
   item: ItemMsg;
@@ -252,145 +120,15 @@ function decodeType<T>(root: Root, byType: Record<number, { buffer: Uint8Array }
 // Value parsing helpers (tools/lib/resolve.mjs, verbatim behaviour).
 // ---------------------------------------------------------------------------
 
-function toNums(str: string | undefined): number[] {
-  if (str == null) return [];
-  return String(str).trim().split(/\s+/).filter((s) => s.length > 0).map(Number);
-}
-
-function parseRange(str: string | undefined, dflt: [number, number] | null): [number, number] | null {
-  const n = toNums(str);
-  if (n.length === 0) return dflt ? [dflt[0], dflt[1]] : null;
-  if (n.length === 1) return [n[0], n[0]];
-  return [n[0], n[1]];
-}
-
-function parseRangeDiv255(str: string | undefined, dflt: [number, number]): [number, number] {
-  const r = parseRange(str, null);
-  if (!r) return [dflt[0], dflt[1]];
-  return [r[0] / 255, r[1] / 255];
-}
-
-function parseInverseRange(str: string | undefined, dflt: [number, number]): [number, number] {
-  const r = parseRange(str, null);
-  if (!r) return [dflt[0], dflt[1]];
-  const inv = (v: number) => (v === 0 ? 0 : 1 / v);
-  return [inv(r[0]), inv(r[1])];
-}
-
-function parseVec2(str: string | undefined, dflt: [number, number]): [number, number] {
-  const n = toNums(str);
-  if (n.length >= 2) return [n[0], n[1]];
-  if (n.length === 1) return [n[0], n[0]];
-  return [dflt[0], dflt[1]];
-}
-
-function parseBool(str: string | undefined): boolean {
-  if (str == null) return false;
-  const s = String(str).trim().toLowerCase();
-  return s === '1' || s === 'true';
-}
-
 // Convert a raw compositor texture reference (no "materials/" prefix, no ".vtf")
 // into the public recipe path "textures/<path>.webp".
-function texturePublicPath(ref: string | undefined | null): string | null {
-  if (!ref) return null;
-  let p = String(ref).trim().replace(/\\/g, '/');
-  p = p.replace(/^materials\//i, '');
-  // Some workshop refs carry a stray source-image extension (e.g. foo.tga); strip any of them.
-  p = p.replace(/\.(vtf|tga|psd|png|webp)$/i, '');
-  // Source treats material paths case-insensitively and the pipeline writes
-  // every file lowercased, so a ref's casing is not meaningful. Community
-  // definitions do use mixed case (one asks for patterns/blank_White), which
-  // would 404 against the shipped textures on any case-sensitive host. No
-  // shipped recipe contains an uppercase ref, so this is a no-op for them.
-  return `textures/${p}.webp`.toLowerCase();
-}
-
 // ---------------------------------------------------------------------------
 // Variable dictionary construction (tools/lib/resolve.mjs).
 // ---------------------------------------------------------------------------
 
-interface VarEntry {
-  value: string;
-  canOverride: boolean;
-}
-
-function varFieldValue(field: VarFieldMsg | undefined, dict: Map<string, VarEntry>): string | undefined {
-  if (field == null) return undefined;
-  if (field.variable !== undefined && field.variable !== '') {
-    const entry = dict.get(field.variable);
-    if (entry !== undefined) return entry.value;
-    // fall back to the field's own baked default value
-  }
-  if (field.string !== undefined) return field.string;
-  if (field.float !== undefined) return String(field.float);
-  if (field.double !== undefined) return String(field.double);
-  if (field.uint32 !== undefined) return String(field.uint32);
-  if (field.uint64 !== undefined) return String(field.uint64);
-  if (field.sint32 !== undefined) return String(field.sint32);
-  if (field.sint64 !== undefined) return String(field.sint64);
-  if (field.bool !== undefined) return String(field.bool);
-  return undefined;
-}
-
-function buildVarDict(baseHeaderVars: Many<VarDefMsg>): Map<string, VarEntry> {
-  const dict = new Map<string, VarEntry>();
-  for (const v of many(baseHeaderVars)) {
-    dict.set(v.name, { value: v.value != null ? v.value : '', canOverride: v.inherit !== false });
-  }
-  return dict;
-}
-
-// Apply CMsgVarField overrides (variable=name, value in oneof) - only updates existing keys.
-function applyVarFieldOverrides(dict: Map<string, VarEntry>, varFields: Many<VarFieldMsg>): void {
-  for (const vf of many(varFields)) {
-    const name = vf.variable;
-    if (name == null) continue;
-    const entry = dict.get(name);
-    if (!entry || !entry.canOverride) continue;
-    let val: string | undefined;
-    if (vf.string !== undefined) val = vf.string;
-    else if (vf.float !== undefined) val = String(vf.float);
-    else if (vf.double !== undefined) val = String(vf.double);
-    else if (vf.uint32 !== undefined) val = String(vf.uint32);
-    else if (vf.uint64 !== undefined) val = String(vf.uint64);
-    else if (vf.sint32 !== undefined) val = String(vf.sint32);
-    else if (vf.sint64 !== undefined) val = String(vf.sint64);
-    else if (vf.bool !== undefined) val = String(vf.bool);
-    if (val === undefined) continue;
-    if (entry.value !== val) entry.value = val;
-  }
-}
-
-// Apply CMsgVariableDefinition overrides (name/value) - only updates existing keys.
-function applyVarDefOverrides(dict: Map<string, VarEntry>, varDefs: Many<VarDefMsg>): void {
-  for (const vd of many(varDefs)) {
-    const entry = dict.get(vd.name);
-    if (!entry || !entry.canOverride) continue;
-    const val = vd.value != null ? vd.value : '';
-    if (entry.value !== val) entry.value = val;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Lookup index (tools/lib/resolve.mjs buildIndex).
 // ---------------------------------------------------------------------------
-
-interface ResolveCtx {
-  opByIdx: Map<number, OperationMsg>;
-  itemDefByIdx: Map<number, ItemDefinitionMsg>;
-  varByIdx: Map<number, { header: HeaderMsg }>;
-}
-
-function buildResolveCtx(operations: OperationMsg[], itemDefs: ItemDefinitionMsg[], variables: { header: HeaderMsg }[]): ResolveCtx {
-  const opByIdx = new Map<number, OperationMsg>();
-  for (const o of operations) opByIdx.set(o.header.defindex, o);
-  const itemDefByIdx = new Map<number, ItemDefinitionMsg>();
-  for (const it of itemDefs) itemDefByIdx.set(it.header.defindex, it);
-  const varByIdx = new Map<number, { header: HeaderMsg }>();
-  for (const v of variables) varByIdx.set(v.header.defindex, v);
-  return { opByIdx, itemDefByIdx, varByIdx };
-}
 
 // ---------------------------------------------------------------------------
 // Operation tree -> resolved RecipeNode tree (tools/lib/resolve.mjs).
@@ -578,7 +316,7 @@ function resolveOne(
 }
 
 // ---------------------------------------------------------------------------
-// Slot collection (tools/extract.mjs collectSlots + the itemDef/weaponKey
+// Slot collection (tools/extract/warpaints.mjs collectSlots + the itemDef/weaponKey
 // resolution inlined into its main loop).
 // ---------------------------------------------------------------------------
 
@@ -620,7 +358,7 @@ function resolveSlots(
 }
 
 // ---------------------------------------------------------------------------
-// Paintkit thumbnail texture picking (tools/extract.mjs pickPaintIconRef).
+// Paintkit thumbnail texture picking (tools/extract/warpaints.mjs pickPaintIconRef).
 // ---------------------------------------------------------------------------
 
 const PAINT_ICON_JUNK = /blank_|paint_dirt|paint_blood|paint_scratches|_wearblend|_ao\.|_albedo\./;
@@ -758,7 +496,7 @@ function mergeByDefindex<T extends { header: HeaderMsg }>(base: T[], overlay: T[
  * src/protodefs/jsonFragments.ts for their tolerant parsing) layered over the
  * stock operations/item definitions/variables in baseBytes - normally
  * public/data/protodefs-base.bin, which carries exactly those defTypes
- * (see tools/extract.mjs stepProtodefsBase). baseBytes never carries defType
+ * (see tools/extract/warpaints.mjs stepProtodefsBase). baseBytes never carries defType
  * 9 (paintkit definitions), so every kit this returns comes from a fragment.
  */
 export function decodeProtoDefsFromJson(

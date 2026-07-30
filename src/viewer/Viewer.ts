@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getPreset } from './lighting';
 import { loadEditorEnvCube, makeEnvCube } from './env';
 import { InspectControls } from './inspectControls';
@@ -26,6 +25,9 @@ import { installTf2VertexLit, TF2_VERTEXLIT_CACHE_KEY } from './shaders/vertexli
 import { createUnusualEffect, setParticlePointScale } from './particles';
 import type { UnusualEffect } from './particles';
 import type { WeaponMaterial } from '../data/types';
+import { screenshotPixelsToBlob } from './capture';
+import { computeModelBounds, ModelLoader, type ModelPart } from './modelLoader';
+import { configureTf2Material, createTf2Uniforms } from './materialConfig';
 
 // three.js viewer with TF2's important VertexLitGeneric/Skin controls layered
 // onto MeshPhongMaterial: base-alpha phong mask, exponent/lightwarp textures,
@@ -56,7 +58,7 @@ export class Viewer {
   private meshes: THREE.Mesh[] = [];
   private envMap: THREE.CubeTexture;
   private envReady: Promise<void>;
-  private gltfLoader = new GLTFLoader();
+  private modelLoader = new ModelLoader();
   private texLoader = new THREE.TextureLoader();
   private normalTexture: THREE.Texture | null = null;
   private exponentTexture: THREE.Texture | null = null;
@@ -64,43 +66,7 @@ export class Viewer {
   private selfIllumTexture: THREE.Texture | null = null;
   private detailTexture: THREE.Texture | null = null;
   private materialLoadToken = 0;
-  private tf2Uniforms = {
-    uTf2PhongEnabled: { value: 0 },
-    uTf2BaseAlphaPhongMask: { value: 0 },
-    uTf2NormalAlphaEnvMask: { value: 0 },
-    uTf2PhongBoost: { value: 1 },
-    uTf2PhongExponent: { value: 5 },
-    uTf2PhongExponentFactor: { value: 0 },
-    uTf2UseExponentMap: { value: 0 },
-    uTf2ExponentMap: { value: null as THREE.Texture | null },
-    uTf2UseLightwarp: { value: 0 },
-    uTf2HalfLambert: { value: 0 },
-    uTf2LightwarpMap: { value: null as THREE.Texture | null },
-    uTf2AlbedoTint: { value: 0 },
-    uTf2UsePhongTint: { value: 0 },
-    uTf2PhongTint: { value: new THREE.Color(1, 1, 1) },
-    uTf2Fresnel: { value: new THREE.Vector3(0, 0.5, 1) },
-    uTf2RimLight: { value: 0 },
-    uTf2RimExponent: { value: 4 },
-    uTf2RimBoost: { value: 1 },
-    uTf2RimMask: { value: 0 },
-    uTf2SelfIllum: { value: 0 },
-    uTf2UseSelfIllumMask: { value: 0 },
-    uTf2SelfIllumMaskMap: { value: null as THREE.Texture | null },
-    uTf2SelfIllumTint: { value: new THREE.Color(1, 1, 1) },
-    uTf2SelfIllumFresnel: { value: 0 },
-    uTf2SelfIllumFresnelParams: { value: new THREE.Vector4(1, 0, 1, 1) },
-    uTf2EnvTint: { value: new THREE.Color(0, 0, 0) },
-    uTf2AlphaTestRef: { value: 0 },
-    uTf2Detail: { value: 0 },
-    uTf2DetailMap: { value: null as THREE.Texture | null },
-    uTf2DetailMode: { value: 0 },
-    uTf2DetailScale: { value: 4 },
-    uTf2DetailFactor: { value: 1 },
-    uTf2DetailTint: { value: new THREE.Color(1, 1, 1) },
-    uTf2AmbientCube: { value: Array.from({ length: 6 }, () => new THREE.Vector3(0.4, 0.4, 0.4)) },
-    uTf2AmbientBasis: { value: new THREE.Matrix3() },
-  };
+  private tf2Uniforms = createTf2Uniforms();
   private raf = 0;
   private lastTime = 0;
   private disposed = false;
@@ -525,55 +491,7 @@ export class Viewer {
       target.dispose();
     }
 
-    // Render-target rows run bottom-up; ImageData expects top-down.
-    const image = new ImageData(width, height);
-    const out = image.data;
-    let minX = width;
-    let minY = height;
-    let maxX = -1;
-    let maxY = -1;
-    for (let y = 0; y < height; y++) {
-      const src = (height - 1 - y) * width * 4;
-      const dst = y * width * 4;
-      for (let x = 0; x < width * 4; x += 4) {
-        const r = raw[src + x];
-        const g = raw[src + x + 1];
-        const b = raw[src + x + 2];
-        const a = raw[src + x + 3];
-        const cover = Math.max(a, r, g, b);
-        if (cover === 0) continue; // fully empty, ImageData is zeroed
-        out[dst + x] = Math.min(255, Math.round((r * 255) / cover));
-        out[dst + x + 1] = Math.min(255, Math.round((g * 255) / cover));
-        out[dst + x + 2] = Math.min(255, Math.round((b * 255) / cover));
-        out[dst + x + 3] = cover;
-        const pixelX = x / 4;
-        minX = Math.min(minX, pixelX);
-        minY = Math.min(minY, y);
-        maxX = Math.max(maxX, pixelX);
-        maxY = Math.max(maxY, y);
-      }
-    }
-
-    // Trim transparent stage space while retaining enough breathing room
-    // around the weapon and any unusual/sheen pixels. Scale the padding so
-    // screenshots framed at 1x and 4x have the same visual margin.
-    const hasContent = maxX >= minX && maxY >= minY;
-    const padding = Math.max(8, Math.round(24 * scale));
-    const cropLeft = hasContent ? Math.max(0, minX - padding) : 0;
-    const cropTop = hasContent ? Math.max(0, minY - padding) : 0;
-    const cropRight = hasContent ? Math.min(width, maxX + 1 + padding) : width;
-    const cropBottom = hasContent ? Math.min(height, maxY + 1 + padding) : height;
-    const scratch = document.createElement('canvas');
-    scratch.width = cropRight - cropLeft;
-    scratch.height = cropBottom - cropTop;
-    const ctx = scratch.getContext('2d');
-    if (!ctx) throw new Error('[warpaint-viewer] screenshot canvas 2d context unavailable');
-    ctx.putImageData(image, -cropLeft, -cropTop);
-    const blob = await new Promise<Blob | null>((resolve) => {
-      scratch.toBlob(resolve, 'image/png');
-    });
-    if (!blob) throw new Error('[warpaint-viewer] screenshot capture failed');
-    return blob;
+    return screenshotPixelsToBlob(raw, width, height, scale);
   }
 
   private installTf2Shader() {
@@ -586,72 +504,7 @@ export class Viewer {
 
   async applyMaterialParams(mat: WeaponMaterial, resolveTexture: (ref: string) => string | Promise<string> = (ref) => ref): Promise<void> {
     const u = this.tf2Uniforms;
-    u.uTf2PhongEnabled.value = mat.phong ? 1 : 0;
-    u.uTf2BaseAlphaPhongMask.value = mat.baseMapAlphaPhongMask ? 1 : 0;
-    u.uTf2NormalAlphaEnvMask.value = mat.normalMapAlphaEnvmapMask ? 1 : 0;
-    u.uTf2PhongBoost.value = mat.phongBoost ?? 1;
-    u.uTf2PhongExponent.value = mat.phongExponent ?? 5;
-    u.uTf2PhongExponentFactor.value = mat.phongExponentFactor ?? 0;
-    u.uTf2AlbedoTint.value = mat.phongAlbedoTint ? 1 : 0;
-    u.uTf2UsePhongTint.value = mat.phongTint ? 1 : 0;
-    if (mat.phongTint) u.uTf2PhongTint.value.setRGB(...mat.phongTint);
-    u.uTf2Fresnel.value.fromArray(mat.phongFresnelRanges ?? [0, 0.5, 1]);
-    u.uTf2RimLight.value = mat.rimLight ? 1 : 0;
-    u.uTf2RimExponent.value = mat.rimLightExponent ?? 4;
-    u.uTf2RimBoost.value = mat.rimLightBoost ?? 1;
-    u.uTf2RimMask.value = mat.rimMask ? 1 : 0;
-    u.uTf2SelfIllum.value = mat.selfIllum ? 1 : 0;
-    u.uTf2SelfIllumFresnel.value = mat.selfIllumFresnel ? 1 : 0;
-    // ModelGlowColor resolves to white outside crit/glow states in TF2's
-    // inspection view, replacing the static warm fallback in these VMTs.
-    const selfIllumTint = mat.modelGlowColor ? [1, 1, 1] : (mat.selfIllumTint ?? [1, 1, 1]);
-    u.uTf2SelfIllumTint.value.setRGB(selfIllumTint[0], selfIllumTint[1], selfIllumTint[2]);
-    const [selfIllumMin, selfIllumMax, selfIllumExp] = mat.selfIllumFresnelMinMaxExp ?? [0, 1, 1];
-    const selfIllumBias = Math.abs(selfIllumMax) > 1e-6 ? selfIllumMin / selfIllumMax : 0;
-    u.uTf2SelfIllumFresnelParams.value.set(
-      1 - selfIllumBias,
-      selfIllumBias,
-      Math.max(selfIllumExp, 0.001),
-      selfIllumMax,
-    );
-    u.uTf2HalfLambert.value = mat.halfLambert ? 1 : 0;
-    u.uTf2EnvTint.value.setRGB(...mat.envmapTint);
-    u.uTf2Detail.value = mat.detailTexture ? 1 : 0;
-    u.uTf2DetailMode.value = mat.detailBlendMode ?? 0;
-    u.uTf2DetailScale.value = mat.detailScale ?? 4;
-    u.uTf2DetailFactor.value = mat.detailBlendFactor ?? 1;
-    u.uTf2DetailTint.value.setRGB(...(mat.detailTint ?? [1, 1, 1]));
-    // $alphatest cuts the weapon out by the composite's alpha channel, and
-    // $allowalphatocoverage turns that same alpha into multisample coverage so
-    // the cut is a partial fade rather than a hard edge. Together they are how
-    // a pack makes a see-through paint: Ghastly Guns composites a flat alpha
-    // just above its 0.5 reference, which passes the test everywhere and then
-    // draws at roughly half coverage. Only imported materials ask for either;
-    // stock war paints spend that channel on the phong/env mask instead.
-    u.uTf2AlphaTestRef.value = mat.alphaTest ? (mat.alphaTestReference ?? 0.5) : 0;
-    // The test itself is done in this material's own shader (see
-    // installTf2Shader), so three's alphaTest stays off.
-    //
-    // The partial coverage is blended rather than sampled. GL turns the
-    // fragment's alpha into a multisample coverage mask but still writes that
-    // same alpha into the covered samples, and this canvas is composited over
-    // the page (a backplate, or the stage behind it) by its alpha. A half
-    // covered pixel would then land at alpha 0.5 * 0.5, letting the backplate
-    // through twice: once through the coverage and again through the weapon's
-    // own pixels, which washes the weapon out instead of making it see-through.
-    // Ordinary alpha blending writes the coverage into the alpha channel
-    // correctly, is not quantised to the sample count, and does not depend on
-    // the context actually granting multisampling.
-    this.material.alphaTest = 0;
-    this.material.alphaToCoverage = false;
-    this.material.transparent = !!mat.alphaTest && !!mat.alphaToCoverage;
-    // Still a depth writer: like Source's coverage mask, the weapon shows one
-    // surface blended over the background, not its own far side as well.
-    this.material.depthWrite = true;
-    this.material.specular.setRGB(1, 1, 1);
-    this.material.shininess = THREE.MathUtils.clamp(mat.phongExponent ?? 5, 1, 300);
-    this.material.reflectivity = 1;
-    this.material.needsUpdate = true;
+    configureTf2Material(mat, this.material, u);
     this.invalidate();
 
     const token = ++this.materialLoadToken;
@@ -809,11 +662,10 @@ export class Viewer {
   }
 
   // Geometry cache: switching weapons back and forth never refetches a GLB.
-  private geoCache = new Map<string, Promise<Array<{ geometry: THREE.BufferGeometry; materialName: string }>>>();
   private currentGeoCached = false;
   private loadToken = 0;
 
-  private setMeshGeometries(parts: Array<{ geometry: THREE.BufferGeometry; materialName: string }>, fromCache: boolean) {
+  private setMeshGeometries(parts: ModelPart[], fromCache: boolean) {
     this.teardownSheenMeshes();
     this.teardownEmissiveMeshes();
     for (const mesh of this.meshes) {
@@ -852,28 +704,11 @@ export class Viewer {
       this.clearModel();
       return;
     }
-    let promise = this.geoCache.get(url);
-    if (!promise) {
-      promise = this.gltfLoader.loadAsync(url).then((gltf) => {
-        const geometries: Array<{ geometry: THREE.BufferGeometry; materialName: string }> = [];
-        gltf.scene.traverse((o) => {
-          if ((o as THREE.Mesh).isMesh) {
-            const mesh = o as THREE.Mesh;
-            const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-            geometries.push({ geometry: mesh.geometry as THREE.BufferGeometry, materialName: material?.name ?? '' });
-          }
-        });
-        if (!geometries.length) throw new Error('no mesh in GLB');
-        return geometries;
-      });
-      this.geoCache.set(url, promise);
-    }
     try {
-      const geometries = await promise;
+      const geometries = await this.modelLoader.load(url);
       if (token !== this.loadToken || this.disposed) return;
       this.setMeshGeometries(geometries, true);
     } catch (err) {
-      this.geoCache.delete(url); // allow retry later
       if (token !== this.loadToken || this.disposed) return;
       console.warn('[warpaint-viewer] model load failed:', err);
       this.clearModel();
@@ -882,21 +717,13 @@ export class Viewer {
   }
 
   private frameCamera(geometries: THREE.BufferGeometry[]) {
-    const box = new THREE.Box3();
-    for (const geo of geometries) {
-      geo.computeBoundingBox();
-      if (geo.boundingBox) box.union(geo.boundingBox);
-    }
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
-    box.getSize(size);
-    box.getCenter(center);
-    const radius = Math.max(size.x, size.y, size.z) * 0.5;
+    const { box, center, radius, dimensions: dims } = computeModelBounds(
+      geometries.map((geometry) => ({ geometry, materialName: '' })),
+    );
     // The inspect pose keeps a weapon's longest axis mostly horizontal, so fit
     // that axis against the horizontal fov and the next-largest against the
     // vertical one. Fitting everything against the vertical fov (the old
     // sphere fit) framed long weapons far too small on wide canvases.
-    const dims = [size.x, size.y, size.z].sort((a, b) => b - a) as [number, number, number];
     this.framedDims = dims;
     this.framedRadius = radius;
     this.framedCenter.copy(center);
@@ -993,8 +820,7 @@ export class Viewer {
     for (const texture of this.emissiveTextures) texture.dispose();
     this.envMap.dispose();
     if (!this.currentGeoCached) for (const mesh of this.meshes) mesh.geometry.dispose();
-    for (const p of this.geoCache.values()) p.then((parts) => parts.forEach((part) => part.geometry.dispose())).catch(() => undefined);
-    this.geoCache.clear();
+    this.modelLoader.dispose();
     this.renderer.dispose();
   }
 }

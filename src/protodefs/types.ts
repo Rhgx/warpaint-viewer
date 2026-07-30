@@ -125,9 +125,7 @@ export interface ProtoDefSource {
   dispose(): void;
 }
 
-// ---------------------------------------------------------------------------
 // UI contract
-// ---------------------------------------------------------------------------
 
 export interface CustomDefinitionKitRow {
   /** Catalog id, i.e. customKitId(defindex). */
