@@ -7,7 +7,6 @@ import { DEFAULT_ATTACHMENT_QUAT, loadParticleIndex, parseAttachmentEntry } from
 export { setParticlePointScale } from './sim';
 export { loadParticleIndex, loadParticleTexture } from './util';
 
-// ---------------------------------------------------------------------------
 // Unusual weapon effects
 //
 // A CPU port of the four weapon_unusual_* particle systems
@@ -18,7 +17,6 @@ export { loadParticleIndex, loadParticleTexture } from './util';
 // the weapon's attachments (PATTACH_POINT_FOLLOW in
 // CEconEntity::UpdateSingleParticleSystem), which is what makes the effects
 // lag and swirl when the weapon moves.
-// ---------------------------------------------------------------------------
 
 export interface UnusualEffect {
   object: THREE.Object3D;
@@ -39,7 +37,7 @@ const KNOWN_EFFECT_IDS = new Set(['hot', 'isotope', 'cool', 'energy_orb']);
 
 // A pre-resolved (effect, weapon) bundle: the system name the game actually
 // spawns for that pair (see the removed runtime selectSystemName(), now baked in
-// at build time by tools/repack-unusuals.mjs / tools/extract-effects.mjs) plus
+// at build time by tools/extract/effects.mjs) plus
 // its transitive children, copied verbatim from the source PCF data.
 export interface UnusualBundle {
   root: string;

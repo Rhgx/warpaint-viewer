@@ -439,7 +439,7 @@ export function useCustomDefinitions({
  * The live compositor derives an omitted sticker spec as `<base>_s` (the SDK
  * proto comment still calls the suffix `_spec`). Only adopt it when the texture
  * is really there: Source otherwise binds black and the sticker turns matte.
- * The build pipeline does this against the game's vpks (tools/extract.mjs);
+ * The build pipeline does this against the game's VPKs (tools/extract/warpaints.mjs);
  * here the answer comes from the shipped textures plus the mounted package.
  */
 function addImplicitStickerSpecs(node: RecipeNode, hasTexture: (ref: string) => boolean): void {

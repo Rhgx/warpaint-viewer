@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 // Embedded VTF 7.3+ sprite-sheet resource, converted at extraction time to
-// just clamp + uv rect per frame (see tools/extract-effects.mjs
+// just clamp + uv rect per frame (see tools/extract/effects.mjs
 // sheetToIndexShape). Every sheet currently extracted has frameCount 1 per
 // sequence (no intra-sheet animation), so "frames" here is a single [x0,y0,x1,y1].
 export interface ParticleSheet {

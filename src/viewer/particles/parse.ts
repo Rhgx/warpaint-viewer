@@ -46,9 +46,7 @@ function swizzleSourceWorld(v: [number, number, number]): THREE.Vector3 {
   return new THREE.Vector3(v[0], v[2], v[1]);
 }
 
-// ---------------------------------------------------------------------------
 // Parsed system configuration
-// ---------------------------------------------------------------------------
 
 export interface SphereInit {
   cp: number;

@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 
-// ---------------------------------------------------------------------------
 // $EmissiveBlendEnabled
 //
 // VertexLitGeneric draws this as a whole extra pass over the weapon
@@ -11,20 +10,9 @@ import * as THREE from 'three';
 // its body was cut away (which is how the Ghastly Guns pack gets a weapon
 // that is see-through and still lit up).
 //
-// The fxc, in full:
-//
-//   float4 cBaseColor = tex2D( g_tBaseSampler, i.vTexCoord0.xy );
-//   float4 vFlowValue = tex2D( g_tFlowSampler, i.vTexCoord0.xy );
-//   float2 vEmissiveTexCoord = vFlowValue.xy + ( g_vEmissiveScrollVector.xy * g_flTime );
-//   float4 cEmissiveColor = tex2D( g_tSelfIllumSampler, vEmissiveTexCoord.xy );
-//   result.rgb = cBaseColor.rgb * cEmissiveColor.rgb * g_cSelfIllumTint.rgb;
-//   result.rgb *= g_flBlendStrength;
-//   result.a = 0.0f;
-//
 // Note the flow texture supplies the emissive sample's UV outright rather
 // than offsetting it, and that only the base and emissive samplers take sRGB
 // reads (emissive_scroll_blended_pass_helper.cpp InitEmissiveScrollBlendedPass).
-// ---------------------------------------------------------------------------
 
 /** SHADER_PARAM defaults from vertexlitgeneric_dx9.cpp. */
 export const EMISSIVE_DEFAULT_SCROLL: [number, number] = [0.11, 0.124];

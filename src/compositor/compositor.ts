@@ -4,6 +4,8 @@ import type { ResolvedNode, ResolvedTransform } from './resolve';
 import { resolveRecipe } from './resolve';
 import { TextureCache, textureCacheBudgetBytes } from './textureCache';
 import type { TextureMetadata } from '../data/types';
+export { textureUvMatrix } from './transforms';
+import { textureUvMatrix } from './transforms';
 import {
   FRAG,
   VERT,
@@ -37,39 +39,6 @@ const IDENTITY_TRANSFORM: ResolvedTransform = {
   rotationDeg: 0, translateU: 0, translateV: 0, scale: 1,
   flipU: false, flipV: false,
 };
-
-// Match CTCTextureStage::ComputeRandomValuesThis in Source:
-//   MatrixBuildRotateZ(matrix, rotation);
-//   matrix = matrix.Scale(scale);
-//   MatrixTranslate(matrix, translation);
-// MatrixTranslate post-multiplies, so column-vector UVs are transformed by
-// R * S * T. Source applies its optional U/V reflection to the resulting
-// texture coordinates, so the full order is F * R * S * T. Folding the flip
-// into S instead would reflect the input axis before rotation; at 45 degrees
-// that changes a stripe's slope rather than only mirroring the stripe texture.
-// The transform is deliberately about the UV origin; centering it changes
-// authored translations whenever scale or rotation is non-identity.
-export function textureUvMatrix(
-  rotationDeg: number,
-  translateU: number,
-  translateV: number,
-  scale: number,
-  flipU: boolean,
-  flipV: boolean,
-): THREE.Matrix3 {
-  const rad = (rotationDeg * Math.PI) / 180;
-  const c = Math.cos(rad);
-  const s = Math.sin(rad);
-  const fx = flipU ? -1 : 1;
-  const fy = flipV ? -1 : 1;
-  const tx = scale * (c * translateU - s * translateV);
-  const ty = scale * (s * translateU + c * translateV);
-  return new THREE.Matrix3().set(
-    fx * c * scale, fx * -s * scale, fx * tx + (flipU ? 1 : 0),
-    fy * s * scale, fy * c * scale, fy * ty + (flipV ? 1 : 0),
-    0, 0, 1,
-  );
-}
 
 interface EvaluatedInput {
   texture: THREE.Texture;

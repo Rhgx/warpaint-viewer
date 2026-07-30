@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import * as THREE from 'three';
-import { Compositor, textureUvMatrix } from '../compositor/compositor';
-import type { RecipeNode } from '../compositor/types';
-import { createUnusualEffect } from '../viewer/particles';
+import { Compositor } from '../../compositor/compositor';
+import type { RecipeNode } from '../../compositor/types';
+import { createUnusualEffect } from '../../viewer/particles';
+import { collectPointsStats } from './particleChecks';
+import { compositorTransformChecks } from './compositorChecks';
+import './selftest.css';
 
 // /?selftest=1 - composites known recipes offscreen and asserts the compositor's
 // pixel math against reference values computed here in JS with the same sRGB and
@@ -160,64 +163,10 @@ interface Result {
   expected: number[];
 }
 
-// ---------------------------------------------------------------------------
 // Unusual effect simulation checks: instantiate each of the four effects for
 // c_rocketlauncher with an identity anchor (world space == geometry space),
 // step 5 simulated seconds at 60 Hz, and assert population/shape invariants
 // against the extracted attachment data.
-// ---------------------------------------------------------------------------
-
-interface PointsStats {
-  name: string;
-  alive: number;
-  nan: number;
-  mean: [number, number, number];
-  livePoints: Array<[number, number, number]>;
-  meanAbsOffset: (origin: [number, number, number]) => [number, number, number];
-  maxDist: (origin: [number, number, number]) => number;
-}
-
-function collectPointsStats(group: THREE.Object3D): PointsStats[] {
-  const out: PointsStats[] = [];
-  group.traverse((o) => {
-    const pts = o as THREE.Points;
-    if (!pts.isPoints) return;
-    const geo = pts.geometry as THREE.BufferGeometry;
-    const pos = geo.getAttribute('position') as THREE.BufferAttribute;
-    const size = geo.getAttribute('aSize') as THREE.BufferAttribute;
-    const live: Array<[number, number, number]> = [];
-    let nan = 0;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) { nan++; continue; }
-      if (size.getX(i) > 0) live.push([x, y, z]);
-    }
-    const mean: [number, number, number] = [0, 0, 0];
-    for (const p of live) { mean[0] += p[0]; mean[1] += p[1]; mean[2] += p[2]; }
-    if (live.length) { mean[0] /= live.length; mean[1] /= live.length; mean[2] /= live.length; }
-    out.push({
-      name: pts.name || '(unnamed)',
-      alive: live.length,
-      nan,
-      mean,
-      livePoints: live,
-      meanAbsOffset: (origin) => {
-        const m: [number, number, number] = [0, 0, 0];
-        for (const p of live) { m[0] += Math.abs(p[0] - origin[0]); m[1] += Math.abs(p[1] - origin[1]); m[2] += Math.abs(p[2] - origin[2]); }
-        if (live.length) { m[0] /= live.length; m[1] /= live.length; m[2] /= live.length; }
-        return m;
-      },
-      maxDist: (origin) => {
-        let d = 0;
-        for (const p of live) {
-          d = Math.max(d, Math.hypot(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]));
-        }
-        return d;
-      },
-    });
-  });
-  return out;
-}
 
 // Perpendicular distance from p to the segment [a, b], and the (clamped)
 // fraction t along that segment where the closest point falls.
@@ -433,25 +382,7 @@ export function SelfTestPage() {
       // Source composes texture transforms as R * S * T about UV origin.
       // This specifically guards authored offsets such as Heatcast Black Box's
       // scale=2, translateV=.335 from regressing to a centered transform.
-      const transformedUv = new THREE.Vector2(0.1, 0.2).applyMatrix3(
-        textureUvMatrix(90, 0.25, 0.5, 2, false, false),
-      );
-      out.push({
-        name: 'Texture transform uses Source R * S * T order',
-        pass: Math.abs(transformedUv.x - -1.4) < 1e-6 && Math.abs(transformedUv.y - 0.7) < 1e-6,
-        got: [transformedUv.x, transformedUv.y],
-        expected: [-1.4, 0.7],
-      });
-      const flippedUv = new THREE.Vector2(0.1, 0.2).applyMatrix3(
-        textureUvMatrix(45, 0, 0, 1, true, false),
-      );
-      out.push({
-        name: 'Texture flip applies after rotation',
-        pass: Math.abs(flippedUv.x - 1.070710678) < 1e-6
-          && Math.abs(flippedUv.y - 0.212132034) < 1e-6,
-        got: [flippedUv.x, flippedUv.y],
-        expected: [1.070710678, 0.212132034],
-      });
+      out.push(...compositorTransformChecks());
       for (const c of cases) {
         const res = await comp.compose(c.recipe, '1');
         const buf = comp.readPixels(res.target);

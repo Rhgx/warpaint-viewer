@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 
-// ---------------------------------------------------------------------------
 // Killstreak sheens
 //
 // TF2 renders a killstreak sheen as a second render pass over the weapon
@@ -9,7 +8,6 @@ import * as THREE from 'three';
 // reflects a small cubemap through the model's smooth normal, masked by an
 // animated sweep texture whose UV comes from the model's raw (uncentered)
 // local-space position.
-// ---------------------------------------------------------------------------
 
 // tf_sheen_framerate (25 fps over 60 mask frames), and MAX_SHEEN_WAIT (5s)
 // with no killstreak owner driving the proxy, which is the inspect case.

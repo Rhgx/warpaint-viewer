@@ -4,7 +4,7 @@
  * These are big (a 9.4 MB container, plus a 140 KB localization file per
  * language) and only the export builder ever wants them, so nothing is
  * requested until someone actually builds a pack. Both are byte-for-byte copies
- * of the files a TF2 install has, emitted by tools/extract.mjs and stamped in
+ * of the files a TF2 install has, emitted by tools/extract/warpaints.mjs and stamped in
  * the manifest with the build they came from.
  *
  * Anyone on a newer TF2 build can hand over their own files instead, which is
