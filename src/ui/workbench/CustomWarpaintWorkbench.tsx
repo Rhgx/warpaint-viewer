@@ -436,7 +436,7 @@ export function CustomWarpaintWorkbench({
           </div>
         )}
 
-        <Tabs.Panel value="files">
+        <Tabs.Panel value="files" className="custom-workbench-panel">
           <AssetFilesPanel
             slots={slots}
             assets={assets}
