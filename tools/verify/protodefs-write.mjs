@@ -1,6 +1,6 @@
 // Verification for the proto_defs container writer and splice.
 //
-//   node tools/verify-protodefs-write.mjs [path/to/proto_defs.vpd]
+//   node tools/verify/protodefs-write.mjs [path/to/proto_defs.vpd]
 //
 // The export builder writes a complete proto_defs container with one extra war
 // paint in it. That file SHADOWS the player's own when it is installed, so a
@@ -23,10 +23,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadRoot, parseContainer as parseContainerNode, decodeType, DEF_TYPE } from './lib/proto.mjs';
-import { loadLocalization } from './lib/localization.mjs';
+import { loadRoot, parseContainer as parseContainerNode, decodeType, DEF_TYPE } from '../lib/proto.mjs';
+import { loadLocalization } from '../lib/localization.mjs';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const STAGING = path.join(ROOT, 'staging');
 const BUILD_DIR = path.join(STAGING, 'protodefs-write-verify');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
@@ -72,7 +72,7 @@ function bundleModules() {
 }
 
 if (!CONTAINER) {
-  console.error('[verify] no proto_defs container found. Run tools/extract.mjs --only export-snapshot, or pass a path.');
+  console.error('[verify] no proto_defs container found. Run tools/extract/warpaints.mjs --only export-snapshot, or pass a path.');
   process.exit(1);
 }
 
@@ -270,7 +270,7 @@ check(
 
 const LOCALIZATION = path.join(PUBLIC_DATA, 'protodefs-loc', 'english.txt');
 if (!fs.existsSync(LOCALIZATION)) {
-  console.log('[verify] skipped the localization checks, run tools/extract.mjs --only export-snapshot first');
+  console.log('[verify] skipped the localization checks, run tools/extract/warpaints.mjs --only export-snapshot first');
 } else {
   const { decodeLocalization, encodeLocalization, setPaintkitName, paintkitNameToken } = api;
   const originalLocBytes = new Uint8Array(fs.readFileSync(LOCALIZATION));

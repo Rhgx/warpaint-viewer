@@ -1,9 +1,9 @@
 // Round-trips writeVpk() through the repository's own VPK reader.
 //
-//   node tools/verify-vpk-write.mjs
+//   node tools/verify/vpk-write.mjs
 //
 // src/export/vpkWrite.ts and src/source/vpk.ts are TypeScript; as in
-// tools/verify-protodefs.mjs and tools/verify-source-packages.mjs, they are
+// tools/verify/protodefs.mjs, they are
 // bundled with vite's SSR build into staging/ so this plain node script can
 // import them directly. Node 22 provides a global File, so the written bytes
 // can be handed straight to openVpkPackage() without a browser.
@@ -12,9 +12,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { decodeVTF } from './lib/vtf.mjs';
+import { decodeVTF } from '../lib/vtf.mjs';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const STAGING = path.join(ROOT, 'staging');
 const BUILD_DIR = path.join(STAGING, 'vpk-write-verify');
 

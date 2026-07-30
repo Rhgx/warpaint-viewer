@@ -17,17 +17,17 @@
 // through the same bone-world and root-frame transforms as pos, then re-orthonormalized and
 // converted to a unit quaternion.
 //
-// Usage: node tools/extract-attachments.mjs  (also invoked from tools/extract-effects.mjs)
+// Usage: node tools/extract/attachments.mjs (also invoked from tools/extract/effects.mjs)
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { extractBatch, MISC_VPK } from './lib/vpk.mjs';
-import { parseMDL, invertAffine3x4, applyMat3x4, rootFrameTransforms } from './models/lib/mdl.mjs';
+import { extractBatch, MISC_VPK } from '../lib/vpk.mjs';
+import { parseMDL, invertAffine3x4, applyMat3x4, rootFrameTransforms } from '../models/lib/mdl.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.resolve(__dirname, '..');
+const REPO = path.resolve(__dirname, '..', '..');
 const STAGING = path.join(REPO, 'staging', 'models'); // shared with mdl2gltf.mjs's cache
 const MANIFEST = path.join(REPO, 'staging', 'weapon_models.json');
 const OUT = path.join(REPO, 'public', 'data', 'effects');

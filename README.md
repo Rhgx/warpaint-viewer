@@ -92,22 +92,23 @@ Developer harnesses:
   real assets required.
 - `tools/dev/selftest-driver.mjs` drives the selftest page in headless Edge
   over raw CDP (see its header comment for usage).
-- `node tools/verify-protodefs.mjs` resolves every shipped recipe variant
+- `node tools/verify/protodefs.mjs` resolves every shipped recipe variant
   through the in-browser proto_defs decoder and compares it against both the
   recipe bundles and the extraction pipeline, so a porting difference is told
   apart from data that predates the installed game.
-- `node tools/verify-vtf-export.mjs` round-trips the browser VTF writer through
+- `node tools/verify/vtf-export.mjs` round-trips the browser VTF writer through
   the extraction pipeline's decoder, and compares a re-encode of a real Valve
   texture against the original's header, flags and image-section size.
-- `node tools/verify-vpk-write.mjs` round-trips the VPK writer through this
+- `node tools/verify/vpk-write.mjs` round-trips the VPK writer through this
   repository's reader and through TF2's own `bin/vpk.exe`, which is what catches
   a container the engine's tools read differently than we do.
-- `node tools/verify-protodefs-write.mjs` asserts the proto_defs writer
+- `node tools/verify/protodefs-write.mjs` asserts the proto_defs writer
   reproduces the shipped container byte for byte when nothing is spliced, then
   checks both splice modes through two independent decoders.
-- `node tools/verify-protodef-json.mjs <dir>` resolves community JSON war paint
-  definitions, and `node tools/verify-source-packages.mjs <zips>` reports how a
-  package's layout and texture references resolve.
+- `node tools/verify/protodef-json.mjs <dir>` resolves community JSON war paint
+  definitions.
+- `node tools/verify/vmt-parity.mjs` compares the browser VMT parser against
+  the stock materials produced by the extraction pipeline.
 
 ## Credits
 

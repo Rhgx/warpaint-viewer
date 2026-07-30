@@ -1,5 +1,5 @@
 // TF2 Warpaint Viewer - unusual/killstreak effect asset extraction.
-//   node tools/extract-effects.mjs
+//   node tools/extract/effects.mjs
 //
 // Produces:
 //   public/data/effects/sheen/mask_strip.png            (killstreak sheen mask frames, stacked vertically)
@@ -16,16 +16,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { listVPK, extractBatch, TEXTURES_VPK, MISC_VPK, HL2_TEXTURES_VPK, HL2_MISC_VPK } from './lib/vpk.mjs';
-import { decodeVTFAllFrames, decodeVTFCubemap, parseVTFSpriteSheet } from './lib/vtf.mjs';
-import { encodePNG } from './lib/png.mjs';
-import { parseKV, kvGet } from './lib/kv.mjs';
-import { parsePCF } from './lib/pcf.mjs';
-import { extractAttachments, validateAgainstGLB } from './extract-attachments.mjs';
-import { EFFECT_PCF_KEY, buildBundlesForEffect } from './lib/unusual-pack.mjs';
+import { listVPK, extractBatch, TEXTURES_VPK, MISC_VPK, HL2_TEXTURES_VPK, HL2_MISC_VPK } from '../lib/vpk.mjs';
+import { decodeVTFAllFrames, decodeVTFCubemap, parseVTFSpriteSheet } from '../lib/vtf.mjs';
+import { encodePNG } from '../lib/png.mjs';
+import { parseKV, kvGet } from '../lib/kv.mjs';
+import { parsePCF } from '../lib/pcf.mjs';
+import { extractAttachments, validateAgainstGLB } from './attachments.mjs';
+import { EFFECT_PCF_KEY, buildBundlesForEffect } from '../lib/unusual-pack.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.join(__dirname, '..', '..');
 const STAGING = path.join(ROOT, 'staging', 'effects');
 const OUT = path.join(ROOT, 'public', 'data', 'effects');
 
@@ -202,8 +202,8 @@ function extractUnusuals(miscList) {
 
   // Bundle per (effect, weapon): the viewer fetches only the one { root, systems }
   // bundle it needs for a given effect/weapon pair instead of the whole
-  // multi-effect systems forest. Selection/closure logic lives once in
-  // lib/unusual-pack.mjs, shared with tools/repack-unusuals.mjs.
+  // multi-effect systems forest. Selection/closure logic lives in
+  // lib/unusual-pack.mjs.
   const weaponKeys = loadManifestWeaponKeys();
   const unusualsOutDir = path.join(OUT, 'unusuals');
   let bundleCount = 0;
@@ -238,22 +238,8 @@ function flattenMaterialName(materialRef) {
     .replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase();
 }
 
-// "effects/workshop/water_unusual/circle_half.vmt" and the weapon_unusual_water_*_swirls systems
-// that referenced it do NOT exist in weapon_unusual_cool.pcf as actually shipped. The staging/
-// cache of that .pcf had been extracted while a third-party particle mod for the Cool unusual
-// (installed via Cukei's Preloader) was present on this machine, so the cached copy carried the
-// mod's replacement effect: a water/swirls subtree whose circle_half material exists nowhere in
-// the clean game files (and, once circle2 was substituted for it, rendered as a giant white
-// capsule in the viewer). The cached copy was ~98% byte-different from a clean vpk.exe extraction
-// at the exact same file size; after the mod's removal, re-extracting produces the correct tree
-// with no water/swirls systems and no reference to circle_half anywhere. Lesson: staging/ is a
-// cache of whatever the local install contained at extraction time, so when extracted data looks
-// insane, hash staging/'s .pcf files against fresh VPK pulls (and diff systems against the
-// decompiled dumps at github.com/sigsegv-mvm/TF2Particles) before suspecting the parser. The
-// infrastructure below (KNOWN_MISSING_MATERIALS, MATERIAL_FALLBACKS) is kept because a genuinely
-// missing material is a real scenario Source assets do hit occasionally and the pipeline should
-// keep handling it correctly (draw nothing, don't guess a substitute) if one is ever found for
-// real.
+// Staged PCFs may reflect locally installed mods. Verify anomalous assets
+// against a clean VPK extraction before adding missing-material fallbacks.
 const MATERIAL_FALLBACKS = {};
 
 // Materials confirmed absent from the entire TF2+HL2 install that should be recorded as a real

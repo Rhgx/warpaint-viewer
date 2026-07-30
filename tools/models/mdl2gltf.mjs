@@ -62,7 +62,7 @@ function ensureExtracted(vpkRel) {
 // (Z-up). They are authored in the weapon_bone attachment frame, which is
 // bonemerged onto the player's hand in-game. See rootFrameTransforms() in
 // lib/mdl.mjs for the full derivation and evidence; it is shared with
-// extract-attachments.mjs so mesh geometry and attachment points land in the
+// tools/extract/attachments.mjs so mesh geometry and attachment points land in the
 // identical frame.
 
 function normalize3(x, y, z) {

@@ -1,15 +1,15 @@
 // Parity/smoke check for the JSON-fragment import path.
 //
-//   node tools/verify-protodef-json.mjs [path/to/fragment/dir]
+//   node tools/verify/protodef-json.mjs [path/to/fragment/dir]
 //
 // Community war paints are not distributed as proto_defs containers: they are
 // JSON fragments (see src/protodefs/jsonFragments.ts for the tolerant format)
 // meant to be layered over public/data/protodefs-base.bin (the stock
-// operations/item definitions/variables tools/extract.mjs's stepProtodefsBase
+// operations/item definitions/variables tools/extract/warpaints.mjs's stepProtodefsBase
 // carves out of proto_defs.vpd). This loads every fragment in a directory,
 // groups them into packs by filename prefix, and for each pack resolves a
 // recipe through src/protodefs/decoder.ts exactly the way the browser would,
-// the same vite SSR bundling trick tools/verify-protodefs.mjs uses to run that
+// the same vite SSR bundling trick tools/verify/protodefs.mjs uses to run that
 // TypeScript in Node.
 
 import fs from 'node:fs';
@@ -17,7 +17,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
 const STAGING = path.join(ROOT, 'staging');
 const BUILD_DIR = path.join(STAGING, 'protodef-json-verify');
@@ -31,7 +31,7 @@ function bundleDecoder() {
     "export { decodeProtoDefsFromJson, resolveKitRecipe } from '../src/protodefs/decoder';\n"
     + "export { classifyProtoDefFragment } from '../src/protodefs/jsonFragments';\n",
   );
-  // Same rationale as tools/verify-protodefs.mjs: spawn vite's bin through node
+  // Same rationale as tools/verify/protodefs.mjs: spawn vite's bin through node
   // (not npx, which resolves differently on Windows and inside git worktrees).
   const viteEntry = fileURLToPath(import.meta.resolve('vite'));
   const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);

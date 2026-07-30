@@ -1,41 +1,33 @@
-// Parity/smoke check for the browser's VMT reader.
+// Stock parity check for the browser's VMT reader.
 //
-//   node tools/verify-vmt.mjs [path/to/a/pack/of/vmts]
+//   node tools/verify/vmt-parity.mjs
 //
 // src/source/vmt.ts re-implements, for imported Source packages, the VMT ->
-// material mapping tools/extract.mjs performs at build time. The two have to
+// material mapping tools/extract/warpaints.mjs performs at build time. The two have to
 // agree, so this replays every VMT the pipeline staged (staging/vmt, written
 // by resolveWeaponMaterials) through the browser parser and diffs the result
 // against what the pipeline actually baked into public/data/manifest.json.
 //
-// It then smoke-tests a real community pack: pass a .zip and it is opened
-// through src/source/zip.ts and queried for every weapon in the manifest, the
-// way a mounted package is; pass a directory and every loose .vmt under it is
-// parsed on its own. Community packs are where the interesting parameters are,
-// since no stock weapon material uses them.
-//
 // Runs the TypeScript through a vite SSR bundle, the same trick
-// tools/verify-protodefs.mjs uses.
+// tools/verify/protodefs.mjs uses.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
 const STAGING = path.join(ROOT, 'staging');
 const VMT_DIR = path.join(STAGING, 'vmt');
 const BUILD_DIR = path.join(STAGING, 'vmt-verify');
-const DEFAULT_PACK_DIR = path.join(STAGING, 'examples');
 
 function bundleParser() {
   fs.mkdirSync(BUILD_DIR, { recursive: true });
   const entry = path.join(STAGING, 'vmt-verify-entry.ts');
   fs.writeFileSync(
     entry,
-    "export { parseWeaponMaterialVmt, readPackageWeaponMaterial } from '../src/source/vmt';\n"
-    + "export { openZipSourcePackage } from '../src/source/zip';\n",
+    "export { parseWeaponMaterialVmt } from '../src/source/vmt';\n",
   );
   // Spawn vite's bin through node rather than npx, which resolves differently
   // on Windows and inside git worktrees.
@@ -71,20 +63,8 @@ function pick(material, keys) {
   return Object.fromEntries(keys.map((key) => [key, material[key] ?? null]));
 }
 
-function describe(parsed) {
-  const { material } = parsed;
-  return [
-    material.phong ? `phong exp ${material.phongExponent ?? '-'} boost ${material.phongBoost}` : 'no phong',
-    material.rimLight ? `rim ${material.rimLightExponent}/${material.rimLightBoost}` : null,
-    material.halfLambert ? 'half-lambert' : null,
-    material.alphaTest ? `alpha test ${material.alphaTestReference}` : null,
-    material.emissiveBlend ? `emissive x${material.emissiveBlendStrength} ${material.emissiveBlendBaseTexture}` : null,
-    material.selfIllum ? 'self-illum' : null,
-  ].filter(Boolean).join(', ');
-}
-
 console.log('[verify] bundling the browser VMT parser ...');
-const { parseWeaponMaterialVmt, readPackageWeaponMaterial, openZipSourcePackage } = await import(bundleParser());
+const { parseWeaponMaterialVmt } = await import(bundleParser());
 
 const manifest = JSON.parse(fs.readFileSync(path.join(PUBLIC_DATA, 'manifest.json'), 'utf8'));
 const weaponModels = fs.existsSync(path.join(STAGING, 'weapon_models.json'))
@@ -125,46 +105,6 @@ for (const full of walk(VMT_DIR, '.vmt')) {
   }
 }
 console.log(`\n[verify] stock materials: ${checked - mismatched}/${checked} identical to the pipeline`);
-if (!checked) console.log('[verify] no staged VMTs found; run tools/extract.mjs to populate staging/vmt');
-
-const packPath = process.argv[2] ?? DEFAULT_PACK_DIR;
-if (packPath.toLowerCase().endsWith('.zip')) {
-  // The whole mount path, not just the parser: index the archive, then ask it
-  // for each weapon's material exactly as SourceTextureProvider does.
-  const bytes = fs.readFileSync(packPath);
-  const file = new File([bytes], path.basename(packPath));
-  const { package: pkg, diagnostics } = await openZipSourcePackage(file);
-  console.log(`\n[verify] mounted ${pkg.name}: ${pkg.entries.size} entries, rootIsMaterials=${pkg.rootIsMaterials}`);
-  for (const diagnostic of diagnostics) console.log(`    [${diagnostic.level}] ${diagnostic.message}`);
-
-  let found = 0;
-  for (const weapon of manifest.weapons) {
-    const overrideId = manifest.paintkits.find((kit) => kit.materialOverrides?.[weapon.key])?.materialOverrides?.[weapon.key];
-    const lookup = await readPackageWeaponMaterial(pkg, weapon.key, overrideId);
-    if (lookup.status === 'none') continue;
-    if (lookup.status !== 'found') {
-      console.log(`  ${weapon.key}: ${lookup.status} ${JSON.stringify(lookup)}`);
-      continue;
-    }
-    found += 1;
-    const { material } = lookup;
-    console.log(`  ${weapon.key} <- ${material.path}${material.nameMatched ? ' (by name)' : ''}`);
-    console.log(`    ${describe(material)}`);
-    if (material.missingTextures.length) console.log(`    not in this package: ${material.missingTextures.join(', ')}`);
-    if (material.unsupported.length) console.log(`    not reproduced: ${material.unsupported.join(', ')}`);
-  }
-  console.log(`[verify] ${found} of ${manifest.weapons.length} weapons take their material from this package`);
-  pkg.dispose();
-} else {
-  const packVmts = walk(packPath, '.vmt');
-  console.log(`\n[verify] parsing ${packVmts.length} loose material${packVmts.length === 1 ? '' : 's'} under ${packPath}`);
-  for (const full of packVmts) {
-    const parsed = parseWeaponMaterialVmt(fs.readFileSync(full, 'utf8'));
-    console.log(`  ${path.relative(packPath, full).replace(/\\/g, '/')}  [${parsed.shader}]`);
-    console.log(`    ${describe(parsed)}`);
-    console.log(`    textures: ${parsed.textureRefs.length ? parsed.textureRefs.join(', ') : 'none'}`);
-    if (parsed.unsupported.length) console.log(`    not reproduced: ${parsed.unsupported.join(', ')}`);
-  }
-}
+if (!checked) console.log('[verify] no staged VMTs found; run tools/extract/warpaints.mjs to populate staging/vmt');
 
 process.exit(mismatched ? 1 : 0);

@@ -1,6 +1,6 @@
 // Round-trip check for the browser-side VTF writer.
 //
-//   node tools/verify-vtf-export.mjs
+//   node tools/verify/vtf-export.mjs
 //
 // src/export/vtfEncode.ts is the inverse of tools/lib/vtf-core.mjs. Everything
 // it writes is fed straight back through that decoder (the same one the app and
@@ -14,15 +14,15 @@
 //
 // The browser source is TypeScript, so it is bundled with vite's SSR build
 // (already a dev dependency) into staging/ before running, matching how
-// tools/verify-protodefs.mjs runs the decoder.
+// tools/verify/protodefs.mjs runs the decoder.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { decodeVTF, parseVTFHeader } from './lib/vtf.mjs';
+import { decodeVTF, parseVTFHeader } from '../lib/vtf.mjs';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const STAGING = path.join(ROOT, 'staging');
 const BUILD_DIR = path.join(STAGING, 'vtf-export-verify');
 

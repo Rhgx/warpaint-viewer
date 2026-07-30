@@ -1,12 +1,12 @@
 // Fetch pre-rendered War Paint backpack icons (spray can + pattern) from the
 // TF2 wiki. The game renders these live from the paintkit, so they cannot be
 // extracted from the VPKs; the wiki hosts the canonical renders. Kits the wiki
-// does not know keep the pattern swatch that extract.mjs already generated.
+// does not know keep the pattern swatch that warpaints.mjs already generated.
 //
 // By default only fetches kits that need it: no icon file on disk at all, or
-// one extract.mjs's staging/swatch_icons.json says is still a generated
+// one warpaints.mjs's staging/swatch_icons.json says is still a generated
 // swatch rather than a real wiki render. Pass --force to refetch every kit.
-//   node tools/fetch_warpaint_icons.mjs [--force]
+//   node tools/extract/warpaint-icons.mjs [--force]
 //
 // This hits the network from update:warpaints, so it must never fail that
 // pipeline or destroy already-good icons: every failure here is caught and
@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
 const STAGING = path.join(ROOT, 'staging');
 const SWATCH_STATE_PATH = path.join(STAGING, 'swatch_icons.json');

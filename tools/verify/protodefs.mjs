@@ -1,6 +1,6 @@
 // Parity check for the browser-side proto_defs decoder.
 //
-//   node tools/verify-protodefs.mjs [path/to/proto_defs.vpd]
+//   node tools/verify/protodefs.mjs [path/to/proto_defs.vpd]
 //
 // src/protodefs/ is a port of the Node pipeline's decode + resolve path
 // (tools/lib/proto.mjs and tools/lib/resolve.mjs). This resolves every variant
@@ -15,11 +15,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { buildBundle } from './lib/recipe-pack.mjs';
-import { loadRoot, parseContainer as parseContainerNode, decodeType, DEF_TYPE } from './lib/proto.mjs';
-import { buildIndex, resolveRecipe as resolveRecipeNode, WEAPON_SLOTS } from './lib/resolve.mjs';
+import { buildBundle } from '../lib/recipe-pack.mjs';
+import { loadRoot, parseContainer as parseContainerNode, decodeType, DEF_TYPE } from '../lib/proto.mjs';
+import { buildIndex, resolveRecipe as resolveRecipeNode, WEAPON_SLOTS } from '../lib/resolve.mjs';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
 const STAGING = path.join(ROOT, 'staging');
 const BUILD_DIR = path.join(STAGING, 'protodefs-verify');
@@ -47,7 +47,7 @@ function bundleDecoder() {
   return pathToFileURL(path.join(BUILD_DIR, 'protodefs-verify-entry.js')).href;
 }
 
-// tools/extract.mjs adds implicit `<base>_s` sticker specs after resolving,
+// tools/extract/warpaints.mjs adds implicit `<base>_s` sticker specs after resolving,
 // using the game's vpk listing. The decoder deliberately leaves that to its
 // caller (a worker cannot see the mounted package), so apply the same rule here
 // against the textures the pipeline actually shipped.

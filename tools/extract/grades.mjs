@@ -1,29 +1,29 @@
 // One-off script: build a paintkit name -> grade (rarity) mapping from the local
 // TF2 install and write it to public/data/grades.json.
 //
-//   node tools/extract-grades.mjs
+//   node tools/extract/grades.mjs
 //
 // Source of truth: items_game.txt's item_collections block nests each collection's
 // war paint items under a rarity tier key (common/uncommon/rare/mythical/legendary/
 // ancient). Those tier keys are the same internal names items_game uses for the
 // war paint "grade" system (Rarity_Common_Weapon etc. localize to "Civilian",
 // "Freelance", "Mercenary", "Commando", "Assassin", "Elite"). Paintkit names are
-// resolved the same way extract.mjs resolves them, so keys line up with the
+// resolved the same way warpaints.mjs resolves them, so keys line up with the
 // generated manifest without any extra normalization.
 //
-// This reads the same local files extract.mjs reads (no network, no re-download)
-// and does not modify extract.mjs or its output.
+// This reads the same local files warpaints.mjs reads (no network, no re-download)
+// and does not modify warpaints.mjs or its output.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadRoot, parseContainer, decodeType, DEF_TYPE } from './lib/proto.mjs';
-import { parseKV, kvGet } from './lib/kv.mjs';
-import { loadLocalization, locLookup } from './lib/localization.mjs';
+import { loadRoot, parseContainer, decodeType, DEF_TYPE } from '../lib/proto.mjs';
+import { parseKV, kvGet } from '../lib/kv.mjs';
+import { loadLocalization, locLookup } from '../lib/localization.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.join(__dirname, '..', '..');
 const STAGING = path.join(ROOT, 'staging');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
 
@@ -78,7 +78,7 @@ function main() {
   log('[grades] loading localization ...');
   const locProto = loadLocalization(LOC_PROTO);
 
-  // paintkit id -> display name, resolved exactly as extract.mjs resolves it.
+  // paintkit id -> display name, resolved exactly as warpaints.mjs resolves it.
   const nameById = new Map();
   for (const def of defs) {
     const id = def.header.defindex;

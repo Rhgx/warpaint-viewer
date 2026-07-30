@@ -29,7 +29,7 @@ export const MSG_FOR_DEFTYPE = {
 };
 
 // Remove custom options / extends / imports that protobufjs's parser rejects.
-// Exported so tools/gen-protodef-schema.mjs (which produces the browser-side
+// Exported so tools/generate/protodef-schema.mjs (which produces the browser-side
 // schema.generated.json) can reuse the exact same preprocessing.
 export function stripProtoOptions(src) {
   let s = src;
