@@ -44,9 +44,5 @@ export function useScreenshotActions({
     ]);
   }, [viewerRef, scale]);
 
-  const copyLink = useCallback(async () => {
-    await navigator.clipboard.writeText(location.href);
-  }, []);
-
-  return { saveImage, copyImage, copyLink };
+  return { saveImage, copyImage };
 }

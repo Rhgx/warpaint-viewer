@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { getPreset } from './lighting';
 import { loadEditorEnvCube, makeEnvCube } from './env';
 import { InspectControls } from './inspectControls';
+import type { CameraMode } from './inspectControls';
 import { getSheen } from './presets';
 import type { ViewAnglePreset } from './presets';
 import {
@@ -39,6 +40,7 @@ export class Viewer {
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
   private controls: InspectControls;
+  private cameraModeListeners = new Set<(mode: CameraMode) => void>();
   private lightGroup = new THREE.Group();
   private modelGroup = new THREE.Group(); // rotated/panned by InspectControls
   private centerGroup = new THREE.Group(); // offsets the mesh so its center sits at the origin
@@ -131,7 +133,13 @@ export class Viewer {
     this.scene.add(this.lightGroup);
     this.scene.add(this.modelGroup);
 
-    this.controls = new InspectControls(this.camera, this.modelGroup, canvas, () => this.invalidate());
+    this.controls = new InspectControls(
+      this.camera,
+      this.modelGroup,
+      canvas,
+      () => this.invalidate(),
+      (mode) => this.emitCameraModeChange(mode),
+    );
 
     this.envMap = makeEnvCube(0x9fb8d6, 0x40382c);
     this.material = new THREE.MeshPhongMaterial({
@@ -259,14 +267,13 @@ export class Viewer {
   };
 
   // Derives the ortho camera from the perspective camera every frame: same
-  // position/orientation, with a frustum sized to match what the perspective
-  // camera currently sees at its dolly distance (InspectControls always keeps
-  // the camera on a ray through the origin, so position.length() is that
-  // distance).
+  // position/orientation, with a frustum sized to match the apparent scale at
+  // the weapon's current view-space depth. InspectControls supplies that depth
+  // for both its fixed-ray inspect view and its free-flying advanced view.
   private syncOrthoCamera() {
     this.orthoCamera.position.copy(this.camera.position);
     this.orthoCamera.quaternion.copy(this.camera.quaternion);
-    const dist = this.camera.position.length();
+    const dist = this.controls.getProjectionDistance();
     const halfH = dist * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const halfW = halfH * this.camera.aspect;
     this.orthoCamera.left = -halfW;
@@ -281,6 +288,30 @@ export class Viewer {
   resetView() {
     this.activeUnusual?.notifyTeleport();
     this.controls.reset();
+  }
+
+  /** Current interaction mode. Advanced mode can also be toggled with Alt. */
+  getCameraMode(): CameraMode {
+    return this.controls.getCameraMode();
+  }
+
+  toggleAdvancedCamera(): CameraMode {
+    return this.controls.toggleAdvancedCamera();
+  }
+
+  setAdvancedCamera(enabled: boolean): CameraMode {
+    return this.controls.setAdvancedCamera(enabled);
+  }
+
+  /** Subscribe UI to keyboard-initiated and button-initiated mode changes. */
+  onCameraModeChange(listener: (mode: CameraMode) => void): () => void {
+    this.cameraModeListeners.add(listener);
+    listener(this.controls.getCameraMode());
+    return () => this.cameraModeListeners.delete(listener);
+  }
+
+  private emitCameraModeChange(mode: CameraMode) {
+    for (const listener of this.cameraModeListeners) listener(mode);
   }
 
   ready(): Promise<void> {
@@ -797,6 +828,7 @@ export class Viewer {
     this.canvas.parentElement?.classList.remove('has-backplate');
     this.canvas.parentElement?.style.removeProperty('--backplate-image');
     this.controls.dispose();
+    this.cameraModeListeners.clear();
     if (this.activeUnusual) {
       this.scene.remove(this.activeUnusual.object);
       this.activeUnusual.dispose();

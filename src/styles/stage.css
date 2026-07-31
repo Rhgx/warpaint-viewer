@@ -1,5 +1,6 @@
 /* ---------- stage ---------- */
 .stage {
+  position: relative;
   grid-column: 2;
   display: flex;
   flex-direction: column;
@@ -68,6 +69,38 @@
   border: 2px solid var(--border-strong);
   border-top-color: var(--accent);
   animation: composing-spin 700ms linear infinite;
+}
+/* Same shell as .composing-badge so the two overlay states read as one
+   family; only the label and the trailing exit key differ. */
+.advanced-camera-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+.advanced-camera-badge-exit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.advanced-camera-badge kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 10px;
 }
 @keyframes composing-spin {
   to {

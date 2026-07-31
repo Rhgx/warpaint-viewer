@@ -28,6 +28,76 @@
   transition: opacity 150ms ease, transform 190ms ease, visibility 0s linear 190ms;
 }
 
+/* ---------- panel collapse handles ---------- */
+/* Absolute inside .stage, so each handle sits exactly on the boundary with the
+   panel it collapses and moves with the grid transition. The chevron carries
+   full --text-dim (about 6:1 on the panel in both themes) rather than being
+   faded back: it is the only way to reopen a collapsed panel, so it has to
+   clear the 3:1 minimum for meaningful graphics on its own. */
+.panel-edge-toggle {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 72px;
+  padding: 0;
+  /* Only the stage-facing edges are bordered, and the stage backdrop is dark
+     in both themes; plain --border-strong reads at 2.16:1 there, so the edge
+     is lifted toward --text-dim to clear 3:1. */
+  border: 1px solid color-mix(in srgb, var(--border-strong) 60%, var(--text-dim));
+  background: var(--panel);
+  color: var(--text-dim);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: var(--transition-fast);
+}
+/* Pads the pointer target past the 24px minimum. It only grows inwards, over
+   the stage, so it never steals clicks from the panel beside it. */
+.panel-edge-toggle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.panel-edge-toggle[data-side='left'] {
+  left: 0;
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+.panel-edge-toggle[data-side='left']::before {
+  left: 0;
+  right: -6px;
+}
+.panel-edge-toggle[data-side='right'] {
+  right: 0;
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+.panel-edge-toggle[data-side='right']::before {
+  left: -6px;
+  right: 0;
+}
+.panel-edge-toggle:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.panel-edge-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* In forced-colors the panel/border tokens collapse, so lean on the system
+   button colors and keep the chevron on the matching foreground. */
+@media (forced-colors: active) {
+  .panel-edge-toggle {
+    border: 1px solid ButtonBorder;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+}
+
 /* ---------- sidebar / warpaint list ---------- */
 .sidebar {
   grid-column: 1;
@@ -70,6 +140,28 @@
     padding-bottom: 0;
     border-top-color: transparent;
     transform: translateY(10px);
+  }
+  /* The inspector docks under the stage here, so its handle follows it to the
+     bottom edge and lies flat. */
+  .panel-edge-toggle[data-side='right'] {
+    top: auto;
+    right: 16px;
+    bottom: 0;
+    width: 72px;
+    height: 20px;
+    border: 1px solid color-mix(in srgb, var(--border-strong) 60%, var(--text-dim));
+    border-bottom: none;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    transform: none;
+  }
+  .panel-edge-toggle[data-side='right']::before {
+    top: -6px;
+    right: 0;
+    bottom: 0;
+    left: 0;
+  }
+  .panel-edge-toggle[data-side='right'] svg {
+    transform: rotate(90deg);
   }
 }
 /* Below 860px the sidebar/inspector stop taking grid space entirely and
@@ -117,7 +209,7 @@
     border-top-color: var(--border);
     transform: translateX(100%);
   }
-  .stage-panel-toggle,
+  .panel-edge-toggle,
   .custom-workbench-trigger,
   .stage-toolbar-divider:first-of-type {
     display: none;
@@ -165,7 +257,8 @@
 @media (prefers-reduced-motion: reduce) {
   .app,
   .sidebar,
-  .inspector {
+  .inspector,
+  .panel-edge-toggle {
     transition: none;
   }
 }

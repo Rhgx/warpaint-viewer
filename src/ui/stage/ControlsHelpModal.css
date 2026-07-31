@@ -1,0 +1,160 @@
+.controls-help-backdrop {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(7 9 12 / 64%);
+  animation: controls-help-backdrop-in 140ms ease-out;
+}
+.controls-help-modal {
+  width: min(420px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  background: var(--panel);
+  color: var(--text);
+  transform-origin: top center;
+  animation: controls-help-modal-in 190ms cubic-bezier(0.2, 0.85, 0.3, 1);
+}
+/* Rows arrive just behind the panel so the list reads as settling into place
+   rather than the whole card sliding as one block. */
+.controls-help-section {
+  animation: controls-help-section-in 220ms ease-out backwards;
+}
+.controls-help-section:first-child {
+  animation-delay: 40ms;
+}
+.controls-help-section:last-child {
+  animation-delay: 80ms;
+}
+@keyframes controls-help-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes controls-help-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+}
+@keyframes controls-help-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+.controls-help-modal:focus-visible,
+.controls-help-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.controls-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 12px 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.controls-help-header h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.controls-help-close {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.controls-help-close:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.controls-help-body {
+  padding: 4px 16px 16px;
+}
+.controls-help-section + .controls-help-section {
+  margin-top: 18px;
+}
+.controls-help-section h3 {
+  margin: 0 0 2px;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.controls-help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 28px;
+  font-size: 12px;
+}
+.controls-help-label {
+  color: var(--text);
+}
+.controls-help-keys {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.controls-help-key {
+  display: inline-flex;
+  min-width: 20px;
+  min-height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.controls-help-mobile-note {
+  display: none;
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+}
+@media (max-width: 860px) {
+  .controls-help-mobile-note {
+    display: block;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .controls-help-close {
+    transition: none;
+  }
+  .controls-help-backdrop,
+  .controls-help-modal,
+  .controls-help-section {
+    animation: none;
+  }
+}

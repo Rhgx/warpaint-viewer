@@ -13,6 +13,7 @@ import { WarpaintList } from './ui/catalog/WarpaintList';
 import { Inspector } from './ui/stage/Inspector';
 import type { ControlsState } from './viewer/controls';
 import { StageToolbar } from './ui/stage/StageToolbar';
+import { PanelEdgeToggle } from './ui/common/PanelEdgeToggle';
 import { DefinitionsPrompt } from './ui/workbench/DefinitionsPrompt';
 import type { WarpaintAssetOverrides, WearRecipe, WorkbenchTab } from './workbench/types';
 import { BootLoader } from './ui/boot/BootLoader';
@@ -72,6 +73,7 @@ function MainApp() {
   const [catalogVisible, setCatalogVisible] = useState(true);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [hintDismissed, setHintDismissed] = useState(false);
+  const [cameraMode, setCameraMode] = useState<'inspect' | 'advanced'>('inspect');
   const [loadedAssetKey, setLoadedAssetKey] = useState('');
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('none');
   const [state, setState] = useState<ControlsState>(() => ({
@@ -188,6 +190,7 @@ function MainApp() {
     let disposed = false;
     let viewer: Viewer | null = null;
     let compositor: Compositor | null = null;
+    let unsubscribeCameraMode: (() => void) | null = null;
     (async () => {
       advanceBoot(22, 'Starting renderer…');
       const [{ Viewer: ViewerCls }, { Compositor: CompositorCls }] = await Promise.all([
@@ -204,6 +207,7 @@ function MainApp() {
       });
       viewerRef.current = viewer;
       compositorRef.current = compositor;
+      unsubscribeCameraMode = viewer.onCameraModeChange(setCameraMode);
       // Dev-only escape hatch for debugging the viewer from the console.
       if (import.meta.env.DEV) (window as unknown as { __viewer?: Viewer }).__viewer = viewer;
       setEngineReady(true);
@@ -220,6 +224,7 @@ function MainApp() {
       setEnvironmentReady(false);
       disposeCache();
       compositor?.dispose();
+      unsubscribeCameraMode?.();
       viewer?.dispose();
       viewerRef.current = null;
       compositorRef.current = null;
@@ -486,7 +491,6 @@ function MainApp() {
   const {
     saveImage: onScreenshot,
     copyImage: onCopyImage,
-    copyLink: onCopyLink,
   } = useScreenshotActions({
     viewerRef,
     paintName: selectedKit?.name,
@@ -538,7 +542,7 @@ function MainApp() {
       data-catalog-hidden={!catalogVisible ? '' : undefined}
       data-controls-hidden={!controlsVisible ? '' : undefined}
     >
-      <aside className="sidebar">
+      <aside className="sidebar" id="warpaint-catalog-panel">
         <WarpaintList
           paintkits={paintkits}
           selectedId={selectedKitId}
@@ -548,6 +552,20 @@ function MainApp() {
         />
       </aside>
       <main className="stage">
+        <PanelEdgeToggle
+          side="left"
+          open={catalogVisible}
+          label={catalogVisible ? 'Hide warpaint catalog' : 'Show warpaint catalog'}
+          controls="warpaint-catalog-panel"
+          onToggle={() => setCatalogVisible((visible) => !visible)}
+        />
+        <PanelEdgeToggle
+          side="right"
+          open={controlsVisible}
+          label={controlsVisible ? 'Hide controls' : 'Show controls'}
+          controls="viewer-controls-panel"
+          onToggle={() => setControlsVisible((visible) => !visible)}
+        />
         <div
           className="canvas-wrap"
           data-prompt={promptedCandidate ? '' : undefined}
@@ -575,20 +593,23 @@ function MainApp() {
                 <span>Compositing…</span>
               </div>
             )}
+            {cameraMode === 'advanced' && (
+              <div className="advanced-camera-badge" role="status">
+                <span>Advanced Camera</span>
+                <span className="advanced-camera-badge-exit">
+                  <kbd>Alt</kbd> to exit
+                </span>
+              </div>
+            )}
           </div>
           <StageToolbar
-            catalogVisible={catalogVisible}
-            controlsVisible={controlsVisible}
             workbenchOpen={workbenchOpen}
             onToggleWorkbench={() => {
               setWorkbenchMounted(true);
               setWorkbenchOpen((open) => !open);
             }}
-            onToggleCatalog={() => setCatalogVisible((visible) => !visible)}
-            onToggleControls={() => setControlsVisible((visible) => !visible)}
             onSavePng={onScreenshot}
             onCopyImage={onCopyImage}
-            onCopyLink={onCopyLink}
             onResetView={() => viewerRef.current?.resetView()}
           />
           <div className={`canvas-hint${hintDismissed ? ' dismissed' : ''}`}>
@@ -652,7 +673,7 @@ function MainApp() {
           )}
         </div>
       </main>
-      <aside className="inspector">
+      <aside className="inspector" id="viewer-controls-panel">
         <Inspector
           manifest={data.manifest}
           weaponOptions={weaponOptions}
