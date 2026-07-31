@@ -72,6 +72,7 @@ export class InspectControls {
   private advancedStartYaw = 0;
   private advancedStartPitch = 0;
   private pressedKeys = new Set<string>();
+  private advancedPrecisionActive = false;
   private altPressed = false;
   private altChorded = false;
   private disposed = false;
@@ -99,8 +100,11 @@ export class InspectControls {
     dom.addEventListener('contextmenu', this.onContextMenu);
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
     document.addEventListener('mousemove', this.onLockedMouseMove);
-    window.addEventListener('keydown', this.onKeyDown);
-    window.addEventListener('keyup', this.onKeyUp);
+    // Capture keyboard input before browser/page shortcuts can observe it while
+    // Advanced Camera owns the pointer. Escape is intentionally left alone so
+    // the browser can release Pointer Lock.
+    window.addEventListener('keydown', this.onKeyDown, true);
+    window.addEventListener('keyup', this.onKeyUp, true);
     window.addEventListener('blur', this.onWindowBlur);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     dom.style.touchAction = 'none';
@@ -318,6 +322,7 @@ export class InspectControls {
     if (document.pointerLockElement === this.dom) this.onChange?.();
     else {
       this.pressedKeys.clear();
+      this.advancedPrecisionActive = false;
       this.advancedVelocity.set(0, 0, 0);
     }
   };
@@ -342,6 +347,7 @@ export class InspectControls {
       this.altChorded = false;
       return;
     }
+    if (this.shouldSuppressAdvancedShortcut(e)) e.preventDefault();
     if (e.key === 'Alt') {
       if (!e.repeat) { this.altPressed = true; this.altChorded = false; }
       return;
@@ -362,6 +368,7 @@ export class InspectControls {
       this.altChorded = false;
       return;
     }
+    if (this.shouldSuppressAdvancedShortcut(e)) e.preventDefault();
     if (e.key === 'Alt') {
       const shouldToggle = this.altPressed && !this.altChorded;
       this.altPressed = false;
@@ -381,6 +388,12 @@ export class InspectControls {
       || code === 'KeyE' || code === 'KeyQ' || code === 'Space'
       || code === 'ControlLeft' || code === 'ControlRight'
       || code === 'ShiftLeft' || code === 'ShiftRight';
+  }
+
+  private shouldSuppressAdvancedShortcut(e: KeyboardEvent) {
+    return this.cameraMode === 'advanced'
+      && document.pointerLockElement === this.dom
+      && e.key !== 'Escape';
   }
 
   private isKeyboardInputBlocked(target: EventTarget | null) {
@@ -415,6 +428,7 @@ export class InspectControls {
     this.advancedYaw = this.advancedStartYaw = rotation.y;
     this.advancedPitch = this.advancedStartPitch = rotation.x;
     this.advancedVelocity.set(0, 0, 0);
+    this.advancedPrecisionActive = false;
     this.cameraMode = 'advanced';
     this.onModeChange?.(this.cameraMode);
     this.onChange?.();
@@ -422,6 +436,7 @@ export class InspectControls {
 
   private exitAdvancedCamera() {
     this.pressedKeys.clear();
+    this.advancedPrecisionActive = false;
     this.advancedVelocity.set(0, 0, 0);
     if (document.pointerLockElement === this.dom) document.exitPointerLock?.();
     this.cameraMode = 'inspect';
@@ -493,10 +508,15 @@ export class InspectControls {
       // Precision mode has no momentum: input maps directly to velocity and
       // releasing movement stops the camera on the same frame.
       this.advancedVelocity.copy(wish);
+    } else if (this.advancedPrecisionActive && wish.lengthSq() === 0) {
+      // Movement and Shift can both be released between animation frames. Do
+      // not feed the final precision velocity into normal-mode momentum.
+      this.advancedVelocity.set(0, 0, 0);
     } else {
       const response = 1 - Math.exp(-ADVANCED_RESPONSE * dt);
       this.advancedVelocity.lerp(wish, response);
     }
+    this.advancedPrecisionActive = precision;
     if (wish.lengthSq() === 0 && this.advancedVelocity.lengthSq() < 1e-6) this.advancedVelocity.set(0, 0, 0);
     const next = this.advancedPosition.clone().addScaledVector(this.advancedVelocity, dt);
     const nextOffset = next.sub(center);
@@ -546,8 +566,8 @@ export class InspectControls {
     this.dom.removeEventListener('contextmenu', this.onContextMenu);
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     document.removeEventListener('mousemove', this.onLockedMouseMove);
-    window.removeEventListener('keydown', this.onKeyDown);
-    window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('keydown', this.onKeyDown, true);
+    window.removeEventListener('keyup', this.onKeyUp, true);
     window.removeEventListener('blur', this.onWindowBlur);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
   }

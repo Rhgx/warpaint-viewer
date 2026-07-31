@@ -30,7 +30,7 @@ Select a war paint, choose a supported weapon, and adjust its appearance using t
 
 Preset angles, projection options, field-of-view settings, and image export controls are available under **View**.
 
-Advanced Camera provides bounded free-flight controls inspired by TF2's roaming spectator camera. Use the mouse to look, `WASD` to fly, `E` or `Space` to ascend, `Q` to descend, `Ctrl` to move faster, and `Shift` for slower precision movement. Press `Alt` again to restore the previous inspection view. The complete shortcut reference is available from the `?` button in the viewer toolbar.
+Advanced Camera provides bounded free-flight controls inspired by TF2's roaming spectator camera.
 
 ### Custom war paints
 
