@@ -25,7 +25,7 @@ const ZOOM_SMOOTHING = 12; // 1/s, exponential approach rate
 const PAN_LIMIT_FACTOR = 1.2; // max pan offset as a multiple of model radius
 const ADVANCED_SPEED_FACTOR = 2.7;
 const ADVANCED_BOOST_MULTIPLIER = 2.5;
-const ADVANCED_PRECISION_MULTIPLIER = 0.5;
+const ADVANCED_PRECISION_MULTIPLIER = 0.2;
 const ADVANCED_RESPONSE = 8;
 const ADVANCED_BOUNDARY_FACTOR = 12;
 const ADVANCED_SOFT_BOUNDARY_START = 0.8;
@@ -488,8 +488,15 @@ export class InspectControls {
         * (precision ? ADVANCED_PRECISION_MULTIPLIER : 1);
       wish.multiplyScalar(speed * (outward > 0 ? THREE.MathUtils.lerp(1, softScale, outward) : 1));
     }
-    const response = 1 - Math.exp(-ADVANCED_RESPONSE * dt);
-    this.advancedVelocity.lerp(wish, response);
+    const precision = this.pressedKeys.has('ShiftLeft') || this.pressedKeys.has('ShiftRight');
+    if (precision) {
+      // Precision mode has no momentum: input maps directly to velocity and
+      // releasing movement stops the camera on the same frame.
+      this.advancedVelocity.copy(wish);
+    } else {
+      const response = 1 - Math.exp(-ADVANCED_RESPONSE * dt);
+      this.advancedVelocity.lerp(wish, response);
+    }
     if (wish.lengthSq() === 0 && this.advancedVelocity.lengthSq() < 1e-6) this.advancedVelocity.set(0, 0, 0);
     const next = this.advancedPosition.clone().addScaledVector(this.advancedVelocity, dt);
     const nextOffset = next.sub(center);
