@@ -195,6 +195,7 @@ export class Viewer {
     const h = this.canvas.clientHeight || 1;
     this.renderer.setSize(w, h, false);
     this.syncDisplayAspect();
+    this.updateInspectFraming();
     this.invalidate();
   };
 
@@ -320,14 +321,19 @@ export class Viewer {
 
   setLighting(presetId: string) {
     const preset = getPreset(presetId);
+    // Map-lighting transforms are relative to the inspect composition, not to
+    // whichever direction the free-fly camera happens to face when selected.
+    const lightingCamera = this.camera.clone();
+    lightingCamera.quaternion.copy(this.controls.getInspectQuaternion());
+    lightingCamera.updateMatrixWorld();
     this.renderer.toneMappingExposure = preset.exposure ?? 1;
     this.lightGroup.clear();
-    for (const l of preset.build(this.camera)) {
+    for (const l of preset.build(lightingCamera)) {
       this.lightGroup.add(l);
       if (l instanceof THREE.DirectionalLight || l instanceof THREE.SpotLight) this.lightGroup.add(l.target);
     }
     preset.ambientCube.forEach((color, i) => this.tf2Uniforms.uTf2AmbientCube.value[i].copy(color));
-    this.tf2Uniforms.uTf2AmbientBasis.value.copy(preset.ambientBasis?.(this.camera) ?? new THREE.Matrix3());
+    this.tf2Uniforms.uTf2AmbientBasis.value.copy(preset.ambientBasis?.(lightingCamera) ?? new THREE.Matrix3());
     const host = this.canvas.parentElement;
     host?.classList.toggle('has-backplate', Boolean(preset.backplate));
     host?.style.setProperty('--backplate-image', preset.backplate ? `url("${preset.backplate}")` : 'none');
@@ -459,20 +465,23 @@ export class Viewer {
 
   setProjection(mode: 'perspective' | 'orthographic') {
     this.projectionMode = mode;
-    this.controls.setDefaultPan(mode === 'perspective' ? this.computePerspectivePan() : new THREE.Vector2());
+    const inspectDistance = this.controls.getInspectDistance();
+    this.controls.setDefaultPan(mode === 'perspective' ? this.computePerspectivePan(inspectDistance) : new THREE.Vector2());
     this.invalidate();
   }
 
   setFov(fov: number) {
     this.camera.fov = THREE.MathUtils.clamp(fov, 30, 110);
     this.camera.updateProjectionMatrix();
-    if (!this.framedDims) {
-      this.invalidate();
-      return;
-    }
-    const dist = this.computeFramingDistance(this.framedDims, this.framedRadius);
-    this.controls.rescaleFraming(dist, this.projectionMode === 'perspective' ? this.computePerspectivePan(dist) : new THREE.Vector2());
+    this.updateInspectFraming();
     this.invalidate();
+  }
+
+  private updateInspectFraming() {
+    if (!this.framedDims) return;
+    const dist = this.computeFramingDistance(this.framedDims, this.framedRadius);
+    const defaultPan = this.projectionMode === 'perspective' ? this.computePerspectivePan(dist) : new THREE.Vector2();
+    this.controls.rescaleFraming(dist, defaultPan);
   }
 
   // Renders at `scale`x resolution with no background so the PNG carries

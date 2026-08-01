@@ -71,6 +71,7 @@ export class InspectControls {
   private advancedPitch = 0;
   private advancedStartYaw = 0;
   private advancedStartPitch = 0;
+  private advancedMaxDistance = 1;
   private pressedKeys = new Set<string>();
   private advancedPrecisionActive = false;
   private altPressed = false;
@@ -112,6 +113,15 @@ export class InspectControls {
 
   getCameraMode(): CameraMode {
     return this.cameraMode;
+  }
+
+  getInspectDistance(): number {
+    return this.dist;
+  }
+
+  getInspectQuaternion(target = new THREE.Quaternion()): THREE.Quaternion {
+    const matrix = new THREE.Matrix4().lookAt(this.viewDir, new THREE.Vector3(), this.camera.up);
+    return target.setFromRotationMatrix(matrix);
   }
 
   // Orthographic projection emulates the perspective camera's apparent scale.
@@ -427,6 +437,10 @@ export class InspectControls {
     const rotation = new THREE.Euler().setFromQuaternion(this.camera.quaternion, 'YXZ');
     this.advancedYaw = this.advancedStartYaw = rotation.y;
     this.advancedPitch = this.advancedStartPitch = rotation.x;
+    // Keep the free-fly boundary stable for the lifetime of this session.
+    // FOV changes rescale the hidden inspect framing (`baseDist`), but must not
+    // move or constrain the active Advanced Camera as a side effect.
+    this.advancedMaxDistance = Math.max(this.radius * ADVANCED_BOUNDARY_FACTOR, this.baseDist * 2);
     this.advancedVelocity.set(0, 0, 0);
     this.advancedPrecisionActive = false;
     this.cameraMode = 'advanced';
@@ -487,7 +501,7 @@ export class InspectControls {
 
     const center = this.model.getWorldPosition(new THREE.Vector3());
     const offset = this.advancedPosition.clone().sub(center);
-    const maxDistance = Math.max(this.radius * ADVANCED_BOUNDARY_FACTOR, this.baseDist * 2);
+    const maxDistance = this.advancedMaxDistance;
     const distance = offset.length();
     if (wish.lengthSq() > 0) {
       wish.normalize();
