@@ -248,6 +248,7 @@ function MainApp() {
   const [stickerRecipe, setStickerRecipe] = useState<ProtoDefRecipeWithProvenance | null>(null);
   const [stickerTargetThumbnails, setStickerTargetThumbnails] = useState<Record<string, string>>({});
   const [stickerTargetArtwork, setStickerTargetArtwork] = useState<Record<string, string>>({});
+  const [stickerSpecularUrl, setStickerSpecularUrl] = useState<string | null>(null);
   const [groupStickerArtwork, setGroupStickerArtwork] = useState<Record<string, { key: string; url: string }>>({});
   const [stickerSurfaceUrl, setStickerSurfaceUrl] = useState<string | null>(null);
   const [stickerBaseSurfaceKey, setStickerBaseSurfaceKey] = useState<string | null>(null);
@@ -569,6 +570,7 @@ function MainApp() {
     if (selectedStickerIndex < 0) return [];
     return matchedStickerStageGroups[selectedStickerIndex] ?? [];
   }, [matchedStickerStageGroups, selectedStickerIndex]);
+  const selectedStickerSpecularRef = selectedResolvedStickerStages[0]?.spec ?? null;
   const selectedGroupStickerContext = useMemo(() => {
     if (!selectedStickerUsesComposedArtwork || selectedResolvedStickerStages.length === 0 || !resolvedStickerRecipe) return null;
     const context = resolvedGroupStickerContext(resolvedStickerRecipe, selectedResolvedStickerStages);
@@ -646,6 +648,23 @@ function MainApp() {
   const activeGroupStickerResources = exactGroupStickerResources ?? retainedGroupStickerResources;
   const effectiveStickerTextureUrl = stickerTextureUrl
     ?? (selectedStickerUsesComposedArtwork ? retainedGroupStickerResources?.artworkUrl ?? null : null);
+
+  useEffect(() => {
+    setStickerSpecularUrl(null);
+    if (selectedStickerUsesComposedArtwork || !selectedStickerSpecularRef) return;
+    let cancelled = false;
+    const override = activeTextureOverrides[selectedStickerSpecularRef];
+    void (override ? Promise.resolve(override) : sourceProvider.resolvePreview(selectedStickerSpecularRef))
+      .then((url) => { if (!cancelled) setStickerSpecularUrl(url); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [
+    activeTextureOverrides,
+    packageGeneration,
+    selectedStickerSpecularRef,
+    selectedStickerUsesComposedArtwork,
+    sourceProvider,
+  ]);
   const groupStickerUvPreview = selectedStickerUsesComposedArtwork
     && activeGroupStickerResources
     ? {
@@ -1330,7 +1349,10 @@ function MainApp() {
           levels: activeGroupStickerResources.levels,
         }, quad, { tool: stickerTransformTool });
       } else {
-        viewer.setStickerPreview(effectiveStickerTextureUrl, quad, { tool: stickerTransformTool });
+        viewer.setStickerPreview(effectiveStickerTextureUrl, quad, {
+          tool: stickerTransformTool,
+          specularUrl: stickerSpecularUrl,
+        });
       }
       if (!stickerPlacementActive) viewer.setStickerGizmo(null);
     } else if (stickerPlacementActive && authoredStickerQuad) {
@@ -1352,6 +1374,7 @@ function MainApp() {
     stickerDraftQuad,
     selectedStickerUsesComposedArtwork,
     stickerPlacementActive,
+    stickerSpecularUrl,
     stickerSurfaceComposeKey,
     effectiveStickerTextureUrl,
     stickerTransformTool,
@@ -1464,12 +1487,16 @@ function MainApp() {
       }, quad, { tool: stickerTransformTool });
       return;
     }
-    viewer?.setStickerPreview(effectiveStickerTextureUrl, quad, { tool: stickerTransformTool });
+    viewer?.setStickerPreview(effectiveStickerTextureUrl, quad, {
+      tool: stickerTransformTool,
+      specularUrl: stickerSpecularUrl,
+    });
   }, [
     activeGroupStickerResources,
     selectedStickerUsesComposedArtwork,
     stickerPlacementActive,
     effectiveStickerTextureUrl,
+    stickerSpecularUrl,
     stickerTransformTool,
   ]);
 

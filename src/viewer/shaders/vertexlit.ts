@@ -18,7 +18,7 @@ import * as THREE from 'three';
  * three caches compiled programs across materials, so anything that changes
  * the source below has to change this key too or a stale program is reused.
  */
-export const TF2_VERTEXLIT_CACHE_KEY = 'tf2-vertexlit-v8-detail-alphatest';
+export const TF2_VERTEXLIT_CACHE_KEY = 'tf2-vertexlit-v9-live-sticker-spec';
 
 const PARAMETERS = /* glsl */ `#include <common>
 uniform float uTf2PhongEnabled, uTf2BaseAlphaPhongMask, uTf2NormalAlphaEnvMask;
@@ -29,8 +29,11 @@ uniform float uTf2SelfIllum, uTf2SelfIllumFresnel, uTf2UseSelfIllumMask;
 uniform float uTf2AlphaTestRef;
 uniform float uTf2Detail, uTf2DetailMode, uTf2DetailScale, uTf2DetailFactor;
 uniform float uTf2SpotFalloff;
+uniform float uTf2StickerPreview, uTf2StickerHasSpec, uTf2StickerOpacity;
 uniform sampler2D uTf2ExponentMap, uTf2LightwarpMap, uTf2SelfIllumMaskMap, uTf2DetailMap;
+uniform sampler2D uTf2StickerMap, uTf2StickerSpecMap;
 uniform vec3 uTf2PhongTint, uTf2Fresnel, uTf2SelfIllumTint, uTf2EnvTint, uTf2DetailTint;
+uniform vec2 uTf2StickerTl, uTf2StickerTr, uTf2StickerBl, uTf2StickerCenter;
 uniform vec4 uTf2SelfIllumFresnelParams;
 uniform vec3 uTf2AmbientCube[6];
 uniform mat3 uTf2AmbientBasis;
@@ -98,6 +101,27 @@ float specularStrength = uTf2PhongEnabled * uTf2PhongBoost * tf2SpecMask;`;
 // while preserving alpha as the Source phong/environment mask.
 const BASE_AND_DETAIL = /* glsl */ `#ifdef USE_MAP
   vec4 sampledDiffuseColor = sRGBTransferEOTF( texture2D( map, vMapUv ) );
+  if ( uTf2StickerPreview > 0.5 ) {
+    vec2 sourceUv = vMapUv + floor( uTf2StickerCenter - vMapUv + vec2( 0.5 ) );
+    vec2 axisX = uTf2StickerTr - uTf2StickerTl;
+    vec2 axisY = uTf2StickerBl - uTf2StickerTl;
+    vec2 local = sourceUv - uTf2StickerTl;
+    float determinant = axisX.x * axisY.y - axisX.y * axisY.x;
+    if ( abs( determinant ) > 0.00000001 ) {
+      vec2 stickerUv = vec2(
+        ( local.x * axisY.y - local.y * axisY.x ) / determinant,
+        ( axisX.x * local.y - axisX.y * local.x ) / determinant
+      );
+      float inside = step( 0.0, stickerUv.x ) * step( stickerUv.x, 1.0 )
+        * step( 0.0, stickerUv.y ) * step( stickerUv.y, 1.0 );
+      vec4 sticker = texture2D( uTf2StickerMap, stickerUv );
+      float alpha = sticker.a * inside * uTf2StickerOpacity;
+      vec3 stickerColor = sRGBTransferEOTF( vec4( sticker.rgb, 1.0 ) ).rgb;
+      float stickerSpec = mix( 0.0, texture2D( uTf2StickerSpecMap, stickerUv ).r, uTf2StickerHasSpec );
+      sampledDiffuseColor.rgb = mix( sampledDiffuseColor.rgb, stickerColor, alpha );
+      sampledDiffuseColor.a = mix( sampledDiffuseColor.a, stickerSpec, alpha );
+    }
+  }
   diffuseColor *= sampledDiffuseColor;
 #endif
 // $detail, sampled at base UV * $detailscale (the detail transform is the base

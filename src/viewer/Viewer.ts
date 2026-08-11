@@ -101,6 +101,8 @@ interface GroupLayerOverlayPass {
 export interface StickerPreviewOptions {
   /** Opacity of the decal preview. Defaults to the authored sticker alpha. */
   readonly opacity?: number;
+  /** Optional linear specular mask paired with an ordinary sticker. */
+  readonly specularUrl?: string | null;
   /** Active direct-manipulation affordance shown on the model. */
   readonly tool?: StickerGizmoTool;
 }
@@ -285,7 +287,9 @@ export class Viewer {
   private stickerPreviewMaterial: THREE.ShaderMaterial | null = null;
   private stickerPreviewMeshes: THREE.Mesh[] = [];
   private stickerPreviewTexture: THREE.Texture | null = null;
+  private stickerPreviewSpecTexture: THREE.Texture | null = null;
   private stickerPreviewUrl: string | null = null;
+  private stickerPreviewSpecUrl: string | null = null;
   private stickerPreviewMode: 'decal' | 'group' | null = null;
   private stickerPreviewLoadToken = 0;
   // The normal compositor map remains current even while the Sticker editor
@@ -1033,13 +1037,7 @@ export class Viewer {
     }
     this.setStickerGizmo(quad, options.tool ?? this.stickerGizmoTool);
 
-    const material = this.ensureStickerPreviewMaterial();
-    material.uniforms.uPreviewMode.value = 0;
-    material.uniforms.uSelectorBase.value = null;
-    material.uniforms.uEndpointZero.value = null;
-    material.uniforms.uEndpointOne.value = null;
-
-    this.loadStickerPreviewTexture(textureUrl, 'decal');
+    this.loadLitStickerPreviewTextures(textureUrl, options.specularUrl ?? null);
   }
 
   /**
@@ -1069,6 +1067,13 @@ export class Viewer {
 
   private loadStickerPreviewTexture(textureUrl: string, mode: 'decal' | 'group'): void {
     const material = this.ensureStickerPreviewMaterial();
+    this.tf2Uniforms.uTf2StickerPreview.value = 0;
+    this.tf2Uniforms.uTf2StickerMap.value = null;
+    this.tf2Uniforms.uTf2StickerSpecMap.value = null;
+    this.tf2Uniforms.uTf2StickerHasSpec.value = 0;
+    this.stickerPreviewSpecTexture?.dispose();
+    this.stickerPreviewSpecTexture = null;
+    this.stickerPreviewSpecUrl = null;
 
     if (textureUrl === this.stickerPreviewUrl && mode === this.stickerPreviewMode && this.stickerPreviewTexture) {
       // Position lives in shader uniforms, so a transform drag must not tear
@@ -1109,14 +1114,80 @@ export class Viewer {
     });
   }
 
+  private loadLitStickerPreviewTextures(textureUrl: string, specularUrl: string | null): void {
+    if (textureUrl === this.stickerPreviewUrl
+      && specularUrl === this.stickerPreviewSpecUrl
+      && this.stickerPreviewMode === 'decal'
+      && this.stickerPreviewTexture) {
+      this.tf2Uniforms.uTf2StickerPreview.value = 1;
+      this.tf2Uniforms.uTf2StickerMap.value = this.stickerPreviewTexture;
+      this.tf2Uniforms.uTf2StickerSpecMap.value = this.stickerPreviewSpecTexture ?? this.stickerPreviewTexture;
+      this.tf2Uniforms.uTf2StickerHasSpec.value = this.stickerPreviewSpecTexture ? 1 : 0;
+      this.teardownStickerPreviewMeshes();
+      this.invalidate();
+      return;
+    }
+
+    const token = ++this.stickerPreviewLoadToken;
+    this.stickerPreviewUrl = textureUrl;
+    this.stickerPreviewSpecUrl = specularUrl;
+    this.stickerPreviewMode = 'decal';
+    this.teardownStickerPreviewMeshes();
+    this.stickerPreviewTexture?.dispose();
+    this.stickerPreviewSpecTexture?.dispose();
+    this.stickerPreviewTexture = null;
+    this.stickerPreviewSpecTexture = null;
+    this.tf2Uniforms.uTf2StickerPreview.value = 0;
+    this.tf2Uniforms.uTf2StickerMap.value = null;
+    this.tf2Uniforms.uTf2StickerSpecMap.value = null;
+    this.tf2Uniforms.uTf2StickerHasSpec.value = 0;
+
+    const base = this.texLoader.loadAsync(textureUrl);
+    const spec = specularUrl ? this.texLoader.loadAsync(specularUrl).catch(() => null) : Promise.resolve(null);
+    void Promise.all([base, spec]).then(([texture, specular]) => {
+      if (token !== this.stickerPreviewLoadToken || this.disposed
+        || textureUrl !== this.stickerPreviewUrl || specularUrl !== this.stickerPreviewSpecUrl
+        || this.stickerPreviewMode !== 'decal') {
+        texture.dispose();
+        specular?.dispose();
+        return;
+      }
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.flipY = false;
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+      if (specular) {
+        specular.colorSpace = THREE.NoColorSpace;
+        specular.flipY = false;
+        specular.wrapS = specular.wrapT = THREE.RepeatWrapping;
+      }
+      this.stickerPreviewTexture = texture;
+      this.stickerPreviewSpecTexture = specular;
+      this.tf2Uniforms.uTf2StickerMap.value = texture;
+      this.tf2Uniforms.uTf2StickerSpecMap.value = specular ?? texture;
+      this.tf2Uniforms.uTf2StickerHasSpec.value = specular ? 1 : 0;
+      this.tf2Uniforms.uTf2StickerPreview.value = 1;
+      this.invalidate();
+    }).catch(() => {
+      if (token !== this.stickerPreviewLoadToken) return;
+      this.clearStickerPreview();
+    });
+  }
+
   /** Remove the temporary UV decal and release its GPU texture. */
   clearStickerPreview(): void {
     this.stickerPreviewLoadToken++;
     this.stickerPreviewUrl = null;
+    this.stickerPreviewSpecUrl = null;
     this.stickerPreviewMode = null;
     this.teardownStickerPreviewMeshes();
     this.stickerPreviewTexture?.dispose();
+    this.stickerPreviewSpecTexture?.dispose();
     this.stickerPreviewTexture = null;
+    this.stickerPreviewSpecTexture = null;
+    this.tf2Uniforms.uTf2StickerPreview.value = 0;
+    this.tf2Uniforms.uTf2StickerMap.value = null;
+    this.tf2Uniforms.uTf2StickerSpecMap.value = null;
+    this.tf2Uniforms.uTf2StickerHasSpec.value = 0;
     if (this.stickerPreviewMaterial) {
       this.stickerPreviewMaterial.uniforms.uStickerMap.value = null;
       this.stickerPreviewMaterial.uniforms.uSelectorBase.value = null;
@@ -1144,6 +1215,11 @@ export class Viewer {
       quad.tl[1] + (y0 + y1) * 0.5,
     );
     material.uniforms.uStickerOpacity.value = THREE.MathUtils.clamp(opacity ?? 1, 0, 1);
+    this.tf2Uniforms.uTf2StickerTl.value.copy(material.uniforms.uStickerTl.value);
+    this.tf2Uniforms.uTf2StickerTr.value.copy(material.uniforms.uStickerTr.value);
+    this.tf2Uniforms.uTf2StickerBl.value.copy(material.uniforms.uStickerBl.value);
+    this.tf2Uniforms.uTf2StickerCenter.value.copy(material.uniforms.uStickerCenter.value);
+    this.tf2Uniforms.uTf2StickerOpacity.value = material.uniforms.uStickerOpacity.value;
     return true;
   }
 
@@ -1251,7 +1327,7 @@ export class Viewer {
 
   private rebuildStickerPreviewMeshes() {
     this.teardownStickerPreviewMeshes();
-    if (!this.stickerPreviewTexture || !this.stickerPreviewMaterial) return;
+    if (this.stickerPreviewMode !== 'group' || !this.stickerPreviewTexture || !this.stickerPreviewMaterial) return;
     this.stickerPreviewMaterial.side = this.material.side;
     for (const mesh of this.paintableMeshes) {
       const preview = new THREE.Mesh(mesh.geometry, this.stickerPreviewMaterial);

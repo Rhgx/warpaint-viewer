@@ -133,6 +133,34 @@ try {
   assert.match(appSource, /setGroupStickerPreview/, 'group movement uses the retained selector endpoint shader');
   assert.match(
     appSource,
+    /setStickerPreview\(effectiveStickerTextureUrl, quad, \{[\s\S]*?specularUrl: stickerSpecularUrl/,
+    'ordinary live sticker movement supplies its resolved specular texture',
+  );
+  const viewerSource = fs.readFileSync(path.join(ROOT, 'src', 'viewer', 'Viewer.ts'), 'utf8');
+  assert.match(
+    viewerSource,
+    /uTf2StickerSpecMap\.value = specular \?\? texture/,
+    'the live sticker specular is bound into the weapon material without another composition',
+  );
+  assert.doesNotMatch(
+    viewerSource,
+    /this\.rebuildStickerPreviewMeshes\(\);[\s\S]{0,160}uTf2StickerPreview\.value = 1/,
+    'ordinary stickers do not rebuild a separate unlit weapon overlay',
+  );
+  const vertexLitSource = fs.readFileSync(path.join(ROOT, 'src', 'viewer', 'shaders', 'vertexlit.ts'), 'utf8');
+  assert.match(
+    vertexLitSource,
+    /sampledDiffuseColor\.a = mix\( sampledDiffuseColor\.a, stickerSpec, alpha \)/,
+    'the live specular mask enters base alpha before TF2 phong lighting',
+  );
+  const compositorSource = fs.readFileSync(path.join(ROOT, 'src', 'compositor', 'compositor.ts'), 'utf8');
+  const stickerCase = compositorSource.slice(
+    compositorSource.indexOf("case 'apply_sticker': {"),
+    compositorSource.indexOf("case 'select':", compositorSource.indexOf("case 'apply_sticker': {") + 1),
+  );
+  assert.match(stickerCase, /u\.uSrgb2\.value = 0/, 'final sticker specular maps are sampled as linear material data');
+  assert.match(
+    appSource,
     /composeGroupStickerArtworkDataUrl\(\{[\s\S]*?selectorBase: selectorBase\.texture,[\s\S]*?endpointZero: endpointZero\.texture,[\s\S]*?endpointOne: endpointOne\.texture/,
     'the picker thumbnail is isolated from the same selector baseline and endpoints as the live previews',
   );

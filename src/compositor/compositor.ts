@@ -395,7 +395,9 @@ export class Compositor {
         const t = base.transform;
         u.uSrgb0.value = 1;
         u.uSrgb1.value = 1;
-        u.uSrgb2.value = 1;
+        // Sticker specular maps are scalar material data. Source samples them
+        // linearly even when the diffuse sticker is read as sRGB.
+        u.uSrgb2.value = 0;
         (u.uAdjust0.value as THREE.Vector3).set(t.black, t.white, t.gamma);
         (u.uUv0.value as THREE.Matrix3).copy(
           textureUvMatrix(t.rotationDeg, t.translateU, t.translateV, t.scale, t.flipU, t.flipV),
