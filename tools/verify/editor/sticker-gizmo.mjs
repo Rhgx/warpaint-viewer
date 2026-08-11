@@ -125,7 +125,7 @@ try {
 
   const seam = { tl: [0.92, 0.45], tr: [1.02, 0.45], bl: [0.92, 0.55] };
   const seamMoved = gizmo.moveStickerQuadByUvDelta(seam, [0.98, 0.5], [0.03, 0.5]);
-  closeUv(seamMoved.tl, [0.97, 0.45], 'move keeps a short seam drag compact');
+  closeUv(seamMoved.tl, [0.95, 0.45], 'move keeps the centre recoverable while preserving seam-safe edge clipping');
 } finally {
   fs.rmSync(BUILD_DIR, { recursive: true, force: true });
 }

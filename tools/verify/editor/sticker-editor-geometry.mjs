@@ -124,6 +124,24 @@ try {
   const moved = geometry.moveStickerPlacement(original, { x: 0.1, y: -0.2 });
   close(moved.x, 0.47, 'move x');
   close(moved.y, 0.38, 'move y');
+  const edgeMove = geometry.moveStickerPlacement(
+    { x: 0.5, y: 0.5, width: 0.2, height: 0.2, rotation: 0 },
+    { x: 0.8, y: 0 },
+  );
+  close(edgeMove.x, 1, 'movement stops while its editable anchor remains recoverable');
+  const oversized = geometry.constrainStickerPlacementToTexture({
+    x: 0.5, y: 0.5, width: 2, height: 1, rotation: 45,
+  });
+  close(oversized.width, 1.5, 'extreme width is capped without forbidding valid clipping');
+  close(oversized.height, 1, 'independent height remains intact below the cap');
+  const authoredEdgeLogo = geometry.stickerPlacementFromQuad({
+    tl: [0.634, 0.177], tr: [0.428, 0.177], bl: [0.634, -0.029],
+  }).placement;
+  assert.ok(authoredEdgeLogo, 'Flak Furnished edge logo remains a supported placement');
+  const preservedEdgeLogo = geometry.stickerPlacementToQuad(geometry.clampStickerPlacement(authoredEdgeLogo));
+  closePoint(preservedEdgeLogo.tl, [0.634, 0.177], 'authored edge clipping preserves top-left');
+  closePoint(preservedEdgeLogo.tr, [0.428, 0.177], 'authored edge clipping preserves top-right');
+  closePoint(preservedEdgeLogo.bl, [0.634, -0.029], 'authored edge clipping preserves bottom-left');
   closePoint(geometry.stickerPlacementToQuad({ x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 }).tl, [0.4, 0.45], 'unrotated top left');
 } finally {
   fs.rmSync(BUILD_DIR, { recursive: true, force: true });

@@ -93,15 +93,26 @@ export function normalizeStickerRotation(rotation: number): number {
   return normalized === -180 ? 180 : normalized;
 }
 
-/** Sanitize externally supplied authored values without requiring a UI mount. */
-export function clampStickerPlacement(placement: StickerPlacement): StickerPlacement {
+/**
+ * Keep the editable anchor recoverable inside the texture and cap extreme
+ * scaling. TF2 deliberately permits destination corners outside 0-1 and
+ * clips them at the render target edge. Several shipped definitions rely on
+ * that behavior.
+ */
+export function constrainStickerPlacementToTexture(placement: StickerPlacement): StickerPlacement {
+  const rotation = normalizeStickerRotation(placement.rotation);
   return {
     x: clamp(finite(placement.x, DEFAULT_STICKER_PLACEMENT.x), 0, 1),
     y: clamp(finite(placement.y, DEFAULT_STICKER_PLACEMENT.y), 0, 1),
     width: clamp(finite(placement.width, DEFAULT_STICKER_PLACEMENT.width), MIN_SIZE, MAX_SIZE),
     height: clamp(finite(placement.height, DEFAULT_STICKER_PLACEMENT.height), MIN_SIZE, MAX_SIZE),
-    rotation: normalizeStickerRotation(placement.rotation),
+    rotation,
   };
+}
+
+/** Sanitize externally supplied authored values without requiring a UI mount. */
+export function clampStickerPlacement(placement: StickerPlacement): StickerPlacement {
+  return constrainStickerPlacementToTexture(placement);
 }
 
 export function moveStickerPlacement(

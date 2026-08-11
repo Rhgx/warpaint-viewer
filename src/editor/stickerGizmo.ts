@@ -4,6 +4,7 @@
  * destination points rather than introducing a world-space decal transform.
  */
 import {
+  constrainStickerQuadToTexture,
   nearestPeriodicUv,
   stickerQuadCenter,
   type StickerPlacementQuad,
@@ -236,11 +237,11 @@ export function moveStickerQuadByUvDelta(
   const target = nearestPeriodicUv(startUv, currentUv);
   const dx = target[0] - startUv[0];
   const dy = target[1] - startUv[1];
-  return {
+  return constrainStickerQuadToTexture({
     tl: [quad.tl[0] + dx, quad.tl[1] + dy],
     tr: [quad.tr[0] + dx, quad.tr[1] + dy],
     bl: [quad.bl[0] + dx, quad.bl[1] + dy],
-  };
+  });
 }
 
 function scaleAlong(
@@ -283,17 +284,22 @@ export function scaleStickerQuadFromGizmo(
 ): StickerPlacementQuad {
   if (!validQuad(quad) || !finiteUv(pointer)) return quad;
   const br = bottomRight(quad);
+  let result = quad;
   switch (handle) {
     case 'scale-top-left':
-      return scaleUniformFromCorner(quad, br, quad.tl, pointer);
+      result = scaleUniformFromCorner(quad, br, quad.tl, pointer);
+      break;
     case 'scale-top-right':
-      return scaleUniformFromCorner(quad, quad.bl, quad.tr, pointer);
+      result = scaleUniformFromCorner(quad, quad.bl, quad.tr, pointer);
+      break;
     case 'scale-bottom-right':
-      return scaleUniformFromCorner(quad, quad.tl, br, pointer);
+      result = scaleUniformFromCorner(quad, quad.tl, br, pointer);
+      break;
     case 'scale-bottom-left':
-      return scaleUniformFromCorner(quad, quad.tr, quad.bl, pointer);
+      result = scaleUniformFromCorner(quad, quad.tr, quad.bl, pointer);
+      break;
   }
-  return quad;
+  return constrainStickerQuadToTexture(result);
 }
 
 /** Uniformly scale an authored destination around its centre from a screen ratio. */
@@ -308,7 +314,7 @@ export function scaleStickerQuadAroundCentre(
     centre[0] + (point[0] - centre[0]) * scale,
     centre[1] + (point[1] - centre[1]) * scale,
   ];
-  return { tl: around(quad.tl), tr: around(quad.tr), bl: around(quad.bl) };
+  return constrainStickerQuadToTexture({ tl: around(quad.tl), tr: around(quad.tr), bl: around(quad.bl) });
 }
 
 /** Scale only one local affine axis while keeping the sticker centre fixed. */
@@ -324,11 +330,11 @@ export function scaleStickerQuadAxisAroundCentre(
   const y = [quad.bl[0] - quad.tl[0], quad.bl[1] - quad.tl[1]] as const;
   const scaledX = axis === 'x' ? [x[0] * scale, x[1] * scale] as const : x;
   const scaledY = axis === 'y' ? [y[0] * scale, y[1] * scale] as const : y;
-  return {
+  return constrainStickerQuadToTexture({
     tl: [centre[0] - (scaledX[0] + scaledY[0]) * 0.5, centre[1] - (scaledX[1] + scaledY[1]) * 0.5],
     tr: [centre[0] + (scaledX[0] - scaledY[0]) * 0.5, centre[1] + (scaledX[1] - scaledY[1]) * 0.5],
     bl: [centre[0] + (scaledY[0] - scaledX[0]) * 0.5, centre[1] + (scaledY[1] - scaledX[1]) * 0.5],
-  };
+  });
 }
 
 /**
@@ -372,5 +378,5 @@ export function rotateStickerQuadByDegrees(quad: StickerPlacementQuad, degrees: 
     const y = point[1] - centre[1];
     return [centre[0] + x * cos - y * sin, centre[1] + x * sin + y * cos];
   };
-  return { tl: rotate(quad.tl), tr: rotate(quad.tr), bl: rotate(quad.bl) };
+  return constrainStickerQuadToTexture({ tl: rotate(quad.tl), tr: rotate(quad.tr), bl: rotate(quad.bl) });
 }
