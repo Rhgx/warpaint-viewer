@@ -228,13 +228,21 @@ function resolveStage(
     const s = stage.select;
     const groupsVal = varFieldValue(s.groups, dict);
     const groups = texturePublicPath(groupsVal);
-    if (groups) textureRefs.add(groups);
     const select: Array<number | string> = [];
     for (const sel of many(s.select)) {
       const v = varFieldValue(sel, dict);
       const num = Number(v);
       select.push(Number.isFinite(num) ? num : (v as string));
     }
+    // Zero is padding, not an actual group. An entirely empty selector emits
+    // a constant black mask and never samples its groups texture in TF2. Some
+    // authored operations leave the groups variable at a template path until
+    // a weapon actually uses the selector, so loading it would fail a valid
+    // recipe for no visual benefit.
+    if (groups && select.some((value) => {
+      const parsed = typeof value === 'number' ? value : parseInt(value, 10);
+      return Number.isFinite(parsed) && parsed !== 0;
+    })) textureRefs.add(groups);
     return { type: 'select', groups: groups ?? '', select };
   }
 

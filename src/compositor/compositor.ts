@@ -35,6 +35,13 @@ export interface ComposeDimensions {
   height: number;
 }
 
+function selectHasActiveGroup(values: readonly (number | string)[] | undefined): boolean {
+  return (values ?? []).some((value) => {
+    const parsed = typeof value === 'number' ? value : parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed !== 0;
+  });
+}
+
 export interface GroupStickerArtworkInput {
   readonly mask: string;
   readonly selectorBase: THREE.Texture;
@@ -183,7 +190,7 @@ export class Compositor {
         node.nodes.forEach((n) => this.collectRefs(n, out));
         break;
       case 'select':
-        out.push({ ref: node.groups, nearest: false });
+        if (selectHasActiveGroup(node.select)) out.push({ ref: node.groups, nearest: false });
         break;
       case 'apply_sticker':
         out.push({ ref: node.base, nearest: false });
@@ -207,7 +214,7 @@ export class Compositor {
         node.nodes.forEach((child) => this.collectRecipeRefs(child, out));
         break;
       case 'select':
-        out.push({ ref: node.groups, nearest: false });
+        if (selectHasActiveGroup(node.select)) out.push({ ref: node.groups, nearest: false });
         break;
       case 'apply_sticker':
         for (const sticker of node.stickers ?? []) {
@@ -359,6 +366,9 @@ export class Compositor {
         return { texture: result.texture, transform: node, target: result };
       }
       case 'select': {
+        if (!selectHasActiveGroup(node.select)) {
+          return { texture: this.constZero(), transform: IDENTITY_TRANSFORM, target: null };
+        }
         const groups = await this.textures.load(node.groups);
         const out = this.acquire();
         u.uMode.value = MODE_SELECT;
