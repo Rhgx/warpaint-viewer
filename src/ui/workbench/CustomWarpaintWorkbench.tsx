@@ -6,8 +6,11 @@ import type {
 import { Tabs } from '@base-ui/react/tabs';
 import {
   AlertTriangle,
+  ChevronDown,
   Download,
   Files,
+  Maximize2,
+  Minimize2,
   PackageOpen,
   PencilRuler,
   Plus,
@@ -28,6 +31,7 @@ import { loadImage, mergeAlpha, readTexture } from '../../workbench/textureImpor
 import { DefinitionsPanel } from './DefinitionsPanel';
 import { ExportPanel } from './ExportPanel';
 import type { ExportDefinitionsContext, ExportItem } from './ExportPanel';
+import type { EditorDownloadFormat } from '../../editor/definitionExport';
 import { AssetFilesPanel } from './AssetFilesPanel';
 import {
   VisualWarpaintEditorPanel,
@@ -66,6 +70,8 @@ export function CustomWarpaintWorkbench({
   snapshotDate,
   exportDefinitions,
   editor,
+  expanded,
+  onExpandedChange,
 }: {
   recipes: WearRecipe[];
   resolveTexture: (ref: string) => string;
@@ -99,8 +105,11 @@ export function CustomWarpaintWorkbench({
     onUndo: () => void;
     onRedo: () => void;
     onReset: () => void;
-    onDownloadPackage: () => void;
+    onDownloadPackage: (format: EditorDownloadFormat) => void;
   };
+  /** Expands the Edit tab over the full application viewport. */
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
   sourcePackage: SourcePackageState;
   /** Async Source package resolver used only for the non-destructive preview. */
   resolvePackageTexture?: (ref: string) => Promise<string>;
@@ -131,6 +140,7 @@ export function CustomWarpaintWorkbench({
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmRevert, setConfirmRevert] = useState(false);
+  const [editorDownloadFormat, setEditorDownloadFormat] = useState<EditorDownloadFormat>('zip');
   const [resizing, setResizing] = useState(false);
   const [dropping, setDropping] = useState(false);
   const [dropHint, setDropHint] = useState(false);
@@ -356,6 +366,18 @@ export function CustomWarpaintWorkbench({
     (kit) => kit.loaded,
   ).length;
 
+  useEffect(() => {
+    if (!expanded) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      event.preventDefault();
+      onExpandedChange(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [expanded, onExpandedChange]);
+
   // The export needs each replaced slot's kind, which only the slot list knows,
   // so the pairing happens here rather than in the panel.
   const exportItems = useMemo<ExportItem[]>(
@@ -374,6 +396,7 @@ export function CustomWarpaintWorkbench({
       className="custom-workbench"
       aria-label="War paint workbench"
       data-tab={tab}
+      data-expanded={expanded ? '' : undefined}
       ref={sectionRef}
       data-dropping={dropping ? '' : undefined}
       {...dropHandlers}
@@ -490,6 +513,19 @@ export function CustomWarpaintWorkbench({
               />
             </label>
           </div>
+
+          {tab === 'editor' && (
+            <button
+              type="button"
+              className="custom-workbench-expand"
+              title={expanded ? 'Exit full-screen editor (Esc)' : 'Open full-screen editor'}
+              aria-label={expanded ? 'Exit full-screen editor' : 'Open full-screen editor'}
+              aria-pressed={expanded}
+              onClick={() => onExpandedChange(!expanded)}
+            >
+              {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+            </button>
+          )}
 
           <button
             type="button"
@@ -648,16 +684,53 @@ export function CustomWarpaintWorkbench({
                   >
                     <RotateCcw size={13} /> {confirmRevert ? 'Revert all?' : 'Revert'}
                   </button>
-                  <button
-                    type="button"
-                    className="custom-workbench-edit-download"
-                    disabled={!editor.canDownload}
-                    aria-busy={editor.exporting}
-                    onClick={editor.onDownloadPackage}
-                    title="Download the complete edited package as a ZIP"
-                  >
-                    <Download size={13} /> {editor.exporting ? 'Preparing ZIP...' : 'Download ZIP'}
-                  </button>
+                  <div className="custom-workbench-edit-download-group">
+                    <button
+                      type="button"
+                      className="custom-workbench-edit-download"
+                      disabled={!editor.canDownload}
+                      aria-busy={editor.exporting}
+                      onClick={() => editor.onDownloadPackage(editorDownloadFormat)}
+                      title={`Download the edited ${editorDownloadFormat.toUpperCase()} output`}
+                    >
+                      <Download size={13} /> {editor.exporting
+                        ? 'Preparing...'
+                        : `Download ${editorDownloadFormat.toUpperCase()}`}
+                    </button>
+                    <details className="custom-workbench-edit-download-options">
+                      <summary
+                        className="custom-workbench-edit-download-toggle"
+                        aria-label="Choose download format"
+                        aria-disabled={!editor.canDownload || editor.exporting}
+                        onClick={(event) => {
+                          if (!editor.canDownload || editor.exporting) event.preventDefault();
+                        }}
+                      >
+                        <ChevronDown size={13} aria-hidden="true" />
+                      </summary>
+                      <div className="custom-workbench-edit-download-menu" role="menu">
+                        {([
+                          ['zip', 'ZIP', 'Edited source package'],
+                          ['json', 'JSON', 'Portable operation and definition'],
+                          ['vpd', 'VPD', 'Complete proto_defs file'],
+                        ] as const).map(([format, label, description]) => (
+                          <button
+                            key={format}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={editorDownloadFormat === format}
+                            onClick={(event) => {
+                              setEditorDownloadFormat(format);
+                              event.currentTarget.closest('details')?.removeAttribute('open');
+                            }}
+                          >
+                            <span>{label}</span>
+                            <small>{description}</small>
+                          </button>
+                        ))}
+                      </div>
+                    </details>
+                  </div>
                 </div>
               </div>
               <div className="custom-workbench-edit-content">
@@ -680,7 +753,7 @@ export function CustomWarpaintWorkbench({
           ) : (
             <VisualWarpaintEditorPanel
               enabled={false}
-              unavailableReason="Choose an imported war paint to edit."
+              unavailableReason="Choose a war paint to edit."
               sample={null}
               selectedGroupIds={[]}
               inspectOnClick={false}

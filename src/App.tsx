@@ -26,11 +26,12 @@ import { useBootData, randomSeed } from './hooks/useBootData';
 import { applyTextureOverrides, useComposedPaint } from './hooks/useComposedPaint';
 import { useSourcePackage } from './hooks/useSourcePackage';
 import { useCustomDefinitions } from './hooks/useCustomDefinitions';
+import { useStockDefinitions } from './hooks/useStockDefinitions';
 import { useScreenshotActions } from './hooks/useScreenshotActions';
 import { useCustomWarpaintIcons } from './hooks/useCustomWarpaintIcons';
 import { sourceTextureIdentity } from './source/paths';
 import { collectTextureRefs, exportPathFor, resolvePackageTextures } from './export/plan';
-import { isCustomKitId } from './protodefs/types';
+import { customKitDefindex, isCustomKitId } from './protodefs/types';
 import type { CustomDefinitionsState, ProtoDefRecipeWithProvenance } from './protodefs/types';
 import { useProtoDefEditorSession } from './editor/useProtoDefEditorSession';
 import { discoverGroupSelectTargets } from './editor/groupTargets';
@@ -63,6 +64,7 @@ import {
 } from './editor/stickerArtwork';
 import { constrainStickerQuadToTexture, type StickerPlacementQuad } from './editor/viewerStickerPlacement';
 import type { StickerTransformTool } from './ui/workbench/StickerPlacementEditor';
+import type { EditorDownloadFormat } from './editor/definitionExport';
 
 // Selftest page is code-split: it never loads in normal use.
 const SelfTestPage = lazy(() => import('./dev/selftest').then((m) => ({ default: m.SelfTestPage })));
@@ -164,10 +166,12 @@ function MainApp() {
   const [selectedKitId, setSelectedKitId] = useState<number | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchMounted, setWorkbenchMounted] = useState(false);
+  const [workbenchExpanded, setWorkbenchExpanded] = useState(false);
   // 0 keeps the CSS default drawer height; anything else is a user drag.
   const [workbenchHeight, setWorkbenchHeight] = useState(0);
   // The drawer is keyed to remount per paint/weapon, so its tab lives out here.
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>('files');
+  const [editorRequestedKitId, setEditorRequestedKitId] = useState<number | null>(null);
   const [editorRecipes, setEditorRecipes] = useState<WearRecipe[]>([]);
   const [editorLoading, setEditorLoading] = useState(false);
   const [assetOverrideCache, setAssetOverrideCache] = useState<Record<string, WarpaintAssetOverrides>>({});
@@ -207,8 +211,31 @@ function MainApp() {
     provider: sourceProvider,
     packageGeneration,
   });
-  const editableKitId = selectedKitId != null && isCustomKitId(selectedKitId) ? selectedKitId : null;
-  const editorSession = useProtoDefEditorSession({ kitId: editableKitId, loadKit: definitions.exportKit });
+  const stockDefinitions = useStockDefinitions(data?.manifest ?? null, getAssetUrl);
+  const {
+    editGeneration: stockEditGeneration,
+    exportKit: exportStockKit,
+    getRecipe: getStockRecipe,
+    getRecipeWithProvenance: getStockRecipeWithProvenance,
+    previewKitMessages: previewStockKitMessages,
+    clearPreviewKit: clearStockPreviewKit,
+  } = stockDefinitions;
+  const {
+    exportKit: exportImportedKit,
+    getRecipeWithProvenance: getImportedRecipeWithProvenance,
+    previewKitMessages: previewImportedKitMessages,
+    clearPreviewKit: clearImportedPreviewKit,
+  } = definitions;
+  useEffect(() => {
+    if (workbenchOpen && workbenchTab === 'editor' && selectedKitId !== null) {
+      setEditorRequestedKitId(selectedKitId);
+    }
+  }, [selectedKitId, workbenchOpen, workbenchTab]);
+  const editableKitId = selectedKitId === editorRequestedKitId ? selectedKitId : null;
+  const loadEditorKit = useCallback((kitId: number) => (
+    isCustomKitId(kitId) ? exportImportedKit(kitId) : exportStockKit(kitId)
+  ), [exportImportedKit, exportStockKit]);
+  const editorSession = useProtoDefEditorSession({ kitId: editableKitId, loadKit: loadEditorKit });
   const {
     status: editorStatus,
     current: editorCurrent,
@@ -225,7 +252,6 @@ function MainApp() {
     reload: reloadEditor,
     getCurrentMessages: getEditorMessages,
   } = editorSession;
-  const { previewKitMessages, clearPreviewKit } = definitions;
   const [groupImage, setGroupImage] = useState<RgbaImageDataLike | null>(null);
   const [groupImageError, setGroupImageError] = useState<string | null>(null);
   const [editorPreviewError, setEditorPreviewError] = useState<string | null>(null);
@@ -456,6 +482,9 @@ function MainApp() {
 
   const selectedKit: PaintkitEntry | null =
     selectedKitId != null ? paintkits.find((p) => p.id === selectedKitId) ?? null : null;
+  const editorDefinitionGeneration = selectedKit && !isCustomKitId(selectedKit.id)
+    ? stockEditGeneration
+    : definitions.editGeneration;
   const selectedAssetKey = selectedKit && state.weaponKey ? `${selectedKit.id}|${state.weaponKey}` : '';
   // Artwork refs are shared by a paintkit even when its weapon recipe changes.
   // Keep one edit set per paintkit so imported textures follow weapon changes;
@@ -469,9 +498,11 @@ function MainApp() {
     (kit: PaintkitEntry, weaponKey: string, team: ControlsState['team'], wearIndex: number) => (
       isCustomKitId(kit.id)
         ? getImportedRecipe(kit.id, weaponKey, team, wearIndex)
-        : data?.getRecipe(kit, weaponKey, team, wearIndex) ?? Promise.resolve(null)
+        : editorCurrent && editableKitId === kit.id
+          ? getStockRecipe(kit.id, weaponKey, team, wearIndex)
+          : data?.getRecipe(kit, weaponKey, team, wearIndex) ?? Promise.resolve(null)
     ),
-    [data, getImportedRecipe],
+    [data, editableKitId, editorCurrent, getImportedRecipe, getStockRecipe],
   );
 
   // An import can point at the kit it is meant for: a numeric ZIP wrapper is a
@@ -511,18 +542,19 @@ function MainApp() {
       return;
     }
     let cancelled = false;
-    void definitions.getRecipeWithProvenance(
-      editableKitId,
-      state.weaponKey,
-      state.team,
-      state.wearIndex,
-    ).then((resolved) => {
+    const resolver = isCustomKitId(editableKitId)
+      ? getImportedRecipeWithProvenance
+      : getStockRecipeWithProvenance;
+    void resolver(editableKitId, state.weaponKey, state.team, state.wearIndex).then((resolved) => {
       if (!cancelled) setStickerRecipe(resolved);
     });
     return () => { cancelled = true; };
   }, [
     definitions,
     definitions.editGeneration,
+    stockEditGeneration,
+    getImportedRecipeWithProvenance,
+    getStockRecipeWithProvenance,
     editableKitId,
     editorCurrent,
     selectedKit,
@@ -1092,7 +1124,10 @@ function MainApp() {
     let cancelled = false;
     setEditorPreviewPending(true);
     setEditorPreviewError(null);
-    void previewKitMessages(editableKitId, editorCurrent)
+    const preview = isCustomKitId(editableKitId)
+      ? previewImportedKitMessages
+      : previewStockKitMessages;
+    void preview(editableKitId, editorCurrent)
       .catch((cause) => {
         console.warn('[warpaint-viewer] editor preview could not be updated:', cause);
         if (!cancelled) setEditorPreviewError('The preview could not be updated.');
@@ -1101,13 +1136,16 @@ function MainApp() {
         if (!cancelled) setEditorPreviewPending(false);
       });
     return () => { cancelled = true; };
-  }, [editableKitId, editorCurrent, editorStatus, previewKitMessages]);
+  }, [editableKitId, editorCurrent, editorStatus, previewImportedKitMessages, previewStockKitMessages]);
 
   useEffect(() => {
     // Selection changes must release the isolated draft source; the imported
     // container remains the stable baseline for the next edit session.
-    return () => clearPreviewKit();
-  }, [editableKitId, clearPreviewKit]);
+    return () => {
+      clearImportedPreviewKit();
+      clearStockPreviewKit();
+    };
+  }, [clearImportedPreviewKit, clearStockPreviewKit, editableKitId]);
 
   useEffect(() => {
     setEditorSample(null);
@@ -1250,7 +1288,7 @@ function MainApp() {
     state,
     assetOverrides,
     packageGeneration,
-    definitionGeneration: definitions.editGeneration,
+    definitionGeneration: editorDefinitionGeneration,
     activeTextureOverrides,
     viewerRef,
     compositorRef,
@@ -1330,7 +1368,7 @@ function MainApp() {
     const surface = stickerBaseSurfaceResultRef.current;
     const quad = stickerDraftQuad ?? authoredStickerQuad;
     const awaitingNormalComposition = !stickerPlacementActive
-      && (editorPreviewPending || visibleDefinitionGeneration < definitions.editGeneration);
+      && (editorPreviewPending || visibleDefinitionGeneration < editorDefinitionGeneration);
     const canPreview = (stickerPlacementActive || awaitingNormalComposition)
       && (stickerBaseSurfaceKey === stickerSurfaceComposeKey || destinationEditSettling)
       && surface
@@ -1366,7 +1404,7 @@ function MainApp() {
   }, [
     authoredStickerQuad,
     activeGroupStickerResources,
-    definitions.editGeneration,
+    editorDefinitionGeneration,
     destinationEditSettling,
     editorPreviewPending,
     engineReady,
@@ -1388,7 +1426,7 @@ function MainApp() {
     setPanelPreviewGroup(null);
   }, [groupAssignActive]);
   const editorUnavailableReason = useMemo(() => {
-    if (editableKitId === null) return 'Choose an imported war paint to edit.';
+    if (editableKitId === null) return 'Choose a war paint to edit.';
     if (editorStatus === 'loading') return 'Loading editable areas…';
     if (editorStatus === 'error') return 'This paint could not be opened.';
     if (!groupDiscovery) return 'This paint can’t be edited yet.';
@@ -1661,15 +1699,24 @@ function MainApp() {
     }
   }, [updateStickerDraft]);
 
-  const downloadEditorPackage = useCallback(() => {
+  const downloadEditorPackage = useCallback((format: EditorDownloadFormat) => {
     const messages = getEditorMessages();
-    if (!messages || editorPackageExporting) return;
+    if (!messages || editorPackageExporting || editableKitId === null) return;
     setEditorPackageExportError(null);
     setEditorPackageExporting(true);
-    void import('./editor/packageExport').then(({ exportEditedPackage }) => exportEditedPackage(messages, {
-      package: sourceProvider.package,
-      name: selectedKit?.name,
-    })).then((result) => {
+    const pending = format === 'zip'
+      ? import('./editor/packageExport').then(({ exportEditedPackage }) => exportEditedPackage(messages, {
+          package: sourceProvider.package,
+          name: selectedKit?.name,
+        }))
+      : import('./editor/definitionExport').then(({ exportEditorDefinition }) => exportEditorDefinition(
+          messages,
+          format,
+          isCustomKitId(editableKitId) ? customKitDefindex(editableKitId) : editableKitId,
+          selectedKit?.name,
+          !isCustomKitId(editableKitId),
+        ));
+    void pending.then((result) => {
       const url = URL.createObjectURL(result.blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -1679,7 +1726,7 @@ function MainApp() {
     }).catch((cause) => {
       setEditorPackageExportError(cause instanceof Error ? cause.message : 'The edited package could not be exported.');
     }).finally(() => setEditorPackageExporting(false));
-  }, [editorPackageExporting, getEditorMessages, selectedKit?.name, sourceProvider]);
+  }, [editableKitId, editorPackageExporting, getEditorMessages, selectedKit?.name, sourceProvider]);
 
   // Set up viewer + compositor on the canvas. The three.js stack is dynamically
   // imported so it lands in its own chunk and the UI shell paints first.
@@ -1788,7 +1835,7 @@ function MainApp() {
       if (!cancelled) setEditorLoading(false);
     });
     return () => { cancelled = true; };
-  }, [workbenchMounted, data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex, definitions.editGeneration]);
+  }, [workbenchMounted, data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex, editorDefinitionGeneration]);
 
   // Load the model when the weapon changes.
   useEffect(() => {
@@ -1951,7 +1998,6 @@ function MainApp() {
   // paint's own definitions, and the package textures the compositor read.
   // Both are fetched only when an export actually runs, so opening the tab
   // costs nothing.
-  const { exportKit } = definitions;
   const exportDefinitions = useMemo(() => {
     // Which of this paint's textures the mounted package supplies, answered
     // from the recipe rather than from what has been rendered so far, so the
@@ -1968,7 +2014,7 @@ function MainApp() {
       isImported: selectedKit ? isCustomKitId(selectedKit.id) : false,
       builtInKits: (data?.manifest.paintkits ?? []).map((kit) => ({ defindex: kit.id, name: kit.name })),
       loadKitMessages: async () => (
-        selectedKit && isCustomKitId(selectedKit.id) ? exportKit(selectedKit.id) : null
+        selectedKit && isCustomKitId(selectedKit.id) ? exportImportedKit(selectedKit.id) : null
       ),
       packageFiles: async () => {
         if (!pkg) return [];
@@ -2001,7 +2047,7 @@ function MainApp() {
     // its own identity across both, so without it this would keep answering for
     // whatever archive was mounted first.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, selectedKit, exportKit, sourceProvider, packageGeneration, editorRecipes, activeTextureOverrides]);
+  }, [data, selectedKit, exportImportedKit, sourceProvider, packageGeneration, editorRecipes, activeTextureOverrides]);
 
   const randomizeSeed = useCallback(() => patch({ seed: randomSeed() }), [patch]);
 
@@ -2204,6 +2250,7 @@ function MainApp() {
         <div
           className="custom-workbench-slot"
           data-open={workbenchOpen ? '' : undefined}
+          data-expanded={workbenchExpanded ? '' : undefined}
           inert={!workbenchOpen}
           style={workbenchHeight ? ({ '--workbench-h': `${workbenchHeight}px` } as CSSProperties) : undefined}
         >
@@ -2214,7 +2261,12 @@ function MainApp() {
                 recipes={editorRecipes}
                 definitions={definitionsState}
                 tab={workbenchTab}
-                onTabChange={setWorkbenchTab}
+                onTabChange={(nextTab) => {
+                  setWorkbenchTab(nextTab);
+                  if (nextTab !== 'editor') setWorkbenchExpanded(false);
+                }}
+                expanded={workbenchExpanded}
+                onExpandedChange={setWorkbenchExpanded}
                 resolveTexture={data.resolveTexture}
                 textureMetadata={data.manifest.textures}
                 paintName={selectedKit?.name}
@@ -2354,7 +2406,10 @@ function MainApp() {
                 // A height of 0 means "back to the default clamp", which is what
                 // double-clicking the drawer's resize handle asks for.
                 onResize={setWorkbenchHeight}
-                onClose={() => setWorkbenchOpen(false)}
+                onClose={() => {
+                  setWorkbenchExpanded(false);
+                  setWorkbenchOpen(false);
+                }}
               />
             </Suspense>
           )}

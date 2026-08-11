@@ -19,6 +19,19 @@
   pointer-events: auto;
   transition: flex-basis 210ms ease, visibility 0s;
 }
+.custom-workbench-slot[data-expanded] {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  flex-basis: auto;
+  overflow: visible;
+  background: var(--panel);
+}
+.custom-workbench-slot[data-expanded] .custom-workbench {
+  border-top: 0;
+  transform: none;
+}
+.custom-workbench-slot[data-expanded] .custom-workbench-resizer { display: none; }
 /* Files and Export are lists and read fine in a shallow drawer. Edit is a
    workspace, so it opens taller by default. Dragging the handle still wins,
    because that sets --workbench-h. */
@@ -124,7 +137,8 @@
   border-radius: 50%;
   background: var(--accent);
 }
-.custom-workbench-close {
+.custom-workbench-close,
+.custom-workbench-expand {
   display: grid;
   flex: none;
   width: 26px;
@@ -137,7 +151,9 @@
   color: var(--text-dim);
   cursor: pointer;
 }
-.custom-workbench-close:hover { background: var(--panel-2); color: var(--text); }
+.custom-workbench-close:hover,
+.custom-workbench-expand:hover { background: var(--panel-2); color: var(--text); }
+.custom-workbench-expand[aria-pressed='true'] { background: var(--panel-2); color: var(--text); }
 
 /* Each tab panel owns its own toolbar/body pair, filling whatever height the
    header left behind. */
@@ -654,6 +670,7 @@
 .custom-workbench-edit-footer {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   padding: 8px 10px 0;
@@ -724,9 +741,76 @@
 
 .custom-workbench-edit-download {
   border-color: var(--accent);
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
   background: var(--accent);
   color: var(--accent-text);
 }
+
+.custom-workbench-edit-download-group {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  flex: 1 0 100%;
+}
+
+.custom-workbench-edit-download { flex: 1; }
+
+.custom-workbench-edit-download-options { display: contents; }
+
+.custom-workbench-edit-download-toggle {
+  display: inline-flex;
+  width: 27px;
+  min-height: var(--control-h);
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--accent);
+  border-left-color: color-mix(in srgb, var(--accent-text) 28%, transparent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+  list-style: none;
+}
+
+.custom-workbench-edit-download-toggle::-webkit-details-marker { display: none; }
+.custom-workbench-edit-download-toggle:hover { filter: brightness(1.08); }
+.custom-workbench-edit-download-options[open] .custom-workbench-edit-download-toggle svg { transform: rotate(180deg); }
+
+.custom-workbench-edit-download-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 8;
+  width: 224px;
+  overflow: hidden;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 32%);
+}
+
+.custom-workbench-edit-download-menu button {
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.custom-workbench-edit-download-menu button:hover,
+.custom-workbench-edit-download-menu button[aria-checked="true"] {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
+.custom-workbench-edit-download-menu button span { font-size: 11px; font-weight: 700; }
+.custom-workbench-edit-download-menu button small { color: var(--text-dim); font-size: 9.5px; }
 
 .custom-workbench-edit-download:hover:not(:disabled) { filter: brightness(1.08); }
 
@@ -776,12 +860,14 @@
     box-shadow: inset 0 -2px 0 var(--accent);
   }
   .custom-workbench-edit-footer {
+    flex-wrap: nowrap;
     margin: 0;
     padding: 8px;
     border-top: 0;
     border-left: 1px solid var(--border);
   }
   .custom-workbench-edit-revert { margin-left: 0; }
+  .custom-workbench-edit-download-group { flex: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
