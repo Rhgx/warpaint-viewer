@@ -2,13 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   assignSelectGroupExclusively,
   clearSelectGroupIds,
+  addStickerStages,
   EditorMutationAmbiguityError,
+  moveStickerStages,
+  removeStickerStages,
   setStickerDestQuad,
   toggleSelectGroupId,
   type SelectGroupAssignmentResult,
   type SelectGroupAssignmentTarget,
   type SelectGroupTarget,
   type StickerQuad,
+  type StickerStructureTarget,
   type StickerTarget,
 } from './mutations';
 import { SnapshotHistory } from './history';
@@ -69,6 +73,9 @@ export interface ProtoDefEditorSession {
   clearSelectGroups: (target: SelectGroupTarget, groupIds: readonly number[]) => boolean;
   /** Moves, scales, or rotates one sticker as a single undoable quad edit. */
   setStickerDestQuad: (target: StickerTarget, quad: StickerQuad) => boolean;
+  addSticker: (target: StickerStructureTarget, quad: StickerQuad, baseReference: string) => boolean;
+  removeSticker: (target: StickerStructureTarget) => boolean;
+  moveSticker: (target: StickerStructureTarget, direction: -1 | 1) => boolean;
   undo: () => void;
   redo: () => void;
   reset: () => void;
@@ -323,6 +330,33 @@ export function useProtoDefEditorSession({
     }
   }, [commitEdit]);
 
+  const applyStickerStructureEdit = useCallback((edit: (prior: ProtoDefKitMessages) => ProtoDefKitMessages): boolean => {
+    const prior = currentRef.current;
+    if (!prior) {
+      setError('Load an imported definition before editing it.');
+      return false;
+    }
+    try {
+      commitEdit(prior, snapshot(edit(prior)));
+      return true;
+    } catch (cause) {
+      setError(errorMessage(cause));
+      return false;
+    }
+  }, [commitEdit]);
+
+  const addSticker = useCallback((target: StickerStructureTarget, quad: StickerQuad, baseReference: string) => (
+    applyStickerStructureEdit((prior) => addStickerStages(prior, target, quad, baseReference))
+  ), [applyStickerStructureEdit]);
+
+  const removeSticker = useCallback((target: StickerStructureTarget) => (
+    applyStickerStructureEdit((prior) => removeStickerStages(prior, target))
+  ), [applyStickerStructureEdit]);
+
+  const moveSticker = useCallback((target: StickerStructureTarget, direction: -1 | 1) => (
+    applyStickerStructureEdit((prior) => moveStickerStages(prior, target, direction))
+  ), [applyStickerStructureEdit]);
+
   const undo = useCallback(() => {
     const currentMessages = currentRef.current;
     if (!currentMessages) return;
@@ -413,6 +447,9 @@ export function useProtoDefEditorSession({
     assignSelectGroups,
     clearSelectGroups,
     setStickerDestQuad: setStickerQuad,
+    addSticker,
+    removeSticker,
+    moveSticker,
     undo,
     redo,
     reset,

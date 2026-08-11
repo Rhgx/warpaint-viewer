@@ -29,7 +29,7 @@ import { useCustomDefinitions } from './hooks/useCustomDefinitions';
 import { useStockDefinitions } from './hooks/useStockDefinitions';
 import { useScreenshotActions } from './hooks/useScreenshotActions';
 import { useCustomWarpaintIcons } from './hooks/useCustomWarpaintIcons';
-import { sourceTextureIdentity } from './source/paths';
+import { isSupportedTexturePath, sourceTextureIdentity } from './source/paths';
 import { collectTextureRefs, exportPathFor, resolvePackageTextures } from './export/plan';
 import { customKitDefindex, isCustomKitId } from './protodefs/types';
 import type { CustomDefinitionsState, ProtoDefRecipeWithProvenance } from './protodefs/types';
@@ -154,6 +154,22 @@ function stickerTargetLabel(baseRef: string | undefined, index: number): string 
   return name.length > 24 ? `${name.slice(0, 23)}…` : name;
 }
 
+function isStickerArtworkReference(reference: string): boolean {
+  const lower = reference.toLowerCase();
+  if (!lower.includes('sticker') && !lower.includes('/stickers/')) return false;
+  const stem = lower.replace(/\.(?:webp|vtf|png|tga|jpg|jpeg)$/, '');
+  return !stem.endsWith('_s') && !stem.endsWith('_n');
+}
+
+function protoTextureReference(reference: string): string {
+  return sourceTextureIdentity(reference).replace(/^materials\//, '');
+}
+
+function textureChoiceLabel(reference: string): string {
+  const name = reference.split('/').at(-1) ?? reference;
+  return name.replace(/\.[^.]+$/, '').replaceAll('_', ' ');
+}
+
 function shortcutTargetsEditableContent(target: EventTarget | null): boolean {
   const element = target instanceof Element ? target : document.activeElement;
   return element instanceof Element && Boolean(element.closest(
@@ -264,6 +280,9 @@ function MainApp() {
     assignSelectGroups: assignSessionGroups,
     clearSelectGroups: clearSessionGroups,
     setStickerDestQuad: setSessionStickerQuad,
+    addSticker: addSessionSticker,
+    removeSticker: removeSessionSticker,
+    moveSticker: moveSessionSticker,
     undo: undoEditor,
     redo: redoEditor,
     reset: resetEditor,
@@ -291,6 +310,7 @@ function MainApp() {
   const [stickerTransformTool, setStickerTransformTool] = useState<StickerTransformTool>('move');
   const [stickerAspectLocked, setStickerAspectLocked] = useState(true);
   const [activeStickerTarget, setActiveStickerTarget] = useState(0);
+  const [pendingAddedStickerRef, setPendingAddedStickerRef] = useState<string | null>(null);
   const [stickerRecipe, setStickerRecipe] = useState<ProtoDefRecipeWithProvenance | null>(null);
   const [stickerTargetThumbnails, setStickerTargetThumbnails] = useState<Record<string, string>>({});
   const [stickerTargetArtwork, setStickerTargetArtwork] = useState<Record<string, string>>({});
@@ -565,6 +585,26 @@ function MainApp() {
     ),
     [assetOverrides],
   );
+  const mountedSourcePackage = sourceProvider.package;
+  const allStickerTextureChoices = useMemo(() => {
+    const choices = new Map<string, { ref: string; label: string; thumbnail?: string | null }>();
+    for (const reference of Object.keys(data?.manifest.textures ?? {})) {
+      if (!isStickerArtworkReference(reference)) continue;
+      const ref = protoTextureReference(reference);
+      choices.set(ref, { ref, label: textureChoiceLabel(reference), thumbnail: data?.resolveTexture(reference) });
+    }
+    for (const [reference, thumbnail] of Object.entries(activeTextureOverrides)) {
+      if (!isStickerArtworkReference(reference)) continue;
+      const ref = protoTextureReference(reference);
+      choices.set(ref, { ref, label: textureChoiceLabel(reference), thumbnail });
+    }
+    for (const entry of mountedSourcePackage?.entries.values() ?? []) {
+      if (!isSupportedTexturePath(entry.path) || !isStickerArtworkReference(entry.path)) continue;
+      const ref = protoTextureReference(entry.path);
+      if (!choices.has(ref)) choices.set(ref, { ref, label: textureChoiceLabel(entry.path) });
+    }
+    return [...choices.values()].sort((a, b) => a.label.localeCompare(b.label) || a.ref.localeCompare(b.ref));
+  }, [activeTextureOverrides, data, mountedSourcePackage]);
 
   useEffect(() => {
     if (editableKitId === null || !selectedKit || !state.weaponKey) {
@@ -597,6 +637,27 @@ function MainApp() {
     () => editorCurrent ? discoverStickerPlacementTargets(editorCurrent, stickerRecipe) : [],
     [editorCurrent, stickerRecipe],
   );
+  const currentStickerTextureChoices = useMemo(() => {
+    const choices = new Map(allStickerTextureChoices.map((choice) => [choice.ref, choice]));
+    const generatedReferences = Object.keys(data?.manifest.textures ?? {});
+    const referenced = stickerTargets.flatMap((target) => target.stickers.flatMap((sticker) => {
+      const value = sticker.base.resolvedValue ?? sticker.base.authoredValue;
+      if (!value) return [];
+      try {
+        const ref = protoTextureReference(value);
+        if (!choices.has(ref)) {
+          const generated = generatedReferences.find((candidate) => protoTextureReference(candidate) === ref);
+          choices.set(ref, {
+            ref,
+            label: textureChoiceLabel(value),
+            thumbnail: generated ? data?.resolveTexture(generated) : undefined,
+          });
+        }
+        return [ref];
+      } catch { return []; }
+    }));
+    return [...new Set(referenced)].flatMap((ref) => choices.get(ref) ?? []);
+  }, [allStickerTextureChoices, data, stickerTargets]);
   const resolvedStickerRecipe = useMemo(
     () => stickerRecipe ? resolveSeededRecipe(stickerRecipe.tree, state.seed) : null,
     [state.seed, stickerRecipe],
@@ -754,6 +815,17 @@ function MainApp() {
     if (activeStickerTarget >= stickerTargets.length) setActiveStickerTarget(0);
     if (stickerTargets.length === 0 && editorTool === 'sticker') setEditorTool('paint');
   }, [activeStickerTarget, editorTool, stickerTargets.length]);
+
+  useEffect(() => {
+    if (!pendingAddedStickerRef) return;
+    const addedIndex = stickerTargets.findLastIndex((target) => target.stickers.some((sticker) => (
+      sticker.base.resolvedValue === pendingAddedStickerRef
+      || sticker.base.authoredValue === pendingAddedStickerRef
+    )));
+    if (addedIndex < 0) return;
+    setActiveStickerTarget(addedIndex);
+    setPendingAddedStickerRef(null);
+  }, [pendingAddedStickerRef, stickerTargets]);
 
   useEffect(() => {
     setStickerDraftQuad(null);
@@ -2358,12 +2430,16 @@ function MainApp() {
                           return {
                             id: target.id,
                             label: count > 1 ? `${label} ${count}` : label,
+                            canMoveEarlier: target.canMoveEarlier,
+                            canMoveLater: target.canMoveLater,
                             thumbnail: groupStickerArtwork[target.id]?.url
                               ?? stickerTargetThumbnails[target.id]
                               ?? null,
                           };
                         });
                       })(),
+                      textureChoices: currentStickerTextureChoices,
+                      allTextureChoices: allStickerTextureChoices,
                       selectionTargets: stickerTargets.flatMap((target, index) => {
                         if (!target.quad) return [];
                         const read = stickerPlacementFromQuad(target.quad);
@@ -2387,6 +2463,26 @@ function MainApp() {
                         if (nextIndex < 0 || nextIndex === activeStickerTarget) return;
                         updateStickerDraft(null);
                         setActiveStickerTarget(nextIndex);
+                      },
+                      onAddTarget: (baseReference: string) => {
+                        if (!selectedStickerTarget?.quad) return;
+                        if (addSessionSticker(
+                          { stagePaths: selectedStickerTarget.stagePaths },
+                          selectedStickerTarget.quad,
+                          baseReference,
+                        )) setPendingAddedStickerRef(baseReference);
+                      },
+                      onRemoveTarget: () => {
+                        if (!selectedStickerTarget) return;
+                        if (removeSessionSticker({ stagePaths: selectedStickerTarget.stagePaths })) {
+                          setActiveStickerTarget(Math.max(0, selectedStickerIndex - 1));
+                        }
+                      },
+                      onMoveTarget: (direction: -1 | 1) => {
+                        if (!selectedStickerTarget) return;
+                        if (moveSessionSticker({ stagePaths: selectedStickerTarget.stagePaths }, direction)) {
+                          setActiveStickerTarget(selectedStickerIndex + direction);
+                        }
                       },
                       textureSrc: stickerSurfaceUrl,
                       uvWireframeSrc: stickerUvWireframeUrl,

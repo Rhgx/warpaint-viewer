@@ -9,7 +9,13 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
 import type { RecipeNode } from '../../../src/compositor/types';
 import { SnapshotHistory } from '../../../src/editor/history';
-import { setStickerDestQuad, type StickerQuad } from '../../../src/editor/mutations';
+import {
+  addStickerStages,
+  moveStickerStages,
+  removeStickerStages,
+  setStickerDestQuad,
+  type StickerQuad,
+} from '../../../src/editor/mutations';
 import { discoverStickerPlacementTargets } from '../../../src/editor/stickerTargets';
 import {
   decodeProtoDefs,
@@ -36,7 +42,10 @@ const implementation = {
   buildResolveCtx,
   decodeProtoDefs,
   discoverStickerPlacementTargets,
+  addStickerStages,
   extractKitMessages,
+  moveStickerStages,
+  removeStickerStages,
   resolveKitRecipeWithProvenance,
   setStickerDestQuad,
   SnapshotHistory,
@@ -205,6 +214,49 @@ assert.equal(first.stickers[0].weight.resolvedValue, '7');
 assert.equal(first.stickers[0].spec.authoredValue, 'stickers/authored_spec');
 assert.equal(first.stickers[0].spec.resolvedValue, 'stickers/weapon_spec');
 assert.equal(targets[1].editable, true, 'literal corner fields should be editable too');
+
+const duplicated = implementation.addStickerStages(
+  original,
+  { stagePaths: first.stagePaths },
+  first.quad!,
+  'stickers/new_artwork',
+);
+const duplicatedTargets = implementation.discoverStickerPlacementTargets(duplicated, resolve(duplicated));
+assert.equal(duplicatedTargets.length, 3, 'duplicating a sticker adds an independent apply_sticker stage');
+assert.deepEqual(duplicatedTargets[1].quad, first.quad, 'the duplicate starts at the selected sticker placement');
+assert.notEqual(
+  duplicatedTargets[1].destTl.variableName,
+  duplicatedTargets[0].destTl.variableName,
+  'the duplicate receives independent placement variables',
+);
+assert.equal(duplicatedTargets[1].stickers[0].base.resolvedValue, 'stickers/new_artwork');
+assert.equal(duplicatedTargets[1].canMoveEarlier, true);
+
+const shiftedDuplicateQuad: StickerQuad = { tl: [0.3, 0.25], tr: [0.7, 0.25], bl: [0.3, 0.75] };
+const shiftedDuplicate = implementation.setStickerDestQuad(
+  duplicated,
+  duplicatedTargets[1].target,
+  shiftedDuplicateQuad,
+);
+const movedEarlier = implementation.moveStickerStages(
+  shiftedDuplicate,
+  { stagePaths: implementation.discoverStickerPlacementTargets(shiftedDuplicate, resolve(shiftedDuplicate))[1].stagePaths },
+  -1,
+);
+assert.deepEqual(
+  implementation.discoverStickerPlacementTargets(movedEarlier, resolve(movedEarlier))[0].quad,
+  shiftedDuplicateQuad,
+  'reordering swaps the complete authored sticker stage',
+);
+const withoutDuplicate = implementation.removeStickerStages(
+  movedEarlier,
+  { stagePaths: implementation.discoverStickerPlacementTargets(movedEarlier, resolve(movedEarlier))[0].stagePaths },
+);
+assert.equal(
+  implementation.discoverStickerPlacementTargets(withoutDuplicate, resolve(withoutDuplicate)).length,
+  2,
+  'removing a sticker deletes its authored stage',
+);
 
 const duplicatedWear = structuredClone(original);
 const duplicateCombine = fixtureStickerCombine(duplicatedWear.operation);

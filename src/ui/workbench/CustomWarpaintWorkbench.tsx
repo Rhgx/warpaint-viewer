@@ -6,6 +6,8 @@ import type {
 import { Tabs } from '@base-ui/react/tabs';
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
   Download,
   Files,
@@ -17,6 +19,7 @@ import {
   RotateCcw,
   Redo2,
   ScrollText,
+  Trash2,
   Undo2,
   X,
 } from 'lucide-react';
@@ -89,9 +92,20 @@ export function CustomWarpaintWorkbench({
     mode: 'paint' | 'sticker';
     onModeChange: (mode: 'paint' | 'sticker') => void;
     sticker?: StickerPlacementEditorProps & {
-      targets: readonly { id: string; label: string; thumbnail?: string | null }[];
+      targets: readonly {
+        id: string;
+        label: string;
+        thumbnail?: string | null;
+        canMoveEarlier: boolean;
+        canMoveLater: boolean;
+      }[];
       activeTargetId: string;
       onActiveTargetChange: (id: string) => void;
+      textureChoices: readonly { ref: string; label: string; thumbnail?: string | null }[];
+      allTextureChoices: readonly { ref: string; label: string; thumbnail?: string | null }[];
+      onAddTarget: (baseReference: string) => void;
+      onRemoveTarget: () => void;
+      onMoveTarget: (direction: -1 | 1) => void;
     };
     dirty: boolean;
     canDownload: boolean;
@@ -144,6 +158,9 @@ export function CustomWarpaintWorkbench({
   const [resizing, setResizing] = useState(false);
   const [dropping, setDropping] = useState(false);
   const [dropHint, setDropHint] = useState(false);
+  const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  const [stickerSearch, setStickerSearch] = useState('');
+  const [showAllStickerTextures, setShowAllStickerTextures] = useState(false);
   // dragenter/dragleave fire for every child the pointer crosses, so the cue
   // is driven by a depth count instead of the last event seen.
   const dragDepthRef = useRef(0);
@@ -649,6 +666,93 @@ export function CustomWarpaintWorkbench({
                     );
                   })}
                 </div>
+                {editor.mode === 'sticker' && editor.sticker && (() => {
+                  const active = editor.sticker.targets.find((target) => target.id === editor.sticker?.activeTargetId);
+                  return (
+                    <div className="custom-workbench-edit-sticker-actions" role="toolbar" aria-label="Sticker actions">
+                      <button
+                        type="button"
+                        title="Add sticker"
+                        aria-label="Add sticker"
+                        aria-expanded={stickerPickerOpen}
+                        onClick={() => setStickerPickerOpen((open) => {
+                          if (!open) setShowAllStickerTextures(false);
+                          return !open;
+                        })}
+                      >
+                        <Plus size={13} />
+                      </button>
+                      <button type="button" title="Remove sticker" aria-label="Remove sticker" onClick={editor.sticker.onRemoveTarget}>
+                        <Trash2 size={13} />
+                      </button>
+                      <span />
+                      <button type="button" title="Move sticker earlier" aria-label="Move sticker earlier" disabled={!active?.canMoveEarlier} onClick={() => editor.sticker?.onMoveTarget(-1)}>
+                        <ArrowUp size={13} />
+                      </button>
+                      <button type="button" title="Move sticker later" aria-label="Move sticker later" disabled={!active?.canMoveLater} onClick={() => editor.sticker?.onMoveTarget(1)}>
+                        <ArrowDown size={13} />
+                      </button>
+                    </div>
+                  );
+                })()}
+                {editor.mode === 'sticker' && editor.sticker && stickerPickerOpen && (
+                  <div className="custom-workbench-sticker-picker" role="dialog" aria-label="Add sticker">
+                    <div className="custom-workbench-sticker-picker-head">
+                      <strong>Add sticker</strong>
+                      <button type="button" aria-label="Close sticker picker" onClick={() => setStickerPickerOpen(false)}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <input
+                      type="search"
+                      value={stickerSearch}
+                      placeholder="Find sticker texture..."
+                      aria-label="Find sticker texture"
+                      autoFocus
+                      onChange={(event) => setStickerSearch(event.target.value)}
+                    />
+                    <div className="custom-workbench-sticker-picker-scope" role="group" aria-label="Sticker texture source">
+                      <button
+                        type="button"
+                        aria-pressed={!showAllStickerTextures}
+                        onClick={() => setShowAllStickerTextures(false)}
+                      >
+                        Current paint
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={showAllStickerTextures}
+                        onClick={() => setShowAllStickerTextures(true)}
+                      >
+                        All available
+                      </button>
+                    </div>
+                    <div className="custom-workbench-sticker-picker-list" role="listbox" aria-label="Sticker textures">
+                      {(showAllStickerTextures ? editor.sticker.allTextureChoices : editor.sticker.textureChoices)
+                        .filter((choice) => `${choice.label} ${choice.ref}`.toLowerCase().includes(stickerSearch.trim().toLowerCase()))
+                        .map((choice) => (
+                          <button
+                            type="button"
+                            key={choice.ref}
+                            role="option"
+                            aria-selected="false"
+                            title={choice.ref}
+                            onClick={() => {
+                              editor.sticker?.onAddTarget(choice.ref);
+                              setStickerPickerOpen(false);
+                              setStickerSearch('');
+                            }}
+                          >
+                            <span aria-hidden="true">
+                              {choice.thumbnail ? <img src={choice.thumbnail} alt="" loading="lazy" draggable={false} /> : null}
+                            </span>
+                            <strong>{choice.label}</strong>
+                            <small>{choice.ref}</small>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
                 <div className="custom-workbench-edit-footer">
                   <button
                     type="button"

@@ -43,6 +43,9 @@ export interface StickerPlacementTarget {
   readonly occurrences: readonly number[];
   /** Operation-message path, useful for diagnostics but never an object reference. */
   readonly stagePath: readonly string[];
+  readonly stagePaths: readonly (readonly string[])[];
+  readonly canMoveEarlier: boolean;
+  readonly canMoveLater: boolean;
   readonly stickers: readonly StickerVariantInfo[];
   readonly destTl: StickerResolvedField;
   readonly destTr: StickerResolvedField;
@@ -88,6 +91,9 @@ function coalesceLogicalStickerTargets(targets: readonly StickerPlacementTarget[
       id: existing.id,
       occurrence: existing.occurrence,
       occurrences: [...existing.occurrences, ...target.occurrences],
+      stagePaths: [...existing.stagePaths, ...target.stagePaths],
+      canMoveEarlier: existing.canMoveEarlier && target.canMoveEarlier,
+      canMoveLater: existing.canMoveLater && target.canMoveLater,
     };
   }
   return output;
@@ -209,14 +215,20 @@ export function discoverStickerPlacementTargets(
   const traces = resolved?.provenance;
 
   const visitNodes = (nodes: Many<OperationNodeMsg>, root: readonly string[]) => {
-    many(nodes).forEach((node, index) => {
+    const siblings = many(nodes);
+    siblings.forEach((node, index) => {
       if (!node.stage) return;
       const stagePath = [...manyEntryPath(root, nodes, index), 'stage'];
-      visitStage(node.stage, stagePath);
+      visitStage(node.stage, stagePath, siblings, index);
     });
   };
 
-  const visitStage = (stage: OperationStageMsg, stagePath: readonly string[]) => {
+  const visitStage = (
+    stage: OperationStageMsg,
+    stagePath: readonly string[],
+    siblings: readonly OperationNodeMsg[],
+    siblingIndex: number,
+  ) => {
     if (stage.apply_sticker) {
       const stickerStage = stage.apply_sticker;
       const currentOccurrence = occurrence++;
@@ -273,6 +285,9 @@ export function discoverStickerPlacementTargets(
         occurrence: currentOccurrence,
         occurrences: [currentOccurrence],
         stagePath: stickerPath,
+        stagePaths: [stickerPath],
+        canMoveEarlier: siblings.some((node, index) => index < siblingIndex && Boolean(node.stage?.apply_sticker)),
+        canMoveLater: siblings.some((node, index) => index > siblingIndex && Boolean(node.stage?.apply_sticker)),
         stickers,
         destTl,
         destTr,

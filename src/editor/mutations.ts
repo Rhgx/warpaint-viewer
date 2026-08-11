@@ -138,6 +138,11 @@ function setSelectFieldValue(
   return field;
 }
 
+export interface StickerStructureTarget {
+  /** Exact authored apply_sticker paths represented by one logical sticker. */
+  stagePaths: readonly (readonly string[])[];
+}
+
 function upsertVariableFieldAtPath(
   messages: MutableMessages,
   variableName: string,
@@ -226,6 +231,100 @@ function stickerTarget(operation: Record<string, unknown>, target: StickerTarget
 
 function replaceMany<T>(owner: Record<string, unknown>, key: string, prior: Many<T>, next: T[]): void {
   owner[key] = Array.isArray(prior) ? next : (next.length === 1 ? next[0] : next);
+}
+
+type StickerNodeLocation = {
+  owner: Record<string, unknown>;
+  prior: Many<OperationNodeMsg>;
+  nodes: OperationNodeMsg[];
+  index: number;
+};
+
+function stickerNodeLocation(operation: Record<string, unknown>, stagePath: readonly string[]): StickerNodeLocation {
+  if (stagePath[0] !== 'operation' || stagePath.at(-2) !== 'stage' || stagePath.at(-1) !== 'apply_sticker') {
+    throw new EditorMutationAmbiguityError('Sticker stage path does not identify an editable operation node.');
+  }
+  const nodePath = stagePath.slice(1, -2);
+  const collectionIndex = nodePath.lastIndexOf('operation_node');
+  if (collectionIndex < 0) {
+    throw new EditorMutationAmbiguityError('Sticker stage path has no editable operation-node collection.');
+  }
+  let cursor: unknown = operation;
+  for (const part of nodePath.slice(0, collectionIndex)) {
+    if (Array.isArray(cursor)) {
+      const index = Number(part);
+      cursor = Number.isInteger(index) ? cursor[index] : undefined;
+    } else if (cursor && typeof cursor === 'object') {
+      cursor = (cursor as Record<string, unknown>)[part];
+    } else {
+      cursor = undefined;
+    }
+    if (!cursor || typeof cursor !== 'object') {
+      throw new EditorMutationAmbiguityError('Sticker stage path no longer exists in this operation.');
+    }
+  }
+  if (Array.isArray(cursor)) throw new EditorMutationAmbiguityError('Sticker operation-node owner is invalid.');
+  const owner = cursor as Record<string, unknown>;
+  const prior = owner.operation_node as Many<OperationNodeMsg> | undefined;
+  const nodes = many(prior);
+  const selector = nodePath.slice(collectionIndex + 1);
+  const index = selector.length === 0 ? 0 : Number(selector[0]);
+  if (selector.length > 1 || !Number.isInteger(index) || !nodes[index]?.stage?.apply_sticker) {
+    throw new EditorMutationAmbiguityError('Sticker stage path no longer identifies an apply_sticker node.');
+  }
+  return { owner, prior, nodes, index };
+}
+
+function freshStickerVariableNames(messages: MutableMessages): { tl: string; tr: string; bl: string } {
+  const used = new Set<string>();
+  for (const message of [messages.definition, messages.operation]) {
+    const header = message.header;
+    if (!header || typeof header !== 'object' || Array.isArray(header)) continue;
+    for (const variable of many((header as { variables?: Many<VarDefMsg> }).variables)) {
+      if (variable.name) used.add(variable.name);
+    }
+  }
+  let suffix = 1;
+  while (['tl', 'tr', 'bl'].some((corner) => used.has(`editor_sticker_${suffix}_${corner}`))) suffix += 1;
+  return {
+    tl: `editor_sticker_${suffix}_tl`,
+    tr: `editor_sticker_${suffix}_tr`,
+    bl: `editor_sticker_${suffix}_bl`,
+  };
+}
+
+function appendDefinitionVariables(messages: MutableMessages, variables: readonly VarDefMsg[]): void {
+  const header = messages.definition.header;
+  if (!header || typeof header !== 'object' || Array.isArray(header)) {
+    throw new EditorMutationAmbiguityError('The definition has no editable header for new sticker placement variables.');
+  }
+  const owner = header as Record<string, unknown>;
+  const prior = owner.variables as Many<VarDefMsg> | undefined;
+  replaceMany(owner, 'variables', prior, [...many(prior), ...variables]);
+}
+
+function referencedVariableNames(value: unknown, output = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const entry of value) referencedVariableNames(entry, output);
+  } else if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (typeof record.variable === 'string') output.add(record.variable);
+    for (const child of Object.values(record)) referencedVariableNames(child, output);
+  }
+  return output;
+}
+
+function removeUnusedHeaderVariables(messages: MutableMessages, candidates: ReadonlySet<string>): void {
+  const referenced = referencedVariableNames(messages.operation);
+  for (const message of [messages.definition, messages.operation]) {
+    const header = message.header;
+    if (!header || typeof header !== 'object' || Array.isArray(header)) continue;
+    const owner = header as Record<string, unknown>;
+    const prior = owner.variables as Many<VarDefMsg> | undefined;
+    replaceMany(owner, 'variables', prior, many(prior).filter((variable) => (
+      !variable.name || !candidates.has(variable.name) || referenced.has(variable.name)
+    )));
+  }
 }
 
 function selectorIds(messages: MutableMessages, target: SelectGroupTarget): number[] {
@@ -553,6 +652,94 @@ export function setStickerDestQuad(
   }
   for (const [name, value] of requested) {
     setStickerField(next, stage, name, value, target.destinationSourcePaths?.[name]);
+  }
+  return next;
+}
+
+/** Add one artwork choice as a new sticker after the selected authored stage. */
+export function addStickerStages(
+  messages: ProtoDefKitMessages,
+  target: StickerStructureTarget,
+  quad: StickerQuad,
+  baseReference: string,
+): ProtoDefKitMessages {
+  if (target.stagePaths.length === 0) throw new EditorMutationAmbiguityError('No authored sticker stage is available to add after.');
+  if (!baseReference.trim()) throw new TypeError('A sticker texture reference is required.');
+  const next = cloneMessages(messages);
+  const names = freshStickerVariableNames(next);
+  appendDefinitionVariables(next, [
+    { name: names.tl, value: formatVec2(quad.tl), inherit: false },
+    { name: names.tr, value: formatVec2(quad.tr), inherit: false },
+    { name: names.bl, value: formatVec2(quad.bl), inherit: false },
+  ]);
+  const locations = target.stagePaths.map((path) => stickerNodeLocation(next.operation, path));
+  const byOwner = new Map<Record<string, unknown>, StickerNodeLocation[]>();
+  for (const location of locations) byOwner.set(location.owner, [...(byOwner.get(location.owner) ?? []), location]);
+  for (const entries of byOwner.values()) {
+    const first = entries[0];
+    const nodes = [...first.nodes];
+    for (const location of [...entries].sort((a, b) => b.index - a.index)) {
+      const added = structuredClone(nodes[location.index]) as OperationNodeMsg;
+      const stage = added.stage?.apply_sticker;
+      if (!stage) throw new EditorMutationAmbiguityError('Sticker stage could not be added.');
+      stage.sticker = { base: { string: baseReference.trim() } };
+      stage.dest_tl = { variable: names.tl };
+      stage.dest_tr = { variable: names.tr };
+      stage.dest_bl = { variable: names.bl };
+      nodes.splice(location.index + 1, 0, added);
+    }
+    replaceMany(first.owner, 'operation_node', first.prior, nodes);
+  }
+  return next;
+}
+
+/** Remove every authored occurrence represented by one logical sticker. */
+export function removeStickerStages(
+  messages: ProtoDefKitMessages,
+  target: StickerStructureTarget,
+): ProtoDefKitMessages {
+  if (target.stagePaths.length === 0) throw new EditorMutationAmbiguityError('No authored sticker stage is available to remove.');
+  const next = cloneMessages(messages);
+  const locations = target.stagePaths.map((path) => stickerNodeLocation(next.operation, path));
+  const placementVariables = new Set(locations.flatMap((location) => {
+    const stage = location.nodes[location.index]?.stage?.apply_sticker;
+    return [stage?.dest_tl?.variable, stage?.dest_tr?.variable, stage?.dest_bl?.variable]
+      .filter((name): name is string => Boolean(name));
+  }));
+  const byOwner = new Map<Record<string, unknown>, StickerNodeLocation[]>();
+  for (const location of locations) byOwner.set(location.owner, [...(byOwner.get(location.owner) ?? []), location]);
+  for (const entries of byOwner.values()) {
+    const first = entries[0];
+    const removed = new Set(entries.map((entry) => entry.index));
+    replaceMany(first.owner, 'operation_node', first.prior, first.nodes.filter((_, index) => !removed.has(index)));
+  }
+  removeUnusedHeaderVariables(next, placementVariables);
+  return next;
+}
+
+/** Move a logical sticker before or after the adjacent sticker in each sibling collection. */
+export function moveStickerStages(
+  messages: ProtoDefKitMessages,
+  target: StickerStructureTarget,
+  direction: -1 | 1,
+): ProtoDefKitMessages {
+  if (target.stagePaths.length === 0) throw new EditorMutationAmbiguityError('No authored sticker stage is available to reorder.');
+  const next = cloneMessages(messages);
+  const locations = target.stagePaths.map((path) => stickerNodeLocation(next.operation, path));
+  const byOwner = new Map<Record<string, unknown>, StickerNodeLocation[]>();
+  for (const location of locations) byOwner.set(location.owner, [...(byOwner.get(location.owner) ?? []), location]);
+  for (const entries of byOwner.values()) {
+    if (entries.length !== 1) {
+      throw new EditorMutationAmbiguityError('Repeated logical stickers in one operation branch cannot be reordered safely.');
+    }
+    const location = entries[0];
+    const adjacent = direction < 0
+      ? location.nodes.findLastIndex((node, index) => index < location.index && Boolean(node.stage?.apply_sticker))
+      : location.nodes.findIndex((node, index) => index > location.index && Boolean(node.stage?.apply_sticker));
+    if (adjacent < 0) throw new EditorMutationAmbiguityError(`This sticker is already ${direction < 0 ? 'first' : 'last'} in its group.`);
+    const nodes = [...location.nodes];
+    [nodes[location.index], nodes[adjacent]] = [nodes[adjacent], nodes[location.index]];
+    replaceMany(location.owner, 'operation_node', location.prior, nodes);
   }
   return next;
 }
