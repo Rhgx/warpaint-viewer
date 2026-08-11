@@ -1,65 +1,66 @@
 // Sticker 2D surface source contract check.
-//
-//   node tools/verify/editor/sticker-surface-preview.mjs
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { test } from 'vitest';
+import {
+  preStickerSurface,
+  recipeWithoutStickerOccurrence,
+  recipeWithoutStickerOccurrences,
+  resolvedGroupStickerContext,
+} from '../../../src/editor/stickerSurface';
+import { visibleStickerEditorMap } from '../../../src/viewer/stickerEditorMap';
+import type { CombineNode, ApplyStickerNode } from '../../../src/compositor/types';
+import type { ResolvedCombine, ResolvedNode, ResolvedSelect, ResolvedSticker } from '../../../src/compositor/resolve';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD_DIR = path.join(ROOT, 'staging', 'sticker-surface-preview-verify');
 
-function bundleModule(entry, output) {
-  fs.rmSync(output, { recursive: true, force: true });
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  if (distIndex < 0 || !fs.existsSync(viteBin)) throw new Error(`could not locate vite's bin from ${viteEntry}`);
-  const result = spawnSync(
-    process.execPath,
-    [viteBin, 'build', '--ssr', entry, '--outDir', output, '--logLevel', 'warn'],
-    { cwd: ROOT, stdio: 'inherit', shell: false },
-  );
-  if (result.status !== 0) throw new Error(`Vite could not bundle ${entry}.`);
-  return pathToFileURL(path.join(output, `${path.basename(entry, '.ts')}.js`)).href;
+function resolvedCombineAt(nodes: readonly ResolvedNode[], index: number): ResolvedCombine {
+  const node = nodes[index];
+  if (!node || (node.type !== 'combine_add' && node.type !== 'combine_lerp' && node.type !== 'combine_multiply')) {
+    throw new Error(`expected combine node at ${index}`);
+  }
+  return node;
 }
 
-try {
-  const {
-    preStickerSurface,
-    recipeWithoutStickerOccurrence,
-    recipeWithoutStickerOccurrences,
-    resolvedGroupStickerContext,
-  } = await import(bundleModule('src/editor/stickerSurface.ts', path.join(BUILD_DIR, 'surface')));
-  const { visibleStickerEditorMap } = await import(bundleModule('src/viewer/stickerEditorMap.ts', path.join(BUILD_DIR, 'map')));
-  const nested = {
+function resolvedTextureAt(nodes: readonly ResolvedNode[], index: number): string {
+  const node = nodes[index];
+  if (!node || node.type !== 'texture_lookup') throw new Error(`expected texture node at ${index}`);
+  return node.texture;
+}
+
+test('sticker surface preview source contract', () => {
+  const nested: CombineNode = {
     type: 'combine_multiply',
     nodes: [
       { type: 'texture_lookup', texture: 'patterns/colour' },
       { type: 'select', groups: 'patterns/groups', select: [1] },
     ],
   };
-  const stage = { nodes: [nested] };
+  const stage: Pick<ApplyStickerNode, 'nodes'> = { nodes: [nested] };
   assert.equal(preStickerSurface(stage), nested, 'the complete nested pre-sticker tree is preserved');
   assert.equal(preStickerSurface({ nodes: [] }), null, 'a missing surface is not replaced with an invented preview');
 
-  const firstSticker = {
+  const firstSticker: ApplyStickerNode = {
     type: 'apply_sticker', stickers: [{ base: 'stickers/first' }],
     destTl: [0.1, 0.1], destTr: [0.2, 0.1], destBl: [0.1, 0.2], nodes: [{ type: 'texture_lookup', texture: 'base/first' }],
   };
-  const secondSticker = {
+  const secondSticker: ApplyStickerNode = {
     type: 'apply_sticker', stickers: [{ base: 'stickers/second' }],
     destTl: [0.6, 0.6], destTr: [0.7, 0.6], destBl: [0.6, 0.7], nodes: [{ type: 'texture_lookup', texture: 'base/second' }],
   };
-  const completeRecipe = { type: 'combine_add', nodes: [firstSticker, secondSticker] };
+  const completeRecipe: CombineNode = { type: 'combine_add', nodes: [firstSticker, secondSticker] };
   const withoutSecond = recipeWithoutStickerOccurrence(completeRecipe, 1);
   assert.ok(withoutSecond, 'a known sticker occurrence can be removed');
+  if (withoutSecond.type !== 'combine_add') throw new Error('expected combine recipe');
   assert.equal(withoutSecond.nodes[0], firstSticker, 'other sticker stages stay in the full recipe');
   assert.equal(withoutSecond.nodes[1], secondSticker.nodes[0], 'only the selected sticker is replaced by its base');
   assert.equal(recipeWithoutStickerOccurrence(completeRecipe, 2), null, 'a missing occurrence never returns a misleading base');
   const withoutLogicalSticker = recipeWithoutStickerOccurrences(completeRecipe, [0, 1]);
+  assert.ok(withoutLogicalSticker);
+  if (withoutLogicalSticker.type !== 'combine_add') throw new Error('expected combine recipe');
   assert.equal(withoutLogicalSticker.nodes[0], firstSticker.nodes[0], 'the first wear-branch copy is removed');
   assert.equal(withoutLogicalSticker.nodes[1], secondSticker.nodes[0], 'the second wear-branch copy is removed');
 
@@ -67,16 +68,16 @@ try {
     black: 0, white: 1, gamma: 1, rotationDeg: 0,
     translateU: 0, translateV: 0, scale: 1, flipU: false, flipV: false,
   };
-  const rawSelector = { type: 'select', groups: 'groups', select: [16] };
-  const siblingGroup = {
+  const rawSelector: ResolvedSelect = { type: 'select', groups: 'groups', select: [16] };
+  const siblingGroup: ResolvedSticker = {
     type: 'apply_sticker', base: 'masks/sibling', destTl: [0, 0], destTr: [0.2, 0], destBl: [0, 0.2],
     black: 0, white: 1, gamma: 1, nodes: [rawSelector],
   };
-  const movingGroup = {
+  const movingGroup: ResolvedSticker = {
     type: 'apply_sticker', base: 'masks/full-source', destTl: [0.2, 0.2], destTr: [0.4, 0.2], destBl: [0.2, 0.4],
     black: 0, white: 1, gamma: 1, nodes: [siblingGroup],
   };
-  const groupRoot = {
+  const groupRoot: ResolvedCombine = {
     type: 'combine_lerp', ...transform,
     nodes: [
       { type: 'texture_lookup', texture: 'paint/base', ...transform },
@@ -86,20 +87,23 @@ try {
   };
   const groupContext = resolvedGroupStickerContext(groupRoot, movingGroup);
   assert.ok(groupContext, 'a sticker in a lerp selector has a position-independent preview context');
+  if (!groupContext || groupContext.base.type !== 'combine_lerp' || groupContext.endpointZero.type !== 'combine_lerp' || groupContext.endpointOne.type !== 'combine_lerp') throw new Error('expected group context');
   assert.equal(groupContext.base.nodes[2], siblingGroup, 'only the moving group is removed from the full base');
   assert.equal(groupContext.selectorBase, siblingGroup, 'other group stickers remain in the selector baseline');
-  assert.match(groupContext.endpointZero.nodes[2].texture, /^data:image\/svg\+xml/, 'the zero endpoint replaces the complete selector');
-  assert.match(groupContext.endpointOne.nodes[2].texture, /^data:image\/svg\+xml/, 'the one endpoint replaces the complete selector');
-  const siblingGroupWear = { ...siblingGroup, nodes: [rawSelector] };
-  const movingGroupWear = { ...movingGroup, nodes: [siblingGroupWear] };
-  const groupRootWear = { ...groupRoot, nodes: [...groupRoot.nodes.slice(0, 2), movingGroupWear] };
-  const wearRoot = { type: 'combine_add', nodes: [groupRoot, groupRootWear] };
+  assert.match(resolvedTextureAt(groupContext.endpointZero.nodes, 2), /^data:image\/svg\+xml/, 'the zero endpoint replaces the complete selector');
+  assert.match(resolvedTextureAt(groupContext.endpointOne.nodes, 2), /^data:image\/svg\+xml/, 'the one endpoint replaces the complete selector');
+  const siblingGroupWear: ResolvedSticker = { ...siblingGroup, nodes: [rawSelector] };
+  const movingGroupWear: ResolvedSticker = { ...movingGroup, nodes: [siblingGroupWear] };
+  const groupRootWear: ResolvedCombine = { ...groupRoot, nodes: [...groupRoot.nodes.slice(0, 2), movingGroupWear] };
+  const wearRoot: ResolvedCombine = { type: 'combine_add', ...transform, nodes: [groupRoot, groupRootWear] };
   const logicalGroupContext = resolvedGroupStickerContext(wearRoot, [movingGroup, movingGroupWear]);
-  assert.equal(logicalGroupContext.base.nodes[0].nodes[2], siblingGroup, 'the first group-sticker wear copy is removed');
-  assert.equal(logicalGroupContext.base.nodes[1].nodes[2], siblingGroupWear, 'the second group-sticker wear copy is removed');
-  assert.match(logicalGroupContext.endpointZero.nodes[0].nodes[2].texture, /^data:image\/svg\+xml/, 'the first wear selector reaches zero');
-  assert.match(logicalGroupContext.endpointZero.nodes[1].nodes[2].texture, /^data:image\/svg\+xml/, 'the second wear selector reaches zero');
-  const ordinarySticker = { ...movingGroup, base: 'stickers/logo', nodes: [groupRoot] };
+  assert.ok(logicalGroupContext);
+  if (!logicalGroupContext || logicalGroupContext.base.type !== 'combine_add' || logicalGroupContext.endpointZero.type !== 'combine_add') throw new Error('expected logical group context');
+  assert.equal(resolvedCombineAt(logicalGroupContext.base.nodes, 0).nodes[2], siblingGroup, 'the first group-sticker wear copy is removed');
+  assert.equal(resolvedCombineAt(logicalGroupContext.base.nodes, 1).nodes[2], siblingGroupWear, 'the second group-sticker wear copy is removed');
+  assert.match(resolvedTextureAt(resolvedCombineAt(logicalGroupContext.endpointZero.nodes, 0).nodes, 2), /^data:image\/svg\+xml/, 'the first wear selector reaches zero');
+  assert.match(resolvedTextureAt(resolvedCombineAt(logicalGroupContext.endpointZero.nodes, 1).nodes, 2), /^data:image\/svg\+xml/, 'the second wear selector reaches zero');
+  const ordinarySticker: ResolvedSticker = { ...movingGroup, base: 'stickers/logo', nodes: [groupRoot] };
   assert.equal(
     resolvedGroupStickerContext(ordinarySticker, ordinarySticker),
     null,
@@ -211,8 +215,4 @@ try {
     /const draft = stickerDraftRef\.current;\s*if \(draft && authoredStickerQuad && stickerQuadsEqual\(draft, authoredStickerQuad\)\) \{\s*discardStickerDraft\(\);\s*\}/,
     'a settled local sticker draft remains visible until authored state catches up',
   );
-} finally {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-}
-
-console.log('[verify] sticker surface preview source passed');
+});

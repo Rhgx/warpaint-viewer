@@ -1,47 +1,25 @@
 // Viewer/2D sticker placement geometry contract check.
-//
-//   node tools/verify/editor/sticker-placement.mjs
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { test } from 'vitest';
+import {
+  constrainStickerQuadToTexture,
+  moveStickerQuadToUv,
+  nearestPeriodicUv,
+  stickerQuadCenter,
+  stickerQuadIsWithinTexture,
+} from '../../../src/editor/viewerStickerPlacement';
+import type { StickerPlacementQuad } from '../../../src/editor/viewerStickerPlacement';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD_DIR = path.join(ROOT, 'staging', 'sticker-placement-verify');
-
-function bundleModule() {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  if (distIndex < 0 || !fs.existsSync(viteBin)) throw new Error(`could not locate vite's bin from ${viteEntry}`);
-  const result = spawnSync(
-    process.execPath,
-    [viteBin, 'build', '--ssr', 'src/editor/viewerStickerPlacement.ts', '--outDir', BUILD_DIR, '--logLevel', 'warn'],
-    { cwd: ROOT, stdio: 'inherit', shell: false },
-  );
-  if (result.status !== 0) throw new Error('Vite could not bundle the sticker placement helpers.');
-  return pathToFileURL(path.join(BUILD_DIR, 'viewerStickerPlacement.js')).href;
-}
-
-function assertUv(actual, expected, message) {
+function assertUv(actual: readonly number[], expected: readonly number[], message: string): void {
   assert.equal(actual.length, expected.length, message);
   for (let index = 0; index < actual.length; index += 1) {
     assert.ok(Math.abs(actual[index] - expected[index]) < 1e-9, message);
   }
 }
 
-try {
-  const {
-    constrainStickerQuadToTexture,
-    nearestPeriodicUv,
-    stickerQuadCenter,
-    stickerQuadIsWithinTexture,
-    moveStickerQuadToUv,
-  } = await import(bundleModule());
-  const quad = { tl: [0.2, 0.3], tr: [0.5, 0.4], bl: [0.1, 0.7] };
+test('viewer sticker placement geometry', () => {
+  const quad: StickerPlacementQuad = { tl: [0.2, 0.3], tr: [0.5, 0.4], bl: [0.1, 0.7] };
   const originalCentre = stickerQuadCenter(quad);
   assertUv(originalCentre, [0.3, 0.55], 'centre includes both affine basis vectors');
 
@@ -55,7 +33,7 @@ try {
   );
 
   assert.deepEqual(nearestPeriodicUv([0.98, 0.5], [0.02, 0.5]), [1.02, 0.5], 'wrap seam picks the nearby periodic copy');
-  const seamQuad = { tl: [0.92, 0.45], tr: [1.02, 0.45], bl: [0.92, 0.55] };
+  const seamQuad: StickerPlacementQuad = { tl: [0.92, 0.45], tr: [1.02, 0.45], bl: [0.92, 0.55] };
   const seamMoved = moveStickerQuadToUv(seamQuad, [0.03, 0.5]);
   assertUv(stickerQuadCenter(seamMoved), [1, 0.5], 'seam movement keeps its anchor at the texture edge');
   assert.equal(stickerQuadIsWithinTexture(seamMoved), false, 'seam-safe clipping keeps the compact authored destination');
@@ -66,10 +44,6 @@ try {
   assertUv(oversized.tr, [1.25, -0.25], 'oversized placement caps its horizontal edge');
   assertUv(oversized.bl, [-0.25, 1.25], 'oversized placement caps its vertical edge');
 
-  const invalid = { tl: [Number.NaN, 0], tr: [0.1, 0], bl: [0, 0.1] };
+  const invalid: StickerPlacementQuad = { tl: [Number.NaN, 0], tr: [0.1, 0], bl: [0, 0.1] };
   assert.equal(moveStickerQuadToUv(invalid, [0.5, 0.5]), invalid, 'bad input is refused without emitting NaN values');
-} finally {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-}
-
-console.log('[verify] viewer sticker placement geometry passed');
+});

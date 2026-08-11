@@ -1,37 +1,61 @@
 // Contract checks for conservative group-select target discovery.
-//
-//   node tools/verify/editor/group-targets.mjs
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { BlobReader, TextWriter, ZipReader } from '@zip.js/zip.js';
+import { test } from 'vitest';
+import { chooseBestSelectTargetForBucket, discoverGroupSelectTargets } from '../../../src/editor/groupTargets';
+import { toggleSelectGroupId } from '../../../src/editor/mutations';
+import {
+  decodeProtoDefs,
+  decodeProtoDefsFromJson,
+  extractKitMessages,
+  resolveKitRecipeWithProvenance,
+} from '../../../src/protodefs/decoder';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD_DIR = path.join(ROOT, 'staging', 'group-targets-verify');
+const implementation = {
+  chooseBestSelectTargetForBucket,
+  decodeProtoDefs,
+  decodeProtoDefsFromJson,
+  discoverGroupSelectTargets,
+  extractKitMessages,
+  resolveKitRecipeWithProvenance,
+  toggleSelectGroupId,
+};
 
-function bundleModule() {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-  const entry = path.join(ROOT, 'staging', 'group-targets-verify-entry.ts');
-  fs.writeFileSync(entry,
-    "export { discoverGroupSelectTargets, chooseBestSelectTargetForBucket } from '../src/editor/groupTargets';\n"
-    + "export { toggleSelectGroupId } from '../src/editor/mutations';\n"
-    + "export { decodeProtoDefs, decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipeWithProvenance } from '../src/protodefs/decoder';\n",
-  );
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  if (distIndex < 0 || !fs.existsSync(viteBin)) throw new Error(`could not locate vite's bin from ${viteEntry}`);
-  const result = spawnSync(process.execPath, [viteBin, 'build', '--ssr', entry, '--outDir', BUILD_DIR, '--logLevel', 'warn'], {
-    cwd: ROOT, stdio: 'inherit', shell: false,
-  });
-  if (result.status !== 0) throw new Error('vite SSR build of group targets failed');
-  return pathToFileURL(path.join(BUILD_DIR, 'group-targets-verify-entry.js')).href;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-const implementation = await import(bundleModule());
+function manifestPaintkitIds(value: unknown): number[] {
+  if (!isRecord(value) || !Array.isArray(value.paintkits)) return [];
+  return value.paintkits.flatMap((kit) => (
+    isRecord(kit) && typeof kit.id === 'number' ? [kit.id] : []
+  ));
+}
+
+function objectMember(parent: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = parent[key];
+  if (!isRecord(value)) throw new Error(`${key} should be an object`);
+  return value;
+}
+
+function arrayMember(parent: Record<string, unknown>, key: string): unknown[] {
+  const value = parent[key];
+  if (!Array.isArray(value)) throw new Error(`${key} should be an array`);
+  return value;
+}
+
+function stringMember(parent: Record<string, unknown>, key: string): string {
+  const value = parent[key];
+  if (typeof value !== 'string') throw new Error(`${key} should be a string`);
+  return value;
+}
+
+test('conservative group-select target discovery', async () => {
 const messages = {
   definition: { header: { defindex: 1 } },
   operation: {
@@ -53,7 +77,7 @@ const messages = {
   },
 };
 
-try {
+{
   const found = implementation.discoverGroupSelectTargets(messages);
   assert.equal(found.targets.length, 4);
   assert.deepEqual(found.targets.map((target) => target.target), [
@@ -183,14 +207,24 @@ try {
     ...mixedInheritance.targets[0].target,
     effectiveSelectValues: [0, 0, 0],
   }, 32);
-  assert.equal(mixedEdited.definition.blackbox.data.variable.string, '32');
+  const blackbox = objectMember(mixedEdited.definition, 'blackbox');
+  const blackboxData = objectMember(blackbox, 'data');
+  const blackboxVariable = objectMember(blackboxData, 'variable');
+  const definitionHeader = objectMember(mixedEdited.definition, 'header');
+  const definitionVariables = arrayMember(definitionHeader, 'variables');
+  const secondVariable = definitionVariables[1];
+  const thirdVariable = definitionVariables[2];
+  if (!isRecord(secondVariable) || !isRecord(thirdVariable)) {
+    throw new Error('expected inherited variables');
+  }
+  assert.equal(stringMember(blackboxVariable, 'string'), '32');
   assert.equal(
-    mixedEdited.definition.header.variables[1].value,
+    stringMember(secondVariable, 'value'),
     '0',
     'a mixed selector edit must not spill into its shared non-inherited tail slots',
   );
   assert.equal(
-    mixedEdited.definition.header.variables[2].value,
+    stringMember(thirdVariable, 'value'),
     '0',
     'shared inherited padding must not be rewritten as a weapon-specific selector slot',
   );
@@ -206,8 +240,11 @@ try {
     try {
       const entries = await reader.getEntries();
       fragments = await Promise.all(entries
-        .filter((entry) => !entry.directory && entry.filename.toLowerCase().endsWith('.json'))
-        .map(async (entry) => ({ name: entry.filename, text: await entry.getData(new TextWriter()) })));
+        .filter((entry) => !entry.directory && 'getData' in entry && entry.filename.toLowerCase().endsWith('.json'))
+        .map(async (entry) => {
+          if (!('getData' in entry)) throw new Error(`ZIP entry ${entry.filename} cannot be read`);
+          return { name: entry.filename, text: await entry.getData(new TextWriter()) };
+        }));
     } finally {
       await reader.close();
     }
@@ -217,7 +254,7 @@ try {
       fragments,
       {
         weaponsByItemDef: JSON.parse(fs.readFileSync(heatcastItemDefsPath, 'utf8')),
-        builtInIds: heatcastManifest.paintkits.map((kit) => kit.id),
+        builtInIds: manifestPaintkitIds(heatcastManifest),
       },
     );
     const kit = heatcast.index.kits[0];
@@ -252,7 +289,7 @@ try {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     const decoded = implementation.decodeProtoDefs(new Uint8Array(fs.readFileSync(fullPath)), {
       weaponsByItemDef: JSON.parse(fs.readFileSync(itemDefsPath, 'utf8')),
-      builtInIds: manifest.paintkits.map((kit) => kit.id),
+      builtInIds: manifestPaintkitIds(manifest),
     });
     const armyGuns = implementation.extractKitMessages(decoded, 435);
     assert.ok(armyGuns, 'Army Guns should be present in the shipped proto_defs');
@@ -279,7 +316,5 @@ try {
     assert.ok(directTargets > 0, 'the shipped proto_defs should expose editable group selectors');
     console.log(`[verify] shipped data: ${directTargets} editable selectors; ${kitsWithOneEditableTarget} kits have exactly one`);
   }
-  console.log('[verify] group targets passed');
-} finally {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
 }
+});

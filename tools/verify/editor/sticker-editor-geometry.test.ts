@@ -1,49 +1,27 @@
 // Compact 2D sticker editor geometry contract check.
-//
-//   node tools/verify/editor/sticker-editor-geometry.mjs
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { test } from 'vitest';
+import * as geometry from '../../../src/editor/stickerGeometry';
+import type { StickerPlacement } from '../../../src/editor/stickerGeometry';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD_DIR = path.join(ROOT, 'staging', 'sticker-editor-geometry-verify');
-
-function bundleModule() {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  if (distIndex < 0 || !fs.existsSync(viteBin)) throw new Error(`could not locate vite's bin from ${viteEntry}`);
-  const result = spawnSync(
-    process.execPath,
-    [viteBin, 'build', '--ssr', 'src/editor/stickerGeometry.ts', '--outDir', BUILD_DIR, '--logLevel', 'warn'],
-    { cwd: ROOT, stdio: 'inherit', shell: false },
-  );
-  if (result.status !== 0) throw new Error('Vite could not bundle sticker editor geometry.');
-  return pathToFileURL(path.join(BUILD_DIR, 'stickerGeometry.js')).href;
-}
-
-function close(actual, expected, message) {
+function close(actual: number, expected: number, message: string): void {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: expected ${expected}, got ${actual}`);
 }
 
-function closePoint(actual, expected, message) {
+function closePoint(actual: readonly [number, number], expected: readonly [number, number], message: string): void {
   close(actual[0], expected[0], `${message} x`);
   close(actual[1], expected[1], `${message} y`);
 }
 
-try {
-  const geometry = await import(bundleModule());
+test('compact sticker editor geometry', () => {
   const original = { x: 0.37, y: 0.58, width: 0.28, height: 0.11, rotation: 31 };
   const quad = geometry.stickerPlacementToQuad(original);
   assert.ok(quad, 'valid placement emits an authored quad');
   const parsed = geometry.stickerPlacementFromQuad(quad);
   assert.equal(parsed.editable, true, 'rotated rectangle stays editable');
   assert.ok(parsed.placement, 'supported quad returns a placement');
-  for (const field of ['x', 'y', 'width', 'height', 'rotation']) {
+  for (const field of ['x', 'y', 'width', 'height', 'rotation'] as const) {
     close(parsed.placement[field], original[field], `quad round-trip ${field}`);
   }
   close(geometry.snapStickerRotationToCardinal(87), 90, 'rotation snaps up to 90');
@@ -70,6 +48,7 @@ try {
 
   const skewed = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0.1, 0.2] });
   assert.equal(skewed.editable, false, 'skewed quad is not silently flattened');
+  assert.ok(skewed.reason);
   assert.match(skewed.reason, /skewed/i, 'skew has a useful refusal reason');
 
   const rocketStickerOne = geometry.stickerPlacementFromQuad({
@@ -99,10 +78,12 @@ try {
     bl: [0.200836, 0.4],
   });
   assert.equal(authoredSkew.editable, false, 'visible authored shear remains read-only');
+  assert.ok(authoredSkew.reason);
   assert.match(authoredSkew.reason, /skewed/i, 'authored shear keeps the skew refusal');
 
   const mirrored = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0, -0.2] });
   assert.equal(mirrored.editable, false, 'mirrored quad is not silently flattened');
+  assert.ok(mirrored.reason);
   assert.match(mirrored.reason, /mirrored/i, 'mirror has a useful refusal reason');
 
   const resized = geometry.resizeStickerFromCorner(
@@ -182,12 +163,12 @@ try {
   }).placement;
   assert.ok(authoredEdgeLogo, 'Flak Furnished edge logo remains a supported placement');
   const preservedEdgeLogo = geometry.stickerPlacementToQuad(geometry.clampStickerPlacement(authoredEdgeLogo));
+  assert.ok(preservedEdgeLogo, 'clamped supported placement remains an authored quad');
   closePoint(preservedEdgeLogo.tl, [0.634, 0.177], 'authored edge clipping preserves top-left');
   closePoint(preservedEdgeLogo.tr, [0.428, 0.177], 'authored edge clipping preserves top-right');
   closePoint(preservedEdgeLogo.bl, [0.634, -0.029], 'authored edge clipping preserves bottom-left');
-  closePoint(geometry.stickerPlacementToQuad({ x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 }).tl, [0.4, 0.45], 'unrotated top left');
-} finally {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-}
-
-console.log('[verify] compact sticker editor geometry passed');
+  const unrotated: StickerPlacement = { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 };
+  const unrotatedQuad = geometry.stickerPlacementToQuad(unrotated);
+  assert.ok(unrotatedQuad, 'finite placement emits an authored quad');
+  closePoint(unrotatedQuad.tl, [0.4, 0.45], 'unrotated top left');
+});

@@ -5,37 +5,46 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { test } from 'vitest';
+import type { RecipeNode } from '../../../src/compositor/types';
+import { SnapshotHistory } from '../../../src/editor/history';
+import { setStickerDestQuad, type StickerQuad } from '../../../src/editor/mutations';
+import { discoverStickerPlacementTargets } from '../../../src/editor/stickerTargets';
+import {
+  decodeProtoDefs,
+  extractKitMessages,
+  resolveKitRecipeWithProvenance,
+  type DecodedContainer,
+} from '../../../src/protodefs/decoder';
+import { applyImplicitStickerSpecs } from '../../../src/protodefs/implicitStickerSpecs';
+import {
+  asItem,
+  type CombineStageMsg,
+  type ItemDefinitionMsg,
+  type ItemMsg,
+  type OperationMsg,
+  type PaintkitDefinitionMsg,
+  type StickerStageMsg,
+} from '../../../src/protodefs/messages';
+import { buildResolveCtx } from '../../../src/protodefs/resolve';
+import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD_DIR = path.join(ROOT, 'staging', 'sticker-targets-verify');
+const implementation = {
+  applyImplicitStickerSpecs,
+  buildResolveCtx,
+  decodeProtoDefs,
+  discoverStickerPlacementTargets,
+  extractKitMessages,
+  resolveKitRecipeWithProvenance,
+  setStickerDestQuad,
+  SnapshotHistory,
+};
 
-function bundleImplementation() {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-  const entry = path.join(ROOT, 'staging', 'sticker-targets-verify-entry.ts');
-  fs.writeFileSync(entry,
-    "export { decodeProtoDefs, extractKitMessages, resolveKitRecipeWithProvenance } from '../src/protodefs/decoder';\n"
-    + "export { buildResolveCtx } from '../src/protodefs/resolve';\n"
-    + "export { discoverStickerPlacementTargets } from '../src/editor/stickerTargets';\n"
-    + "export { setStickerDestQuad } from '../src/editor/mutations';\n"
-    + "export { SnapshotHistory } from '../src/editor/history';\n"
-    + "export { applyImplicitStickerSpecs } from '../src/protodefs/implicitStickerSpecs';\n",
-  );
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  if (distIndex < 0 || !fs.existsSync(viteBin)) throw new Error(`could not locate vite's bin from ${viteEntry}`);
-  const result = spawnSync(process.execPath, [viteBin, 'build', '--ssr', entry, '--outDir', BUILD_DIR, '--logLevel', 'warn'], {
-    cwd: ROOT, stdio: 'inherit', shell: false,
-  });
-  if (result.status !== 0) throw new Error('Vite could not bundle sticker target implementation.');
-  return pathToFileURL(path.join(BUILD_DIR, 'sticker-targets-verify-entry.js')).href;
-}
+test('sticker placement discovery and mutation', () => {
 
-const implementation = await import(bundleImplementation());
-
-const implicitSpecRecipe = {
+const implicitSpecRecipe: Extract<RecipeNode, { type: 'apply_sticker' }> = {
   type: 'apply_sticker',
   stickers: [
     { base: 'textures/patterns/reported_sticker.webp' },
@@ -54,7 +63,11 @@ assert.equal(
 assert.equal(implicitSpecRecipe.stickers[0].spec, 'textures/patterns/reported_sticker_s.webp');
 assert.equal(implicitSpecRecipe.stickers[1].spec, 'textures/patterns/custom_spec.webp', 'an explicit specular always wins');
 
-const operation = {
+type FixtureOperation = OperationMsg & Record<string, unknown>;
+type FixtureDefinition = PaintkitDefinitionMsg & Record<string, unknown> & { blackbox: ItemMsg; scattergun: ItemMsg };
+type FixtureMessages = { definition: FixtureDefinition; operation: FixtureOperation };
+
+const operation: FixtureOperation = {
   header: { defindex: 701, variables: [] },
   operation_node: [{ stage: { combine_multiply: { operation_node: [
     { stage: { apply_sticker: {
@@ -68,19 +81,8 @@ const operation = {
     } } } } } },
   ] } } }],
 };
-const definition = {
-  header: { defindex: 901, variables: [
-    { name: 'sticker_base', value: 'stickers/authored_base', inherit: true },
-    { name: 'sticker_weight', value: '2', inherit: true },
-    { name: 'sticker_spec', value: 'stickers/authored_spec', inherit: true },
-    { name: 'sticker_tl', value: '0 0', inherit: true },
-    { name: 'sticker_tr', value: '1 0', inherit: true },
-    { name: 'sticker_bl', value: '0 1', inherit: true },
-  ] },
-  operation_template: { defindex: 701 },
-};
-const itemDefinition = { header: { defindex: 100, variables: [] }, item_definition_index: 42 };
-const slot = { item_definition_template: { defindex: 100 }, data: { variable: [
+const itemDefinition: ItemDefinitionMsg = { header: { defindex: 100, variables: [] }, item_definition_index: 42 };
+const blackbox: ItemMsg = { item_definition_template: { defindex: 100 }, data: { variable: [
   { variable: 'sticker_base', string: 'stickers/weapon_base' },
   { variable: 'sticker_weight', string: '7' },
   { variable: 'sticker_spec', string: 'stickers/weapon_spec' },
@@ -88,8 +90,7 @@ const slot = { item_definition_template: { defindex: 100 }, data: { variable: [
   { variable: 'sticker_tr', string: '0.8 0.3' },
   { variable: 'sticker_bl', string: '0.2 0.9' },
 ] } };
-definition.blackbox = slot;
-definition.scattergun = {
+const scattergun: ItemMsg = {
   item_definition_template: { defindex: 100 },
   data: { variable: [
     { variable: 'sticker_base', string: 'stickers/weapon_base' },
@@ -100,23 +101,97 @@ definition.scattergun = {
     { variable: 'sticker_bl', string: '0.1 0.65' },
   ] },
 };
+const definition: FixtureDefinition = {
+  header: { defindex: 901, variables: [
+    { name: 'sticker_base', value: 'stickers/authored_base', inherit: true },
+    { name: 'sticker_weight', value: '2', inherit: true },
+    { name: 'sticker_spec', value: 'stickers/authored_spec', inherit: true },
+    { name: 'sticker_tl', value: '0 0', inherit: true },
+    { name: 'sticker_tr', value: '1 0', inherit: true },
+    { name: 'sticker_bl', value: '0 1', inherit: true },
+  ] },
+  operation_template: { defindex: 701 },
+  blackbox,
+  scattergun,
+};
 
-function decodedFor(messages) {
+function fixtureDefinition(value: Record<string, unknown>): FixtureDefinition {
+  const blackboxItem = asItem(value.blackbox);
+  const scattergunItem = asItem(value.scattergun);
+  const header = value.header;
+  const operationTemplate = value.operation_template;
+  if (!blackboxItem || !scattergunItem || !header || typeof header !== 'object' || Array.isArray(header)
+    || !operationTemplate || typeof operationTemplate !== 'object' || Array.isArray(operationTemplate)) {
+    throw new TypeError('Sticker target fixture no longer has its expected definition shape.');
+  }
+  const definitionHeader = header as { defindex?: unknown };
+  const template = operationTemplate as { defindex?: unknown };
+  if (typeof definitionHeader.defindex !== 'number' || typeof template.defindex !== 'number') {
+    throw new TypeError('Sticker target fixture has an invalid definition header.');
+  }
+  return value as unknown as FixtureDefinition;
+}
+
+function fixtureOperation(value: Record<string, unknown>): FixtureOperation {
+  const header = value.header;
+  const operationHeader = header && typeof header === 'object' && !Array.isArray(header)
+    ? header as { defindex?: unknown }
+    : undefined;
+  if (typeof operationHeader?.defindex !== 'number') {
+    throw new TypeError('Sticker target fixture no longer has its expected operation shape.');
+  }
+  return value as unknown as FixtureOperation;
+}
+
+function decodedDefinition(value: Record<string, unknown>): PaintkitDefinitionMsg {
+  const header = value.header;
+  const decodedHeader = header && typeof header === 'object' && !Array.isArray(header)
+    ? header as { defindex?: unknown }
+    : undefined;
+  if (typeof decodedHeader?.defindex !== 'number') {
+    throw new TypeError('Decoded paintkit definition has no numeric header defindex.');
+  }
+  return value as unknown as PaintkitDefinitionMsg;
+}
+
+function requiredArray<T>(value: T | T[] | undefined, label: string): T[] {
+  if (!Array.isArray(value)) throw new TypeError(`${label} must remain an array in this fixture.`);
+  return value;
+}
+
+function fixtureStickerCombine(operation: FixtureOperation): CombineStageMsg {
+  const root = requiredArray(operation.operation_node, 'Fixture operation nodes')[0];
+  const combine = root?.stage?.combine_multiply;
+  if (!combine) throw new TypeError('Sticker target fixture no longer has its root multiply stage.');
+  return combine;
+}
+
+function fixtureStickerStage(operation: FixtureOperation): StickerStageMsg {
+  const node = requiredArray(fixtureStickerCombine(operation).operation_node, 'Fixture multiply nodes')[0];
+  const stage = node?.stage?.apply_sticker;
+  if (!stage) throw new TypeError('Sticker target fixture no longer has its primary sticker stage.');
+  return stage;
+}
+
+function decodedFor(messages: ProtoDefKitMessages): DecodedContainer {
+  const fixture = fixtureDefinition(messages.definition);
+  const fixtureOperationMessage = fixtureOperation(messages.operation);
   return {
-    ctx: implementation.buildResolveCtx([messages.operation], [itemDefinition], []),
-    kitsByDefindex: new Map([[901, { def: messages.definition, slots: [
-      { item: messages.definition.blackbox, itemDef: itemDefinition, weaponKey: 'blackbox' },
-      { item: messages.definition.scattergun, itemDef: itemDefinition, weaponKey: 'scattergun' },
+    ctx: implementation.buildResolveCtx([fixtureOperationMessage], [itemDefinition], []),
+    kitsByDefindex: new Map([[901, { def: fixture, slots: [
+      { item: fixture.blackbox, itemDef: itemDefinition, weaponKey: 'blackbox' },
+      { item: fixture.scattergun, itemDef: itemDefinition, weaponKey: 'scattergun' },
     ] }]]),
+    index: { kits: [], countsByType: {} },
   };
 }
-function resolve(messages, weaponKey = 'blackbox') {
+function resolve(messages: ProtoDefKitMessages, weaponKey = 'blackbox') {
   const result = implementation.resolveKitRecipeWithProvenance(decodedFor(messages), 901, weaponKey, 'red', 0);
   assert.ok(result, 'fixture should resolve through the production decoder');
   return result;
 }
 
-const original = structuredClone({ definition, operation });
+const original: FixtureMessages = structuredClone({ definition, operation });
 const targets = implementation.discoverStickerPlacementTargets(original, resolve(original));
 assert.equal(targets.length, 2, 'direct nested sticker stages should retain deterministic depth-first occurrences');
 const first = targets[0];
@@ -132,9 +207,9 @@ assert.equal(first.stickers[0].spec.resolvedValue, 'stickers/weapon_spec');
 assert.equal(targets[1].editable, true, 'literal corner fields should be editable too');
 
 const duplicatedWear = structuredClone(original);
-duplicatedWear.operation.operation_node[0].stage.combine_multiply.operation_node.push(
-  structuredClone(duplicatedWear.operation.operation_node[0].stage.combine_multiply.operation_node[0]),
-);
+const duplicateCombine = fixtureStickerCombine(duplicatedWear.operation);
+const duplicateNodes = requiredArray(duplicateCombine.operation_node, 'Fixture multiply nodes');
+duplicateNodes.push(structuredClone(duplicateNodes[0]));
 const logicalWearTargets = implementation.discoverStickerPlacementTargets(duplicatedWear, resolve(duplicatedWear));
 assert.equal(logicalWearTargets.length, 2, 'wear-branch copies must not appear as separate logical stickers');
 assert.deepEqual(
@@ -143,16 +218,18 @@ assert.deepEqual(
   'one logical sticker retains every duplicated wear-branch occurrence',
 );
 
-const movedQuad = { tl: [0.4, 0.2], tr: [0.9, 0.4], bl: [0.2, 0.8] };
+const movedQuad: StickerQuad = { tl: [0.4, 0.2], tr: [0.9, 0.4], bl: [0.2, 0.8] };
 const moved = implementation.setStickerDestQuad(original, first.target, movedQuad);
-assert.equal(original.definition.header.variables[3].value, '0 0', 'placement mutation must never mutate its input');
+assert.equal(requiredArray(original.definition.header.variables, 'Definition variables')[3]?.value, '0 0', 'placement mutation must never mutate its input');
 assert.deepEqual(
-  moved.definition.header.variables.slice(3).map((entry) => [entry.value, entry.inherit]),
+  requiredArray(fixtureDefinition(moved.definition).header.variables, 'Definition variables')
+    .slice(3).map((entry) => [entry.value, entry.inherit]),
   [['0 0', true], ['1 0', true], ['0 1', true]],
   'a weapon-scoped placement must not rewrite the shared paint-kit defaults',
 );
 assert.deepEqual(
-  moved.definition.blackbox.data.variable.slice(3).map((entry) => entry.string),
+  requiredArray(fixtureDefinition(moved.definition).blackbox.data?.variable, 'Blackbox variables')
+    .slice(3).map((entry) => entry.string),
   ['0.4 0.2', '0.9 0.4', '0.2 0.8'],
   'an edited placement must write only the active weapon slot',
 );
@@ -173,16 +250,18 @@ assert.equal(history.canUndo, false);
 assert.deepEqual(history.redo(undone), moved, 'redo restores the complete placement snapshot');
 
 const sharedDestination = structuredClone(original);
-const stage = sharedDestination.operation.operation_node[0].stage.combine_multiply.operation_node[0].stage.apply_sticker;
+const stage = fixtureStickerStage(sharedDestination.operation);
 stage.dest_tr = { variable: 'sticker_tl' };
 const rejected = implementation.discoverStickerPlacementTargets(sharedDestination, resolve(sharedDestination))[0];
 assert.equal(rejected.editable, false, 'a shared destination variable is an unsafe affine target');
+assert.ok(rejected.reason);
 assert.match(rejected.reason, /share variable/i);
 
 const unresolvedDestination = structuredClone(original);
-unresolvedDestination.operation.operation_node[0].stage.combine_multiply.operation_node[0].stage.apply_sticker.dest_bl = { variable: 'missing_destination' };
+fixtureStickerStage(unresolvedDestination.operation).dest_bl = { variable: 'missing_destination' };
 const unresolved = implementation.discoverStickerPlacementTargets(unresolvedDestination, resolve(unresolvedDestination))[0];
 assert.equal(unresolved.editable, false, 'unresolvable destination data must be read-only rather than guessed');
+assert.ok(unresolved.reason);
 assert.match(unresolved.reason, /unresolved|invalid/i);
 
 // Army Guns is the canonical shipped case that declares matching sticker
@@ -196,7 +275,7 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const decoded = implementation.decodeProtoDefs(new Uint8Array(fs.readFileSync(fullPath)), {
     weaponsByItemDef: JSON.parse(fs.readFileSync(itemDefsPath, 'utf8')),
-    builtInIds: manifest.paintkits.map((kit) => kit.id),
+    builtInIds: manifest.paintkits.map((kit: { id: number }) => kit.id),
   });
   const armyGuns = implementation.extractKitMessages(decoded, 435);
   const armyInfo = decoded.kitsByDefindex.get(435);
@@ -209,7 +288,7 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
   assert.ok(armyTargets.some((target) => target.editable), 'Army Guns should expose at least one editable sticker placement');
   const editableArmyTarget = armyTargets.find((target) => target.editable);
   assert.ok(editableArmyTarget?.quad);
-  const movedArmyQuad = {
+  const movedArmyQuad: StickerQuad = {
     tl: [editableArmyTarget.quad.tl[0] + 0.01, editableArmyTarget.quad.tl[1]] ,
     tr: editableArmyTarget.quad.tr,
     bl: editableArmyTarget.quad.bl,
@@ -221,10 +300,20 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
   const repeatedSlotIndex = Array.isArray(armyGuns.definition.item)
     ? armyGuns.definition.item.indexOf(activeSlot?.item)
     : -1;
-  armyInfo.def = movedArmy.definition;
-  if (activeSlot && namedSlotKey) activeSlot.item = movedArmy.definition[namedSlotKey];
-  if (activeSlot && repeatedSlotIndex >= 0) activeSlot.item = movedArmy.definition.item[repeatedSlotIndex];
-  decoded.ctx.opByIdx.set(movedArmy.operation.header.defindex, movedArmy.operation);
+  armyInfo.def = decodedDefinition(movedArmy.definition);
+  if (activeSlot && namedSlotKey) {
+    const movedSlot = asItem(movedArmy.definition[namedSlotKey]);
+    assert.ok(movedSlot, 'Army Guns named slot must remain an item after mutation');
+    activeSlot.item = movedSlot;
+  }
+  if (activeSlot && repeatedSlotIndex >= 0) {
+    const movedItems = movedArmy.definition.item;
+    const movedSlot = Array.isArray(movedItems) ? asItem(movedItems[repeatedSlotIndex]) : undefined;
+    assert.ok(movedSlot, 'Army Guns repeated slot must remain an item after mutation');
+    activeSlot.item = movedSlot;
+  }
+  const movedArmyOperation = fixtureOperation(movedArmy.operation);
+  decoded.ctx.opByIdx.set(movedArmyOperation.header.defindex, movedArmyOperation);
   const movedArmyResolved = implementation.resolveKitRecipeWithProvenance(decoded, 435, weaponKey, 'red', 0);
   const movedArmyTargets = implementation.discoverStickerPlacementTargets(movedArmy, movedArmyResolved);
   assert.deepEqual(
@@ -235,5 +324,4 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
   console.log(`[verify] shipped Army Guns: ${armyTargets.filter((target) => target.editable).length}/${armyTargets.length} editable stickers`);
 }
 
-fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-console.log('[verify] sticker targets passed');
+});

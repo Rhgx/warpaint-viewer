@@ -6,33 +6,17 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { test } from 'vitest';
+import * as viewport from '../../../src/editor/stickerViewport';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD_DIR = path.join(ROOT, 'staging', 'sticker-viewport-verify');
 
-function bundleModule() {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  if (distIndex < 0 || !fs.existsSync(viteBin)) throw new Error(`could not locate vite's bin from ${viteEntry}`);
-  const result = spawnSync(
-    process.execPath,
-    [viteBin, 'build', '--ssr', 'src/editor/stickerViewport.ts', '--outDir', BUILD_DIR, '--logLevel', 'warn'],
-    { cwd: ROOT, stdio: 'inherit', shell: false },
-  );
-  if (result.status !== 0) throw new Error('Vite could not bundle the sticker viewport helpers.');
-  return pathToFileURL(path.join(BUILD_DIR, 'stickerViewport.js')).href;
-}
-
-function close(actual, expected, message) {
+function close(actual: number, expected: number, message: string): void {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: expected ${expected}, got ${actual}`);
 }
 
-try {
-  const viewport = await import(bundleModule());
+test('sticker viewport UV contract', () => {
   const size = { width: 640, height: 400 };
   const uv = { x: 0.3725, y: 0.68125 }; // V is deliberately CSS/compositor down.
 
@@ -62,8 +46,4 @@ try {
   assert.match(editorSource, /if \(event\.button !== 2\) return;/, 'UV panning is reserved for right drag');
   assert.match(editorSource, /onContextMenu=\{\(event\) => event\.preventDefault\(\)\}/, 'right drag suppresses the context menu');
   assert.doesNotMatch(editorSource, /middle drag pans|Middle \/ Space drag/, 'UV guidance does not advertise the old middle-drag pan');
-} finally {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-}
-
-console.log('[verify] sticker viewport UV contract passed');
+});

@@ -1,43 +1,21 @@
 // On-model sticker gizmo UV transform contract check.
-//
-//   node tools/verify/editor/sticker-gizmo.mjs
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { test } from 'vitest';
+import * as gizmo from '../../../src/editor/stickerGizmo';
+import type { StickerPlacementQuad, StickerUv } from '../../../src/editor/viewerStickerPlacement';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD_DIR = path.join(ROOT, 'staging', 'sticker-gizmo-verify');
-
-function bundleModule() {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  if (distIndex < 0 || !fs.existsSync(viteBin)) throw new Error(`could not locate vite's bin from ${viteEntry}`);
-  const result = spawnSync(
-    process.execPath,
-    [viteBin, 'build', '--ssr', 'src/editor/stickerGizmo.ts', '--outDir', BUILD_DIR, '--logLevel', 'warn'],
-    { cwd: ROOT, stdio: 'inherit', shell: false },
-  );
-  if (result.status !== 0) throw new Error('Vite could not bundle sticker gizmo geometry.');
-  return pathToFileURL(path.join(BUILD_DIR, 'stickerGizmo.js')).href;
-}
-
-function close(actual, expected, message) {
+function close(actual: number, expected: number, message: string): void {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: expected ${expected}, got ${actual}`);
 }
 
-function closeUv(actual, expected, message) {
+function closeUv(actual: StickerUv, expected: StickerUv, message: string): void {
   close(actual[0], expected[0], `${message} u`);
   close(actual[1], expected[1], `${message} v`);
 }
 
-try {
-  const gizmo = await import(bundleModule());
-  const quad = { tl: [0.4, 0.45], tr: [0.6, 0.45], bl: [0.4, 0.55] };
+test('sticker gizmo geometry', () => {
+  const quad: StickerPlacementQuad = { tl: [0.4, 0.45], tr: [0.6, 0.45], bl: [0.4, 0.55] };
 
   assert.equal(gizmo.stickerGizmoAnchorContainsCentre([true, false, false]), true,
     'an occluded anchor remains compatible while its chart still contains the authored centre');
@@ -123,11 +101,7 @@ try {
   closeUv(grabbed.tl, [0.65, 0.25], 'move uses the UV delta from the grabbed point, not the quad centre');
   closeUv(grabbed.tr, [0.85, 0.25], 'move keeps the full authored basis intact');
 
-  const seam = { tl: [0.92, 0.45], tr: [1.02, 0.45], bl: [0.92, 0.55] };
+  const seam: StickerPlacementQuad = { tl: [0.92, 0.45], tr: [1.02, 0.45], bl: [0.92, 0.55] };
   const seamMoved = gizmo.moveStickerQuadByUvDelta(seam, [0.98, 0.5], [0.03, 0.5]);
   closeUv(seamMoved.tl, [0.95, 0.45], 'move keeps the centre recoverable while preserving seam-safe edge clipping');
-} finally {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-}
-
-console.log('[verify] sticker gizmo geometry passed');
+});

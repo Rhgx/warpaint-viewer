@@ -1,38 +1,17 @@
 // Focused history contract check for immutable proto-def editor snapshots.
-//
-//   node tools/verify/editor/editor-history.mjs
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { test } from 'vitest';
+import { SnapshotHistory } from '../../../src/editor/history';
+import { assignSelectGroupExclusively, clearSelectGroupIds } from '../../../src/editor/mutations';
+import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD_DIR = path.join(ROOT, 'staging', 'editor-history-verify');
+const implementation = { SnapshotHistory, assignSelectGroupExclusively, clearSelectGroupIds };
 
-function bundleImplementation() {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-  const entry = path.join(ROOT, 'staging', 'editor-history-verify-entry.ts');
-  fs.writeFileSync(entry,
-    "export { SnapshotHistory } from '../src/editor/history';\n"
-    + "export { assignSelectGroupExclusively, clearSelectGroupIds } from '../src/editor/mutations';\n",
-  );
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  if (distIndex < 0 || !fs.existsSync(viteBin)) throw new Error(`could not locate vite's bin from ${viteEntry}`);
-  const result = spawnSync(process.execPath, [viteBin, 'build', '--ssr', entry, '--outDir', BUILD_DIR, '--logLevel', 'warn'], {
-    cwd: ROOT, stdio: 'inherit', shell: false,
-  });
-  if (result.status !== 0) throw new Error('Vite could not bundle the TypeScript editor history implementation.');
-  return pathToFileURL(path.join(BUILD_DIR, 'editor-history-verify-entry.js')).href;
-}
+test('immutable editor history snapshots', () => {
 
-const implementation = await import(bundleImplementation());
-
-const layerTarget = (occurrence) => ({ groupsValue: 'models/example_groups', occurrence });
-const layer = (label, occurrence) => ({ label, target: layerTarget(occurrence) });
+const layerTarget = (occurrence: number) => ({ groupsValue: 'models/example_groups', occurrence });
+const layer = (label: string, occurrence: number) => ({ label, target: layerTarget(occurrence) });
 const base = {
   definition: { header: { defindex: 1, variables: [] } },
   operation: {
@@ -44,13 +23,36 @@ const base = {
   },
 };
 
-function values(messages, occurrence) {
-  return messages.operation.operation_node[0].stage.combine_multiply.operation_node[occurrence].stage.select.select
-    .map((field) => field.uint32 ?? field.string);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function recordValue(value: unknown, label: string): Record<string, unknown> {
+  if (!isRecord(value)) throw new Error(`${label} should be an object`);
+  return value;
+}
+
+function arrayValue(value: unknown, label: string): unknown[] {
+  if (!Array.isArray(value)) throw new Error(`${label} should be an array`);
+  return value;
+}
+
+function values(messages: ProtoDefKitMessages, occurrence: number): Array<number | string | undefined> {
+  const operationNodes = arrayValue(messages.operation.operation_node, 'operation nodes');
+  const root = recordValue(operationNodes[0], 'root operation node');
+  const rootStage = recordValue(root.stage, 'root stage');
+  const multiply = recordValue(rootStage.combine_multiply, 'multiply stage');
+  const child = recordValue(arrayValue(multiply.operation_node, 'multiply nodes')[occurrence], 'select operation node');
+  const select = recordValue(recordValue(child.stage, 'select stage').select, 'select stage');
+  return arrayValue(select.select, 'select values').map((field) => {
+    const value = recordValue(field, 'select value');
+    const literal = value.uint32;
+    return typeof literal === 'number' ? literal : typeof value.string === 'string' ? value.string : undefined;
+  });
 }
 
 // Clear must be exactly one step even though it removes two literal ids.
-const clearHistory = new implementation.SnapshotHistory();
+const clearHistory = new implementation.SnapshotHistory<ProtoDefKitMessages>();
 const cleared = implementation.clearSelectGroupIds(base, layerTarget(0), [16, 32]);
 clearHistory.record(base);
 assert.deepEqual(values(cleared, 0), [0, 0, 0], 'Clear should remove every selected part from the active layer');
@@ -65,7 +67,7 @@ assert.equal(clearHistory.canRedo, false);
 
 // A new edit after undo replaces the alternate timeline rather than leaving a
 // stale redo available.
-const branchHistory = new implementation.SnapshotHistory();
+const branchHistory = new implementation.SnapshotHistory<ProtoDefKitMessages>();
 const firstEdit = implementation.clearSelectGroupIds(base, layerTarget(0), [16]);
 branchHistory.record(base);
 const undone = branchHistory.undo(firstEdit);
@@ -80,7 +82,7 @@ assert.deepEqual(values(branched, 1), [48, 32, 0]);
 
 // Exclusive cross-layer reassignment mutates both layers but records one
 // snapshot. One undo restores both owners together.
-const assignmentHistory = new implementation.SnapshotHistory();
+const assignmentHistory = new implementation.SnapshotHistory<ProtoDefKitMessages>();
 const moved = implementation.assignSelectGroupExclusively(base, layer('Layer 2', 1), [
   layer('Layer 1', 0), layer('Layer 2', 1),
 ], 32).messages;
@@ -91,5 +93,4 @@ const restored = assignmentHistory.undo(moved);
 assert.deepEqual(restored, base, 'One undo must restore both sides of a moved part');
 assert.equal(assignmentHistory.canUndo, false, 'One assignment must create one history step');
 
-fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-console.log('[verify] editor history passed');
+});

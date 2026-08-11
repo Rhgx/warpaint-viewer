@@ -1,43 +1,15 @@
 // Contract verification for src/editor/jsonExport.ts.
 //
-//   node tools/verify/editor/editor-json-export.mjs
-//
 // This intentionally uses the current JSON-fragment normalizer, rather than a
 // second parser, so it catches export/import contract drift at the boundary the
 // editor will expose to users.
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { test } from 'vitest';
+import { serializeProtoDefKitMessages } from '../../../src/editor/jsonExport';
+import { normalizeProtoDefFragments } from '../../../src/protodefs/jsonFragments';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const STAGING = path.join(ROOT, 'staging');
-const BUILD_DIR = path.join(STAGING, 'editor-json-export-verify');
-
-function bundleModule() {
-  fs.mkdirSync(BUILD_DIR, { recursive: true });
-  const entry = path.join(STAGING, 'editor-json-export-verify-entry.ts');
-  fs.writeFileSync(entry, [
-    "export { serializeProtoDefKitMessages } from '../src/editor/jsonExport';",
-    "export { normalizeProtoDefFragments } from '../src/protodefs/jsonFragments';",
-    '',
-  ].join('\n'));
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  if (distIndex < 0 || !fs.existsSync(viteBin)) throw new Error(`could not locate vite's bin from ${viteEntry}`);
-  const result = spawnSync(
-    process.execPath,
-    [viteBin, 'build', '--ssr', entry, '--outDir', BUILD_DIR, '--logLevel', 'warn'],
-    { cwd: ROOT, stdio: 'inherit', shell: false },
-  );
-  if (result.status !== 0) throw new Error('vite ssr build failed');
-  return pathToFileURL(path.join(BUILD_DIR, 'editor-json-export-verify-entry.js')).href;
-}
-
-const { serializeProtoDefKitMessages, normalizeProtoDefFragments } = await import(bundleModule());
+test('editor JSON export round-trip', () => {
 
 // Both singleton and repeated protobuf shapes are intentional. Unknown fields
 // model a newer game schema and must remain byte-for-byte JSON values through
@@ -111,4 +83,4 @@ assert.throws(
   'mismatched operation ids must be rejected instead of exported inconsistently',
 );
 
-console.log('[verify] PASS: editor JSON export preserves unknown fields and singleton/array shapes through importer round-trip.');
+});

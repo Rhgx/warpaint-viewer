@@ -7,17 +7,22 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run typecheck && vite build",
     "extract:map-lighting": "node tools/extract/map-lighting.mjs",
     "extract:effects": "node tools/extract/effects.mjs",
     "gen:protodefs": "node tools/generate/protodef-schema.mjs",
     "update:warpaints": "node -e \"require('node:fs').rmSync('staging/items_game.json', { force: true })\" && node tools/extract/warpaints.mjs && node tools/extract/grades.mjs && node tools/extract/warpaint-icons.mjs",
     "verify:protodefs": "node tools/verify/protodefs.mjs",
     "verify:protodefs-write": "node tools/verify/protodefs-write.mjs",
-    "verify:editor": "node tools/verify/editor/run.mjs",
-    "verify:editor-history": "node tools/verify/editor/editor-history.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b && npm run typecheck:test",
+    "verify:editor": "vitest run tools/verify/editor",
+    "verify:editor-history": "vitest run tools/verify/editor/editor-history.test.ts",
+    "typecheck:test": "tsc -p tools/verify/tsconfig.json",
     "verify:vmt": "node tools/verify/vmt-parity.mjs",
-    "verify:vpk": "node tools/verify/vpk-write.mjs",
+    "verify:vpk": "npm run verify:vpk-interop",
+    "verify:vpk-interop": "node tools/verify/vpk-interop.mjs",
     "verify:vtf": "node tools/verify/vtf-export.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
@@ -33,13 +38,14 @@
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
-    "@types/three": "^0.185.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.185.1",
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
     "sharp": "^0.35.3",
     "typescript": "~6.0.2",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "vitest": "^4.1.10"
   }
 }

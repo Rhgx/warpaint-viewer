@@ -1,4 +1,4 @@
-// Round-trips writeVpk() through the repository's own VPK reader.
+// Optional interoperability check for writeVpk() against Valve's vpk.exe.
 //
 //   node tools/verify/vpk-write.mjs
 //
@@ -24,7 +24,6 @@ function bundleModules() {
   fs.writeFileSync(entry, [
     "export { writeVpk } from '../src/export/vpkWrite';",
     "export { encodeVtf } from '../src/export/vtfEncode';",
-    "export { openVpkPackage } from '../src/source/vpk';",
     '',
   ].join('\n'));
   // Spawn vite's bin through node rather than npx: npx resolves differently on
@@ -39,27 +38,17 @@ function bundleModules() {
     [viteBin, 'build', '--ssr', entry, '--outDir', BUILD_DIR, '--logLevel', 'warn'],
     { cwd: ROOT, stdio: 'inherit', shell: false },
   );
-  if (result.status !== 0) throw new Error('vite ssr build of the VPK writer/reader failed');
+  if (result.status !== 0) throw new Error('vite ssr build of the VPK/VTF writers failed');
   return pathToFileURL(path.join(BUILD_DIR, 'vpk-write-verify-entry.js')).href;
 }
 
-console.log('[verify] bundling the VPK writer and reader ...');
-const { writeVpk, encodeVtf, openVpkPackage } = await import(bundleModules());
+console.log('[verify] bundling the VPK and VTF writers ...');
+const { writeVpk, encodeVtf } = await import(bundleModules());
 
-const VPK_HEADER_SIZE = 28;
 const failures = [];
 function check(condition, message) {
   if (!condition) failures.push(message);
   return condition;
-}
-
-function expectThrow(label, thunk) {
-  try {
-    thunk();
-    failures.push(`${label}: expected writeVpk() to throw, but it succeeded`);
-  } catch (error) {
-    console.log(`[verify] ${label}: rejected as expected (${error instanceof Error ? error.message : error})`);
-  }
 }
 
 function fillPattern(size) {
@@ -76,9 +65,7 @@ function bytesEqual(a, b) {
   return true;
 }
 
-// --- 1. Build a representative set of entries: archive root, deep nesting,
-// multiple extensions sharing a directory, and one large file to exercise
-// offsets past the first VPK entry. -----------------------------------------
+// Build representative entries for Valve's reader and extractor.
 
 const files = [
   { path: 'readme.txt', data: new TextEncoder().encode('root file at the archive root') },
@@ -88,72 +75,8 @@ const files = [
   { path: 'materials/patterns/mypaint/large.vtf', data: fillPattern(6 * 1024 * 1024) },
 ];
 
-console.log(`[verify] building a VPK from ${files.length} entries ...`);
 const bytes = writeVpk(files);
-console.log(`[verify] wrote ${bytes.byteLength.toLocaleString()} bytes`);
-
-// --- 2. Round-trip through the reader; every path and every byte must survive.
-
-const directoryFile = new File([bytes], 'warpaint_export_dir.vpk');
-const pkg = await openVpkPackage([directoryFile]);
-
-check(pkg.entries.size === files.length, `reader indexed ${pkg.entries.size} entries, expected ${files.length}`);
-
-for (const file of files) {
-  const normalized = file.path.replace(/\\/g, '/').toLowerCase();
-  if (!check(pkg.has(normalized), `reader is missing "${normalized}"`)) continue;
-  const readBack = await pkg.read(normalized);
-  check(bytesEqual(readBack, file.data), `content mismatch for "${normalized}" (${readBack.byteLength} vs ${file.data.byteLength} bytes)`);
-}
-
-// --- 3. Determinism: encoding the same input twice yields identical bytes. -
-
-const bytesAgain = writeVpk(files);
-check(bytesEqual(bytes, bytesAgain), 'determinism: two encodes of the same input produced different bytes');
-
-// --- 4. Header fields and treeSize, parsed directly rather than through the
-// reader, so a bug shared between the writer and reader cannot hide here. ---
-
-const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-const signature = view.getUint32(0, true);
-const version = view.getUint32(4, true);
-const treeSize = view.getUint32(8, true);
-check(signature === 0x55aa1234, `signature 0x${signature.toString(16)} !== 0x55aa1234`);
-check(version === 2, `version ${version} !== 2`);
-check(treeSize > 0 && treeSize < bytes.byteLength, `treeSize ${treeSize} is not plausible for a ${bytes.byteLength}-byte archive`);
-const expectedDataSize = files.reduce((sum, file) => sum + file.data.byteLength, 0);
-check(
-  bytes.byteLength === VPK_HEADER_SIZE + treeSize + expectedDataSize,
-  `total length ${bytes.byteLength} !== header(${VPK_HEADER_SIZE}) + treeSize(${treeSize}) + data(${expectedDataSize})`,
-);
-check(
-  view.getUint32(12, true) === expectedDataSize,
-  `fileDataSectionSize ${view.getUint32(12, true)} !== ${expectedDataSize}`,
-);
-for (const [name, offset] of [['archiveMD5SectionSize', 16], ['otherMD5SectionSize', 20], ['signatureSectionSize', 24]]) {
-  check(view.getUint32(offset, true) === 0, `${name} should be 0, got ${view.getUint32(offset, true)}`);
-}
-// An empty archive still has a one-byte tree: just the extension list's
-// empty-string terminator.
-const empty = writeVpk([]);
-check(
-  empty.byteLength === VPK_HEADER_SIZE + 1,
-  `empty archive should be ${VPK_HEADER_SIZE + 1} bytes (header + 1-byte tree), got ${empty.byteLength}`,
-);
-
-// --- 5. Error cases ----------------------------------------------------------
-
-expectThrow('file with no extension', () => writeVpk([{ path: 'materials/noextension', data: new Uint8Array(1) }]));
-expectThrow('dotfile with no stem', () => writeVpk([{ path: 'materials/.vtf', data: new Uint8Array(1) }]));
-expectThrow('duplicate normalized path', () => writeVpk([
-  { path: 'Materials/Foo.VTF', data: new Uint8Array(1) },
-  { path: 'materials/foo.vtf', data: new Uint8Array(2) },
-]));
-expectThrow('path traversal', () => writeVpk([{ path: 'materials/../evil.vtf', data: new Uint8Array(1) }]));
-expectThrow('absolute path', () => writeVpk([{ path: '/materials/evil.vtf', data: new Uint8Array(1) }]));
-expectThrow('empty path', () => writeVpk([{ path: '', data: new Uint8Array(1) }]));
-
-// --- 6. Valve's own vpk.exe, the only reader that really matters ------------
+// Valve's own vpk.exe is the only reader that really matters here.
 //
 // Our reader agreeing with our writer proves nothing about the tools people
 // actually install mods with. This packs the same files through TF2's shipped
@@ -250,4 +173,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
-console.log('\n[verify] PASS: writeVpk() round-trips through the reader, is deterministic, and rejects invalid input.');
+console.log('\n[verify] PASS: writeVpk() interoperates with Valve\'s tooling when available.');

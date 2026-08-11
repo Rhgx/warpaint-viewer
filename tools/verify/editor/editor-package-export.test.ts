@@ -4,37 +4,23 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { BlobReader, TextWriter, Uint8ArrayWriter, ZipReader } from '@zip.js/zip.js';
+import { test } from 'vitest';
+import { exportEditedPackage } from '../../../src/editor/packageExport';
+import { decodeProtoDefs, extractKitMessages } from '../../../src/protodefs/decoder';
+import { normalizeProtoDefFragments } from '../../../src/protodefs/jsonFragments';
+import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
+import type { SourcePackage } from '../../../src/source/contracts';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD_DIR = path.join(ROOT, 'staging', 'editor-package-export-verify');
 
-function bundleImplementation() {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-  const entry = path.join(ROOT, 'staging', 'editor-package-export-verify-entry.ts');
-  fs.writeFileSync(entry,
-    "export { exportEditedPackage } from '../src/editor/packageExport';\n"
-    + "export { normalizeProtoDefFragments } from '../src/protodefs/jsonFragments';\n"
-    + "export { decodeProtoDefs, extractKitMessages } from '../src/protodefs/decoder';\n",
-  );
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  const result = spawnSync(process.execPath, [viteBin, 'build', '--ssr', entry, '--outDir', BUILD_DIR, '--logLevel', 'warn'], {
-    cwd: ROOT, stdio: 'inherit', shell: false,
-  });
-  if (result.status !== 0) throw new Error('Vite could not bundle the editor package exporter.');
-  return pathToFileURL(path.join(BUILD_DIR, 'editor-package-export-verify-entry.js')).href;
-}
-
-async function unzip(blob) {
+async function unzip(blob: Blob): Promise<Map<string, string | Uint8Array>> {
   const reader = new ZipReader(new BlobReader(blob));
   try {
-    const output = new Map();
+    const output = new Map<string, string | Uint8Array>();
     for (const entry of await reader.getEntries()) {
-      if (entry.directory) continue;
+      if (entry.directory || !('getData' in entry)) continue;
       output.set(entry.filename, entry.filename.endsWith('.json')
         ? await entry.getData(new TextWriter())
         : await entry.getData(new Uint8ArrayWriter()));
@@ -45,7 +31,49 @@ async function unzip(blob) {
   }
 }
 
-const implementation = await import(bundleImplementation());
+function textFile(files: ReadonlyMap<string, string | Uint8Array>, name: string): string {
+  const value = files.get(name);
+  if (typeof value !== 'string') throw new Error(`${name} should be a text ZIP entry`);
+  return value;
+}
+
+function bytesFile(files: ReadonlyMap<string, string | Uint8Array>, name: string): Uint8Array {
+  const value = files.get(name);
+  assert.ok(value instanceof Uint8Array, `${name} should be a binary ZIP entry`);
+  return value;
+}
+
+function fixturePackage(id: string, name: string, files: ReadonlyMap<string, Uint8Array>): SourcePackage {
+  return {
+    id,
+    name,
+    format: 'zip',
+    rootIsMaterials: false,
+    entries: new Map([...files].map(([entryPath, bytes]) => [entryPath, { path: entryPath, size: bytes.length }])),
+    has: (entryPath: string) => files.has(entryPath),
+    read: async (entryPath: string) => {
+      const bytes = files.get(entryPath);
+      if (!bytes) throw new Error(`Missing fixture entry: ${entryPath}`);
+      return new Uint8Array(bytes);
+    },
+    dispose() {},
+  };
+}
+
+function builtInIds(value: unknown): number[] {
+  if (!value || typeof value !== 'object' || !('paintkits' in value) || !Array.isArray(value.paintkits)) return [];
+  return value.paintkits.flatMap((kit) => (
+    kit && typeof kit === 'object' && 'id' in kit && typeof kit.id === 'number' ? [kit.id] : []
+  ));
+}
+
+function objectField(value: Record<string, unknown>, key: string): Record<string, unknown> {
+  const field = value[key];
+  if (!field || typeof field !== 'object' || Array.isArray(field)) throw new Error(`${key} should be an object`);
+  return field as Record<string, unknown>;
+}
+
+const implementation = { decodeProtoDefs, exportEditedPackage, extractKitMessages, normalizeProtoDefFragments };
 const original = {
   operation: {
     header: { defindex: 700 },
@@ -56,24 +84,19 @@ const original = {
     operation_template: { defindex: 700 },
     blackbox: { item_definition_template: { defindex: 1 } },
   },
-};
+} satisfies ProtoDefKitMessages;
 const edited = structuredClone(original);
 edited.operation.operation_node.stage.texture_lookup.texture.string = 'patterns/edited';
 
 const encoder = new TextEncoder();
+test('editor package ZIP export', async () => {
 const sourceFiles = new Map([
   ['materials/patterns/sample.vtf', new Uint8Array([1, 2, 3, 4])],
   ['defs/custom_operation.json', encoder.encode(`${JSON.stringify(original.operation)}\n`)],
   ['defs/custom_definition.json', encoder.encode(`${JSON.stringify(original.definition)}\n`)],
   ['readme.txt', encoder.encode('keep me')],
 ]);
-const sourcePackage = {
-  id: 'fixture', name: 'Fixture.zip', format: 'zip', rootIsMaterials: false,
-  entries: new Map([...sourceFiles].map(([entryPath, bytes]) => [entryPath, { path: entryPath, size: bytes.length }])),
-  has: (entryPath) => sourceFiles.has(entryPath),
-  read: async (entryPath) => new Uint8Array(sourceFiles.get(entryPath)),
-  dispose() {},
-};
+const sourcePackage = fixturePackage('fixture', 'Fixture.zip', sourceFiles);
 
 const exported = await implementation.exportEditedPackage(edited, { package: sourcePackage, name: 'Edited Paint' });
 assert.equal(exported.fileName, 'fixture-edited.zip');
@@ -83,10 +106,13 @@ const files = await unzip(exported.blob);
 assert.deepEqual(files.get('materials/patterns/sample.vtf'), new Uint8Array([1, 2, 3, 4]));
 assert.deepEqual(files.get('readme.txt'), encoder.encode('keep me'));
 const normalized = implementation.normalizeProtoDefFragments([
-  { name: 'operation', text: files.get('defs/custom_operation.json') },
-  { name: 'definition', text: files.get('defs/custom_definition.json') },
+  { name: 'operation', text: textFile(files, 'defs/custom_operation.json') },
+  { name: 'definition', text: textFile(files, 'defs/custom_definition.json') },
 ]);
-assert.equal(normalized[0].value.operation_node.stage.texture_lookup.texture.string, 'patterns/edited');
+const operationNode = objectField(normalized[0].value, 'operation_node');
+const operationStage = objectField(operationNode, 'stage');
+const textureLookup = objectField(operationStage, 'texture_lookup');
+assert.equal(objectField(textureLookup, 'texture').string, 'patterns/edited');
 assert.deepEqual(normalized[1].value, edited.definition);
 
 const minimal = await implementation.exportEditedPackage(edited, { name: 'Standalone Paint' });
@@ -106,15 +132,15 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const decoded = implementation.decodeProtoDefs(fullBytes, {
     weaponsByItemDef: itemDefs,
-    builtInIds: manifest.paintkits.map((kit) => kit.id),
+    builtInIds: builtInIds(manifest),
   });
   const armyGuns = implementation.extractKitMessages(decoded, 435);
   assert.ok(armyGuns, 'Army Guns should exist in the shipped definition container');
   const editedContainerKit = structuredClone(armyGuns);
-  const replaceFirstTexture = (value) => {
+  const replaceFirstTexture = (value: unknown): boolean => {
     if (!value || typeof value !== 'object') return false;
-    if (!Array.isArray(value) && value.texture && typeof value.texture === 'object'
-      && typeof value.texture.string === 'string') {
+    if (!Array.isArray(value) && 'texture' in value && value.texture && typeof value.texture === 'object'
+      && 'string' in value.texture && typeof value.texture.string === 'string') {
       value.texture.string = 'patterns/editor_package_export_probe';
       return true;
     }
@@ -125,20 +151,14 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
     ['scripts/protodefs/proto_defs.vpd', fullBytes],
     ['materials/patterns/keep.vtf', new Uint8Array([9, 8, 7])],
   ]);
-  const vpdPackage = {
-    id: 'vpd-fixture', name: 'Container.zip', format: 'zip', rootIsMaterials: false,
-    entries: new Map([...vpdFiles].map(([entryPath, bytes]) => [entryPath, { path: entryPath, size: bytes.length }])),
-    has: (entryPath) => vpdFiles.has(entryPath),
-    read: async (entryPath) => new Uint8Array(vpdFiles.get(entryPath)),
-    dispose() {},
-  };
+  const vpdPackage = fixturePackage('vpd-fixture', 'Container.zip', vpdFiles);
   const vpdExport = await implementation.exportEditedPackage(editedContainerKit, { package: vpdPackage });
   assert.deepEqual(vpdExport.replacedPaths, ['scripts/protodefs/proto_defs.vpd']);
   const vpdOutput = await unzip(vpdExport.blob);
   assert.deepEqual(vpdOutput.get('materials/patterns/keep.vtf'), new Uint8Array([9, 8, 7]));
-  const rewritten = implementation.decodeProtoDefs(vpdOutput.get('scripts/protodefs/proto_defs.vpd'), {
+  const rewritten = implementation.decodeProtoDefs(bytesFile(vpdOutput, 'scripts/protodefs/proto_defs.vpd'), {
     weaponsByItemDef: itemDefs,
-    builtInIds: manifest.paintkits.map((kit) => kit.id),
+    builtInIds: builtInIds(manifest),
   });
   assert.match(
     JSON.stringify(implementation.extractKitMessages(rewritten, 435)?.operation),
@@ -147,5 +167,4 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
   );
 }
 
-fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-console.log('[verify] editor package ZIP export passed');
+});

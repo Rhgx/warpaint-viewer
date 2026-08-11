@@ -99,12 +99,13 @@ Developer harnesses:
   through the in-browser proto_defs decoder and compares it against both the
   recipe bundles and the extraction pipeline, so a porting difference is told
   apart from data that predates the installed game.
-- `node tools/verify/vtf-export.mjs` round-trips the browser VTF writer through
-  the extraction pipeline's decoder, and compares a re-encode of a real Valve
-  texture against the original's header, flags and image-section size.
-- `node tools/verify/vpk-write.mjs` round-trips the VPK writer through this
-  repository's reader and through TF2's own `bin/vpk.exe`, which is what catches
-  a container the engine's tools read differently than we do.
+- `npm test` runs the typed Vitest suites, including deterministic VTF
+  encoder/decoder and VPK writer/reader round trips.
+- `npm run verify:vtf -- <path>` additionally compares a re-encode of a real
+  Valve texture against the original's header, flags and image-section size.
+- `npm run verify:vpk-interop` checks the VPK writer against TF2's own
+  `bin/vpk.exe`, which catches a container Valve's tools read differently than
+  this repository's reader.
 - `node tools/verify/protodefs-write.mjs` asserts the proto_defs writer
   reproduces the shipped container byte for byte when nothing is spliced, then
   checks both splice modes through two independent decoders.

@@ -1,29 +1,11 @@
 // Physical periodic sticker UV-chart topology contract check.
-//
-//   node tools/verify/editor/sticker-uv-topology.mjs
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { test } from 'vitest';
+import { buildStickerUvTopology } from '../../../src/editor/stickerUvTopology';
+import type { StickerUv, StickerUvTopologyAttribute, StickerUvTopologyGeometry, StickerUvTopologyIndex, StickerVec3 } from '../../../src/editor/stickerUvTopology';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD_DIR = path.join(ROOT, 'staging', 'sticker-uv-topology-verify');
-
-function bundleModule() {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  const result = spawnSync(process.execPath, [viteBin, 'build', '--ssr', 'src/editor/stickerUvTopology.ts', '--outDir', BUILD_DIR, '--logLevel', 'warn'], {
-    cwd: ROOT, stdio: 'inherit', shell: false,
-  });
-  if (result.status !== 0) throw new Error('Vite could not bundle sticker UV topology.');
-  return pathToFileURL(path.join(BUILD_DIR, 'stickerUvTopology.js')).href;
-}
-
-function attribute(points) {
+function positionAttribute(points: readonly StickerVec3[]): StickerUvTopologyAttribute {
   return {
     count: points.length,
     getX: (index) => points[index][0],
@@ -32,15 +14,29 @@ function attribute(points) {
   };
 }
 
-function geometry(positions, uvs, indexes = null) {
+function uvAttribute(points: readonly StickerUv[]): StickerUvTopologyAttribute {
   return {
-    getAttribute: (name) => name === 'position' ? attribute(positions) : name === 'uv' ? attribute(uvs) : undefined,
-    getIndex: () => indexes ? ({ count: indexes.length, getX: (index) => indexes[index] }) : null,
+    count: points.length,
+    getX: (index) => points[index][0],
+    getY: (index) => points[index][1],
   };
 }
 
-try {
-  const { buildStickerUvTopology } = await import(bundleModule());
+function geometry(
+  positions: readonly StickerVec3[],
+  uvs: readonly StickerUv[],
+  indexes: readonly number[] | null = null,
+): StickerUvTopologyGeometry {
+  const index: StickerUvTopologyIndex | null = indexes
+    ? { count: indexes.length, getX: (position) => indexes[position] ?? -1 }
+    : null;
+  return {
+    getAttribute: (name) => name === 'position' ? positionAttribute(positions) : uvAttribute(uvs),
+    getIndex: () => index,
+  };
+}
+
+test('physical periodic sticker UV-chart topology', () => {
 
   const repeated = geometry(
     [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [3, 0, 0], [4, 0, 0], [4, 1, 0], [3, 1, 0]],
@@ -84,8 +80,4 @@ try {
   const nonIndexedTopology = buildStickerUvTopology([nonIndexed]);
   assert.equal(nonIndexedTopology.charts.length, 1, 'non-indexed duplicate vertices still join through a matched physical+UV edge');
   assert.equal(nonIndexedTopology.triangles.length, 2);
-} finally {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-}
-
-console.log('[verify] sticker UV topology passed');
+});

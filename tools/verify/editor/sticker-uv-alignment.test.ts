@@ -1,41 +1,16 @@
 // End-to-end UV-orientation contract for the 2D sticker editor.
-//
-//   node tools/verify/editor/sticker-uv-alignment.mjs
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { test } from 'vitest';
+import * as geometry from '../../../src/editor/stickerGeometry';
+import * as rows from '../../../src/editor/stickerSurface';
+import * as viewport from '../../../src/editor/stickerViewport';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD_DIR = path.join(ROOT, 'staging', 'sticker-uv-alignment-verify');
-
-function bundle(entry, output) {
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  if (distIndex < 0 || !fs.existsSync(viteBin)) throw new Error(`could not locate vite's bin from ${viteEntry}`);
-  const result = spawnSync(
-    process.execPath,
-    [viteBin, 'build', '--ssr', entry, '--outDir', output, '--logLevel', 'warn'],
-    { cwd: ROOT, stdio: 'inherit', shell: false },
-  );
-  if (result.status !== 0) throw new Error(`Vite could not bundle ${entry}.`);
-}
-
-function close(actual, expected, message) {
+function close(actual: number, expected: number, message: string): void {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: expected ${expected}, got ${actual}`);
 }
 
-try {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-  bundle('src/editor/stickerGeometry.ts', path.join(BUILD_DIR, 'geometry'));
-  bundle('src/editor/stickerSurface.ts', path.join(BUILD_DIR, 'rows'));
-  bundle('src/editor/stickerViewport.ts', path.join(BUILD_DIR, 'viewport'));
-  const geometry = await import(pathToFileURL(path.join(BUILD_DIR, 'geometry', 'stickerGeometry.js')).href);
-  const rows = await import(pathToFileURL(path.join(BUILD_DIR, 'rows', 'stickerSurface.js')).href);
-  const viewport = await import(pathToFileURL(path.join(BUILD_DIR, 'viewport', 'stickerViewport.js')).href);
+test('2D editor and compositor sticker UV alignment', () => {
 
   // This deliberately asymmetric placement catches a vertical flip. The 2D
   // editor maps its CSS left/top percentages straight to these UV coordinates;
@@ -80,8 +55,4 @@ try {
     [...readback],
     'isolated group artwork keeps its deliberate transparent background',
   );
-} finally {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-}
-
-console.log('[verify] 2D/editor and 3D/compositor sticker UV alignment passed');
+});

@@ -3,44 +3,39 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { BlobReader, TextWriter, ZipReader } from '@zip.js/zip.js';
+import { test } from 'vitest';
+import { discoverGroupSelectTargets } from '../../../src/editor/groupTargets';
+import { discoverStickerPlacementTargets } from '../../../src/editor/stickerTargets';
+import { decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipeWithProvenance } from '../../../src/protodefs/decoder';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const EXAMPLES = path.join(ROOT, '.tmp', 'example-warpaints');
-const BUILD_DIR = path.join(ROOT, 'staging', 'example-warpaints-verify');
 
-function bundleImplementation() {
-  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
-  const entry = path.join(ROOT, 'staging', 'example-warpaints-verify-entry.ts');
-  fs.writeFileSync(entry,
-    "export { decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipeWithProvenance } from '../src/protodefs/decoder';\n"
-    + "export { discoverGroupSelectTargets } from '../src/editor/groupTargets';\n"
-    + "export { discoverStickerPlacementTargets } from '../src/editor/stickerTargets';\n",
-  );
-  const viteEntry = fileURLToPath(import.meta.resolve('vite'));
-  const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
-  const viteBin = path.join(viteEntry.slice(0, distIndex), 'bin', 'vite.js');
-  const result = spawnSync(process.execPath, [viteBin, 'build', '--ssr', entry, '--outDir', BUILD_DIR, '--logLevel', 'warn'], {
-    cwd: ROOT, stdio: 'inherit', shell: false,
-  });
-  if (result.status !== 0) throw new Error('Vite could not bundle the example compatibility verifier.');
-  return pathToFileURL(path.join(BUILD_DIR, 'example-warpaints-verify-entry.js')).href;
+function manifestPaintkitIds(value: unknown): number[] {
+  if (!value || typeof value !== 'object' || !('paintkits' in value) || !Array.isArray(value.paintkits)) return [];
+  return value.paintkits.flatMap((kit) => (
+    kit && typeof kit === 'object' && 'id' in kit && typeof kit.id === 'number' ? [kit.id] : []
+  ));
 }
 
-async function fragmentsFromZip(filePath) {
+async function fragmentsFromZip(filePath: string) {
   const reader = new ZipReader(new BlobReader(new Blob([fs.readFileSync(filePath)])));
   try {
     const entries = await reader.getEntries();
     return Promise.all(entries
-      .filter((entry) => !entry.directory && entry.filename.toLowerCase().endsWith('.json'))
-      .map(async (entry) => ({ name: entry.filename, text: await entry.getData(new TextWriter()) })));
+      .filter((entry) => !entry.directory && 'getData' in entry && entry.filename.toLowerCase().endsWith('.json'))
+      .map(async (entry) => {
+        if (!('getData' in entry)) throw new Error(`ZIP entry ${entry.filename} cannot be read`);
+        return { name: entry.filename, text: await entry.getData(new TextWriter()) };
+      }));
   } finally {
     await reader.close();
   }
 }
 
+test('local example war paint compatibility matrix', async () => {
 const archives = fs.existsSync(EXAMPLES)
   ? fs.readdirSync(EXAMPLES).filter((name) => name.toLowerCase().endsWith('.zip')).sort()
   : [];
@@ -49,7 +44,13 @@ if (archives.length === 0) {
   process.exit(0);
 }
 
-const implementation = await import(bundleImplementation());
+const implementation = {
+  decodeProtoDefsFromJson,
+  discoverGroupSelectTargets,
+  discoverStickerPlacementTargets,
+  extractKitMessages,
+  resolveKitRecipeWithProvenance,
+};
 const baseBytes = new Uint8Array(fs.readFileSync(path.join(ROOT, 'public', 'data', 'protodefs-base.bin')));
 const itemDefs = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'item-defs.json'), 'utf8'));
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'manifest.json'), 'utf8'));
@@ -67,7 +68,7 @@ for (const archive of archives) {
   try {
     decoded = implementation.decodeProtoDefsFromJson(baseBytes, fragments, {
       weaponsByItemDef: itemDefs,
-      builtInIds: manifest.paintkits.map((kit) => kit.id),
+      builtInIds: manifestPaintkitIds(manifest),
     });
   } catch (cause) {
     failures.push(`${archive}: definitions could not be imported (${cause instanceof Error ? cause.message : cause})`);
@@ -80,11 +81,13 @@ for (const archive of archives) {
       failures.push(`${archive}: paint ${kit.defindex} could not expose its editable messages`);
       continue;
     }
-    const weaponKeys = [...new Set(kitInfo.slots.map((slot) => slot.weaponKey))].sort();
+    const weaponKeys = [...new Set(kitInfo.slots.map((slot) => slot.weaponKey))]
+      .filter((weaponKey): weaponKey is string => typeof weaponKey === 'string')
+      .sort();
     for (const weaponKey of weaponKeys) {
       weaponCount += 1;
       let weaponHasEditableSurface = false;
-      for (const team of ['red', 'blu']) {
+      for (const team of ['red', 'blu'] as const) {
         for (let wearIndex = 0; wearIndex < 5; wearIndex += 1) {
           const label = `${archive} / ${weaponKey} / ${team} / wear ${wearIndex}`;
           const resolved = implementation.resolveKitRecipeWithProvenance(
@@ -129,7 +132,6 @@ for (const archive of archives) {
   }
 }
 
-fs.rmSync(BUILD_DIR, { recursive: true, force: true });
 assert.deepEqual(failures, [], `Example compatibility failures:\n${failures.map((failure) => `- ${failure}`).join('\n')}`);
 console.log(
   `[verify] ${archives.length} example packs, ${weaponCount} weapons, ${recipeCount} team/wear recipes, `
@@ -139,3 +141,4 @@ console.log(
     ? ` (${[...viewOnlyByArchive].map(([archive, count]) => `${archive}: ${count}`).join(', ')})`
     : ''),
 );
+}, 60_000);
