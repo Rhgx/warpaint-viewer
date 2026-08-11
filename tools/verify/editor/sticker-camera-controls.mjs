@@ -27,7 +27,13 @@ function bundleModule() {
 }
 
 try {
-  const { inspectDragForPointer, inspectDoubleClickResets, isRapidInspectClickPair } = await import(bundleModule());
+  const {
+    INSPECT_MIN_DISTANCE_FACTOR,
+    inspectDragForPointer,
+    inspectDoubleClickResets,
+    isRapidInspectClickPair,
+  } = await import(bundleModule());
+  assert.equal(INSPECT_MIN_DISTANCE_FACTOR, 0.35, 'inspect camera permits a substantially closer weapon view');
   assert.equal(inspectDragForPointer(0, 'rotate'), 'rotate', 'normal inspect left-drag rotates');
   assert.equal(inspectDragForPointer(1, 'rotate'), 'pan', 'normal inspect middle-drag pans');
   assert.equal(inspectDragForPointer(2, 'rotate'), 'pan', 'normal inspect right-drag pans');

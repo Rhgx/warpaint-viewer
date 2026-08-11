@@ -22,6 +22,7 @@ const INERTIA_HALF_LIFE = 0.09; // seconds; velocity halves every 90 ms
 const INERTIA_CUTOFF = 0.02; // rad/s below which inertia stops
 const ZOOM_STEP = 1.15; // per wheel notch
 const ZOOM_SMOOTHING = 12; // 1/s, exponential approach rate
+export const INSPECT_MIN_DISTANCE_FACTOR = 0.35;
 const PAN_LIMIT_FACTOR = 1.2; // max pan offset as a multiple of model radius
 const ADVANCED_SPEED_FACTOR = 2.7;
 const ADVANCED_BOOST_MULTIPLIER = 2.5;
@@ -300,7 +301,7 @@ export class InspectControls {
     this.applyInspect();
   }
 
-  private minDist() { return this.radius * 0.85; }
+  private minDist() { return this.radius * INSPECT_MIN_DISTANCE_FACTOR; }
   private maxDist() { return this.baseDist * 4; }
 
   // Sets the camera's fixed viewing ray (normalized), or restores the default
