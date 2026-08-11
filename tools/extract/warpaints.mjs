@@ -9,6 +9,7 @@
 //   public/data/recipes/<paintkitId>.json  ({ trees, variants }; variants key =
 //                                            <weaponKey>_<team>[_w<n>] -> trees index)
 //   public/data/textures/<vpk path minus materials/>.webp   (lossless, compositor input)
+//   public/data/thumbnails/textures/...                      (32px editor previews)
 //   staging/weapon_models.json      (weaponKey -> [vpk-relative .mdl paths]) for the model agent
 //   staging/protodefs/*.json        (raw decoded proto dumps, for debugging)
 //   staging/items_game.json         (cached parsed items_game)
@@ -62,6 +63,21 @@ const CUSTOM_DEFINITION_TEXTURE_REFS = [
 
 function log(...a) { console.log(...a); }
 function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
+
+function collectLayerPreviewRefs(node, refs) {
+  if (!node?.nodes) return;
+  node.nodes.forEach((child, index) => {
+    if (child.type === 'select' && index > 0) {
+      const collectTextures = (candidate) => {
+        if (candidate.type === 'texture_lookup') refs.add(candidate.texture);
+        for (const nested of candidate.nodes || []) collectTextures(nested);
+      };
+      collectTextures(node.nodes[index - 1]);
+    } else {
+      collectLayerPreviewRefs(child, refs);
+    }
+  });
+}
 
 const EXTRACT_STATE_PATH = path.join(STAGING, 'extract_state.json');
 
@@ -353,6 +369,7 @@ async function main() {
   const paintIconRefByKit = new Map(); // paintkit id -> representative pattern texture ref
   const weaponRegistry = new Map(); // weaponKey -> { key, name, itemDefIndex, modelPath }
   const allTextureRefs = new Set();
+  const layerPreviewRefs = new Set();
   // Lightwarps are shipped whole rather than only where a stock weapon material
   // names one. A custom VMT imported at runtime (src/source/vmt.ts) is free to
   // ask for any of them, and regularly does: Ghastly Guns lights its weapons
@@ -411,6 +428,7 @@ async function main() {
           const r = resolveRecipe(def, slot, itemDef, w, team, ctx);
           if (!r) { trees.push(null); continue; }
           addImplicitStickerSpecs(r.tree, compositorVpkPaths, r.textureRefs);
+          collectLayerPreviewRefs(r.tree, layerPreviewRefs);
           for (const t of r.textureRefs) { allTextureRefs.add(t); kitTextureRefs.add(t); }
           trees.push(r.tree);
         }
@@ -491,6 +509,7 @@ async function main() {
   if (run('textures')) {
     const result = await extractAndDecodeTextures({
       allTextureRefs,
+      layerPreviewRefs,
       publicDataPath: PUBLIC_DATA,
       stagingPath: STAGING,
       vpkChanged,

@@ -41,9 +41,9 @@ import {
   sampleGroupAtUv,
   type RgbaImageDataLike,
 } from './editor/groupSampling';
-import { loadRgbaImageData, loadRgbaThumbnail } from './editor/imageData';
+import { loadRgbaImageData, loadRgbaThumbnail, rgbaThumbnailDataUrl } from './editor/imageData';
 import { formatGroupNameForDisplay, lookupGroupNameForBucket } from './editor/groupNames';
-import { chooseEditorLayerColors, EDITOR_LAYER_MAP_COLORS } from './editor/layerMap';
+import { chooseEditorLayerColors, EDITOR_LAYER_MAP_COLORS, linearLayerColorToCss } from './editor/layerMap';
 import { discoverStickerPlacementTargets } from './editor/stickerTargets';
 import {
   DEFAULT_STICKER_PLACEMENT,
@@ -82,11 +82,28 @@ type MobilePanel = 'none' | 'catalog' | 'controls';
 interface ResolvedGroupSelect {
   groups: string;
   select: number[];
+  textureRef?: string;
+}
+
+function resolvedTextureReferences(node: RecipeNode): string[] {
+  if (node.type === 'texture_lookup') return [node.texture];
+  return 'nodes' in node ? node.nodes.flatMap(resolvedTextureReferences) : [];
 }
 
 function collectResolvedGroupSelects(node: RecipeNode, output: ResolvedGroupSelect[] = []): ResolvedGroupSelect[] {
   if (node.type === 'select') output.push({ groups: node.groups, select: node.select.map(Number) });
-  if ('nodes' in node) for (const child of node.nodes) collectResolvedGroupSelects(child, output);
+  if ('nodes' in node) node.nodes.forEach((child, index) => {
+    if (child.type !== 'select') {
+      collectResolvedGroupSelects(child, output);
+      return;
+    }
+    const refs = index > 0 ? resolvedTextureReferences(node.nodes[index - 1]) : [];
+    output.push({
+      groups: child.groups,
+      select: child.select.map(Number),
+      ...(refs.length > 0 ? { textureRef: refs.at(-1) } : {}),
+    });
+  });
   return output;
 }
 
@@ -263,6 +280,7 @@ function MainApp() {
   const [showLayerMap, setShowLayerMap] = useState(false);
   const [layerMapImages, setLayerMapImages] = useState<Record<string, RgbaImageDataLike>>({});
   const [layerTextureThumbnails, setLayerTextureThumbnails] = useState<Record<string, RgbaImageDataLike | null>>({});
+  const [layerTexturePreviewUrls, setLayerTexturePreviewUrls] = useState<Record<string, string | null>>({});
   const layerThumbnailCacheRef = useRef(new Map<string, Promise<RgbaImageDataLike | null>>());
   const layerThumbnailGenerationRef = useRef('');
   const [activeEditorSelector, setActiveEditorSelector] = useState(0);
@@ -409,8 +427,13 @@ function MainApp() {
     return labels;
   }, [activeGroupRef]);
   const groupAssignmentTargets = useMemo(() => editableGroupTargets.map((target, index) => {
-    const operationIndex = groupDiscovery?.targets.indexOf(target) ?? -1;
-    const resolved = operationIndex >= 0 ? resolvedGroupSelects[operationIndex] : undefined;
+    const matchingOperationIndexes = groupDiscovery?.targets.flatMap((candidate, operationIndex) => (
+      candidate.sourceKey === target.sourceKey ? [operationIndex] : []
+    )) ?? [];
+    const resolvedMatches = matchingOperationIndexes.flatMap((operationIndex) => (
+      resolvedGroupSelects[operationIndex] ? [resolvedGroupSelects[operationIndex]] : []
+    ));
+    const resolved = resolvedMatches.at(-1);
     const selectedGroupIds = target.hasInheritedVariableValues ? resolved?.select : target.selectedGroupIds;
     return {
       label: editorSelectors[index]?.label ?? target.label,
@@ -418,7 +441,11 @@ function MainApp() {
       // The texture is the paint artwork immediately preceding this selector,
       // not its grayscale groups map. Keep it attached to the eventual editor
       // assignment target so layer cues can contrast against what users see.
-      textureRef: target.textureRef,
+      // A logical selector can be authored more than once in a recipe. The
+      // later occurrence is the visible paint pass; earlier occurrences often
+      // initialise every layer with the same albedo and made all thumbnails
+      // look identical. A compound pass falls back to its final texture leaf.
+      textureRef: resolved?.textureRef ?? target.textureRef,
       selectedGroupIds: selectedGroupIds ?? [],
       target: {
         ...target.target,
@@ -1059,25 +1086,49 @@ function MainApp() {
       .filter((ref): ref is string => Boolean(ref)))];
     if (refs.length === 0) {
       setLayerTextureThumbnails({});
+      setLayerTexturePreviewUrls({});
       return;
     }
     let cancelled = false;
     void Promise.all(refs.map(async (ref) => {
       try {
-        const url = activeTextureOverrides[ref] ?? await sourceProvider.resolvePreview(ref);
-        const cacheKey = `${generation}\u0000${url}`;
-        let thumbnail = layerThumbnailCacheRef.current.get(cacheKey);
-        if (!thumbnail) {
-          thumbnail = loadRgbaThumbnail(url).catch(() => null);
-          layerThumbnailCacheRef.current.set(cacheKey, thumbnail);
+        const overrideUrl = activeTextureOverrides[ref];
+        const stockThumbnailUrl = !overrideUrl && data?.manifest.textures?.[ref]
+          ? `${import.meta.env.BASE_URL}data/thumbnails/${ref}`
+          : null;
+        const load = (url: string) => {
+          const cacheKey = `${generation}\u0000${url}`;
+          let thumbnail = layerThumbnailCacheRef.current.get(cacheKey);
+          if (!thumbnail) {
+            thumbnail = loadRgbaThumbnail(url).catch(() => null);
+            layerThumbnailCacheRef.current.set(cacheKey, thumbnail);
+          }
+          return thumbnail;
+        };
+        let url = stockThumbnailUrl ?? overrideUrl ?? await sourceProvider.resolveThumbnail(ref);
+        let pixels = await load(url);
+        // Community definitions may assign a shipped texture that no stock
+        // paint uses as a layer. Such refs have no generated thumbnail, so use
+        // the same lazy exact path as an imported image instead of showing grey.
+        if (!pixels && stockThumbnailUrl) {
+          url = await sourceProvider.resolveThumbnail(ref);
+          pixels = await load(url);
         }
-        return [ref, await thumbnail] as const;
+        // Layer rows are identification aids, not a composited preview. Show
+        // the authored RGB at full opacity so translucent masks remain easy to
+        // tell apart at this small size.
+        return [
+          ref,
+          pixels,
+          pixels ? url === stockThumbnailUrl ? url : rgbaThumbnailDataUrl(pixels) : null,
+        ] as const;
       } catch {
-        return [ref, null] as const;
+        return [ref, null, null] as const;
       }
     })).then((entries) => {
       if (cancelled) return;
-      const next = Object.fromEntries(entries);
+      const next = Object.fromEntries(entries.map(([ref, thumbnail]) => [ref, thumbnail]));
+      const nextUrls = Object.fromEntries(entries.map(([ref, , url]) => [ref, url]));
       setLayerTextureThumbnails((current) => {
         const keys = Object.keys(next);
         return keys.length === Object.keys(current).length
@@ -1085,12 +1136,14 @@ function MainApp() {
           ? current
           : next;
       });
+      setLayerTexturePreviewUrls(nextUrls);
     });
     return () => { cancelled = true; };
   }, [
     activeTextureOverrides,
     assetOverrides.revision,
     definitions.generation,
+    data?.manifest.textures,
     layerColorTextureRefs,
     packageGeneration,
     sourceProvider,
@@ -1108,19 +1161,14 @@ function MainApp() {
   // Viewer overlay uses. CSS colours are sRGB, so the context column swatches
   // and the parts board squares need their own converted copy or they will
   // read lighter than the on-model layer map they are meant to match.
-  const editorLayerCssColors = useMemo(() => editorLayerColors.map(([r, g, b]) => {
-    const toSrgbByte = (channel: number) => {
-      const clamped = Math.min(1, Math.max(0, channel));
-      const srgb = clamped <= 0.0031308 ? clamped * 12.92 : 1.055 * clamped ** (1 / 2.4) - 0.055;
-      return Math.round(srgb * 255);
-    };
-    const channels = [toSrgbByte(r), toSrgbByte(g), toSrgbByte(b)];
-    const peak = Math.max(...channels);
-    const lifted = peak > 0 ? channels.map((channel) => channel * Math.min(1.35, 242 / peak)) : channels;
-    const average = lifted.reduce((sum, channel) => sum + channel, 0) / lifted.length;
-    const vivid = lifted.map((channel) => Math.round(Math.min(255, Math.max(0, average + (channel - average) * 1.35))));
-    return `rgb(${vivid[0]}, ${vivid[1]}, ${vivid[2]})`;
-  }), [editorLayerColors]);
+  const editorLayerCssColors = useMemo(
+    () => editorLayerColors.map((color) => linearLayerColorToCss(color, 1.35)),
+    [editorLayerColors],
+  );
+  const editorLayerSwatchCssColors = useMemo(
+    () => editorLayerColors.map((color) => linearLayerColorToCss(color, 1.85)),
+    [editorLayerColors],
+  );
 
   useEffect(() => {
     if (editorStatus !== 'ready' || !editorCurrent || editableKitId === null) return;
@@ -2379,6 +2427,10 @@ function MainApp() {
                   activeLayerIndex: activeEditorLayerIndex,
                   groupLayerIndex: groupBucketLayerIndex,
                   layerColors: editorLayerCssColors,
+                  layerSwatchColors: editorLayerSwatchCssColors,
+                  layerThumbnails: layerColorTextureRefs.map((textureRef) => (
+                    textureRef ? layerTexturePreviewUrls[textureRef] ?? null : null
+                  )),
                   showLayerMap,
                   onShowLayerMapChange: setShowLayerMap,
                   inspectOnClick: groupAssignActive,

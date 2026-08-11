@@ -13,18 +13,22 @@ export const EDITOR_LAYER_MAP_COLORS = [
 type Rgb = readonly [number, number, number];
 
 /**
- * A slightly broader set than the historic six indexed colours. The first
- * six intentionally remain byte-for-byte equivalent to that fallback so a
- * missing texture never changes the established editor cue.
+ * A broader, deliberately separated categorical set for texture-aware cues.
+ * Missing textures still use the historic indexed fallback above.
  */
 const LAYER_COLOR_CANDIDATES = [
-  ...EDITOR_LAYER_MAP_COLORS,
-  [0.91, 0.45, 0.30],
-  [0.57, 0.50, 0.91],
-  [0.87, 0.74, 0.27],
-  [0.48, 0.72, 0.38],
-  [0.93, 0.51, 0.65],
-  [0.42, 0.72, 0.84],
+  [0.92, 0.25, 0.28],
+  [0.20, 0.48, 0.95],
+  [0.15, 0.75, 0.38],
+  [0.95, 0.55, 0.12],
+  [0.65, 0.30, 0.90],
+  [0.10, 0.72, 0.82],
+  [0.90, 0.78, 0.08],
+  [0.90, 0.28, 0.65],
+  [0.50, 0.80, 0.15],
+  [0.35, 0.30, 0.90],
+  [0.95, 0.38, 0.18],
+  [0.10, 0.65, 0.60],
 ] as const satisfies readonly Rgb[];
 
 export interface EditorLayerColorInput {
@@ -43,9 +47,28 @@ interface Oklab {
 const OVERLAY_OPACITY = 0.16;
 const MIN_VISIBLE_ALPHA = 16;
 const MAX_TEXTURE_SAMPLES = 256;
+const MIN_LAYER_COLOR_DISTANCE = 0.14;
+const SEPARATION_SCORE_WEIGHT = 0.18;
 
 function clampUnit(value: number): number {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+}
+
+export function linearLayerColorToCss([r, g, b]: Rgb, saturation: number): string {
+  const toSrgbByte = (channel: number) => {
+    const clamped = clampUnit(channel);
+    const srgb = clamped <= 0.0031308 ? clamped * 12.92 : 1.055 * clamped ** (1 / 2.4) - 0.055;
+    return Math.round(srgb * 255);
+  };
+  const channels = [toSrgbByte(r), toSrgbByte(g), toSrgbByte(b)];
+  const peak = Math.max(...channels);
+  const lifted = peak > 0 ? channels.map((channel) => channel * Math.min(1.35, 242 / peak)) : channels;
+  const average = lifted.reduce((sum, channel) => sum + channel, 0) / lifted.length;
+  const vivid = lifted.map((channel) => Math.round(Math.min(
+    255,
+    Math.max(0, average + (channel - average) * saturation),
+  )));
+  return `rgb(${vivid[0]}, ${vivid[1]}, ${vivid[2]})`;
 }
 
 function srgbToLinear(value: number): number {
@@ -141,24 +164,40 @@ function candidateScore(candidate: Rgb, samples: readonly { color: Rgb; weight: 
  */
 export function chooseEditorLayerColors(inputs: readonly EditorLayerColorInput[]): Rgb[] {
   const usedCandidateIndexes = new Set<number>();
+  const selectedColors: Rgb[] = [];
   return inputs.map(({ thumbnail, fallbackIndex }) => {
     const samples = textureSamples(thumbnail);
     if (samples.length === 0) {
       const candidateIndex = fallbackCandidateIndex(fallbackIndex);
       usedCandidateIndexes.add(candidateIndex);
-      return fallbackColor(fallbackIndex);
+      const color = fallbackColor(fallbackIndex);
+      selectedColors.push(color);
+      return color;
     }
 
     const available = LAYER_COLOR_CANDIDATES
       .map((_, index) => index)
       .filter((index) => !usedCandidateIndexes.has(index));
-    const candidateIndexes = available.length > 0
+    const unusedCandidateIndexes = available.length > 0
       ? available
       : LAYER_COLOR_CANDIDATES.map((_, index) => index);
+    const separationFromSelected = (candidateIndex: number) => selectedColors.length === 0
+      ? 1
+      : Math.min(...selectedColors.map((color) => oklabDistance(
+        toOklab(LAYER_COLOR_CANDIDATES[candidateIndex]),
+        toOklab(color),
+      )));
+    const separatedCandidateIndexes = unusedCandidateIndexes.filter((candidateIndex) => (
+      separationFromSelected(candidateIndex) >= MIN_LAYER_COLOR_DISTANCE
+    ));
+    const candidateIndexes = separatedCandidateIndexes.length > 0
+      ? separatedCandidateIndexes
+      : unusedCandidateIndexes;
     let selectedIndex = candidateIndexes[0];
     let selectedScore = Number.NEGATIVE_INFINITY;
     for (const candidateIndex of candidateIndexes) {
-      const score = candidateScore(LAYER_COLOR_CANDIDATES[candidateIndex], samples);
+      const score = candidateScore(LAYER_COLOR_CANDIDATES[candidateIndex], samples)
+        + separationFromSelected(candidateIndex) * SEPARATION_SCORE_WEIGHT;
       // Strict comparison deliberately makes palette order the stable tie
       // break, including flat/near-flat thumbnails.
       if (score > selectedScore) {
@@ -167,6 +206,8 @@ export function chooseEditorLayerColors(inputs: readonly EditorLayerColorInput[]
       }
     }
     usedCandidateIndexes.add(selectedIndex);
-    return LAYER_COLOR_CANDIDATES[selectedIndex];
+    const color = LAYER_COLOR_CANDIDATES[selectedIndex];
+    selectedColors.push(color);
+    return color;
   });
 }

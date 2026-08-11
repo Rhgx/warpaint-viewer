@@ -1,5 +1,6 @@
 import type { TextureMetadata } from '../data/types';
 import { encodeRgbaPng } from './png';
+import { opaqueRgbaThumbnail, SOURCE_THUMBNAIL_SIDE } from './thumbnail';
 
 export interface VtfHeaderDetails {
   verMajor: number;
@@ -12,6 +13,7 @@ export interface VtfHeaderDetails {
 
 export interface DecodedVtfPng {
   png: ArrayBuffer;
+  thumbnailPng: ArrayBuffer;
   width: number;
   height: number;
   header: VtfHeaderDetails;
@@ -36,6 +38,7 @@ interface WorkerSuccess {
   id: number;
   ok: true;
   png: ArrayBuffer;
+  thumbnailPng: ArrayBuffer;
   width: number;
   height: number;
   header: VtfHeaderDetails;
@@ -94,7 +97,15 @@ async function decodeOnMainThread(bytes: Uint8Array, options: Required<DecodeVtf
       throw new Error(`VTF dimensions ${header.width} x ${header.height} exceed the ${options.limitDescription}.`);
     }
     const decoded = decodeVTF(bytes);
-    return { png: await encodeRgbaPng(decoded.rgba, decoded.width, decoded.height), width: decoded.width, height: decoded.height, header };
+    const [png, thumbnailPng] = await Promise.all([
+      encodeRgbaPng(decoded.rgba, decoded.width, decoded.height),
+      encodeRgbaPng(
+        opaqueRgbaThumbnail(decoded.rgba, decoded.width, decoded.height),
+        SOURCE_THUMBNAIL_SIDE,
+        SOURCE_THUMBNAIL_SIDE,
+      ),
+    ]);
+    return { png, thumbnailPng, width: decoded.width, height: decoded.height, header };
   } catch (cause) {
     if (cause instanceof VtfDecodeError) throw cause;
     throw decodeFailure(cause instanceof Error ? cause.message : 'The image data could not be decoded.', header);
@@ -127,7 +138,13 @@ function createWorker(): Worker | null {
       const decode = pending.get(result.id);
       if (!decode) return;
       pending.delete(result.id);
-      if (result.ok) decode.resolve({ png: result.png, width: result.width, height: result.height, header: result.header });
+      if (result.ok) decode.resolve({
+        png: result.png,
+        thumbnailPng: result.thumbnailPng,
+        width: result.width,
+        height: result.height,
+        header: result.header,
+      });
       else decode.reject(decodeFailure(result.message, asHeader(result.header)));
     };
     worker.onerror = () => disableWorkerAndFallBack();

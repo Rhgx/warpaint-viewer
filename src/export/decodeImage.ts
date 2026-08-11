@@ -117,7 +117,12 @@ function createContext(): ReadbackContext {
   return { gl, program, flipRows: false };
 }
 
-function readBitmap(context: ReadbackContext, bitmap: ImageBitmap): DecodedImage {
+function readBitmap(
+  context: ReadbackContext,
+  bitmap: ImageBitmap,
+  outputWidth = bitmap.width,
+  outputHeight = bitmap.height,
+): DecodedImage {
   const { gl, program } = context;
   const { width, height } = bitmap;
   const maxSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
@@ -130,10 +135,12 @@ function readBitmap(context: ReadbackContext, bitmap: ImageBitmap): DecodedImage
   const framebuffer = gl.createFramebuffer();
   try {
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    // NEAREST with a 1:1 draw means every output pixel is exactly one texel,
-    // never a filtered blend of two.
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    const filter = outputWidth === width && outputHeight === height ? gl.NEAREST : gl.LINEAR;
+    // Exact export stays 1:1 and unfiltered. Thumbnail callers can ask the GPU
+    // to downsample before readback without passing through a premultiplied 2D
+    // canvas, which would erase RGB stored beneath TF2's wear alpha channel.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
@@ -141,23 +148,27 @@ function readBitmap(context: ReadbackContext, bitmap: ImageBitmap): DecodedImage
     gl.bindTexture(gl.TEXTURE_2D, target);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, outputWidth, outputHeight);
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target, 0);
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
       throw new Error('The browser could not allocate a readback target for this texture.');
     }
 
-    gl.viewport(0, 0, width, height);
+    gl.viewport(0, 0, outputWidth, outputHeight);
     gl.useProgram(program);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    const pixels = new Uint8Array(width * height * 4);
-    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    return { width, height, pixels: context.flipRows ? flipRows(pixels, width, height) : pixels };
+    const pixels = new Uint8Array(outputWidth * outputHeight * 4);
+    gl.readPixels(0, 0, outputWidth, outputHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    return {
+      width: outputWidth,
+      height: outputHeight,
+      pixels: context.flipRows ? flipRows(pixels, outputWidth, outputHeight) : pixels,
+    };
   } finally {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.deleteFramebuffer(framebuffer);
@@ -226,6 +237,22 @@ export async function decodeImageExact(source: Blob | string): Promise<DecodedIm
   const bitmap = await toBitmap(blob);
   try {
     return readBitmap(context, bitmap);
+  } finally {
+    bitmap.close();
+  }
+}
+
+/** Read back a small, unpremultiplied preview while preserving hidden RGB. */
+export async function decodeImageThumbnailExact(
+  source: Blob | string,
+  width: number,
+  height: number,
+): Promise<DecodedImage> {
+  const blob = typeof source === 'string' ? await (await fetch(source)).blob() : source;
+  const context = await getContext();
+  const bitmap = await toBitmap(blob);
+  try {
+    return readBitmap(context, bitmap, width, height);
   } finally {
     bitmap.close();
   }

@@ -36,6 +36,10 @@ export interface VisualWarpaintEditorPanelProps {
   readonly groupLayerIndex?: Readonly<Record<number, number>>;
   /** CSS (sRGB) colour per layer index, matching the context column swatches and the viewer's layer map. */
   readonly layerColors?: readonly string[];
+  /** Higher-chroma versions of layer colours for the small context markers. */
+  readonly layerSwatchColors?: readonly string[];
+  /** Small source-texture previews for the layer list in the edit context column. */
+  readonly layerThumbnails?: readonly (string | null)[];
 }
 
 export function VisualWarpaintEditorPanel({

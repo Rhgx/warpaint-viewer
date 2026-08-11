@@ -46,10 +46,17 @@ test('texture-aware editor layer colors', () => {
     { thumbnail: vibrant, fallbackIndex: 0 },
     { thumbnail: vibrant, fallbackIndex: 1 },
     { thumbnail: vibrant, fallbackIndex: 2 },
+    { thumbnail: vibrant, fallbackIndex: 3 },
+    { thumbnail: vibrant, fallbackIndex: 4 },
+    { thumbnail: vibrant, fallbackIndex: 5 },
   ];
   const first = chooseEditorLayerColors(sameTexture);
   const second = chooseEditorLayerColors(sameTexture);
   assert.deepEqual(first, second, 'identical input always chooses the same colour order');
   assert.equal(new Set(first.map((color) => color.join(','))).size, first.length, 'same-texture layers stay distinct');
+  const pairDistances = first.flatMap((color, index) => first.slice(index + 1).map((other) => (
+    Math.hypot(color[0] - other[0], color[1] - other[1], color[2] - other[2])
+  )));
+  assert.ok(Math.min(...pairDistances) > 0.2, 'generated layer colours remain clearly separated');
   assert.ok(first.flat().every((channel: number) => Number.isFinite(channel)), 'all output channels are finite');
 });

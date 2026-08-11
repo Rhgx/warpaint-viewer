@@ -9,6 +9,7 @@ import {
 } from './paths';
 import { readPackageWeaponMaterial, type PackageMaterial } from './vmt';
 import { encodeRgbaPng } from './png';
+import { opaqueRgbaThumbnail, SOURCE_THUMBNAIL_SIDE } from './thumbnail';
 
 export interface SourceTextureProviderSnapshot {
   package: SourcePackage | null;
@@ -36,6 +37,7 @@ export class SourceTextureProvider {
   #generation = 0;
   #urls = new Map<string, string>();
   #metadata = new Map<string, Partial<TextureMetadata>>();
+  #thumbnailUrls = new Map<string, string>();
   #loads = new Map<string, Promise<string>>();
   #usedPaths = new Set<string>();
   #fallbackIdentities = new Set<string>();
@@ -125,6 +127,13 @@ export class SourceTextureProvider {
    */
   async resolvePreview(ref: string): Promise<string> {
     return this.#resolve(ref, false);
+  }
+
+  /** A package-scoped preview produced during its first texture decode. */
+  async resolveThumbnail(ref: string): Promise<string> {
+    const url = await this.#resolve(ref, false);
+    const path = this.packagePathFor(ref);
+    return path ? this.#thumbnailUrls.get(path) ?? url : url;
   }
 
   /**
@@ -310,7 +319,8 @@ export class SourceTextureProvider {
 
   #clearTransientState(): void {
     for (const url of this.#urls.values()) URL.revokeObjectURL(url);
-    this.#urls.clear(); this.#metadata.clear(); this.#loads.clear(); this.#usedPaths.clear(); this.#fallbackIdentities.clear();
+    for (const url of this.#thumbnailUrls.values()) URL.revokeObjectURL(url);
+    this.#urls.clear(); this.#thumbnailUrls.clear(); this.#metadata.clear(); this.#loads.clear(); this.#usedPaths.clear(); this.#fallbackIdentities.clear();
     this.#nameMatchedPaths.clear(); this.#ambiguousNameMatches.clear();
     this.#materials.clear(); this.#materialPaths.clear();
     this.#nameIndexPackage = null; this.#nameIndexByStem = null;
@@ -342,8 +352,13 @@ export class SourceTextureProvider {
       if (!extension) throw new Error('Package entry has no supported texture extension.');
       const decoded = await decodePackageTexture(bytes, extension);
       const url = decoded.url;
-      if (generation !== this.#generation || pkg !== this.#package) { URL.revokeObjectURL(url); throw new Error('Source package changed while this texture was decoding.'); }
+      if (generation !== this.#generation || pkg !== this.#package) {
+        URL.revokeObjectURL(url);
+        if (decoded.thumbnailUrl) URL.revokeObjectURL(decoded.thumbnailUrl);
+        throw new Error('Source package changed while this texture was decoding.');
+      }
       this.#urls.set(path, url);
+      if (decoded.thumbnailUrl) this.#thumbnailUrls.set(path, decoded.thumbnailUrl);
       if (decoded.metadata) this.#metadata.set(path, decoded.metadata);
       return url;
     } catch (cause) {
@@ -415,20 +430,39 @@ function buildNameIndex(pkg: SourcePackage): Map<string, string[]> {
   return index;
 }
 
-async function decodePackageTexture(bytes: Uint8Array, extension: string): Promise<{ url: string; metadata?: Partial<TextureMetadata> }> {
+async function decodePackageTexture(
+  bytes: Uint8Array,
+  extension: string,
+): Promise<{ url: string; thumbnailUrl?: string; metadata?: Partial<TextureMetadata> }> {
   if (extension === 'vtf') {
     // VTF decoding and lossless PNG encoding run in a lazy Worker. This keeps
     // package reads from blocking interaction with the active paint.
     const { decodeVtfToPng } = await import('./vtfDecode');
     const decoded = await decodeVtfToPng(bytes, { maxPixels: MAX_DECODED_PIXELS });
-    return { url: URL.createObjectURL(new Blob([decoded.png], { type: 'image/png' })), metadata: decoded.header.sampling };
+    return {
+      url: URL.createObjectURL(new Blob([decoded.png], { type: 'image/png' })),
+      thumbnailUrl: URL.createObjectURL(new Blob([decoded.thumbnailPng], { type: 'image/png' })),
+      metadata: decoded.header.sampling,
+    };
   }
   if (extension === 'tga') {
     const { TGALoader } = await import('three/addons/loaders/TGALoader.js');
     const parsed = new TGALoader().parse(toArrayBuffer(bytes));
     if (!parsed.data || !parsed.width || !parsed.height || parsed.width * parsed.height > MAX_DECODED_PIXELS) throw new Error('TGA has invalid or oversized pixel data.');
     const png = await encodeRgbaPng(Uint8Array.from(parsed.data as ArrayLike<number>), parsed.width, parsed.height);
-    return { url: URL.createObjectURL(new Blob([png], { type: 'image/png' })) };
+    const thumbnailPng = await encodeRgbaPng(
+      opaqueRgbaThumbnail(
+        Uint8Array.from(parsed.data as ArrayLike<number>),
+        parsed.width,
+        parsed.height,
+      ),
+      SOURCE_THUMBNAIL_SIDE,
+      SOURCE_THUMBNAIL_SIDE,
+    );
+    return {
+      url: URL.createObjectURL(new Blob([png], { type: 'image/png' })),
+      thumbnailUrl: URL.createObjectURL(new Blob([thumbnailPng], { type: 'image/png' })),
+    };
   }
   const type = extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : `image/${extension}`;
   const blob = new Blob([toArrayBuffer(bytes)], { type });

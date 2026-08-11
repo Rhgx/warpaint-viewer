@@ -603,7 +603,8 @@ export function CustomWarpaintWorkbench({
                 >
                   {editor.mode === 'paint' ? editor.selectors.map((selector, index) => {
                     const active = editor.activeSelectorId === selector.id;
-                    const swatchColor = editor.layerColors?.[index];
+                    const swatchColor = editor.layerSwatchColors?.[index] ?? editor.layerColors?.[index];
+                    const thumbnail = editor.layerThumbnails?.[index];
                     const count = editor.groupLayerIndex
                       ? Object.values(editor.groupLayerIndex).filter((layerIndex) => layerIndex === index).length
                       : 0;
@@ -616,11 +617,13 @@ export function CustomWarpaintWorkbench({
                         aria-selected={active}
                         onClick={() => editor.onActiveSelectorChange(selector.id)}
                       >
-                        <span
-                          className="custom-workbench-edit-layer-swatch"
-                          style={swatchColor ? { background: swatchColor } : undefined}
-                          aria-hidden="true"
-                        />
+                        <span className="custom-workbench-edit-layer-thumb" aria-hidden="true">
+                          {thumbnail ? <img src={thumbnail} alt="" draggable={false} /> : null}
+                          <span
+                            className="custom-workbench-edit-layer-swatch"
+                            style={swatchColor ? { background: swatchColor } : undefined}
+                          />
+                        </span>
                         <span className="custom-workbench-edit-layer-label">{selector.label}</span>
                         <span className="custom-workbench-edit-layer-count">{count}</span>
                       </button>

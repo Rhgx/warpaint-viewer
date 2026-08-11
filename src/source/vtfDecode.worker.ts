@@ -2,6 +2,7 @@
 
 import { decodeVTF, parseVTFHeader } from '../../tools/lib/vtf-core.mjs';
 import { encodeRgbaPng } from './png';
+import { opaqueRgbaThumbnail, SOURCE_THUMBNAIL_SIDE } from './thumbnail';
 
 interface DecodeRequest {
   id: number;
@@ -27,8 +28,18 @@ self.onmessage = async (event: MessageEvent<DecodeRequest>) => {
       throw new Error(`VTF dimensions ${header.width} x ${header.height} exceed the ${limitDescription}.`);
     }
     const decoded = decodeVTF(new Uint8Array(bytes));
-    const png = await encodeRgbaPng(decoded.rgba, decoded.width, decoded.height);
-    self.postMessage({ id, ok: true, png, width: decoded.width, height: decoded.height, header }, [png]);
+    const [png, thumbnailPng] = await Promise.all([
+      encodeRgbaPng(decoded.rgba, decoded.width, decoded.height),
+      encodeRgbaPng(
+        opaqueRgbaThumbnail(decoded.rgba, decoded.width, decoded.height),
+        SOURCE_THUMBNAIL_SIDE,
+        SOURCE_THUMBNAIL_SIDE,
+      ),
+    ]);
+    self.postMessage(
+      { id, ok: true, png, thumbnailPng, width: decoded.width, height: decoded.height, header },
+      [png, thumbnailPng],
+    );
   } catch (cause) {
     failure(id, cause, header);
   }

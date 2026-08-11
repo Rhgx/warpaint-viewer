@@ -602,13 +602,35 @@
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
-.custom-workbench-edit-layer-swatch {
-  width: 12px;
-  height: 12px;
+.custom-workbench-edit-layer-thumb {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  width: 32px;
+  height: 32px;
   flex: none;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   border: 1px solid color-mix(in srgb, var(--border-strong) 60%, transparent);
+  background: var(--panel-2);
+}
+
+.custom-workbench-edit-layer-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: auto;
+}
+
+.custom-workbench-edit-layer-swatch {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgb(255 255 255 / 55%);
+  border-radius: 2px;
   background: currentColor;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 40%);
 }
 
 .custom-workbench-edit-layer-label {
