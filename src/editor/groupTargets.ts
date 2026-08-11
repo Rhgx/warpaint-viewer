@@ -234,6 +234,11 @@ export function discoverGroupSelectTargets(
       const unique = [...new Map(candidates?.map((path) => [path.join('\0'), path]) ?? []).values()];
       return unique.length === 1 ? unique[0] : undefined;
     });
+    const overrideParents = [...new Map(valueSourcePaths.filter((path): path is string[] => Boolean(path)).map((path) => {
+      const parent = path.slice(0, -1);
+      return [parent.join('\0'), parent];
+    })).values()];
+    const valueOverridePath = overrideParents.length === 1 ? overrideParents[0] : undefined;
     // An inherited operation slot may resolve from either this weapon's
     // editable override or the shared header default. Shared zero-padding is
     // not part of the weapon's layer capacity and must not make the complete
@@ -251,6 +256,7 @@ export function discoverGroupSelectTargets(
         occurrence,
         ...(valueSourcePaths.some(Boolean) ? { valueSourcePaths } : {}),
         ...(hasInheritedVariableValues ? { inheritedSelectValues: inheritedSelectFields } : {}),
+        ...(valueOverridePath ? { valueOverridePath } : {}),
       },
       groupsRef,
       selectedGroupIds: [...ids].sort((a, b) => a - b),

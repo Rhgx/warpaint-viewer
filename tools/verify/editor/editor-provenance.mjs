@@ -335,6 +335,52 @@ assert.deepEqual(
   'reassigning inherited selectors must preserve and lock both visible baselines',
 );
 
+// Some shipped selectors inherit a full weapon-specific prefix but append
+// shared zero slots in the operation. A full prefix must still be able to
+// activate another slot through a weapon-local override.
+const inheritedWithLiteralPadding = structuredClone(inheritedVariableBacked);
+inheritedWithLiteralPadding.definition.header.variables.push(
+  { name: 'inherited_select_3', value: '0', inherit: false },
+);
+inheritedWithLiteralPadding.operation.operation_node[0].stage.combine_multiply.operation_node = [
+  { stage: { select: {
+    groups: { string: 'models/weapons/c_blackbox/c_blackbox_groups' },
+    select: [{ variable: 'inherited_select_1' }, { variable: 'inherited_select_2' }, { variable: 'inherited_select_3' }],
+  } } },
+];
+const paddedAdded = implementation.toggleSelectGroupId(inheritedWithLiteralPadding, {
+  groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups',
+  effectiveSelectValues: [16, 224, 0],
+  inheritedSelectValues: [true, true, false],
+  valueSourcePaths: [
+    ['definition', 'blackbox', 'data', 'variable', '0'],
+    ['definition', 'blackbox', 'data', 'variable', '1'],
+    undefined,
+  ],
+  valueOverridePath: ['definition', 'blackbox', 'data', 'variable'],
+}, 192);
+assert.deepEqual(
+  paddedAdded.operation.operation_node[0].stage.combine_multiply.operation_node[0].stage.select.select,
+  [{ variable: 'inherited_select_1' }, { variable: 'inherited_select_2' }, { variable: 'inherited_select_3' }],
+  'shared selector padding must remain usable when every inherited slot is occupied',
+);
+assert.deepEqual(
+  paddedAdded.definition.blackbox.data.variable.map((field) => [field.variable, field.string]),
+  [['inherited_select_1', '16'], ['inherited_select_2', '224'], ['inherited_select_3', '192']],
+  'using shared selector padding must create only a weapon-local override',
+);
+assert.equal(
+  paddedAdded.definition.header.variables.find((entry) => entry.name === 'inherited_select_3').inherit,
+  true,
+  'a newly used shared padding variable must inherit its weapon-local value',
+);
+assert.deepEqual(
+  implementation.resolveKitRecipeWithProvenance(decodedForInherited(paddedAdded), 900, 'blackbox', 'red', 0)
+    ?.tree.nodes.find((node) => node.type === 'select')?.select,
+  [16, 224, 192],
+  'the activated shared slot must appear in the resolved weapon recipe',
+);
+
 const stickerEdited = implementation.setStickerDestQuad(original, {}, {
   tl: [0.2, 0.3], tr: [0.8, 0.3], bl: [0.2, 0.9],
 });

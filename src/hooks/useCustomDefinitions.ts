@@ -23,6 +23,7 @@ import type {
 } from '../protodefs/types';
 import { classifyProtoDefFragment } from '../protodefs/jsonFragments';
 import { serializeProtoDefKitMessages } from '../editor/jsonExport';
+import { applyImplicitStickerSpecs } from '../protodefs/implicitStickerSpecs';
 
 // A stock container is under 10 MB. The cap only exists so a mis-picked file
 // cannot be read into memory in its entirety before it is rejected.
@@ -475,7 +476,7 @@ export function useCustomDefinitions({
       .resolveRecipe(customKitDefindex(kitId), weaponKey, team, wearIndex)
       .then((resolved) => {
         if (!resolved) return null;
-        addImplicitStickerSpecs(resolved.tree, hasTexture);
+        applyImplicitStickerSpecs(resolved.tree, hasTexture);
         return resolved.tree;
       })
       .catch(() => null);
@@ -497,8 +498,11 @@ export function useCustomDefinitions({
       weaponKey,
       team,
       wearIndex,
-    ).catch(() => null);
-  }, []);
+    ).then((resolved) => {
+      if (resolved) applyImplicitStickerSpecs(resolved.tree, hasTexture);
+      return resolved;
+    }).catch(() => null);
+  }, [hasTexture]);
 
   // The export builder needs an imported kit's own definition and operation
   // messages so it can write them into a proto_defs container the game loads.
@@ -552,22 +556,4 @@ export function useCustomDefinitions({
       editGeneration,
     ],
   );
-}
-
-/**
- * The live compositor derives an omitted sticker spec as `<base>_s` (the SDK
- * proto comment still calls the suffix `_spec`). Only adopt it when the texture
- * is really there: Source otherwise binds black and the sticker turns matte.
- * The build pipeline does this against the game's VPKs (tools/extract/warpaints.mjs);
- * here the answer comes from the shipped textures plus the mounted package.
- */
-function addImplicitStickerSpecs(node: RecipeNode, hasTexture: (ref: string) => boolean): void {
-  if (node.type === 'apply_sticker') {
-    for (const sticker of node.stickers ?? []) {
-      if (!sticker.base || sticker.spec) continue;
-      const implicit = sticker.base.replace(/\.webp$/i, '_s.webp');
-      if (hasTexture(implicit)) sticker.spec = implicit;
-    }
-  }
-  if ('nodes' in node) for (const child of node.nodes) addImplicitStickerSpecs(child, hasTexture);
 }

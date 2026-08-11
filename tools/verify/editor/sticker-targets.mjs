@@ -19,7 +19,8 @@ function bundleImplementation() {
     + "export { buildResolveCtx } from '../src/protodefs/resolve';\n"
     + "export { discoverStickerPlacementTargets } from '../src/editor/stickerTargets';\n"
     + "export { setStickerDestQuad } from '../src/editor/mutations';\n"
-    + "export { SnapshotHistory } from '../src/editor/history';\n",
+    + "export { SnapshotHistory } from '../src/editor/history';\n"
+    + "export { applyImplicitStickerSpecs } from '../src/protodefs/implicitStickerSpecs';\n",
   );
   const viteEntry = fileURLToPath(import.meta.resolve('vite'));
   const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
@@ -33,6 +34,25 @@ function bundleImplementation() {
 }
 
 const implementation = await import(bundleImplementation());
+
+const implicitSpecRecipe = {
+  type: 'apply_sticker',
+  stickers: [
+    { base: 'textures/patterns/reported_sticker.webp' },
+    { base: 'textures/patterns/explicit.webp', spec: 'textures/patterns/custom_spec.webp' },
+  ],
+  nodes: [{ type: 'texture_lookup', texture: 'textures/patterns/surface.webp' }],
+};
+assert.equal(
+  implementation.applyImplicitStickerSpecs(
+    implicitSpecRecipe,
+    (reference) => reference === 'textures/patterns/reported_sticker_s.webp',
+  ),
+  1,
+  'one available implicit specular is attached to the editable recipe',
+);
+assert.equal(implicitSpecRecipe.stickers[0].spec, 'textures/patterns/reported_sticker_s.webp');
+assert.equal(implicitSpecRecipe.stickers[1].spec, 'textures/patterns/custom_spec.webp', 'an explicit specular always wins');
 
 const operation = {
   header: { defindex: 701, variables: [] },

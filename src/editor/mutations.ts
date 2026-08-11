@@ -26,6 +26,8 @@ export interface SelectGroupTarget {
   valueSourcePaths?: readonly (readonly string[] | undefined)[];
   /** Which authored selector slots inherit their effective per-weapon value. */
   inheritedSelectValues?: readonly boolean[];
+  /** Weapon-local variable collection that can receive an unused shared slot. */
+  valueOverridePath?: readonly string[];
 }
 
 /** One editable paint layer considered by an exclusive group assignment. */
@@ -110,10 +112,20 @@ function setSelectFieldValue(
   value: string,
   lockInheritance = false,
   sourcePath?: readonly string[],
+  overridePath?: readonly string[],
 ): VarFieldMsg {
   if (!field.variable) return fieldWithLiteralLike(field, value);
   if (sourcePath && sourcePath[0] === 'definition' && sourcePath[1] !== 'header') {
     setVariableFieldAtSourcePath(messages, field.variable, sourcePath, value);
+    return field;
+  }
+  if (overridePath) {
+    upsertVariableFieldAtPath(messages, field.variable, overridePath, value);
+    const match = findEditableVariable(messages, field.variable);
+    const variables = many(match.all).map((variable, index) => (
+      index === match.index ? { ...variable, inherit: true } : variable
+    ));
+    replaceMany(match.owner, 'variables', match.all, variables);
     return field;
   }
   const match = findEditableVariable(messages, field.variable);
@@ -124,6 +136,37 @@ function setSelectFieldValue(
   ));
   replaceMany(match.owner, 'variables', match.all, replaced);
   return field;
+}
+
+function upsertVariableFieldAtPath(
+  messages: MutableMessages,
+  variableName: string,
+  collectionPath: readonly string[],
+  value: string,
+): void {
+  const [root, ...parts] = collectionPath;
+  if ((root !== 'definition' && root !== 'operation') || parts.length === 0) {
+    throw new EditorMutationAmbiguityError(`Variable "${variableName}" has no editable weapon override collection.`);
+  }
+  let owner: Record<string, unknown> = root === 'definition' ? messages.definition : messages.operation;
+  for (const part of parts.slice(0, -1)) {
+    const child = owner[part];
+    if (!child || typeof child !== 'object' || Array.isArray(child)) {
+      throw new EditorMutationAmbiguityError(`Variable "${variableName}" has no editable weapon override collection.`);
+    }
+    owner = child as Record<string, unknown>;
+  }
+  const key = parts.at(-1)!;
+  const prior = owner[key] as Many<VarFieldMsg> | undefined;
+  const fields = many(prior);
+  const matches = fields.flatMap((field, index) => field.variable === variableName ? [index] : []);
+  if (matches.length > 1) {
+    throw new EditorMutationAmbiguityError(`Variable "${variableName}" has multiple weapon overrides.`);
+  }
+  const next = matches.length === 1
+    ? fields.map((field, index) => index === matches[0] ? { ...field, string: value } : field)
+    : [...fields, { variable: variableName, string: value }];
+  replaceMany(owner, key, prior, next);
 }
 
 function fieldWithLiteralLike(existing: VarFieldMsg | undefined, value: string): VarFieldMsg {
@@ -358,7 +401,15 @@ export function toggleSelectGroupId(
   if (ids.some((id) => !Number.isInteger(id))) throw new EditorMutationAmbiguityError('Select values contain a non-integer literal and cannot be safely toggled.');
   const inheritedMask = target.inheritedSelectValues;
   const hasWeaponScopedSlots = inheritedMask?.some(Boolean) ?? false;
-  const editableIndex = (index: number) => !hasWeaponScopedSlots || inheritedMask?.[index] === true;
+  // A weapon override may own only the active prefix while the operation
+  // provides additional shared zero slots. A zero slot is safe to activate by
+  // enabling inheritance and writing its value into this weapon only.
+  const editableIndex = (index: number) => (
+    !hasWeaponScopedSlots
+    || values[index]?.variable === undefined
+    || inheritedMask?.[index] === true
+    || (ids[index] === 0 && target.valueOverridePath !== undefined)
+  );
   const found = ids.some((id, index) => id === groupId && editableIndex(index));
   let nextIds: number[];
   if (found) {
@@ -393,7 +444,14 @@ export function toggleSelectGroupId(
       );
     }
     return shouldWrite
-      ? setSelectFieldValue(next, field, String(id), useEffectiveBaseline && inherited, sourcePath)
+      ? setSelectFieldValue(
+        next,
+        field,
+        String(id),
+        useEffectiveBaseline && inherited,
+        sourcePath,
+        !sourcePath && field.variable && ids[index] === 0 ? target.valueOverridePath : undefined,
+      )
       : field;
   });
   replaceMany(stage as unknown as Record<string, unknown>, 'select', prior, replacement);
