@@ -27,6 +27,10 @@ export interface StickerArtworkTarget {
   };
 }
 
+export interface GroupStickerArtworkTarget extends StickerArtworkTarget {
+  readonly occurrenceCount: number;
+}
+
 const MAX_STICKER_ARTWORK_PIXELS = 16 * 1024 * 1024;
 
 function normalizedTextureReference(value: string | undefined): string {
@@ -69,6 +73,31 @@ export function matchResolvedStickerArtwork<T extends StickerArtworkCandidate>(
     if (match < 0) return null;
     claimed.add(match);
     return candidates[match];
+  });
+}
+
+/** Match every resolved wear-branch occurrence owned by each logical sticker. */
+export function matchResolvedStickerArtworkGroups<T extends StickerArtworkCandidate>(
+  targets: readonly GroupStickerArtworkTarget[],
+  candidates: readonly T[],
+): readonly (readonly T[])[] {
+  const claimed = new Set<number>();
+  return targets.map((target) => {
+    if (!target.quad) return [];
+    const bases = new Set(target.bases.map(normalizedTextureReference).filter(Boolean));
+    const matches: T[] = [];
+    const limit = Math.max(1, target.occurrenceCount);
+    for (let index = 0; index < candidates.length && matches.length < limit; index += 1) {
+      const candidate = candidates[index];
+      if (claimed.has(index)
+        || !bases.has(normalizedTextureReference(candidate.base))
+        || !pointsEqual(target.quad.tl, candidate.destTl)
+        || !pointsEqual(target.quad.tr, candidate.destTr)
+        || !pointsEqual(target.quad.bl, candidate.destBl)) continue;
+      claimed.add(index);
+      matches.push(candidate);
+    }
+    return matches;
   });
 }
 

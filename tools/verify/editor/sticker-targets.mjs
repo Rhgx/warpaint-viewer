@@ -100,6 +100,7 @@ const original = structuredClone({ definition, operation });
 const targets = implementation.discoverStickerPlacementTargets(original, resolve(original));
 assert.equal(targets.length, 2, 'direct nested sticker stages should retain deterministic depth-first occurrences');
 const first = targets[0];
+assert.deepEqual(first.occurrences, [0], 'an ordinary sticker owns its single authored occurrence');
 assert.equal(first.editable, true);
 assert.deepEqual(first.quad, { tl: [0.2, 0.3], tr: [0.8, 0.3], bl: [0.2, 0.9] });
 assert.equal(first.stickers[0].base.authoredValue, 'stickers/authored_base');
@@ -109,6 +110,18 @@ assert.equal(first.stickers[0].weight.resolvedValue, '7');
 assert.equal(first.stickers[0].spec.authoredValue, 'stickers/authored_spec');
 assert.equal(first.stickers[0].spec.resolvedValue, 'stickers/weapon_spec');
 assert.equal(targets[1].editable, true, 'literal corner fields should be editable too');
+
+const duplicatedWear = structuredClone(original);
+duplicatedWear.operation.operation_node[0].stage.combine_multiply.operation_node.push(
+  structuredClone(duplicatedWear.operation.operation_node[0].stage.combine_multiply.operation_node[0]),
+);
+const logicalWearTargets = implementation.discoverStickerPlacementTargets(duplicatedWear, resolve(duplicatedWear));
+assert.equal(logicalWearTargets.length, 2, 'wear-branch copies must not appear as separate logical stickers');
+assert.deepEqual(
+  logicalWearTargets[0].occurrences,
+  [0, 2],
+  'one logical sticker retains every duplicated wear-branch occurrence',
+);
 
 const movedQuad = { tl: [0.4, 0.2], tr: [0.9, 0.4], bl: [0.2, 0.8] };
 const moved = implementation.setStickerDestQuad(original, first.target, movedQuad);

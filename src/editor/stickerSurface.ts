@@ -85,17 +85,19 @@ function replaceResolvedNode(root: ResolvedNode, path: readonly number[], replac
  */
 export function resolvedGroupStickerContext(
   root: ResolvedNode | null | undefined,
-  target: ResolvedSticker | null | undefined,
+  target: ResolvedSticker | readonly ResolvedSticker[] | null | undefined,
 ): ResolvedGroupStickerContext | null {
   if (!root || !target) return null;
-  let targetPath: number[] | null = null;
-  let selectorPath: number[] | null = null;
+  const targets = Array.isArray(target) ? target : [target];
+  if (targets.length === 0) return null;
+  const targetSet = new Set(targets);
+  const matches: { target: ResolvedSticker; targetPath: number[]; selectorPath: number[] }[] = [];
 
   const visit = (node: ResolvedNode, path: number[], selectors: readonly number[][]): void => {
-    if (targetPath) return;
-    if (node === target) {
-      targetPath = path;
-      selectorPath = selectors.at(-1)?.slice() ?? null;
+    const matchedTarget = targetSet.has(node as ResolvedSticker) ? node as ResolvedSticker : undefined;
+    const selectorPath = selectors.at(-1);
+    if (matchedTarget && selectorPath) {
+      matches.push({ target: matchedTarget, targetPath: path, selectorPath: selectorPath.slice() });
       return;
     }
     if (!('nodes' in node)) return;
@@ -109,23 +111,34 @@ export function resolvedGroupStickerContext(
   };
 
   visit(root, [], []);
-  // TypeScript does not observe assignments made by the recursive closure.
-  const foundTargetPath = targetPath as number[] | null;
-  const foundSelectorPath = selectorPath as number[] | null;
-  if (!foundTargetPath || !foundSelectorPath || !target.nodes[0]) return null;
+  const first = matches[0];
+  if (!first?.target.nodes[0]) return null;
+  const foundTargetPath = first.targetPath;
+  const foundSelectorPath = first.selectorPath;
   const selector = foundSelectorPath.reduce<ResolvedNode | null>((node, childIndex) => (
     node && 'nodes' in node ? node.nodes[childIndex] ?? null : null
   ), root);
   if (!selector) return null;
   const relativeTargetPath = foundTargetPath.slice(foundSelectorPath.length);
-  const base = replaceResolvedNode(root, foundTargetPath, target.nodes[0]);
-  const selectorBase = replaceResolvedNode(selector, relativeTargetPath, target.nodes[0]);
+  let base = root;
+  for (const match of matches) {
+    const replacement = match.target.nodes[0];
+    if (replacement) base = replaceResolvedNode(base, match.targetPath, replacement);
+  }
+  const selectorBase = replaceResolvedNode(selector, relativeTargetPath, first.target.nodes[0]);
+  const selectorPaths = [...new Map(matches.map((match) => [match.selectorPath.join('/'), match.selectorPath])).values()];
+  let endpointZero = root;
+  let endpointOne = root;
+  for (const path of selectorPaths) {
+    endpointZero = replaceResolvedNode(endpointZero, path, constantResolvedTexture(BLACK_PIXEL));
+    endpointOne = replaceResolvedNode(endpointOne, path, constantResolvedTexture(WHITE_PIXEL));
+  }
   return {
     base,
     selectorBase,
-    endpointZero: replaceResolvedNode(root, foundSelectorPath, constantResolvedTexture(BLACK_PIXEL)),
-    endpointOne: replaceResolvedNode(root, foundSelectorPath, constantResolvedTexture(WHITE_PIXEL)),
-    sticker: target,
+    endpointZero,
+    endpointOne,
+    sticker: first.target,
   };
 }
 
@@ -178,14 +191,24 @@ export function preStickerSurface(stage: Pick<ApplyStickerNode, 'nodes'> | null 
  * otherwise leave the authored decal visible underneath its live position.
  */
 export function recipeWithoutStickerOccurrence(root: RecipeNode | null | undefined, occurrence: number): RecipeNode | null {
-  if (!root || !Number.isSafeInteger(occurrence) || occurrence < 0) return null;
+  return recipeWithoutStickerOccurrences(root, [occurrence]);
+}
+
+/** Remove every authored wear-branch occurrence owned by one logical sticker. */
+export function recipeWithoutStickerOccurrences(
+  root: RecipeNode | null | undefined,
+  occurrences: readonly number[],
+): RecipeNode | null {
+  if (!root || occurrences.length === 0
+    || occurrences.some((occurrence) => !Number.isSafeInteger(occurrence) || occurrence < 0)) return null;
+  const selected = new Set(occurrences);
   let index = 0;
   let removed = false;
 
   const visit = (node: RecipeNode): RecipeNode => {
     if (node.type === 'apply_sticker') {
       const thisOccurrence = index++;
-      if (thisOccurrence === occurrence) {
+      if (selected.has(thisOccurrence)) {
         const base = node.nodes[0];
         if (!base) return node;
         removed = true;

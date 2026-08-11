@@ -30,6 +30,7 @@ try {
   const {
     adjustStickerArtworkPixels,
     matchResolvedStickerArtwork,
+    matchResolvedStickerArtworkGroups,
     stickerArtworkNeedsComposedPreview,
     stickerLevelsAreIdentity,
   } = await import(bundleModule());
@@ -52,6 +53,12 @@ try {
     matchResolvedStickerArtwork(targets, expanded).map((candidate) => candidate?.base),
     ['stickers/first', 'textures/stickers/second.webp'],
     'expanded template stickers must not shift authored artwork pairing',
+  );
+  const duplicated = [expanded[2], { ...expanded[2] }];
+  assert.deepEqual(
+    matchResolvedStickerArtworkGroups([{ ...targets[0], occurrenceCount: 2 }], duplicated)[0].map((candidate) => candidate.base),
+    ['stickers/first', 'stickers/first'],
+    'one logical sticker pairs with every resolved wear-branch copy',
   );
 
   const pixels = new Uint8ClampedArray([51, 128, 204, 128]);

@@ -39,6 +39,8 @@ export interface StickerPlacementTarget {
   readonly target: StickerTarget;
   /** Zero-based depth-first apply_sticker occurrence. */
   readonly occurrence: number;
+  /** Every authored occurrence represented by this logical sticker. */
+  readonly occurrences: readonly number[];
   /** Operation-message path, useful for diagnostics but never an object reference. */
   readonly stagePath: readonly string[];
   readonly stickers: readonly StickerVariantInfo[];
@@ -50,6 +52,45 @@ export interface StickerPlacementTarget {
   readonly editable: boolean;
   /** Human-readable refusal reason when editable is false. */
   readonly reason?: string;
+}
+
+function logicalStickerKey(target: StickerPlacementTarget): string | null {
+  const destinationVariables = [target.destTl, target.destTr, target.destBl].map((field) => field.variableName);
+  if (destinationVariables.some((name) => !name)) return null;
+  const fieldKey = (field: StickerResolvedField) => (
+    field.variableName ? `variable:${field.variableName}` : `literal:${field.authoredValue ?? ''}`
+  );
+  return JSON.stringify({
+    destinationVariables,
+    stickers: target.stickers.map((sticker) => [
+      fieldKey(sticker.base),
+      fieldKey(sticker.weight),
+      fieldKey(sticker.spec),
+    ]),
+  });
+}
+
+function coalesceLogicalStickerTargets(targets: readonly StickerPlacementTarget[]): StickerPlacementTarget[] {
+  const output: StickerPlacementTarget[] = [];
+  const indexes = new Map<string, number>();
+  for (const target of targets) {
+    const key = logicalStickerKey(target);
+    const existingIndex = key === null ? undefined : indexes.get(key);
+    if (existingIndex === undefined) {
+      if (key !== null) indexes.set(key, output.length);
+      output.push(target);
+      continue;
+    }
+    const existing = output[existingIndex];
+    const representative = existing.editable || !target.editable ? existing : target;
+    output[existingIndex] = {
+      ...representative,
+      id: existing.id,
+      occurrence: existing.occurrence,
+      occurrences: [...existing.occurrences, ...target.occurrences],
+    };
+  }
+  return output;
 }
 
 function manyEntryPath<T>(root: readonly string[], source: Many<T>, index: number): string[] {
@@ -230,6 +271,7 @@ export function discoverStickerPlacementTargets(
         id: `sticker:${currentOccurrence}:${stickerPath.join('/')}`,
         target,
         occurrence: currentOccurrence,
+        occurrences: [currentOccurrence],
         stagePath: stickerPath,
         stickers,
         destTl,
@@ -255,5 +297,5 @@ export function discoverStickerPlacementTargets(
     (messages.operation as { operation_node?: Many<OperationNodeMsg> }).operation_node,
     ['operation', 'operation_node'],
   );
-  return output;
+  return coalesceLogicalStickerTargets(output);
 }

@@ -53,6 +53,8 @@ export interface StickerUvCandidate {
   readonly targetIndex: number;
   /** The periodic copy of the query point inside this triangle's UV basis. */
   readonly uv: StickerUv;
+  /** Integer UV-tile offset from the authored query to this physical copy. */
+  readonly periodicOffset: readonly [number, number];
   /** Barycentric weights for the returned triangle, in vertexIndices order. */
   readonly barycentric: readonly [number, number, number];
 }
@@ -212,6 +214,7 @@ function candidateForTarget(
     triangleIndex: triangle.triangleIndex,
     targetIndex,
     uv: best.uv,
+    periodicOffset: [Math.round(best.uv[0] - target[0]), Math.round(best.uv[1] - target[1])],
     barycentric: best.barycentric,
   };
 }

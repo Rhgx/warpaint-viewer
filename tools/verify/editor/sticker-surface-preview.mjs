@@ -27,7 +27,12 @@ function bundleModule(entry, output) {
 }
 
 try {
-  const { preStickerSurface, recipeWithoutStickerOccurrence, resolvedGroupStickerContext } = await import(bundleModule('src/editor/stickerSurface.ts', path.join(BUILD_DIR, 'surface')));
+  const {
+    preStickerSurface,
+    recipeWithoutStickerOccurrence,
+    recipeWithoutStickerOccurrences,
+    resolvedGroupStickerContext,
+  } = await import(bundleModule('src/editor/stickerSurface.ts', path.join(BUILD_DIR, 'surface')));
   const { visibleStickerEditorMap } = await import(bundleModule('src/viewer/stickerEditorMap.ts', path.join(BUILD_DIR, 'map')));
   const nested = {
     type: 'combine_multiply',
@@ -54,6 +59,9 @@ try {
   assert.equal(withoutSecond.nodes[0], firstSticker, 'other sticker stages stay in the full recipe');
   assert.equal(withoutSecond.nodes[1], secondSticker.nodes[0], 'only the selected sticker is replaced by its base');
   assert.equal(recipeWithoutStickerOccurrence(completeRecipe, 2), null, 'a missing occurrence never returns a misleading base');
+  const withoutLogicalSticker = recipeWithoutStickerOccurrences(completeRecipe, [0, 1]);
+  assert.equal(withoutLogicalSticker.nodes[0], firstSticker.nodes[0], 'the first wear-branch copy is removed');
+  assert.equal(withoutLogicalSticker.nodes[1], secondSticker.nodes[0], 'the second wear-branch copy is removed');
 
   const transform = {
     black: 0, white: 1, gamma: 1, rotationDeg: 0,
@@ -82,6 +90,15 @@ try {
   assert.equal(groupContext.selectorBase, siblingGroup, 'other group stickers remain in the selector baseline');
   assert.match(groupContext.endpointZero.nodes[2].texture, /^data:image\/svg\+xml/, 'the zero endpoint replaces the complete selector');
   assert.match(groupContext.endpointOne.nodes[2].texture, /^data:image\/svg\+xml/, 'the one endpoint replaces the complete selector');
+  const siblingGroupWear = { ...siblingGroup, nodes: [rawSelector] };
+  const movingGroupWear = { ...movingGroup, nodes: [siblingGroupWear] };
+  const groupRootWear = { ...groupRoot, nodes: [...groupRoot.nodes.slice(0, 2), movingGroupWear] };
+  const wearRoot = { type: 'combine_add', nodes: [groupRoot, groupRootWear] };
+  const logicalGroupContext = resolvedGroupStickerContext(wearRoot, [movingGroup, movingGroupWear]);
+  assert.equal(logicalGroupContext.base.nodes[0].nodes[2], siblingGroup, 'the first group-sticker wear copy is removed');
+  assert.equal(logicalGroupContext.base.nodes[1].nodes[2], siblingGroupWear, 'the second group-sticker wear copy is removed');
+  assert.match(logicalGroupContext.endpointZero.nodes[0].nodes[2].texture, /^data:image\/svg\+xml/, 'the first wear selector reaches zero');
+  assert.match(logicalGroupContext.endpointZero.nodes[1].nodes[2].texture, /^data:image\/svg\+xml/, 'the second wear selector reaches zero');
   const ordinarySticker = { ...movingGroup, base: 'stickers/logo', nodes: [groupRoot] };
   assert.equal(
     resolvedGroupStickerContext(ordinarySticker, ordinarySticker),
@@ -97,8 +114,8 @@ try {
   const appSource = fs.readFileSync(path.join(ROOT, 'src', 'App.tsx'), 'utf8');
   assert.match(
     appSource,
-    /recipeWithoutStickerOccurrence\(stickerRecipe\?\.tree \?\? null, selectedStickerTarget\.occurrence\)/,
-    'the temporary base removes exactly the selected depth-first occurrence',
+    /recipeWithoutStickerOccurrences\(stickerRecipe\?\.tree \?\? null, selectedStickerTarget\.occurrences\)/,
+    'the temporary base removes every wear-branch occurrence of the selected logical sticker',
   );
   const effectStart = appSource.indexOf('// Every sticker uses a retained base with its stage removed plus a lightweight');
   const currentEffect = appSource.indexOf('\n  useEffect(() => {', effectStart);
@@ -121,7 +138,7 @@ try {
   );
   assert.match(
     appSource,
-    /selectorBaseSrc: preparedGroupStickerResources\.selectorBaseUrl,[\s\S]*?endpointZeroSrc: preparedGroupStickerResources\.endpointZeroUrl,[\s\S]*?endpointOneSrc: preparedGroupStickerResources\.endpointOneUrl/,
+    /selectorBaseSrc: activeGroupStickerResources\.selectorBaseUrl,[\s\S]*?endpointZeroSrc: activeGroupStickerResources\.endpointZeroUrl,[\s\S]*?endpointOneSrc: activeGroupStickerResources\.endpointOneUrl/,
     'the UV editor receives the same selector baseline and endpoints as the weapon preview',
   );
   const placementEditorSource = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'workbench', 'StickerPlacementEditor.tsx'), 'utf8');

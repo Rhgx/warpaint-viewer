@@ -153,6 +153,8 @@ interface VisibleStickerGizmoPoint {
   readonly point: THREE.Vector3 | null;
   /** Camera-space distance used only to resolve equivalent chart scores. */
   readonly depth: number;
+  /** Distance from the authored base UV tile. Zero is the direct model copy. */
+  readonly tileDistance: number;
 }
 
 interface VisibleStickerGizmoChart {
@@ -160,6 +162,24 @@ interface VisibleStickerGizmoChart {
   readonly points: readonly VisibleStickerGizmoPoint[];
   /** Whether each requested UV is actually contained by this physical chart. */
   readonly containedTargets: readonly boolean[];
+}
+
+interface StickerGizmoChartScore {
+  readonly centre: number;
+  readonly centreTile: number;
+  readonly corners: number;
+  readonly edges: number;
+  readonly tileDistance: number;
+  readonly depth: number;
+}
+
+function compareStickerGizmoChartScores(left: StickerGizmoChartScore, right: StickerGizmoChartScore): number {
+  return right.centre - left.centre
+    || left.centreTile - right.centreTile
+    || right.corners - left.corners
+    || right.edges - left.edges
+    || left.tileDistance - right.tileDistance
+    || left.depth - right.depth;
 }
 
 // three.js viewer with TF2's important VertexLitGeneric/Skin controls layered
@@ -860,6 +880,16 @@ export class Viewer {
     this.invalidate();
   }
 
+  /** Forget the selected physical UV copy when the edited sticker changes. */
+  resetStickerGizmoAnchor(): void {
+    this.stickerGizmoAnchorChartId = null;
+    this.stickerGizmoProjectionKey = '';
+    this.stickerGizmoState = null;
+    this.stickerGizmoPointerId = null;
+    this.canvas.style.cursor = '';
+    this.invalidate();
+  }
+
   /** Latest visible projected controls, or null when the sticker is obscured. */
   getStickerGizmoState(): StickerGizmoState | null {
     return this.stickerGizmoState;
@@ -1320,9 +1350,15 @@ export class Viewer {
         const candidates = targetCandidates
           .flatMap((topologyCandidate) => {
             const point = this.stickerGizmoCandidatePoint(topologyCandidate);
-            return point ? [{ topologyCandidate, point, depth: point.distanceTo(cameraPosition) }] : [];
+            const [tileU, tileV] = topologyCandidate.periodicOffset;
+            return point ? [{
+              topologyCandidate,
+              point,
+              depth: point.distanceTo(cameraPosition),
+              tileDistance: Math.abs(tileU) + Math.abs(tileV),
+            }] : [];
           })
-          .sort((a, b) => a.depth - b.depth);
+          .sort((a, b) => a.tileDistance - b.tileDistance || a.depth - b.depth);
         for (const candidate of candidates) {
           // Ray through the candidate's projected screen point rather than
           // from the camera position. Orthographic rays are parallel, and a
@@ -1343,10 +1379,14 @@ export class Viewer {
             && hitMeshIndex === candidate.topologyCandidate.meshIndex
             && hitChartId === candidate.topologyCandidate.chartId
             && visibleHit.point.distanceTo(candidate.point) <= 0.01) {
-            return { point: candidate.point, depth: candidate.depth };
+            return {
+              point: candidate.point,
+              depth: candidate.depth,
+              tileDistance: candidate.tileDistance,
+            };
           }
         }
-        return { point: null, depth: Number.POSITIVE_INFINITY };
+        return { point: null, depth: Number.POSITIVE_INFINITY, tileDistance: Number.POSITIVE_INFINITY };
       });
       return { chartId, points, containedTargets };
     };
@@ -1362,24 +1402,22 @@ export class Viewer {
       this.stickerGizmoAnchorChartId = null;
     }
 
-    const score = (chart: VisibleStickerGizmoChart) => {
+    const score = (chart: VisibleStickerGizmoChart): StickerGizmoChartScore => {
       const visible = (index: number) => chart.points[index]?.point ? 1 : 0;
       const corners = visible(1) + visible(3) + visible(5) + visible(7);
       const edges = visible(2) + visible(4) + visible(6) + visible(8);
       const depth = chart.points.reduce((nearest, point) => Math.min(nearest, point.depth), Number.POSITIVE_INFINITY);
-      return { centre: visible(0), corners, edges, depth };
+      const centreTile = chart.points[0]?.point ? chart.points[0].tileDistance : Number.POSITIVE_INFINITY;
+      const tileDistance = chart.points.reduce((total, point) => (
+        point.point ? total + point.tileDistance : total
+      ), 0);
+      return { centre: visible(0), centreTile, corners, edges, tileDistance, depth };
     };
     const selected = topology.charts
       .map((chart) => resolveChart(chart.id))
       .filter((chart) => chart.points.some((point) => point.point !== null))
-      .sort((a, b) => {
-        const left = score(a);
-        const right = score(b);
-        return right.centre - left.centre
-          || right.corners - left.corners
-          || right.edges - left.edges
-          || left.depth - right.depth;
-      })[0] ?? null;
+      .map((chart) => ({ chart, score: score(chart) }))
+      .sort((left, right) => compareStickerGizmoChartScores(left.score, right.score))[0]?.chart ?? null;
     if (selected) this.stickerGizmoAnchorChartId = selected.chartId;
     return selected;
   }

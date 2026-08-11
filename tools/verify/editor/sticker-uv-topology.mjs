@@ -64,6 +64,11 @@ try {
   const seam = buildStickerUvTopology([periodicSeam]);
   assert.equal(seam.charts.length, 1, 'UV endpoints differing by one wrap join the same physical chart');
   assert.equal(seam.findCandidates([[1.02, 0.2]])[0].length, 1, 'queries continue across a normal texture seam');
+  assert.deepEqual(
+    seam.findCandidates([[1.02, 0.2]])[0][0].periodicOffset,
+    [-1, 0],
+    'candidate records which wrapped tile supplied the physical UV copy',
+  );
 
   const mirroredSeam = geometry(
     [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],

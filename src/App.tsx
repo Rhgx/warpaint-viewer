@@ -46,21 +46,22 @@ import { chooseEditorLayerColors, EDITOR_LAYER_MAP_COLORS } from './editor/layer
 import { discoverStickerPlacementTargets } from './editor/stickerTargets';
 import {
   DEFAULT_STICKER_PLACEMENT,
+  constrainStickerPlacementToTexture,
   stickerPlacementFromQuad,
   stickerPlacementToQuad,
   type StickerPlacement,
 } from './editor/stickerGeometry';
 import {
   mapResolvedTextureReferences,
-  recipeWithoutStickerOccurrence,
+  recipeWithoutStickerOccurrences,
   resolvedGroupStickerContext,
 } from './editor/stickerSurface';
 import {
-  matchResolvedStickerArtwork,
+  matchResolvedStickerArtworkGroups,
   prepareStickerArtwork,
   stickerArtworkNeedsComposedPreview,
 } from './editor/stickerArtwork';
-import type { StickerPlacementQuad } from './editor/viewerStickerPlacement';
+import { constrainStickerQuadToTexture, type StickerPlacementQuad } from './editor/viewerStickerPlacement';
 import type { StickerTransformTool } from './ui/workbench/StickerPlacementEditor';
 
 // Selftest page is code-split: it never loads in normal use.
@@ -541,14 +542,20 @@ function MainApp() {
     () => resolvedStickerRecipe ? collectAppliedStickers(resolvedStickerRecipe) : [],
     [resolvedStickerRecipe],
   );
-  const matchedStickerStages = useMemo(() => matchResolvedStickerArtwork(
+  const matchedStickerStageGroups = useMemo(() => matchResolvedStickerArtworkGroups(
     stickerTargets.map((target) => ({
       bases: target.stickers.flatMap((sticker) => [sticker.base.resolvedValue, sticker.base.authoredValue]),
       quad: target.quad,
+      occurrenceCount: target.occurrences.length,
     })),
     resolvedStickerStages,
   ), [resolvedStickerStages, stickerTargets]);
-  const selectedStickerTarget = stickerTargets[activeStickerTarget] ?? stickerTargets[0] ?? null;
+  const matchedStickerStages = useMemo(
+    () => matchedStickerStageGroups.map((stages) => stages[0] ?? null),
+    [matchedStickerStageGroups],
+  );
+  const selectedStickerIndex = stickerTargets[activeStickerTarget] ? activeStickerTarget : (stickerTargets.length > 0 ? 0 : -1);
+  const selectedStickerTarget = selectedStickerIndex >= 0 ? stickerTargets[selectedStickerIndex] : null;
   const composedStickerTargetIds = useMemo(() => new Set(stickerTargets.filter((target) => (
     stickerArtworkNeedsComposedPreview(target.stickers.flatMap((sticker) => [
       sticker.base.resolvedValue,
@@ -558,12 +565,13 @@ function MainApp() {
   const selectedStickerUsesComposedArtwork = selectedStickerTarget
     ? composedStickerTargetIds.has(selectedStickerTarget.id)
     : false;
-  const selectedResolvedSticker = selectedStickerTarget
-    ? matchedStickerStages[stickerTargets.indexOf(selectedStickerTarget)] ?? null
-    : null;
+  const selectedResolvedStickerStages = useMemo(() => {
+    if (selectedStickerIndex < 0) return [];
+    return matchedStickerStageGroups[selectedStickerIndex] ?? [];
+  }, [matchedStickerStageGroups, selectedStickerIndex]);
   const selectedGroupStickerContext = useMemo(() => {
-    if (!selectedStickerUsesComposedArtwork || !selectedResolvedSticker || !resolvedStickerRecipe) return null;
-    const context = resolvedGroupStickerContext(resolvedStickerRecipe, selectedResolvedSticker);
+    if (!selectedStickerUsesComposedArtwork || selectedResolvedStickerStages.length === 0 || !resolvedStickerRecipe) return null;
+    const context = resolvedGroupStickerContext(resolvedStickerRecipe, selectedResolvedStickerStages);
     if (!context) return null;
     const mapReference = (reference: string) => activeTextureOverrides[reference] ?? reference;
     return {
@@ -573,7 +581,7 @@ function MainApp() {
       endpointZero: mapResolvedTextureReferences(context.endpointZero, mapReference),
       endpointOne: mapResolvedTextureReferences(context.endpointOne, mapReference),
     };
-  }, [activeTextureOverrides, resolvedStickerRecipe, selectedResolvedSticker, selectedStickerUsesComposedArtwork]);
+  }, [activeTextureOverrides, resolvedStickerRecipe, selectedResolvedStickerStages, selectedStickerUsesComposedArtwork]);
   const authoredStickerQuad = selectedStickerTarget?.quad ?? null;
   const stickerPlacementRead = useMemo(
     () => authoredStickerQuad ? stickerPlacementFromQuad(authoredStickerQuad) : { editable: false as const },
@@ -589,7 +597,7 @@ function MainApp() {
   // stickers, so composing only its immediate child would lose visible work.
   const stickerSurfaceNode = useMemo(
     () => selectedStickerTarget
-      ? recipeWithoutStickerOccurrence(stickerRecipe?.tree ?? null, selectedStickerTarget.occurrence)
+      ? recipeWithoutStickerOccurrences(stickerRecipe?.tree ?? null, selectedStickerTarget.occurrences)
       : null,
     [selectedStickerTarget, stickerRecipe],
   );
@@ -622,17 +630,30 @@ function MainApp() {
         : null
       : stickerTargetArtwork[selectedStickerTarget.id] ?? null
     : null;
-  const preparedGroupStickerResources = groupStickerResourcesKey === groupStickerComposeKey
+  const exactGroupStickerResources = groupStickerResourcesKey === groupStickerComposeKey
     ? groupStickerResourcesRef.current
     : null;
+  // The local draft remains authoritative from pointer release until the
+  // asynchronous provenance recipe exposes the committed destination. The
+  // selected sticker's base and artwork are destination-independent, so keep
+  // using the retained resources during that handoff instead of briefly
+  // disabling the editor and flashing the preparation state.
+  const destinationEditSettling = Boolean(stickerDraftQuad && selectedStickerTarget);
+  const retainedGroupStickerResources = destinationEditSettling
+    && groupStickerResourcesRef.current?.targetId === selectedStickerTarget?.id
+    ? groupStickerResourcesRef.current
+    : null;
+  const activeGroupStickerResources = exactGroupStickerResources ?? retainedGroupStickerResources;
+  const effectiveStickerTextureUrl = stickerTextureUrl
+    ?? (selectedStickerUsesComposedArtwork ? retainedGroupStickerResources?.artworkUrl ?? null : null);
   const groupStickerUvPreview = selectedStickerUsesComposedArtwork
-    && preparedGroupStickerResources?.key === groupStickerComposeKey
+    && activeGroupStickerResources
     ? {
-        maskSrc: preparedGroupStickerResources.maskUrl,
-        selectorBaseSrc: preparedGroupStickerResources.selectorBaseUrl,
-        endpointZeroSrc: preparedGroupStickerResources.endpointZeroUrl,
-        endpointOneSrc: preparedGroupStickerResources.endpointOneUrl,
-        levels: preparedGroupStickerResources.levels,
+        maskSrc: activeGroupStickerResources.maskUrl,
+        selectorBaseSrc: activeGroupStickerResources.selectorBaseUrl,
+        endpointZeroSrc: activeGroupStickerResources.endpointZeroUrl,
+        endpointOneSrc: activeGroupStickerResources.endpointOneUrl,
+        levels: activeGroupStickerResources.levels,
       }
     : null;
   // A direct manipulation must always have the same stripped base in both
@@ -640,10 +661,12 @@ function MainApp() {
   // a draggable sticker whose 3D preview can disagree with the UV editor.
   const stickerEditorReady = Boolean(
     stickerEditorEnabled
-    && stickerTextureUrl
-    && stickerBaseSurfaceKey === stickerSurfaceComposeKey
+    && effectiveStickerTextureUrl
+    && (stickerBaseSurfaceKey === stickerSurfaceComposeKey || destinationEditSettling)
     && stickerBaseSurfaceResultRef.current
-    && (!selectedStickerUsesComposedArtwork || groupStickerResourcesKey === groupStickerComposeKey)
+    && (!selectedStickerUsesComposedArtwork
+      || groupStickerResourcesKey === groupStickerComposeKey
+      || activeGroupStickerResources)
   );
 
   useEffect(() => {
@@ -655,6 +678,10 @@ function MainApp() {
     setStickerDraftQuad(null);
     stickerDraftRef.current = null;
   }, [activeStickerTarget, editableKitId, state.weaponKey]);
+
+  useEffect(() => {
+    viewerRef.current?.resetStickerGizmoAnchor();
+  }, [selectedStickerTarget?.id, editableKitId, state.weaponKey]);
 
   useEffect(() => {
     // A completed gesture stays visually authoritative while the edited
@@ -956,10 +983,10 @@ function MainApp() {
       image.onerror = () => { if (!cancelled) install(fallback); };
       image.src = url;
     };
-    measure(stickerTextureUrl, 1, setStickerAspect);
+    measure(effectiveStickerTextureUrl, 1, setStickerAspect);
     measure(stickerSurfaceUrl, 1.6, setStickerSurfaceAspect);
     return () => { cancelled = true; };
-  }, [stickerSurfaceUrl, stickerTextureUrl]);
+  }, [effectiveStickerTextureUrl, stickerSurfaceUrl]);
   // Selection edits recreate the assignment target objects, but preserve this
   // layer order and each texture reference. The chooser is deterministic, so
   // re-evaluation after an assignment cannot reshuffle layer colours.
@@ -1286,25 +1313,24 @@ function MainApp() {
     const awaitingNormalComposition = !stickerPlacementActive
       && (editorPreviewPending || visibleDefinitionGeneration < definitions.editGeneration);
     const canPreview = (stickerPlacementActive || awaitingNormalComposition)
-      && stickerBaseSurfaceKey === stickerSurfaceComposeKey
+      && (stickerBaseSurfaceKey === stickerSurfaceComposeKey || destinationEditSettling)
       && surface
-      && stickerTextureUrl
+      && effectiveStickerTextureUrl
       && quad;
     if (canPreview) {
       // Swap the material source before drawing the decal overlay. The base
       // recipe excludes only this sticker, so there is never an old baked
       // position under the live one.
       viewer.setStickerEditorBaseMap(surface.texture);
-      const groupResources = groupStickerResourcesRef.current;
-      if (selectedStickerUsesComposedArtwork && groupResources?.key === groupStickerComposeKey) {
-        viewer.setGroupStickerPreview(groupResources.maskUrl, {
-          selectorBase: groupResources.selectorBase.texture,
-          endpointZero: groupResources.endpointZero.texture,
-          endpointOne: groupResources.endpointOne.texture,
-          levels: groupResources.levels,
+      if (selectedStickerUsesComposedArtwork && activeGroupStickerResources) {
+        viewer.setGroupStickerPreview(activeGroupStickerResources.maskUrl, {
+          selectorBase: activeGroupStickerResources.selectorBase.texture,
+          endpointZero: activeGroupStickerResources.endpointZero.texture,
+          endpointOne: activeGroupStickerResources.endpointOne.texture,
+          levels: activeGroupStickerResources.levels,
         }, quad, { tool: stickerTransformTool });
       } else {
-        viewer.setStickerPreview(stickerTextureUrl, quad, { tool: stickerTransformTool });
+        viewer.setStickerPreview(effectiveStickerTextureUrl, quad, { tool: stickerTransformTool });
       }
       if (!stickerPlacementActive) viewer.setStickerGizmo(null);
     } else if (stickerPlacementActive && authoredStickerQuad) {
@@ -1317,17 +1343,17 @@ function MainApp() {
     }
   }, [
     authoredStickerQuad,
+    activeGroupStickerResources,
     definitions.editGeneration,
+    destinationEditSettling,
     editorPreviewPending,
     engineReady,
     stickerBaseSurfaceKey,
     stickerDraftQuad,
-    groupStickerComposeKey,
-    groupStickerResourcesKey,
     selectedStickerUsesComposedArtwork,
     stickerPlacementActive,
     stickerSurfaceComposeKey,
-    stickerTextureUrl,
+    effectiveStickerTextureUrl,
     stickerTransformTool,
     visibleDefinitionGeneration,
   ]);
@@ -1427,29 +1453,28 @@ function MainApp() {
   }, [authoredStickerQuad]);
 
   const previewStickerDraft = useCallback((quad: StickerPlacementQuad) => {
-    if (!stickerPlacementActive || !stickerTextureUrl) return;
+    if (!stickerPlacementActive || !effectiveStickerTextureUrl) return;
     const viewer = viewerRef.current;
-    const groupResources = groupStickerResourcesRef.current;
-    if (selectedStickerUsesComposedArtwork && groupResources?.key === groupStickerComposeKey) {
-      viewer?.setGroupStickerPreview(groupResources.maskUrl, {
-        selectorBase: groupResources.selectorBase.texture,
-        endpointZero: groupResources.endpointZero.texture,
-        endpointOne: groupResources.endpointOne.texture,
-        levels: groupResources.levels,
+    if (selectedStickerUsesComposedArtwork && activeGroupStickerResources) {
+      viewer?.setGroupStickerPreview(activeGroupStickerResources.maskUrl, {
+        selectorBase: activeGroupStickerResources.selectorBase.texture,
+        endpointZero: activeGroupStickerResources.endpointZero.texture,
+        endpointOne: activeGroupStickerResources.endpointOne.texture,
+        levels: activeGroupStickerResources.levels,
       }, quad, { tool: stickerTransformTool });
       return;
     }
-    viewer?.setStickerPreview(stickerTextureUrl, quad, { tool: stickerTransformTool });
+    viewer?.setStickerPreview(effectiveStickerTextureUrl, quad, { tool: stickerTransformTool });
   }, [
-    groupStickerComposeKey,
+    activeGroupStickerResources,
     selectedStickerUsesComposedArtwork,
     stickerPlacementActive,
-    stickerTextureUrl,
+    effectiveStickerTextureUrl,
     stickerTransformTool,
   ]);
 
   const changeStickerPlacement = useCallback((placement: StickerPlacement) => {
-    const quad = stickerPlacementToQuad(placement);
+    const quad = stickerPlacementToQuad(constrainStickerPlacementToTexture(placement));
     if (!quad) return;
     // The 2D editor owns its lightweight local transform while dragging. Push
     // the matching shader uniforms now instead of waiting for React's effect
@@ -1461,8 +1486,9 @@ function MainApp() {
   }, [previewStickerDraft, updateStickerDraft]);
 
   const changeStickerQuad = useCallback((quad: StickerPlacementQuad) => {
-    previewStickerDraft(quad);
-    updateStickerDraft(quad);
+    const constrained = constrainStickerQuadToTexture(quad);
+    previewStickerDraft(constrained);
+    updateStickerDraft(constrained);
   }, [previewStickerDraft, updateStickerDraft]);
 
   const finishStickerInteraction = useCallback(() => {
@@ -2222,7 +2248,7 @@ function MainApp() {
                       },
                       textureSrc: stickerSurfaceUrl,
                       uvWireframeSrc: stickerUvWireframeUrl,
-                      stickerSrc: stickerTextureUrl,
+                      stickerSrc: effectiveStickerTextureUrl,
                       groupPreview: groupStickerUvPreview,
                       renderStickerArtwork: !selectedStickerUsesComposedArtwork,
                       textureAspect: stickerSurfaceAspect,
