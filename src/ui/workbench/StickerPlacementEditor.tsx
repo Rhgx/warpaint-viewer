@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { Braces, Copy, Expand, Magnet, Minus, MoreHorizontal, Move, Plus, RotateCw } from 'lucide-react';
+import { Braces, Copy, Expand, Link2, Magnet, Minus, MoreHorizontal, Move, Plus, RotateCw, Unlink2 } from 'lucide-react';
 import {
   clampStickerPlacement,
   moveStickerPlacement,
   resizeStickerFromCorner,
   resizeStickerFromEdge,
   rotateStickerPlacement,
+  snapStickerRotationToCardinal,
   snapStickerPlacement,
   stickerPlacementContainsPoint,
   stickerPlacementFromQuad,
@@ -78,6 +79,9 @@ export interface StickerPlacementEditorProps {
   /** Optional controlled transform mode. Omitting this keeps the control local to the editor. */
   readonly activeTool?: StickerTransformTool;
   readonly onActiveToolChange?: (tool: StickerTransformTool) => void;
+  /** Keeps width and height proportional while scaling. Shift temporarily inverts it. */
+  readonly aspectLocked?: boolean;
+  readonly onAspectLockedChange?: (locked: boolean) => void;
   /** Optional controlled grid state. Omitting this keeps the checkbox local to the editor. */
   readonly snapEnabled?: boolean;
   readonly onSnapEnabledChange?: (enabled: boolean) => void;
@@ -92,7 +96,7 @@ export interface StickerPlacementEditorProps {
 type PointerInteraction =
   | { readonly kind: 'move'; readonly initial: StickerPlacement; readonly pointer: StickerPoint }
   | { readonly kind: 'resize'; readonly initial: StickerPlacement; readonly corner: StickerCorner; readonly preserveAspect: boolean }
-  | { readonly kind: 'resize-axis'; readonly initial: StickerPlacement; readonly edge: StickerEdge }
+  | { readonly kind: 'resize-axis'; readonly initial: StickerPlacement; readonly edge: StickerEdge; readonly preserveAspect: boolean }
   | { readonly kind: 'rotate'; readonly initial: StickerPlacement }
   | { readonly kind: 'pan'; readonly initial: StickerViewport; readonly pointer: StickerPoint };
 
@@ -186,6 +190,8 @@ export function StickerPlacementEditor({
   notice,
   activeTool,
   onActiveToolChange,
+  aspectLocked,
+  onAspectLockedChange,
   snapEnabled,
   onSnapEnabledChange,
   snapStep,
@@ -201,6 +207,7 @@ export function StickerPlacementEditor({
   const typingRef = useRef<{ timer: number | null }>({ timer: null });
   const revertRef = useRef<StickerPlacement | null>(null);
   const [internalTool, setInternalTool] = useState<StickerTransformTool>('move');
+  const [internalAspectLocked, setInternalAspectLocked] = useState(true);
   // Precision work is a normal part of placing a decal, so the numbers are
   // present by default and only dismissed when the surface is wanted clear.
   const [valuesOpen, setValuesOpen] = useState(true);
@@ -217,6 +224,7 @@ export function StickerPlacementEditor({
   const [cornerDraft, setCornerDraft] = useState({ tlX: '', tlY: '', trX: '', trY: '', blX: '', blY: '' });
   const unavailable = disabled || (!stickerSrc && !groupPreview);
   const tool = activeTool ?? internalTool;
+  const isAspectLocked = aspectLocked ?? internalAspectLocked;
   const isSnapEnabled = snapEnabled ?? internalSnapEnabled;
   const safeSnapStep = snapStep !== undefined && Number.isFinite(snapStep) && snapStep > 0
     ? Math.min(snapStep, 1)
@@ -268,9 +276,30 @@ export function StickerPlacementEditor({
     onActiveToolChange?.(nextTool);
   };
 
+  useEffect(() => {
+    if (unavailable) return;
+    const onShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      const target = event.target instanceof Element ? event.target : document.activeElement;
+      if (target instanceof Element && target.closest('input, textarea, select, [contenteditable], [role="textbox"]')) return;
+      const nextTool = ({ '1': 'move', '2': 'scale', '3': 'turn' } as const)[event.key as '1' | '2' | '3'];
+      if (!nextTool) return;
+      event.preventDefault();
+      setInternalTool(nextTool);
+      onActiveToolChange?.(nextTool);
+    };
+    window.addEventListener('keydown', onShortcut);
+    return () => window.removeEventListener('keydown', onShortcut);
+  }, [onActiveToolChange, unavailable]);
+
   const setSnap = (enabled: boolean) => {
     setInternalSnapEnabled(enabled);
     onSnapEnabledChange?.(enabled);
+  };
+
+  const setAspectLock = (locked: boolean) => {
+    setInternalAspectLocked(locked);
+    onAspectLockedChange?.(locked);
   };
 
   const begin = (event: React.PointerEvent<HTMLElement>, interaction: PointerInteraction) => {
@@ -304,7 +333,12 @@ export function StickerPlacementEditor({
 
   const beginResize = (event: React.PointerEvent<HTMLButtonElement>, corner: StickerCorner) => {
     if (tool !== 'scale' || event.button !== 0) return;
-    begin(event, { kind: 'resize', initial: placementValue, corner, preserveAspect: !event.shiftKey });
+    begin(event, {
+      kind: 'resize',
+      initial: placementValue,
+      corner,
+      preserveAspect: event.shiftKey ? !isAspectLocked : isAspectLocked,
+    });
   };
 
   const beginRotate = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -314,7 +348,12 @@ export function StickerPlacementEditor({
 
   const beginAxisResize = (event: React.PointerEvent<HTMLButtonElement>, edge: StickerEdge) => {
     if (tool !== 'scale' || event.button !== 0) return;
-    begin(event, { kind: 'resize-axis', initial: placementValue, edge });
+    begin(event, {
+      kind: 'resize-axis',
+      initial: placementValue,
+      edge,
+      preserveAspect: event.shiftKey ? !isAspectLocked : isAspectLocked,
+    });
   };
 
   const beginPan = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -388,10 +427,20 @@ export function StickerPlacementEditor({
         emit(resizeStickerFromCorner(interaction.initial, interaction.corner, pointer, { preserveAspect: interaction.preserveAspect }), 'resize', snap);
         break;
       case 'resize-axis':
-        emit(resizeStickerFromEdge(interaction.initial, interaction.edge, pointer), 'resize', snap);
+        emit(resizeStickerFromEdge(
+          interaction.initial,
+          interaction.edge,
+          pointer,
+          { preserveAspect: interaction.preserveAspect },
+        ), 'resize', snap);
         break;
       case 'rotate':
-        emit(rotateStickerPlacement(interaction.initial, rotationForPointer(pointer, interaction.initial)), 'rotate', snap);
+        emit(rotateStickerPlacement(
+          interaction.initial,
+          event.shiftKey
+            ? rotationForPointer(pointer, interaction.initial)
+            : snapStickerRotationToCardinal(rotationForPointer(pointer, interaction.initial)),
+        ), 'rotate', snap);
         break;
     }
   };
@@ -466,7 +515,13 @@ export function StickerPlacementEditor({
     const parsed = nextNumber(rawValue);
     if (parsed === null) return;
     noteTyping();
-    emit({ ...placementValue, [field]: parsed }, 'value', isSnapEnabled || temporarySnap);
+    const aspect = placementValue.width / Math.max(placementValue.height, 0.0001);
+    const linkedSize = isAspectLocked && field === 'width'
+      ? { height: parsed / aspect }
+      : isAspectLocked && field === 'height'
+        ? { width: parsed * aspect }
+        : {};
+    emit({ ...placementValue, ...linkedSize, [field]: parsed }, 'value', isSnapEnabled || temporarySnap);
   };
 
   /** Live-apply the corner draft whenever the six numbers describe a real rectangle. */
@@ -639,20 +694,36 @@ export function StickerPlacementEditor({
         <span className="sticker-placement-editor-title">{label}</span>
         <div className="sticker-placement-editor-heading-actions">
           <div className="sticker-placement-editor-tools" role="toolbar" aria-label="Sticker transform">
-            {TOOLS.map(({ id, label: toolLabel, Icon }) => (
+            {TOOLS.map(({ id, label: toolLabel, Icon }, index) => (
               <button
                 key={id}
                 type="button"
                 className="sticker-placement-editor-tool"
                 aria-label={toolLabel}
                 aria-pressed={tool === id}
-                title={id === 'scale' ? 'Scale. Hold Shift to stretch one side.' : toolLabel}
+                title={`${toolLabel} (${index + 1})${id === 'scale'
+                  ? '. Hold Shift to temporarily invert the proportion lock.'
+                  : id === 'turn'
+                    ? '. Snaps near cardinal angles; hold Shift for free rotation.'
+                    : ''}`}
                 disabled={unavailable}
                 onClick={() => setTool(id)}
               >
                 <Icon size={15} aria-hidden="true" />
               </button>
             ))}
+            <span className="sticker-placement-editor-tool-divider" aria-hidden="true" />
+            <button
+              type="button"
+              className="sticker-placement-editor-tool sticker-placement-editor-aspect-lock"
+              aria-label={isAspectLocked ? 'Unlock sticker proportions' : 'Lock sticker proportions'}
+              aria-pressed={isAspectLocked}
+              title={`${isAspectLocked ? 'Proportions locked' : 'Proportions unlocked'}. Hold Shift during a drag to temporarily ${isAspectLocked ? 'stretch freely' : 'keep proportions'}.`}
+              disabled={unavailable}
+              onClick={() => setAspectLock(!isAspectLocked)}
+            >
+              {isAspectLocked ? <Link2 size={15} aria-hidden="true" /> : <Unlink2 size={15} aria-hidden="true" />}
+            </button>
           </div>
           <span className="sticker-placement-editor-separator" aria-hidden="true" />
           <label className="sticker-placement-editor-snap" title="Align edits to the grid. Hold Ctrl to snap just for one drag.">

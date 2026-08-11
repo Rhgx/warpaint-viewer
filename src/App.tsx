@@ -48,6 +48,7 @@ import { discoverStickerPlacementTargets } from './editor/stickerTargets';
 import {
   DEFAULT_STICKER_PLACEMENT,
   constrainStickerPlacementToTexture,
+  snapStickerRotationToCardinal,
   stickerPlacementFromQuad,
   stickerPlacementToQuad,
   type StickerPlacement,
@@ -270,6 +271,7 @@ function MainApp() {
   // surface prevents a scale handle in one view from silently moving in the
   // other.
   const [stickerTransformTool, setStickerTransformTool] = useState<StickerTransformTool>('move');
+  const [stickerAspectLocked, setStickerAspectLocked] = useState(true);
   const [activeStickerTarget, setActiveStickerTarget] = useState(0);
   const [stickerRecipe, setStickerRecipe] = useState<ProtoDefRecipeWithProvenance | null>(null);
   const [stickerTargetThumbnails, setStickerTargetThumbnails] = useState<Record<string, string>>({});
@@ -311,6 +313,7 @@ function MainApp() {
   const stickerGizmoGestureRef = useRef<{
     pointerId: number;
     drag: StickerGizmoDrag;
+    preserveAspect: boolean;
     base: StickerPlacementQuad;
     latest: StickerPlacementQuad;
   } | null>(null);
@@ -1581,6 +1584,7 @@ function MainApp() {
         stickerGizmoGestureRef.current = {
           pointerId: event.pointerId,
           drag,
+          preserveAspect: event.shiftKey ? !stickerAspectLocked : stickerAspectLocked,
           base: authoredStickerQuad,
           latest: authoredStickerQuad,
         };
@@ -1609,7 +1613,7 @@ function MainApp() {
     }
     if (!groupAssignActive || !event.shiftKey || event.button !== 0 || event.target !== canvasRef.current) return;
     groupPointerRef.current = { x: event.clientX, y: event.clientY, moved: false };
-  }, [authoredStickerQuad, beginStickerInteraction, groupAssignActive, previewStickerDraft, stickerPlacementActive, updateStickerDraft]);
+  }, [authoredStickerQuad, beginStickerInteraction, groupAssignActive, previewStickerDraft, stickerAspectLocked, stickerPlacementActive, updateStickerDraft]);
 
   const previewEditorSurface = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const gizmoGesture = stickerGizmoGestureRef.current;
@@ -1618,11 +1622,22 @@ function MainApp() {
         gizmoGesture.drag,
         event.clientX,
         event.clientY,
+        gizmoGesture.preserveAspect,
       );
       if (result) {
-        gizmoGesture.latest = result.quad;
-        previewStickerDraft(result.quad);
-        updateStickerDraft(result.quad);
+        let nextQuad = result.quad;
+        if (result.intent === 'rotate' && !event.shiftKey) {
+          const read = stickerPlacementFromQuad(result.quad);
+          if (read.editable && read.placement) {
+            nextQuad = stickerPlacementToQuad({
+              ...read.placement,
+              rotation: snapStickerRotationToCardinal(read.placement.rotation),
+            }) ?? result.quad;
+          }
+        }
+        gizmoGesture.latest = nextQuad;
+        previewStickerDraft(nextQuad);
+        updateStickerDraft(nextQuad);
       }
       return;
     }
@@ -2343,6 +2358,8 @@ function MainApp() {
                       } : undefined,
                       activeTool: stickerTransformTool,
                       onActiveToolChange: setStickerTransformTool,
+                      aspectLocked: stickerAspectLocked,
+                      onAspectLockedChange: setStickerAspectLocked,
                       onInteractionStart: beginStickerInteraction,
                       onInteractionEnd: finishStickerInteraction,
                       onInteractionCancel: () => updateStickerDraft(null),

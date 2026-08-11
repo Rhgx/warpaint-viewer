@@ -63,6 +63,7 @@ const MIN_SIZE = 0.02;
 const MAX_SIZE = 1.5;
 export const DEFAULT_STICKER_SNAP_STEP = 0.025;
 export const DEFAULT_STICKER_TURN_SNAP = 15;
+export const DEFAULT_CARDINAL_SNAP_THRESHOLD = 4;
 
 export const DEFAULT_STICKER_PLACEMENT: StickerPlacement = Object.freeze({
   x: 0.5,
@@ -110,6 +111,19 @@ export function constrainStickerPlacementToTexture(placement: StickerPlacement):
     height: clamp(finite(placement.height, DEFAULT_STICKER_PLACEMENT.height), MIN_SIZE, MAX_SIZE),
     rotation,
   };
+}
+
+/** Magnetize an angle near a cardinal direction without quantizing free rotation. */
+export function snapStickerRotationToCardinal(
+  rotation: number,
+  threshold = DEFAULT_CARDINAL_SNAP_THRESHOLD,
+): number {
+  const normalized = normalizeStickerRotation(rotation);
+  const nearest = Math.round(normalized / 90) * 90;
+  const safeThreshold = clamp(finite(threshold, DEFAULT_CARDINAL_SNAP_THRESHOLD), 0, 45);
+  return Math.abs(normalizeStickerRotation(normalized - nearest)) <= safeThreshold
+    ? normalizeStickerRotation(nearest)
+    : normalized;
 }
 
 /** Sanitize externally supplied authored values without requiring a UI mount. */
@@ -299,6 +313,7 @@ export function resizeStickerFromEdge(
   initial: StickerPlacement,
   edge: StickerEdge,
   pointer: StickerPoint,
+  options: StickerResizeOptions = {},
 ): StickerPlacement {
   const value = clampStickerPlacement(initial);
   const horizontal = edge === 'left' || edge === 'right';
@@ -315,11 +330,14 @@ export function resizeStickerFromEdge(
   const centreOffset = rotateStickerPoint(horizontal
     ? { x: centreAlongAxis, y: 0 }
     : { x: 0, y: centreAlongAxis }, value.rotation);
+  const initialAspect = value.width / Math.max(value.height, MIN_SIZE);
   return clampStickerPlacement({
     ...value,
     x: value.x + centreOffset.x,
     y: value.y + centreOffset.y,
-    ...(horizontal ? { width: nextSize } : { height: nextSize }),
+    ...(horizontal
+      ? { width: nextSize, ...(options.preserveAspect ? { height: nextSize / initialAspect } : {}) }
+      : { height: nextSize, ...(options.preserveAspect ? { width: nextSize * initialAspect } : {}) }),
   });
 }
 

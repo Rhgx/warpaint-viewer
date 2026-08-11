@@ -46,6 +46,11 @@ try {
   for (const field of ['x', 'y', 'width', 'height', 'rotation']) {
     close(parsed.placement[field], original[field], `quad round-trip ${field}`);
   }
+  close(geometry.snapStickerRotationToCardinal(87), 90, 'rotation snaps up to 90');
+  close(geometry.snapStickerRotationToCardinal(94), 90, 'rotation snaps down to 90 at threshold');
+  close(geometry.snapStickerRotationToCardinal(95), 95, 'rotation remains free outside threshold');
+  close(geometry.snapStickerRotationToCardinal(179), 180, 'rotation snaps near 180');
+  close(geometry.snapStickerRotationToCardinal(359), 0, 'rotation snaps across the zero seam');
   assert.equal(
     geometry.stickerPlacementContainsPoint(original, { x: original.x, y: original.y }),
     true,
@@ -129,6 +134,15 @@ try {
   close(widthOnly.y, 0.5, 'right edge resize keeps centre y');
   close(widthOnly.width, 0.3, 'right edge resize changes width');
   close(widthOnly.height, 0.1, 'right edge resize preserves height');
+
+  const widthLocked = geometry.resizeStickerFromEdge(
+    { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 },
+    'right',
+    { x: 0.7, y: 0.5 },
+    { preserveAspect: true },
+  );
+  close(widthLocked.width / widthLocked.height, 2, 'locked edge resize keeps artwork ratio');
+  close(widthLocked.x - widthLocked.width / 2, 0.4, 'locked edge resize holds opposite edge');
 
   const heightOnly = geometry.resizeStickerFromEdge(
     { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 },

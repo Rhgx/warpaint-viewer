@@ -969,6 +969,7 @@ export class Viewer {
     drag: StickerGizmoDrag,
     clientX: number,
     clientY: number,
+    preserveAspect = false,
   ): StickerGizmoDragResult | null {
     if (!Number.isFinite(clientX) || !Number.isFinite(clientY) || !this.isUsableStickerQuad(drag.baseQuad)) return null;
     if (drag.intent === 'rotate') {
@@ -991,6 +992,9 @@ export class Viewer {
       { x: drag.startClientX, y: drag.startClientY },
       { x: clientX, y: clientY },
     );
+    if (preserveAspect) {
+      return { intent: 'scale', quad: scaleStickerQuadAroundCentre(drag.baseQuad, ratio) };
+    }
     if (drag.handle === 'scale-left' || drag.handle === 'scale-right') {
       return { intent: 'scale', quad: scaleStickerQuadAxisAroundCentre(drag.baseQuad, 'x', ratio) };
     }
