@@ -9,6 +9,7 @@ const verifiers = [
   'editor-provenance.mjs',
   'editor-json-export.mjs',
   'editor-package-export.mjs',
+  'example-warpaints.mjs',
   'group-sampling.mjs',
   'group-targets.mjs',
   'group-names.mjs',

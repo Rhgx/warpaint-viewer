@@ -24,6 +24,8 @@ export interface SelectGroupTarget {
   effectiveSelectValues?: readonly number[];
   /** Exact per-slot write paths for the active weapon's selector values. */
   valueSourcePaths?: readonly (readonly string[] | undefined)[];
+  /** Which authored selector slots inherit their effective per-weapon value. */
+  inheritedSelectValues?: readonly boolean[];
 }
 
 /** One editable paint layer considered by an exclusive group assignment. */
@@ -354,15 +356,18 @@ export function toggleSelectGroupId(
     ? [...supplied!]
     : values.map((field) => Number(selectFieldValue(next, field)));
   if (ids.some((id) => !Number.isInteger(id))) throw new EditorMutationAmbiguityError('Select values contain a non-integer literal and cannot be safely toggled.');
-  const found = ids.includes(groupId);
+  const inheritedMask = target.inheritedSelectValues;
+  const hasWeaponScopedSlots = inheritedMask?.some(Boolean) ?? false;
+  const editableIndex = (index: number) => !hasWeaponScopedSlots || inheritedMask?.[index] === true;
+  const found = ids.some((id, index) => id === groupId && editableIndex(index));
   let nextIds: number[];
   if (found) {
     // Real operations commonly use fixed-size selector arrays padded with 0.
     // Preserve that shape and clear every duplicate so a second toggle is a
     // deterministic add, not a partial removal.
-    nextIds = ids.map((id) => id === groupId ? 0 : id);
+    nextIds = ids.map((id, index) => id === groupId && editableIndex(index) ? 0 : id);
   } else {
-    const emptyIndex = ids.indexOf(0);
+    const emptyIndex = ids.findIndex((id, index) => id === 0 && editableIndex(index));
     if (emptyIndex >= 0) {
       nextIds = ids.map((id, index) => index === emptyIndex ? groupId : id);
     } else {
@@ -379,14 +384,17 @@ export function toggleSelectGroupId(
     // Once an inherited selector becomes an edit surface, keep every slot on
     // its visible baseline. Locking only the changed slot would let the other
     // slots continue to be overwritten by the weapon/wear definition.
-    const shouldWrite = useEffectiveBaseline || ids[index] !== id;
     const sourcePath = target.valueSourcePaths?.[index];
-    if (useEffectiveBaseline && field.variable && !sourcePath) {
+    const inherited = target.inheritedSelectValues?.[index] ?? (useEffectiveBaseline && Boolean(field.variable));
+    const shouldWrite = ids[index] !== id || (useEffectiveBaseline && inherited);
+    if (useEffectiveBaseline && inherited && field.variable && !sourcePath) {
       throw new EditorMutationAmbiguityError(
         `Paint layer variable â€œ${field.variable}â€ has no editable override for this weapon.`,
       );
     }
-    return shouldWrite ? setSelectFieldValue(next, field, String(id), useEffectiveBaseline, sourcePath) : field;
+    return shouldWrite
+      ? setSelectFieldValue(next, field, String(id), useEffectiveBaseline && inherited, sourcePath)
+      : field;
   });
   replaceMany(stage as unknown as Record<string, unknown>, 'select', prior, replacement);
   return next;

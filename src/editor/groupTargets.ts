@@ -200,16 +200,21 @@ export function discoverGroupSelectTargets(
     const ids = new Set<number>();
     let hasInheritedVariableValues = false;
     const selectFields = many(select.select);
+    const inheritedSelectFields = selectFields.map((field) => {
+      if (!field.variable) return false;
+      const matches = variables.get(field.variable);
+      return matches?.length === 1 && matches[0].inherit !== false;
+    });
     const variableNames = selectFields.map((field) => field.variable).filter((name): name is string => Boolean(name));
     const variableStem = selectFields.find((field) => field.variable)?.variable
       ?.replace(/_select_\d+$/i, '')
       .replace(/_/g, ' ');
-    for (const field of selectFields) {
+    for (const [fieldIndex, field] of selectFields.entries()) {
       let id: number | undefined;
       if (field.variable !== undefined) {
         const matches = variables.get(field.variable);
         const value = matches?.length === 1 ? matches[0].value : undefined;
-        if (matches?.length === 1 && matches[0].inherit !== false) hasInheritedVariableValues = true;
+        if (inheritedSelectFields[fieldIndex]) hasInheritedVariableValues = true;
         id = value === undefined ? undefined : literalGroupId({ string: value });
         if (id === undefined) blockers.add('variable-select-value');
       } else {
@@ -232,7 +237,7 @@ export function discoverGroupSelectTargets(
       const unique = [...new Map(candidates?.map((path) => [path.join('\0'), path]) ?? []).values()];
       return unique.length === 1 ? unique[0] : undefined;
     });
-    if (hasInheritedVariableValues && selectFields.some((field, index) => field.variable && !valueSourcePaths[index])) {
+    if (inheritedSelectFields.some((inherits, index) => inherits && !valueSourcePaths[index])) {
       blockers.add('uneditable-weapon-select-value');
     }
     targets.push({
@@ -240,6 +245,7 @@ export function discoverGroupSelectTargets(
         groupsValue: groupsRef,
         occurrence,
         ...(valueSourcePaths.some(Boolean) ? { valueSourcePaths } : {}),
+        ...(hasInheritedVariableValues ? { inheritedSelectValues: inheritedSelectFields } : {}),
       },
       groupsRef,
       selectedGroupIds: [...ids].sort((a, b) => a - b),

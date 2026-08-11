@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { BlobReader, TextWriter, ZipReader } from '@zip.js/zip.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const BUILD_DIR = path.join(ROOT, 'staging', 'group-targets-verify');
@@ -16,7 +17,8 @@ function bundleModule() {
   const entry = path.join(ROOT, 'staging', 'group-targets-verify-entry.ts');
   fs.writeFileSync(entry,
     "export { discoverGroupSelectTargets, chooseBestSelectTargetForBucket } from '../src/editor/groupTargets';\n"
-    + "export { decodeProtoDefs, extractKitMessages, resolveKitRecipeWithProvenance } from '../src/protodefs/decoder';\n",
+    + "export { toggleSelectGroupId } from '../src/editor/mutations';\n"
+    + "export { decodeProtoDefs, decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipeWithProvenance } from '../src/protodefs/decoder';\n",
   );
   const viteEntry = fileURLToPath(import.meta.resolve('vite'));
   const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
@@ -107,6 +109,117 @@ try {
     ['patterns/workshop/example/surface-stripe.webp', 'Surface Stripe'],
     ['patterns/workshop/example/p_nested_paint.vtf', 'Nested Paint'],
   ]);
+
+  // Community paints such as Heatcast reserve more selector slots than each
+  // weapon overrides. Fixed, non-inherited tail slots do not need a weapon
+  // provenance path and must not make the complete layer read-only.
+  const mixedInheritance = implementation.discoverGroupSelectTargets({
+    definition: {
+      header: { defindex: 5, variables: [
+        { name: 'layer_select_1', value: '0', inherit: true },
+        { name: 'layer_select_2', value: '0', inherit: false },
+      ] },
+      blackbox: { data: { variable: { variable: 'layer_select_1', string: '0' } } },
+    },
+    operation: {
+      header: { defindex: 6 },
+      operation_node: { stage: { combine_lerp: { operation_node: [
+        { stage: { texture_lookup: { texture: { string: 'patterns/layer' } } } },
+        { stage: { select: {
+          groups: { string: 'models/example_groups' },
+          select: [{ variable: 'layer_select_1' }, { variable: 'layer_select_2' }],
+        } } },
+      ] } } },
+    },
+  }, [{
+    fieldPath: ['operation', 'layer_select_1'],
+    provenance: {
+      variableName: 'layer_select_1',
+      effectiveValue: '0',
+      sourcePath: ['definition', 'blackbox', 'data', 'variable'],
+      editableSourcePath: ['definition', 'blackbox', 'data', 'variable'],
+      scope: 'weapon',
+      canOverride: true,
+    },
+  }]);
+  assert.equal(mixedInheritance.targets[0]?.canToggle, true);
+  assert.deepEqual(mixedInheritance.targets[0]?.target.valueSourcePaths, [
+    ['definition', 'blackbox', 'data', 'variable'],
+    undefined,
+  ]);
+  assert.deepEqual(mixedInheritance.targets[0]?.target.inheritedSelectValues, [true, false]);
+  const mixedEdited = implementation.toggleSelectGroupId({
+    definition: {
+      header: { defindex: 5, variables: [
+        { name: 'layer_select_1', value: '0', inherit: true },
+        { name: 'layer_select_2', value: '0', inherit: false },
+      ] },
+      blackbox: { data: { variable: { variable: 'layer_select_1', string: '0' } } },
+    },
+    operation: {
+      header: { defindex: 6 },
+      operation_node: { stage: { combine_lerp: { operation_node: [
+        { stage: { texture_lookup: { texture: { string: 'patterns/layer' } } } },
+        { stage: { select: {
+          groups: { string: 'models/example_groups' },
+          select: [{ variable: 'layer_select_1' }, { variable: 'layer_select_2' }],
+        } } },
+      ] } } },
+    },
+  }, {
+    ...mixedInheritance.targets[0].target,
+    effectiveSelectValues: [0, 0],
+  }, 32);
+  assert.equal(mixedEdited.definition.blackbox.data.variable.string, '32');
+  assert.equal(
+    mixedEdited.definition.header.variables[1].value,
+    '0',
+    'a mixed selector edit must not spill into its shared non-inherited tail slots',
+  );
+
+  const heatcastPath = path.join(ROOT, '.tmp', 'example-warpaints', 'Heatcast.zip');
+  const basePath = path.join(ROOT, 'public', 'data', 'protodefs-base.bin');
+  const heatcastItemDefsPath = path.join(ROOT, 'public', 'data', 'item-defs.json');
+  const heatcastManifestPath = path.join(ROOT, 'public', 'data', 'manifest.json');
+  if (fs.existsSync(heatcastPath) && fs.existsSync(basePath)
+    && fs.existsSync(heatcastItemDefsPath) && fs.existsSync(heatcastManifestPath)) {
+    const reader = new ZipReader(new BlobReader(new Blob([fs.readFileSync(heatcastPath)])));
+    let fragments;
+    try {
+      const entries = await reader.getEntries();
+      fragments = await Promise.all(entries
+        .filter((entry) => !entry.directory && entry.filename.toLowerCase().endsWith('.json'))
+        .map(async (entry) => ({ name: entry.filename, text: await entry.getData(new TextWriter()) })));
+    } finally {
+      await reader.close();
+    }
+    const heatcastManifest = JSON.parse(fs.readFileSync(heatcastManifestPath, 'utf8'));
+    const heatcast = implementation.decodeProtoDefsFromJson(
+      new Uint8Array(fs.readFileSync(basePath)),
+      fragments,
+      {
+        weaponsByItemDef: JSON.parse(fs.readFileSync(heatcastItemDefsPath, 'utf8')),
+        builtInIds: heatcastManifest.paintkits.map((kit) => kit.id),
+      },
+    );
+    const kit = heatcast.index.kits[0];
+    const slot = heatcast.kitsByDefindex.get(kit.defindex)?.slots[0];
+    assert.ok(slot, 'Heatcast should expose at least one supported weapon');
+    const resolved = implementation.resolveKitRecipeWithProvenance(
+      heatcast,
+      kit.defindex,
+      slot.weaponKey,
+      'red',
+      0,
+    );
+    const heatcastMessages = implementation.extractKitMessages(heatcast, kit.defindex);
+    assert.ok(resolved && heatcastMessages, 'Heatcast should resolve through its imported JSON fragments');
+    const heatcastTargets = implementation.discoverGroupSelectTargets(heatcastMessages, resolved.provenance);
+    assert.ok(
+      heatcastTargets.targets.some((target) => target.canToggle),
+      'Heatcast must retain editable paint layers when only part of each selector inherits per-weapon values',
+    );
+  }
 
   assert.deepEqual(implementation.chooseBestSelectTargetForBucket(found, 16)?.target, { groupsValue: 'models/a_groups', occurrence: 0 });
   assert.deepEqual(implementation.chooseBestSelectTargetForBucket(found, 99, { groupsRef: 'models/c_groups' })?.target, { groupsValue: 'models/c_groups', occurrence: 0 });
