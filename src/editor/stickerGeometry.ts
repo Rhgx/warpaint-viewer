@@ -20,6 +20,8 @@ export interface StickerPoint {
   readonly y: number;
 }
 
+const RECTANGULAR_QUAD_ORTHOGONALITY_EPSILON = 1e-5;
+
 /** Test a V-down UV point against a rotated sticker rectangle. */
 export function stickerPlacementContainsPoint(placement: StickerPlacement, point: StickerPoint): boolean {
   const radians = -placement.rotation * Math.PI / 180;
@@ -223,7 +225,7 @@ export function stickerPlacementFromQuad(quad: StickerAffineQuad): StickerPlacem
   const dot = horizontal.x * vertical.x + horizontal.y * vertical.y;
   // This relative epsilon accepts ordinary float serialization noise but does
   // not allow the UI to erase a visible authored shear.
-  if (Math.abs(dot) > width * height * 1e-6) {
+  if (Math.abs(dot) > width * height * RECTANGULAR_QUAD_ORTHOGONALITY_EPSILON) {
     return { editable: false, reason: 'This sticker is skewed and cannot be adjusted here.' };
   }
   const cross = horizontal.x * vertical.y - horizontal.y * vertical.x;

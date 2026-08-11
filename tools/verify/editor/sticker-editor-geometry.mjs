@@ -67,6 +67,35 @@ try {
   assert.equal(skewed.editable, false, 'skewed quad is not silently flattened');
   assert.match(skewed.reason, /skewed/i, 'skew has a useful refusal reason');
 
+  const rocketStickerOne = geometry.stickerPlacementFromQuad({
+    tl: [0.1061291099, 0.05910533667],
+    tr: [0.1061293483, 0.128580153],
+    bl: [0.03665441275, 0.05910533667],
+  });
+  assert.equal(
+    rocketStickerOne.editable,
+    true,
+    'ordinary proto float noise does not disable Fantach Rocket Launcher sticker 1',
+  );
+  const rocketStickerTwo = geometry.stickerPlacementFromQuad({
+    tl: [0.2066156268, 0.1291550994],
+    tr: [0.2066156268, 0.05968052149],
+    bl: [0.2760903239, 0.1291549802],
+  });
+  assert.equal(
+    rocketStickerTwo.editable,
+    true,
+    'ordinary proto float noise does not disable Fantach Rocket Launcher sticker 2',
+  );
+
+  const authoredSkew = geometry.stickerPlacementFromQuad({
+    tl: [0.2, 0.2],
+    tr: [0.4, 0.2],
+    bl: [0.200836, 0.4],
+  });
+  assert.equal(authoredSkew.editable, false, 'visible authored shear remains read-only');
+  assert.match(authoredSkew.reason, /skewed/i, 'authored shear keeps the skew refusal');
+
   const mirrored = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0, -0.2] });
   assert.equal(mirrored.editable, false, 'mirrored quad is not silently flattened');
   assert.match(mirrored.reason, /mirrored/i, 'mirror has a useful refusal reason');

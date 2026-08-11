@@ -469,20 +469,25 @@ export function useCustomDefinitions({
     const edited = editedRef.current;
     const source = edited?.kitId === kitId ? edited.source : loadedRef.current?.source;
     if (!source) return Promise.resolve(null);
-    const key = `${kitId}|${weaponKey}|${team}|${wearIndex}`;
+    const packageGenerationAtStart = packageGeneration;
+    // A package mount can add an implicit sticker spec to an otherwise
+    // unchanged definition. Include its generation in the cache identity so
+    // a render in the same React turn cannot reuse the recipe resolved before
+    // the package was mounted.
+    const key = `${packageGeneration}|${kitId}|${weaponKey}|${team}|${wearIndex}`;
     const cached = recipeCacheRef.current.get(key);
     if (cached) return cached;
     const pending = source
       .resolveRecipe(customKitDefindex(kitId), weaponKey, team, wearIndex)
       .then((resolved) => {
-        if (!resolved) return null;
+        if (!resolved || packageGenerationAtStart !== provider.generation) return null;
         applyImplicitStickerSpecs(resolved.tree, hasTexture);
         return resolved.tree;
       })
       .catch(() => null);
     recipeCacheRef.current.set(key, pending);
     return pending;
-  }, [hasTexture]);
+  }, [hasTexture, packageGeneration, provider]);
 
   const getRecipeWithProvenance = useCallback((
     kitId: number,
@@ -493,16 +498,18 @@ export function useCustomDefinitions({
     const edited = editedRef.current;
     const source = edited?.kitId === kitId ? edited.source : loadedRef.current?.source;
     if (!source) return Promise.resolve(null);
+    const packageGenerationAtStart = packageGeneration;
     return source.resolveRecipeWithProvenance(
       customKitDefindex(kitId),
       weaponKey,
       team,
       wearIndex,
     ).then((resolved) => {
+      if (packageGenerationAtStart !== provider.generation) return null;
       if (resolved) applyImplicitStickerSpecs(resolved.tree, hasTexture);
       return resolved;
     }).catch(() => null);
-  }, [hasTexture]);
+  }, [hasTexture, packageGeneration, provider]);
 
   // The export builder needs an imported kit's own definition and operation
   // messages so it can write them into a proto_defs container the game loads.
