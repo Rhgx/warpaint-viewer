@@ -198,9 +198,8 @@ export function discoverGroupSelectTargets(
     occurrences.set(groupsRef, occurrence + 1);
     const blockers = new Set<GroupSelectTargetBlocker>();
     const ids = new Set<number>();
-    let hasInheritedVariableValues = false;
     const selectFields = many(select.select);
-    const inheritedSelectFields = selectFields.map((field) => {
+    const headerInheritedSelectFields = selectFields.map((field) => {
       if (!field.variable) return false;
       const matches = variables.get(field.variable);
       return matches?.length === 1 && matches[0].inherit !== false;
@@ -209,12 +208,11 @@ export function discoverGroupSelectTargets(
     const variableStem = selectFields.find((field) => field.variable)?.variable
       ?.replace(/_select_\d+$/i, '')
       .replace(/_/g, ' ');
-    for (const [fieldIndex, field] of selectFields.entries()) {
+    for (const field of selectFields) {
       let id: number | undefined;
       if (field.variable !== undefined) {
         const matches = variables.get(field.variable);
         const value = matches?.length === 1 ? matches[0].value : undefined;
-        if (inheritedSelectFields[fieldIndex]) hasInheritedVariableValues = true;
         id = value === undefined ? undefined : literalGroupId({ string: value });
         if (id === undefined) blockers.add('variable-select-value');
       } else {
@@ -230,14 +228,21 @@ export function discoverGroupSelectTargets(
       if (!field.variable) return undefined;
       const candidates = provenance?.filter((trace) => (
         trace.provenance.variableName === field.variable
-        && trace.provenance.scope === 'weapon'
         && trace.provenance.editableSourcePath?.[0] === 'definition'
         && trace.provenance.editableSourcePath?.[1] !== 'header'
       )).map((trace) => trace.provenance.editableSourcePath!);
       const unique = [...new Map(candidates?.map((path) => [path.join('\0'), path]) ?? []).values()];
       return unique.length === 1 ? unique[0] : undefined;
     });
-    if (inheritedSelectFields.some((inherits, index) => inherits && !valueSourcePaths[index])) {
+    // An inherited operation slot may resolve from either this weapon's
+    // editable override or the shared header default. Shared zero-padding is
+    // not part of the weapon's layer capacity and must not make the complete
+    // layer read-only. Without provenance, retain the conservative behavior.
+    const inheritedSelectFields = headerInheritedSelectFields.map((inherits, index) => (
+      inherits && (provenance === undefined || valueSourcePaths[index] !== undefined)
+    ));
+    const hasInheritedVariableValues = inheritedSelectFields.some(Boolean);
+    if (headerInheritedSelectFields.some(Boolean) && !hasInheritedVariableValues) {
       blockers.add('uneditable-weapon-select-value');
     }
     targets.push({

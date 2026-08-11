@@ -101,6 +101,16 @@ for (const archive of archives) {
           recipeCount += 1;
           const groups = implementation.discoverGroupSelectTargets(messages, resolved.provenance);
           const stickers = implementation.discoverStickerPlacementTargets(messages, resolved);
+          if (archive.toLowerCase() === 'flakfurnished.zip'
+            && weaponKey === 'c_amputator' && team === 'red' && wearIndex === 0) {
+            const editableLayers = groups.targets.filter((target, index, targets) => (
+              target.canToggle
+              && targets.findIndex((candidate) => candidate.canToggle && candidate.sourceKey === target.sourceKey) === index
+            ));
+            if (editableLayers.length !== 4) {
+              failures.push(`${label}: expected 4 editable paint layers, found ${editableLayers.length}`);
+            }
+          }
           groupTargetCount += groups.targets.length;
           stickerTargetCount += stickers.length;
           if (groups.targets.length > 0) {

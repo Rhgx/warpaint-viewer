@@ -118,6 +118,7 @@ try {
       header: { defindex: 5, variables: [
         { name: 'layer_select_1', value: '0', inherit: true },
         { name: 'layer_select_2', value: '0', inherit: false },
+        { name: 'layer_select_3', value: '0', inherit: true },
       ] },
       blackbox: { data: { variable: { variable: 'layer_select_1', string: '0' } } },
     },
@@ -127,7 +128,7 @@ try {
         { stage: { texture_lookup: { texture: { string: 'patterns/layer' } } } },
         { stage: { select: {
           groups: { string: 'models/example_groups' },
-          select: [{ variable: 'layer_select_1' }, { variable: 'layer_select_2' }],
+          select: [{ variable: 'layer_select_1' }, { variable: 'layer_select_2' }, { variable: 'layer_select_3' }],
         } } },
       ] } } },
     },
@@ -141,18 +142,30 @@ try {
       scope: 'weapon',
       canOverride: true,
     },
+  }, {
+    fieldPath: ['operation', 'layer_select_3'],
+    provenance: {
+      variableName: 'layer_select_3',
+      effectiveValue: '0',
+      sourcePath: ['definition', 'header', 'variables', '2', 'value'],
+      editableSourcePath: ['definition', 'header', 'variables', '2', 'value'],
+      scope: 'global',
+      canOverride: true,
+    },
   }]);
   assert.equal(mixedInheritance.targets[0]?.canToggle, true);
   assert.deepEqual(mixedInheritance.targets[0]?.target.valueSourcePaths, [
     ['definition', 'blackbox', 'data', 'variable'],
     undefined,
+    undefined,
   ]);
-  assert.deepEqual(mixedInheritance.targets[0]?.target.inheritedSelectValues, [true, false]);
+  assert.deepEqual(mixedInheritance.targets[0]?.target.inheritedSelectValues, [true, false, false]);
   const mixedEdited = implementation.toggleSelectGroupId({
     definition: {
       header: { defindex: 5, variables: [
         { name: 'layer_select_1', value: '0', inherit: true },
         { name: 'layer_select_2', value: '0', inherit: false },
+        { name: 'layer_select_3', value: '0', inherit: true },
       ] },
       blackbox: { data: { variable: { variable: 'layer_select_1', string: '0' } } },
     },
@@ -162,19 +175,24 @@ try {
         { stage: { texture_lookup: { texture: { string: 'patterns/layer' } } } },
         { stage: { select: {
           groups: { string: 'models/example_groups' },
-          select: [{ variable: 'layer_select_1' }, { variable: 'layer_select_2' }],
+          select: [{ variable: 'layer_select_1' }, { variable: 'layer_select_2' }, { variable: 'layer_select_3' }],
         } } },
       ] } } },
     },
   }, {
     ...mixedInheritance.targets[0].target,
-    effectiveSelectValues: [0, 0],
+    effectiveSelectValues: [0, 0, 0],
   }, 32);
   assert.equal(mixedEdited.definition.blackbox.data.variable.string, '32');
   assert.equal(
     mixedEdited.definition.header.variables[1].value,
     '0',
     'a mixed selector edit must not spill into its shared non-inherited tail slots',
+  );
+  assert.equal(
+    mixedEdited.definition.header.variables[2].value,
+    '0',
+    'shared inherited padding must not be rewritten as a weapon-specific selector slot',
   );
 
   const heatcastPath = path.join(ROOT, '.tmp', 'example-warpaints', 'Heatcast.zip');
