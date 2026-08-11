@@ -1,4 +1,4 @@
-import type { ProtoDefKitMessages } from '../protodefs/types';
+import type { ProtoDefKitMessages, ProtoDefValueTrace } from '../protodefs/types';
 import { many, type Many, type OperationNodeMsg, type OperationStageMsg, type VarDefMsg, type VarFieldMsg } from '../protodefs/messages';
 import type { SelectGroupTarget } from './mutations';
 
@@ -30,7 +30,8 @@ export interface GroupSelectTargetInfo {
 
 export type GroupSelectTargetBlocker =
   | 'variable-select-value'
-  | 'invalid-select-value';
+  | 'invalid-select-value'
+  | 'uneditable-weapon-select-value';
 
 export interface GroupSelectDiscovery {
   /** Select stages with a literal groups-texture reference. */
@@ -166,7 +167,10 @@ function selectTextureReferences(
  * The traversal covers nested combine and sticker branches, retains authored
  * singleton/array forms, and never resolves or guesses variable values.
  */
-export function discoverGroupSelectTargets(messages: ProtoDefKitMessages): GroupSelectDiscovery {
+export function discoverGroupSelectTargets(
+  messages: ProtoDefKitMessages,
+  provenance?: readonly ProtoDefValueTrace[],
+): GroupSelectDiscovery {
   const targets: GroupSelectTargetInfo[] = [];
   const occurrences = new Map<string, number>();
   const state = { hasUnexpandedOperationTemplates: false, hasUnresolvedGroupsReferences: false };
@@ -217,8 +221,26 @@ export function discoverGroupSelectTargets(messages: ProtoDefKitMessages): Group
       }
       if (id !== 0) ids.add(id);
     }
+    const valueSourcePaths = selectFields.map((field) => {
+      if (!field.variable) return undefined;
+      const candidates = provenance?.filter((trace) => (
+        trace.provenance.variableName === field.variable
+        && trace.provenance.scope === 'weapon'
+        && trace.provenance.editableSourcePath?.[0] === 'definition'
+        && trace.provenance.editableSourcePath?.[1] !== 'header'
+      )).map((trace) => trace.provenance.editableSourcePath!);
+      const unique = [...new Map(candidates?.map((path) => [path.join('\0'), path]) ?? []).values()];
+      return unique.length === 1 ? unique[0] : undefined;
+    });
+    if (hasInheritedVariableValues && selectFields.some((field, index) => field.variable && !valueSourcePaths[index])) {
+      blockers.add('uneditable-weapon-select-value');
+    }
     targets.push({
-      target: { groupsValue: groupsRef, occurrence },
+      target: {
+        groupsValue: groupsRef,
+        occurrence,
+        ...(valueSourcePaths.some(Boolean) ? { valueSourcePaths } : {}),
+      },
       groupsRef,
       selectedGroupIds: [...ids].sort((a, b) => a - b),
       textureRef,

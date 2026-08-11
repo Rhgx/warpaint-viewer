@@ -67,9 +67,10 @@ export interface ProtoDefRecipe {
 
 /**
  * Where the resolver obtained one effective operation-field value.  Paths are
- * expressed relative to the two editable kit messages, except for weapon and
- * wear paths which name the external item-definition branch that supplied the
- * override.  They deliberately remain data (rather than object references) so
+ * expressed relative to the two editable kit messages. Weapon-slot paths
+ * point into the definition message, while wear and external item-definition
+ * paths name the non-editable base branch that supplied the override. They
+ * deliberately remain data (rather than object references) so
  * they can safely cross the worker boundary.
  */
 export type ProtoDefValueScope = 'global' | 'weapon' | 'wear' | 'literal';
@@ -79,9 +80,8 @@ export interface ProtoDefValueProvenance {
   effectiveValue: string | undefined;
   sourcePath: string[];
   /**
-   * The local header variable that seeds this value before weapon/wear
-   * overrides. Unlike sourcePath it always points into the two-message editor
-   * snapshot when the variable can be safely frozen for an edit.
+   * The exact source inside the two-message editor snapshot that can be
+   * changed without broadening the edit to another weapon.
    */
   editableSourcePath?: string[];
   scope: ProtoDefValueScope;

@@ -375,7 +375,10 @@ function applyTracedFieldOverrides(
       variableName: field.variable,
       effectiveValue: value,
       sourcePath: fieldPath,
-      editableSourcePath: entry.provenance.editableSourcePath ?? entry.provenance.sourcePath,
+      // Weapon slots live inside the exported paint-kit definition, so edits
+      // can be scoped to exactly that weapon. Wear/item-definition overrides
+      // live in the shared base container and cannot be written safely.
+      ...(sourceRoot[0] === 'definition' ? { editableSourcePath: fieldPath } : {}),
       scope,
       canOverride: entry.canOverride,
     };
@@ -397,7 +400,6 @@ function applyTracedDefOverrides(
       variableName: definition.name,
       effectiveValue: value,
       sourcePath: [...definitionPath, 'value'],
-      editableSourcePath: entry.provenance.editableSourcePath ?? entry.provenance.sourcePath,
       scope: 'weapon',
       canOverride: entry.canOverride,
     };
@@ -529,7 +531,15 @@ function traceResolvedValues(
   if (!operationMsg) return [];
 
   const dict = buildTracedVarDict(headerVariables, headerPath);
-  applyTracedFieldOverrides(dict, slotItem.data?.variable, ['weaponSlot', 'data', 'variable'], 'weapon');
+  const slotPath = (() => {
+    for (const name of WEAPON_SLOTS) {
+      if (asItem(paintkitDef[name]) === slotItem) return ['definition', name];
+    }
+    const items = many(paintkitDef.item);
+    const index = items.indexOf(slotItem);
+    return index >= 0 ? manyEntryPath(['definition', 'item'], paintkitDef.item, index) : ['weaponSlot'];
+  })();
+  applyTracedFieldOverrides(dict, slotItem.data?.variable, [...slotPath, 'data', 'variable'], 'weapon');
   applyTracedDefOverrides(dict, itemDef.header?.variables, ['itemDefinition', String(itemDef.header.defindex), 'header', 'variables']);
   if (perWearDef) {
     const wearPath = manyEntryPath(

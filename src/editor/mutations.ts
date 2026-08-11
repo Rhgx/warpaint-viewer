@@ -22,6 +22,8 @@ export interface SelectGroupTarget {
    * the selector to an authored draft value.
    */
   effectiveSelectValues?: readonly number[];
+  /** Exact per-slot write paths for the active weapon's selector values. */
+  valueSourcePaths?: readonly (readonly string[] | undefined)[];
 }
 
 /** One editable paint layer considered by an exclusive group assignment. */
@@ -105,8 +107,13 @@ function setSelectFieldValue(
   field: VarFieldMsg,
   value: string,
   lockInheritance = false,
+  sourcePath?: readonly string[],
 ): VarFieldMsg {
   if (!field.variable) return fieldWithLiteralLike(field, value);
+  if (sourcePath && sourcePath[0] === 'definition' && sourcePath[1] !== 'header') {
+    setVariableFieldAtSourcePath(messages, field.variable, sourcePath, value);
+    return field;
+  }
   const match = findEditableVariable(messages, field.variable);
   const replaced = many(match.all).map((variable, index) => (
     index === match.index
@@ -237,6 +244,36 @@ function sourceMatchedStickerVariable(
   return { owner, index, variable, all };
 }
 
+function setVariableFieldAtSourcePath(
+  messages: MutableMessages,
+  variableName: string,
+  sourcePath: readonly string[],
+  value: string,
+): void {
+  const [root, ...parts] = sourcePath;
+  if ((root !== 'definition' && root !== 'operation') || parts.length === 0) {
+    throw new EditorMutationAmbiguityError(`Variable â€œ${variableName}â€ resolves outside this editable kit.`);
+  }
+  let owner: Record<string, unknown> = root === 'definition' ? messages.definition : messages.operation;
+  for (const part of parts.slice(0, -1)) {
+    const child = owner[part];
+    if (!child || typeof child !== 'object') {
+      throw new EditorMutationAmbiguityError(`Variable â€œ${variableName}â€ no longer has its authored weapon override.`);
+    }
+    owner = child as Record<string, unknown>;
+  }
+  const key = parts.at(-1)!;
+  const field = owner[key];
+  if (!field || typeof field !== 'object' || Array.isArray(field)
+    || (field as VarFieldMsg).variable !== variableName) {
+    throw new EditorMutationAmbiguityError(`Weapon provenance no longer identifies variable â€œ${variableName}â€ in this draft.`);
+  }
+  const authored = field as VarFieldMsg;
+  const literal = { ...authored };
+  delete literal.variable;
+  owner[key] = { ...fieldWithLiteralLike(literal, value), variable: variableName };
+}
+
 function setStickerField(
   messages: MutableMessages,
   stage: StickerStageMsg,
@@ -264,6 +301,10 @@ function setStickerField(
     });
   }
   if (sourcePath) {
+    if (sourcePath[0] === 'definition' && sourcePath[1] !== 'header') {
+      setVariableFieldAtSourcePath(messages, variableName, sourcePath, value);
+      return;
+    }
     const match = sourceMatchedStickerVariable(messages, variableName, sourcePath);
     const replaced = many(match.all).map((variable, index) => (
       index === match.index ? { ...variable, value, inherit: false } : variable
@@ -339,7 +380,13 @@ export function toggleSelectGroupId(
     // its visible baseline. Locking only the changed slot would let the other
     // slots continue to be overwritten by the weapon/wear definition.
     const shouldWrite = useEffectiveBaseline || ids[index] !== id;
-    return shouldWrite ? setSelectFieldValue(next, field, String(id), useEffectiveBaseline) : field;
+    const sourcePath = target.valueSourcePaths?.[index];
+    if (useEffectiveBaseline && field.variable && !sourcePath) {
+      throw new EditorMutationAmbiguityError(
+        `Paint layer variable â€œ${field.variable}â€ has no editable override for this weapon.`,
+      );
+    }
+    return shouldWrite ? setSelectFieldValue(next, field, String(id), useEffectiveBaseline, sourcePath) : field;
   });
   replaceMany(stage as unknown as Record<string, unknown>, 'select', prior, replacement);
   return next;

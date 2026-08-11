@@ -126,12 +126,14 @@ function editableLocalSourcePath(field: StickerResolvedField): readonly string[]
   const source = field.provenance;
   if (!field.variableName || source?.variableName !== field.variableName) return undefined;
   const path = source.editableSourcePath ?? source.sourcePath;
-  const [root, header, variables] = path;
-  // Provenance may point at a weapon slot or a per-wear branch. Those are not
-  // part of the exported two-message kit, so never use them as a write target.
-  return (root === 'definition' || root === 'operation') && header === 'header' && variables === 'variables'
-    ? path
-    : undefined;
+  const [root, second, third] = path;
+  if (source.scope === 'weapon') {
+    // A named/repeated weapon slot is part of the exported definition. Writing
+    // its VarField keeps another weapon's authored placement untouched.
+    return root === 'definition' && second !== 'header' ? path : undefined;
+  }
+  return (root === 'definition' || root === 'operation') && second === 'header' && third === 'variables'
+    ? path : undefined;
 }
 
 function preflightEdit(
@@ -212,7 +214,13 @@ export function discoverStickerPlacementTargets(
       } else {
         const duplicate = duplicateDestinationVariable([destTl, destTr, destBl]);
         if (duplicate) reason = `Destination corners share variable “${duplicate}”, so they cannot move independently.`;
-        else {
+        else if ([destTl, destTr, destBl].some((field, index) => (
+          field.variableName
+          && field.provenance?.scope !== 'global'
+          && ![destinationSourcePaths.dest_tl, destinationSourcePaths.dest_tr, destinationSourcePaths.dest_bl][index]
+        ))) {
+          reason = 'This sticker placement comes from a definition branch that cannot be edited per weapon.';
+        } else {
           quad = { tl, tr, bl };
           reason = preflightEdit(messages, target, quad);
           if (reason) quad = undefined;

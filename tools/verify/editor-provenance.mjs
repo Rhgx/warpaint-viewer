@@ -88,6 +88,7 @@ const slot = {
   item_definition_template: { defindex: 100 },
   data: { variable: { variable: 'slot_value', string: '32' } },
 };
+definition.blackbox = slot;
 
 function decodedFor(messages) {
   const currentOperation = messages.operation;
@@ -95,7 +96,7 @@ function decodedFor(messages) {
   const ctx = implementation.buildResolveCtx([currentOperation], [itemDefinition], []);
   return {
     ctx,
-    kitsByDefindex: new Map([[900, { def: currentDefinition, slots: [{ item: slot, itemDef: itemDefinition, weaponKey: 'blackbox' }] }]]),
+    kitsByDefindex: new Map([[900, { def: currentDefinition, slots: [{ item: currentDefinition.blackbox, itemDef: itemDefinition, weaponKey: 'blackbox' }] }]]),
   };
 }
 
@@ -191,11 +192,22 @@ inheritedSlot.data.variable = [
   { variable: 'inherited_select_1', string: '16' },
   { variable: 'inherited_select_2', string: '0' },
 ];
+inheritedVariableBacked.definition.blackbox = inheritedSlot;
+inheritedVariableBacked.definition.scattergun = {
+  item_definition_template: { defindex: 100 },
+  data: { variable: [
+    { variable: 'inherited_select_1', string: '48' },
+    { variable: 'inherited_select_2', string: '64' },
+  ] },
+};
 function decodedForInherited(messages) {
   const ctx = implementation.buildResolveCtx([messages.operation], [itemDefinition], []);
   return {
     ctx,
-    kitsByDefindex: new Map([[900, { def: messages.definition, slots: [{ item: inheritedSlot, itemDef: itemDefinition, weaponKey: 'blackbox' }] }]]),
+    kitsByDefindex: new Map([[900, { def: messages.definition, slots: [
+      { item: messages.definition.blackbox, itemDef: itemDefinition, weaponKey: 'blackbox' },
+      { item: messages.definition.scattergun, itemDef: itemDefinition, weaponKey: 'scattergun' },
+    ] }]]),
   };
 }
 assert.deepEqual(
@@ -207,6 +219,10 @@ assert.deepEqual(
 const inheritedAdded = implementation.toggleSelectGroupId(inheritedVariableBacked, {
   groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups',
   effectiveSelectValues: [16, 0],
+  valueSourcePaths: [
+    ['definition', 'blackbox', 'data', 'variable', '0'],
+    ['definition', 'blackbox', 'data', 'variable', '1'],
+  ],
 }, 224);
 assert.deepEqual(
   implementation.resolveKitRecipeWithProvenance(decodedForInherited(inheritedAdded), 900, 'blackbox', 'red', 0)
@@ -216,18 +232,33 @@ assert.deepEqual(
 );
 assert.deepEqual(
   inheritedAdded.definition.header.variables.slice(-2).map((entry) => [entry.value, entry.inherit]),
-  [['16', false], ['224', false]],
-  'the effective baseline must be captured and locked before it is edited',
+  [['0', true], ['0', true]],
+  'a weapon-scoped edit must leave the shared paint-kit defaults untouched',
+);
+assert.deepEqual(
+  inheritedAdded.definition.blackbox.data.variable.slice(-2).map((entry) => entry.string),
+  ['16', '224'],
+  'the effective baseline must be written into only the active weapon slot',
 );
 const inheritedRemoved = implementation.toggleSelectGroupId(inheritedAdded, {
   groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups',
   effectiveSelectValues: [16, 224],
+  valueSourcePaths: [
+    ['definition', 'blackbox', 'data', 'variable', '0'],
+    ['definition', 'blackbox', 'data', 'variable', '1'],
+  ],
 }, 224);
 assert.deepEqual(
   implementation.resolveKitRecipeWithProvenance(decodedForInherited(inheritedRemoved), 900, 'blackbox', 'red', 0)
     ?.tree.nodes.find((node) => node.type === 'select')?.select,
   [16, 0],
   'removing an edited inherited area must restore the effective baseline',
+);
+assert.deepEqual(
+  implementation.resolveKitRecipeWithProvenance(decodedForInherited(inheritedRemoved), 900, 'scattergun', 'red', 0)
+    ?.tree.nodes.find((node) => node.type === 'select')?.select,
+  [48, 64],
+  'clearing one weapon must preserve another weapon slot\'s assigned groups',
 );
 
 // A paintable part is owned by one texture layer at a time. Reassigning it
@@ -277,6 +308,10 @@ const inheritedMoved = implementation.assignSelectGroupExclusively(inheritedOver
   target: {
     groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups', occurrence: 1,
     effectiveSelectValues: [32, 0],
+    valueSourcePaths: [
+      ['definition', 'header', 'variables', '2'],
+      ['definition', 'header', 'variables', '3'],
+    ],
   },
 }, [
   {
@@ -284,6 +319,10 @@ const inheritedMoved = implementation.assignSelectGroupExclusively(inheritedOver
     target: {
       groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups', occurrence: 0,
       effectiveSelectValues: [16, 224],
+      valueSourcePaths: [
+        ['definition', 'header', 'variables', '0'],
+        ['definition', 'header', 'variables', '1'],
+      ],
     },
   },
 ], 224);

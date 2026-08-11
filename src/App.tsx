@@ -325,8 +325,8 @@ function MainApp() {
   useEffect(() => setShowLayerMap(false), [editableKitId, state.weaponKey]);
 
   const groupDiscovery = useMemo(
-    () => editorCurrent ? discoverGroupSelectTargets(editorCurrent) : null,
-    [editorCurrent],
+    () => editorCurrent ? discoverGroupSelectTargets(editorCurrent, stickerRecipe?.provenance) : null,
+    [editorCurrent, stickerRecipe],
   );
   const editableGroupTargets = useMemo(() => (
     groupDiscovery?.targets.filter((target, index, targets) => (

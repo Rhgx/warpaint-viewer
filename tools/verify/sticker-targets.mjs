@@ -68,15 +68,30 @@ const slot = { item_definition_template: { defindex: 100 }, data: { variable: [
   { variable: 'sticker_tr', string: '0.8 0.3' },
   { variable: 'sticker_bl', string: '0.2 0.9' },
 ] } };
+definition.blackbox = slot;
+definition.scattergun = {
+  item_definition_template: { defindex: 100 },
+  data: { variable: [
+    { variable: 'sticker_base', string: 'stickers/weapon_base' },
+    { variable: 'sticker_weight', string: '7' },
+    { variable: 'sticker_spec', string: 'stickers/weapon_spec' },
+    { variable: 'sticker_tl', string: '0.1 0.15' },
+    { variable: 'sticker_tr', string: '0.6 0.15' },
+    { variable: 'sticker_bl', string: '0.1 0.65' },
+  ] },
+};
 
 function decodedFor(messages) {
   return {
     ctx: implementation.buildResolveCtx([messages.operation], [itemDefinition], []),
-    kitsByDefindex: new Map([[901, { def: messages.definition, slots: [{ item: slot, itemDef: itemDefinition, weaponKey: 'blackbox' }] }]]),
+    kitsByDefindex: new Map([[901, { def: messages.definition, slots: [
+      { item: messages.definition.blackbox, itemDef: itemDefinition, weaponKey: 'blackbox' },
+      { item: messages.definition.scattergun, itemDef: itemDefinition, weaponKey: 'scattergun' },
+    ] }]]),
   };
 }
-function resolve(messages) {
-  const result = implementation.resolveKitRecipeWithProvenance(decodedFor(messages), 901, 'blackbox', 'red', 0);
+function resolve(messages, weaponKey = 'blackbox') {
+  const result = implementation.resolveKitRecipeWithProvenance(decodedFor(messages), 901, weaponKey, 'red', 0);
   assert.ok(result, 'fixture should resolve through the production decoder');
   return result;
 }
@@ -100,11 +115,22 @@ const moved = implementation.setStickerDestQuad(original, first.target, movedQua
 assert.equal(original.definition.header.variables[3].value, '0 0', 'placement mutation must never mutate its input');
 assert.deepEqual(
   moved.definition.header.variables.slice(3).map((entry) => [entry.value, entry.inherit]),
-  [['0.4 0.2', false], ['0.9 0.4', false], ['0.2 0.8', false]],
-  'an edited inherited placement must freeze every destination field at the visible result',
+  [['0 0', true], ['1 0', true], ['0 1', true]],
+  'a weapon-scoped placement must not rewrite the shared paint-kit defaults',
+);
+assert.deepEqual(
+  moved.definition.blackbox.data.variable.slice(3).map((entry) => entry.string),
+  ['0.4 0.2', '0.9 0.4', '0.2 0.8'],
+  'an edited placement must write only the active weapon slot',
 );
 const movedTarget = implementation.discoverStickerPlacementTargets(moved, resolve(moved))[0];
 assert.deepEqual(movedTarget.quad, movedQuad, 'production re-resolution must preserve the moved quad over weapon overrides');
+const otherWeaponTarget = implementation.discoverStickerPlacementTargets(moved, resolve(moved, 'scattergun'))[0];
+assert.deepEqual(
+  otherWeaponTarget.quad,
+  { tl: [0.1, 0.15], tr: [0.6, 0.15], bl: [0.1, 0.65] },
+  'moving a sticker on one weapon must preserve another weapon slot\'s placement',
+);
 
 const history = new implementation.SnapshotHistory();
 history.record(original);
@@ -157,7 +183,14 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
   };
   const movedArmy = implementation.setStickerDestQuad(armyGuns, editableArmyTarget.target, movedArmyQuad);
   assert.notEqual(movedArmy, armyGuns, 'Army Guns placement must mutate a detached snapshot');
+  const activeSlot = armyInfo.slots.find((entry) => entry.weaponKey === weaponKey);
+  const namedSlotKey = Object.keys(armyGuns.definition).find((key) => armyGuns.definition[key] === activeSlot?.item);
+  const repeatedSlotIndex = Array.isArray(armyGuns.definition.item)
+    ? armyGuns.definition.item.indexOf(activeSlot?.item)
+    : -1;
   armyInfo.def = movedArmy.definition;
+  if (activeSlot && namedSlotKey) activeSlot.item = movedArmy.definition[namedSlotKey];
+  if (activeSlot && repeatedSlotIndex >= 0) activeSlot.item = movedArmy.definition.item[repeatedSlotIndex];
   decoded.ctx.opByIdx.set(movedArmy.operation.header.defindex, movedArmy.operation);
   const movedArmyResolved = implementation.resolveKitRecipeWithProvenance(decoded, 435, weaponKey, 'red', 0);
   const movedArmyTargets = implementation.discoverStickerPlacementTargets(movedArmy, movedArmyResolved);

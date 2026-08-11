@@ -16,7 +16,7 @@ function bundleModule() {
   const entry = path.join(ROOT, 'staging', 'group-targets-verify-entry.ts');
   fs.writeFileSync(entry,
     "export { discoverGroupSelectTargets, chooseBestSelectTargetForBucket } from '../src/editor/groupTargets';\n"
-    + "export { decodeProtoDefs, extractKitMessages } from '../src/protodefs/decoder';\n",
+    + "export { decodeProtoDefs, extractKitMessages, resolveKitRecipeWithProvenance } from '../src/protodefs/decoder';\n",
   );
   const viteEntry = fileURLToPath(import.meta.resolve('vite'));
   const distIndex = viteEntry.lastIndexOf(`${path.sep}dist${path.sep}`);
@@ -136,7 +136,11 @@ try {
     for (const kit of decoded.index.kits) {
       const kitMessages = implementation.extractKitMessages(decoded, kit.defindex);
       if (!kitMessages) continue;
-      const discovery = implementation.discoverGroupSelectTargets(kitMessages);
+      const slot = decoded.kitsByDefindex.get(kit.defindex)?.slots[0];
+      const resolved = slot
+        ? implementation.resolveKitRecipeWithProvenance(decoded, kit.defindex, slot.weaponKey, 'red', 0)
+        : null;
+      const discovery = implementation.discoverGroupSelectTargets(kitMessages, resolved?.provenance);
       const editable = discovery.targets.filter((target) => target.canToggle);
       directTargets += editable.length;
       if (editable.length === 1) kitsWithOneEditableTarget += 1;
