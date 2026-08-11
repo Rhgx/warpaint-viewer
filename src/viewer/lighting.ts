@@ -9,13 +9,14 @@ export type AmbientCube = readonly [
 export interface LightingPreset {
   id: string;
   label: string;
-  build: (camera?: THREE.PerspectiveCamera) => THREE.Light[];
+  build: (camera?: THREE.PerspectiveCamera, frame?: LightingFrame) => THREE.Light[];
   // Source-axis order: +X, -X, +Y, -Y, +Z, -Z. Values are linear RGB.
   ambientCube: AmbientCube;
   ambientBasis?: (camera?: THREE.PerspectiveCamera) => THREE.Matrix3;
   background: number;
   backplate?: string;
   exposure?: number;
+  spotFalloff?: number;
 }
 
 type SourceLight = readonly [number, number, number, number];
@@ -39,6 +40,12 @@ function sourceLightIntensity(light: SourceLight): number {
 
 function sourceAmbientCube(sourceCube: readonly (readonly number[])[]): AmbientCube {
   return sourceCube.map((face) => new THREE.Vector3(...face as [number, number, number])) as unknown as AmbientCube;
+}
+
+export interface LightingFrame {
+  center: THREE.Vector3;
+  dimensions: readonly [number, number, number];
+  bounds: THREE.Box3;
 }
 
 function sourceCameraBasis(angles: SourceVector) {
@@ -205,6 +212,40 @@ export const LIGHTING_PRESETS: LightingPreset[] = [
   mapPreset('night'),
 ];
 
+export const PAINTKIT_ICON_LIGHTING_ID = 'paintkit-icon';
+
+const paintkitIconLighting: LightingPreset = {
+  id: PAINTKIT_ICON_LIGHTING_ID,
+  label: 'War Paint Icon',
+  background: 0x1c1f24,
+  exposure: 1,
+  spotFalloff: 5,
+  // CModelPanel::Paint sets all six studio ambient cube faces to 0.4.
+  ambientCube: cube([0.4, 0.4, 0.4]),
+  build: (_camera, frame) => {
+    if (!frame) return [];
+    // ItemModelPanel.res enables spotlight=1. CModelPanel places that light at
+    // Source (0,0,200), aimed 75% of the model's Z extent above its origin.
+    // LightDesc_t receives cone boundaries in radians. Three expresses the
+    // inner cone as a fraction of the outer cone through `penumbra`.
+    const innerCone = 0.035;
+    const outerCone = 0.873;
+    const light = new THREE.SpotLight(
+      0xffffff,
+      1,
+      0,
+      outerCone,
+      1 - innerCone / outerCone,
+      0,
+    );
+    const sourceZExtent = frame.bounds.max.z - frame.bounds.min.z;
+    light.position.set(0, 0, 200).sub(frame.center);
+    light.target.position.set(0, 0, sourceZExtent * 0.75).sub(frame.center);
+    return [light];
+  },
+};
+
 export function getPreset(id: string): LightingPreset {
+  if (id === PAINTKIT_ICON_LIGHTING_ID) return paintkitIconLighting;
   return LIGHTING_PRESETS.find((preset) => preset.id === id) ?? LIGHTING_PRESETS[0];
 }

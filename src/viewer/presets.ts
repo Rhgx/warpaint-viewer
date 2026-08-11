@@ -59,6 +59,38 @@ export interface ViewAnglePreset {
   id: string;
   label: string;
   dir: [number, number, number] | null; // null = default 3/4 inspect view
+  framingScale?: number;
+  cameraAttachment?: {
+    position: [number, number, number];
+    forward: [number, number, number];
+    up?: [number, number, number];
+  };
+  /** Exact inventory-icon framing: preserve authored roll and lock input. */
+  lockedCamera?: boolean;
+}
+
+interface IconCameraSource {
+  key: string;
+  iconCamera?: {
+    position: [number, number, number];
+    forward: [number, number, number];
+    up: [number, number, number];
+  };
+}
+
+/** Build the reset/default pose authored into a TF2 weapon model. */
+export function weaponIconView(
+  weapon: IconCameraSource | null | undefined,
+  lockedCamera = false,
+): ViewAnglePreset | undefined {
+  if (!weapon?.iconCamera) return undefined;
+  return {
+    id: `icon-${weapon.key}`,
+    label: 'Default',
+    dir: null,
+    cameraAttachment: weapon.iconCamera,
+    lockedCamera,
+  };
 }
 
 // normalize(1, 1, 1), computed by hand here to avoid a three.js import.
@@ -66,6 +98,7 @@ const ISO = 1 / Math.sqrt(3);
 
 export const VIEW_ANGLES: ViewAnglePreset[] = [
   { id: 'default', label: 'Default', dir: null },
+  { id: 'inventory-icon', label: 'Inventory icon (locked)', dir: null, lockedCamera: true },
   { id: 'front', label: 'Front', dir: [0, 0, 1] },
   { id: 'back', label: 'Back', dir: [0, 0, -1] },
   { id: 'left', label: 'Left', dir: [-1, 0, 0] },
@@ -74,3 +107,26 @@ export const VIEW_ANGLES: ViewAnglePreset[] = [
   { id: 'bottom', label: 'Bottom', dir: [0, -1, 0] },
   { id: 'iso', label: 'Isometric', dir: [ISO, ISO, ISO] },
 ];
+
+// Valve's inventory icons present the paint-tool card almost face-on, with a
+// small elevation and side angle to keep the card thickness and paint cans
+// legible. The BaseModelPanel resource default is 54 degrees (rather than the
+// viewer's wider general-purpose 75-degree weapon view).
+export const PAINTKIT_TOOL_VIEW: ViewAnglePreset = {
+  id: 'paintkit-tool',
+  label: 'War Paint',
+  // models/items/paintkit_tool.mdl, attachment "icon_camera". TF2's
+  // CEmbeddedItemModelPanel reads this transform directly for inventory icons.
+  dir: [0.8461242318, 0.172205776, 0.5043995976],
+  cameraAttachment: {
+    position: [52.8896865845, 28.1729717255, 32.5647087097],
+    forward: [-0.8461242318, -0.172205776, -0.5043995976],
+    up: [-0.1479191903, 0.9850609985, -0.0881745],
+  },
+};
+// CEmbeddedItemModelPanel's inventory render uses the authored 54-degree icon
+// FOV directly. At 128 square this reproduces the 77 x 86 pixel alpha bounds
+// shared by TF2's shipped modern war-paint icons.
+export const DEFAULT_VIEWER_FOV = 70;
+export const TF2_ITEM_PANEL_FOV = 54;
+export const PAINTKIT_TOOL_FOV = TF2_ITEM_PANEL_FOV;

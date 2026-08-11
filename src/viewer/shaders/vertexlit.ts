@@ -28,6 +28,7 @@ uniform float uTf2RimLight, uTf2RimExponent, uTf2RimBoost, uTf2RimMask;
 uniform float uTf2SelfIllum, uTf2SelfIllumFresnel, uTf2UseSelfIllumMask;
 uniform float uTf2AlphaTestRef;
 uniform float uTf2Detail, uTf2DetailMode, uTf2DetailScale, uTf2DetailFactor;
+uniform float uTf2SpotFalloff;
 uniform sampler2D uTf2ExponentMap, uTf2LightwarpMap, uTf2SelfIllumMaskMap, uTf2DetailMap;
 uniform vec3 uTf2PhongTint, uTf2Fresnel, uTf2SelfIllumTint, uTf2EnvTint, uTf2DetailTint;
 uniform vec4 uTf2SelfIllumFresnelParams;
@@ -267,4 +268,12 @@ export function installTf2VertexLit(shader: THREE.WebGLProgramParametersWithUnif
   }
   shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', normalFragmentMaps());
   shader.fragmentShader = shader.fragmentShader.replace('#include <lights_phong_pars_fragment>', lightsPhongPars());
+  shader.fragmentShader = shader.fragmentShader.replace(
+    'return smoothstep( coneCosine, penumbraCosine, angleCosine );',
+    `if ( uTf2SpotFalloff > 0.0 ) {
+      float tf2Cone = saturate( ( angleCosine - coneCosine ) / max( penumbraCosine - coneCosine, 1e-6 ) );
+      return pow( tf2Cone, uTf2SpotFalloff );
+    }
+    return smoothstep( coneCosine, penumbraCosine, angleCosine );`,
+  );
 }

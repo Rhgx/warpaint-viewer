@@ -9,6 +9,9 @@ export const MODE_LERP = 2;
 export const MODE_SELECT = 3;
 export const MODE_BLEND = 6;
 export const MODE_TEXTURE = 10; // sample with UV transform + AdjustLevels
+// Editor-only pass that turns a selector-writing group sticker into isolated
+// RGBA artwork. This is not part of Source's ECombineOperation enum.
+export const MODE_GROUP_STICKER_ARTWORK = 11;
 
 // RawShaderMaterial: three injects nothing, so declare the geometry attributes.
 export const VERT = /* glsl */ `
@@ -94,6 +97,31 @@ vec4 adjustLevels(vec4 src, vec3 bwg) {
 }
 
 void main() {
+  if (uMode == ${MODE_GROUP_STICKER_ARTWORK}) {
+    // tex0 is the selector before this group sticker, tex1/2 are the final
+    // paint with that selector forced to zero/one, and tex3 is the original
+    // local sticker mask. Sampling the endpoints at the authored destination
+    // produces the exact visible block without baking neighbouring pixels into
+    // it or clipping the source to an earlier crop.
+    vec2 destinationUv = uDestTl
+      + (uDestTr - uDestTl) * vUv.x
+      + (uDestBl - uDestTl) * vUv.y;
+    vec4 mask = adjustLevels(samp(uTex3, vUv, uSrgb3), uAdjust3);
+    if (mask.a <= 0.001) {
+      fragColor = vec4(0.0);
+      return;
+    }
+    float selectorBase = samp(uTex0, destinationUv, uSrgb0).r;
+    float selector = mix(selectorBase, mask.r, mask.a);
+    vec4 endpointZero = samp(uTex1, destinationUv, uSrgb1);
+    vec4 endpointOne = samp(uTex2, destinationUv, uSrgb2);
+    vec3 desired = mix(endpointZero.rgb, endpointOne.rgb, selector);
+    // The selector blend already accounts for the mask's soft alpha. The
+    // isolated result therefore replaces the affected pixel as an opaque
+    // final colour, while pixels outside the source mask stay transparent.
+    writeLinear(vec4(desired, 1.0));
+    return;
+  }
   if (uMode == ${MODE_TEXTURE}) {
     vec2 uvc = (uUv0 * vec3(vUv, 1.0)).xy;
     writeLinear(adjustLevels(samp(uTex0, uvc, uSrgb0), uAdjust0));

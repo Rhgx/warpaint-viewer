@@ -45,6 +45,9 @@
   width: 100%;
   height: 100%;
 }
+.canvas-wrap[data-editor-selecting] .viewer-canvas {
+  cursor: crosshair;
+}
 /* Lives inside .stage-overlay-tl, stacked under .stage-header when both are
    visible, so it no longer needs its own absolute position. */
 .composing-badge {

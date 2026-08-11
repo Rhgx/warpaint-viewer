@@ -52,7 +52,14 @@ function loadUnusualBundle(effectId: string, weaponKey: string): Promise<Unusual
   let promise = unusualBundlePromises.get(key);
   if (!promise) {
     const base = import.meta.env.BASE_URL;
-    promise = fetch(`${base}data/effects/unusuals/${effectId}/${weaponKey}.json`).then((r) => {
+    // paintkit_tool is a presentation prop rather than an equippable weapon,
+    // so the weapon-unusual PCFs do not author a suffixed particle dispatch
+    // for it. The model itself does author unusual_0..unusual_5 down the six
+    // spray cans; attachments.json carries those exact transforms. Reuse a
+    // canonical world-model dispatch, then bind its CPs to those authored can
+    // attachments through the same lookup path as every real weapon.
+    const bundleWeaponKey = weaponKey === 'paintkit_tool' ? 'c_rocketlauncher' : weaponKey;
+    promise = fetch(`${base}data/effects/unusuals/${effectId}/${bundleWeaponKey}.json`).then((r) => {
       if (!r.ok) throw new Error(`unusual bundle "${key}" fetch failed: ${r.status}`);
       return r.json() as Promise<UnusualBundle>;
     });

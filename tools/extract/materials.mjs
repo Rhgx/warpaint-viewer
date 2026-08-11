@@ -18,6 +18,16 @@ export function resolveWeaponMaterials({
   for (const weapon of weaponRegistry.values()) {
     weaponModels[weapon.key] = [weapon.modelPath ? weapon.modelPath.replace(/\\/g, '/') : null].filter(Boolean);
     if (!weapon.modelPath) continue;
+    // The paint-tool MDL's sole material is nested one directory below the
+    // model. It never accepts a paint kit's per-weapon material override.
+    const authoredMaterial = weapon.key === 'paintkit_tool'
+      ? 'materials/models/items/paintkit_tool/paintkit_tool.vmt'
+      : null;
+    if (authoredMaterial && misc.has(authoredMaterial)) {
+      weaponVmts.set(weapon.key, authoredMaterial);
+      toExtract.push(authoredMaterial);
+      continue;
+    }
     const modelMaterial = `materials/${weapon.modelPath.replace(/\\/g, '/').replace(/\.mdl$/i, '.vmt')}`.toLowerCase();
     if (misc.has(modelMaterial)) {
       weaponVmts.set(weapon.key, modelMaterial);

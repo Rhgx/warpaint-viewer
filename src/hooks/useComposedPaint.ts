@@ -69,6 +69,8 @@ export function applyTextureOverrides(node: RecipeNode, textures: Record<string,
 }
 
 interface UseComposedPaintOptions {
+  /** Another editor-owned composition is currently supplying the visible map. */
+  suspended?: boolean;
   engineReady: boolean;
   data: DataSource | null;
   selectedKit: PaintkitEntry | null;
@@ -87,6 +89,7 @@ interface UseComposedPaintOptions {
   state: ControlsState;
   assetOverrides: WarpaintAssetOverrides;
   packageGeneration: number;
+  definitionGeneration: number;
   activeTextureOverrides: Record<string, string>;
   viewerRef: React.RefObject<Viewer | null>;
   compositorRef: React.RefObject<Compositor | null>;
@@ -96,6 +99,7 @@ interface UseComposedPaintOptions {
 }
 
 export function useComposedPaint({
+  suspended = false,
   engineReady,
   data,
   selectedKit,
@@ -105,6 +109,7 @@ export function useComposedPaint({
   state,
   assetOverrides,
   packageGeneration,
+  definitionGeneration,
   activeTextureOverrides,
   viewerRef,
   compositorRef,
@@ -118,6 +123,7 @@ export function useComposedPaint({
   const firstPaintLoggedRef = useRef(false);
 
   const [composing, setComposing] = useState(false);
+  const [visibleDefinitionGeneration, setVisibleDefinitionGeneration] = useState(-1);
 
   const resetComposeKey = useCallback(() => {
     lastComposeKeyRef.current = '';
@@ -134,6 +140,10 @@ export function useComposedPaint({
   // Recompose when recipe inputs change: debounced, deduped, and the previous
   // texture stays on the mesh until the new one is ready (no untextured flash).
   useEffect(() => {
+    if (suspended) {
+      setComposing(false);
+      return;
+    }
     const ds = data;
     if (!engineReady || !ds || !selectedKit || !state.weaponKey || loadedAssetKey !== selectedAssetKey) return;
     if (!selectedKit.weapons.includes(state.weaponKey)) return;
@@ -143,7 +153,7 @@ export function useComposedPaint({
       height: weapon?.compositeHeight ?? 1024,
     };
 
-    const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}`;
+    const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|definition:${definitionGeneration}`;
     if (composeKey === lastComposeKeyRef.current) return;
 
     let cancelled = false;
@@ -225,6 +235,7 @@ export function useComposedPaint({
         composeCacheRef.current.delete(composeKey);
         composeCacheRef.current.set(composeKey, cached);
         viewer.setMap(cached.texture);
+        setVisibleDefinitionGeneration(definitionGeneration);
         lastResultRef.current = cached;
         lastComposeKeyRef.current = composeKey;
         setComposing(false);
@@ -257,6 +268,7 @@ export function useComposedPaint({
           return;
         }
         viewer.setMap(result.texture);
+        setVisibleDefinitionGeneration(definitionGeneration);
         cacheResult(composeKey, result, comp);
         lastResultRef.current = result;
         lastComposeKeyRef.current = composeKey;
@@ -287,7 +299,7 @@ export function useComposedPaint({
         void (async () => {
           const variant = likelyVariant();
           if (!variant || cancelled || compositorRef.current !== comp) return;
-          const key = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${variant.team}|${variant.wear}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}`;
+          const key = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${variant.team}|${variant.wear}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|definition:${definitionGeneration}`;
           if (composeCacheRef.current.has(key)) return;
           await waitForIdle();
           if (cancelled || compositorRef.current !== comp || !allowSpeculativeCompose()) return;
@@ -325,7 +337,7 @@ export function useComposedPaint({
       window.clearTimeout(badgeTimer);
       cancelPendingIdle?.();
     };
-  }, [engineReady, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
+  }, [suspended, engineReady, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
 
-  return { composing, resetComposeKey, disposeCache };
+  return { composing, visibleDefinitionGeneration, resetComposeKey, disposeCache };
 }

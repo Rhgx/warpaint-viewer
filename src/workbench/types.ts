@@ -5,7 +5,7 @@ export interface WarpaintAssetOverrides {
   assets: Record<string, WarpaintAssetState>;
 }
 
-export type WorkbenchTab = 'files' | 'package' | 'definitions' | 'export';
+export type WorkbenchTab = 'files' | 'editor' | 'package' | 'definitions' | 'export';
 
 export interface WearRecipe {
   wearIndex: number;

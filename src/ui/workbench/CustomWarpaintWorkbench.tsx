@@ -9,8 +9,12 @@ import {
   Download,
   Files,
   PackageOpen,
+  PencilRuler,
   Plus,
+  RotateCcw,
+  Redo2,
   ScrollText,
+  Undo2,
   X,
 } from 'lucide-react';
 import type { TextureMetadata } from '../../data/types';
@@ -25,6 +29,14 @@ import { DefinitionsPanel } from './DefinitionsPanel';
 import { ExportPanel } from './ExportPanel';
 import type { ExportDefinitionsContext, ExportItem } from './ExportPanel';
 import { AssetFilesPanel } from './AssetFilesPanel';
+import {
+  VisualWarpaintEditorPanel,
+  type VisualWarpaintEditorPanelProps,
+} from './VisualWarpaintEditorPanel';
+import {
+  StickerPlacementEditor,
+  type StickerPlacementEditorProps,
+} from './StickerPlacementEditor';
 import './CustomWarpaintWorkbench.css';
 import './SourcePackagePanel.css';
 import './DefinitionsPanel.css';
@@ -53,6 +65,7 @@ export function CustomWarpaintWorkbench({
   gameBuild,
   snapshotDate,
   exportDefinitions,
+  editor,
 }: {
   recipes: WearRecipe[];
   resolveTexture: (ref: string) => string;
@@ -66,6 +79,27 @@ export function CustomWarpaintWorkbench({
   snapshotDate?: string | null;
   /** Definition and package sources for the Export tab, supplied by the app. */
   exportDefinitions?: ExportDefinitionsContext;
+  editor?: VisualWarpaintEditorPanelProps & {
+    mode: 'paint' | 'sticker';
+    onModeChange: (mode: 'paint' | 'sticker') => void;
+    sticker?: StickerPlacementEditorProps & {
+      targets: readonly { id: string; label: string; thumbnail?: string | null }[];
+      activeTargetId: string;
+      onActiveTargetChange: (id: string) => void;
+    };
+    dirty: boolean;
+    canDownload: boolean;
+    canUndo: boolean;
+    canRedo: boolean;
+    error?: string | null;
+    selectors: readonly { id: string; label: string }[];
+    activeSelectorId: string;
+    onActiveSelectorChange: (id: string) => void;
+    onUndo: () => void;
+    onRedo: () => void;
+    onReset: () => void;
+    onDownloadJson: () => void;
+  };
   sourcePackage: SourcePackageState;
   /** Async Source package resolver used only for the non-destructive preview. */
   resolvePackageTexture?: (ref: string) => Promise<string>;
@@ -95,6 +129,7 @@ export function CustomWarpaintWorkbench({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmRevert, setConfirmRevert] = useState(false);
   const [resizing, setResizing] = useState(false);
   const [dropping, setDropping] = useState(false);
   const [dropHint, setDropHint] = useState(false);
@@ -126,6 +161,24 @@ export function CustomWarpaintWorkbench({
     );
     return () => window.clearTimeout(timer);
   }, [confirmReset]);
+
+  useEffect(() => {
+    if (!confirmRevert) return;
+    const timer = window.setTimeout(() => setConfirmRevert(false), RESET_CONFIRM_MS);
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setConfirmRevert(false);
+    };
+    window.addEventListener('keydown', cancel, true);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('keydown', cancel, true);
+    };
+  }, [confirmRevert]);
+
+  useEffect(() => setConfirmRevert(false), [editor?.dirty, editor?.activeSelectorId]);
 
   useEffect(() => {
     if (!dropHint) return;
@@ -318,7 +371,8 @@ export function CustomWarpaintWorkbench({
   return (
     <section
       className="custom-workbench"
-      aria-label="Custom warpaint files"
+      aria-label="War paint workbench"
+      data-tab={tab}
       ref={sectionRef}
       data-dropping={dropping ? '' : undefined}
       {...dropHandlers}
@@ -326,11 +380,26 @@ export function CustomWarpaintWorkbench({
       <div
         className="custom-workbench-resizer"
         role="separator"
-        aria-label="Resize custom files panel"
+        aria-label="Resize war paint workbench"
         aria-orientation="horizontal"
+        tabIndex={0}
         data-resizing={resizing ? '' : undefined}
         onPointerDown={startResize}
         onDoubleClick={() => onResize(0)}
+        onKeyDown={(event) => {
+          const current = sectionRef.current?.getBoundingClientRect().height ?? MIN_PANEL_HEIGHT;
+          const step = event.shiftKey ? 48 : 16;
+          if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            onResize(Math.max(MIN_PANEL_HEIGHT, current + (event.key === 'ArrowUp' ? step : -step)));
+          } else if (event.key === 'Home') {
+            event.preventDefault();
+            onResize(MIN_PANEL_HEIGHT);
+          } else if (event.key === 'End') {
+            event.preventDefault();
+            onResize(Math.max(MIN_PANEL_HEIGHT, window.innerHeight * 0.7));
+          }
+        }}
       />
       <Tabs.Root
         className="custom-workbench-tabs-root"
@@ -343,6 +412,15 @@ export function CustomWarpaintWorkbench({
               <Files size={13} />
               <span>Files</span>
               <span className="custom-workbench-tab-badge">{filesBadge}</span>
+            </Tabs.Tab>
+            <Tabs.Tab
+              value="editor"
+              className="custom-workbench-tab"
+              data-dirty={editor?.dirty ? '' : undefined}
+            >
+              <PencilRuler size={13} />
+              <span>Edit</span>
+              {editor?.dirty && <span className="visual-warpaint-editor-dirty-dot" aria-label="Unsaved changes" />}
             </Tabs.Tab>
             <Tabs.Tab value="export" className="custom-workbench-tab">
               <Download size={13} />
@@ -415,8 +493,8 @@ export function CustomWarpaintWorkbench({
           <button
             type="button"
             className="custom-workbench-close"
-            title="Close custom warpaint files"
-            aria-label="Close custom warpaint files"
+            title="Close war paint workbench"
+            aria-label="Close war paint workbench"
             onClick={onClose}
           >
             <X size={16} />
@@ -458,6 +536,157 @@ export function CustomWarpaintWorkbench({
             onRemoveAlpha={(ref) => void removeAlpha(ref)}
             onResetSlot={resetSlot}
           />
+        </Tabs.Panel>
+        <Tabs.Panel value="editor" className="custom-workbench-panel custom-workbench-editor-panel">
+          {editor ? (
+            <div className="custom-workbench-edit-body">
+              <div className="custom-workbench-edit-context">
+                {editor.sticker && (
+                  <div className="custom-workbench-edit-mode" role="group" aria-label="Edit tool">
+                    <button
+                      type="button"
+                      aria-pressed={editor.mode === 'paint'}
+                      onClick={() => editor.onModeChange('paint')}
+                    >
+                      Paint
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={editor.mode === 'sticker'}
+                      onClick={() => editor.onModeChange('sticker')}
+                    >
+                      Stickers
+                    </button>
+                  </div>
+                )}
+                <div
+                  className="custom-workbench-edit-list"
+                  role="listbox"
+                  aria-label={editor.mode === 'paint' ? 'Paint layers' : 'Stickers'}
+                >
+                  {editor.mode === 'paint' ? editor.selectors.map((selector, index) => {
+                    const active = editor.activeSelectorId === selector.id;
+                    const swatchColor = editor.layerColors?.[index];
+                    const count = editor.groupLayerIndex
+                      ? Object.values(editor.groupLayerIndex).filter((layerIndex) => layerIndex === index).length
+                      : 0;
+                    return (
+                      <button
+                        type="button"
+                        key={selector.id}
+                        className="custom-workbench-edit-layer-row"
+                        role="option"
+                        aria-selected={active}
+                        onClick={() => editor.onActiveSelectorChange(selector.id)}
+                      >
+                        <span
+                          className="custom-workbench-edit-layer-swatch"
+                          style={swatchColor ? { background: swatchColor } : undefined}
+                          aria-hidden="true"
+                        />
+                        <span className="custom-workbench-edit-layer-label">{selector.label}</span>
+                        <span className="custom-workbench-edit-layer-count">{count}</span>
+                      </button>
+                    );
+                  }) : editor.sticker?.targets.map((target, index) => {
+                    const active = editor.sticker?.activeTargetId === target.id;
+                    return (
+                      <button
+                        type="button"
+                        key={target.id}
+                        className="custom-workbench-edit-sticker-row"
+                        role="option"
+                        aria-selected={active}
+                        onClick={() => editor.sticker?.onActiveTargetChange(target.id)}
+                      >
+                        <span className="custom-workbench-edit-sticker-thumb" aria-hidden="true">
+                          {target.thumbnail ? <img src={target.thumbnail} alt="" draggable={false} /> : null}
+                        </span>
+                        <span className="custom-workbench-edit-sticker-label">
+                          {target.label || `Sticker ${index + 1}`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="custom-workbench-edit-footer">
+                  <button
+                    type="button"
+                    className="custom-workbench-edit-icon-btn"
+                    title="Undo"
+                    aria-label="Undo"
+                    disabled={!editor.canUndo}
+                    onClick={editor.onUndo}
+                  >
+                    <Undo2 size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="custom-workbench-edit-icon-btn"
+                    title="Redo"
+                    aria-label="Redo"
+                    disabled={!editor.canRedo}
+                    onClick={editor.onRedo}
+                  >
+                    <Redo2 size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="custom-workbench-edit-revert"
+                    disabled={!editor.dirty}
+                    data-confirm={confirmRevert ? '' : undefined}
+                    aria-label={confirmRevert ? 'Confirm reverting all edits' : 'Revert all edits'}
+                    onClick={() => {
+                      if (!confirmRevert) {
+                        setConfirmRevert(true);
+                        return;
+                      }
+                      setConfirmRevert(false);
+                      editor.onReset();
+                    }}
+                  >
+                    <RotateCcw size={13} /> {confirmRevert ? 'Revert all?' : 'Revert'}
+                  </button>
+                  <button
+                    type="button"
+                    className="custom-workbench-edit-download"
+                    disabled={!editor.canDownload}
+                    onClick={editor.onDownloadJson}
+                    title="Download edited definition JSON files"
+                  >
+                    <Download size={13} /> Download
+                  </button>
+                </div>
+              </div>
+              <div className="custom-workbench-edit-content">
+                {editor.error && <div className="visual-warpaint-editor-error" role="alert">{editor.error}</div>}
+                {editor.mode === 'sticker' && editor.sticker
+                  ? (() => {
+                    const sticker = editor.sticker;
+                    const active = sticker.targets.find((target) => target.id === sticker.activeTargetId);
+                    return (
+                      <StickerPlacementEditor
+                        {...sticker}
+                        label={active?.label ?? sticker.label}
+                        focusKey={sticker.activeTargetId}
+                      />
+                    );
+                  })()
+                  : <VisualWarpaintEditorPanel {...editor} />}
+              </div>
+            </div>
+          ) : (
+            <VisualWarpaintEditorPanel
+              enabled={false}
+              unavailableReason="Choose an imported war paint to edit."
+              sample={null}
+              selectedGroupIds={[]}
+              inspectOnClick={false}
+              onInspectOnClickChange={() => undefined}
+              onToggleGroup={() => undefined}
+              onClearSelection={() => undefined}
+            />
+          )}
         </Tabs.Panel>
         {/* Not Tabs.Panel: base-ui only activates a panel that has a matching
             trigger inside Tabs.List, and these are reached from the source chips

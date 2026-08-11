@@ -6,7 +6,7 @@
 import type { DecodedContainer } from './decoder';
 import type {
   ProtoDefIndex, ProtoDefJsonFragment, ProtoDefKitMessages, ProtoDefOpenOptions, ProtoDefRecipe,
-  ProtoDefSource,
+  ProtoDefRecipeWithProvenance, ProtoDefSource,
 } from './types';
 
 type Team = 'red' | 'blu';
@@ -59,6 +59,17 @@ class InProcessSource {
     if (!this.decoded) return null;
     const { resolveKitRecipe } = await import('./decoder');
     return resolveKitRecipe(this.decoded, defindex, weaponKey, team, wearIndex);
+  }
+
+  async resolveRecipeWithProvenance(
+    defindex: number,
+    weaponKey: string,
+    team: Team,
+    wearIndex: number,
+  ): Promise<ProtoDefRecipeWithProvenance | null> {
+    if (!this.decoded) return null;
+    const { resolveKitRecipeWithProvenance } = await import('./decoder');
+    return resolveKitRecipeWithProvenance(this.decoded, defindex, weaponKey, team, wearIndex);
   }
 
   async exportKit(defindex: number): Promise<ProtoDefKitMessages | null> {
@@ -175,6 +186,21 @@ export class ProtoDefClient implements ProtoDefSource {
       return (await this.post({ kind: 'resolveRecipe', defindex, weaponKey, team, wearIndex })) as ProtoDefRecipe | null;
     } catch {
       return (await this.ensureFallback()).resolveRecipe(defindex, weaponKey, team, wearIndex);
+    }
+  }
+
+  async resolveRecipeWithProvenance(
+    defindex: number,
+    weaponKey: string,
+    team: Team,
+    wearIndex: number,
+  ): Promise<ProtoDefRecipeWithProvenance | null> {
+    if (this.fallback) return this.fallback.resolveRecipeWithProvenance(defindex, weaponKey, team, wearIndex);
+    if (!this.worker) return (await this.ensureFallback()).resolveRecipeWithProvenance(defindex, weaponKey, team, wearIndex);
+    try {
+      return (await this.post({ kind: 'resolveRecipeWithProvenance', defindex, weaponKey, team, wearIndex })) as ProtoDefRecipeWithProvenance | null;
+    } catch {
+      return (await this.ensureFallback()).resolveRecipeWithProvenance(defindex, weaponKey, team, wearIndex);
     }
   }
 

@@ -4,6 +4,8 @@ import { NumberField } from '@base-ui/react/number-field';
 import { Switch } from '@base-ui/react/switch';
 import { Toggle } from '@base-ui/react/toggle';
 import { Input } from '@base-ui/react/input';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 
 export interface Option {
@@ -18,6 +20,35 @@ export interface IconOption extends Option {
 export interface SwatchOption extends Option {
   color?: string | null; // CSS color; missing/null renders a hollow swatch
   secondaryColor?: string | null; // Optional second half, used by team-dependent colors
+}
+
+function SelectSearch({
+  placeholder,
+  value,
+  onChange,
+}: {
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="ui-select-search">
+      <Search size={13} aria-hidden="true" />
+      <Input
+        autoFocus
+        type="search"
+        value={value}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          // Leave Escape to the Select so it can close the popup. Text entry
+          // should not also drive the Select's built-in option typeahead.
+          if (event.key !== 'Escape') event.stopPropagation();
+        }}
+      />
+    </label>
+  );
 }
 
 function OptionSwatch({ option }: { option?: SwatchOption }) {
@@ -114,27 +145,97 @@ export function IconSelectField({
   onChange,
   options,
   placeholder,
+  ariaLabel,
+  stepLabels,
+  searchPlaceholder,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: IconOption[];
   placeholder?: string;
+  ariaLabel?: string;
+  /** Adds previous/next buttons beside the trigger for stepping the list. */
+  stepLabels?: { previous: string; next: string };
+  /** Adds a filter box to the popup. Long lists are slow to scroll through. */
+  searchPlaceholder?: string;
 }) {
   const selected = options.find((o) => o.value === value);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase();
+  const matchesQuery = (option: IconOption) => !needle || option.label.toLowerCase().includes(needle);
+  const visibleCount = options.filter(matchesQuery).length;
+
+  const step = (delta: number) => {
+    if (options.length === 0) return;
+    const current = options.findIndex((o) => o.value === value);
+    // Wrapping is the point: this exists to walk the whole list without
+    // stopping at either end to scroll back.
+    const next = current < 0
+      ? delta < 0 ? options.length - 1 : 0
+      : ((current + delta) % options.length + options.length) % options.length;
+    onChange(options[next].value);
+  };
+
+  const trigger = (
+    <Select.Trigger className="ui-select-trigger ui-select-trigger-icon" aria-label={ariaLabel}>
+      <span className="ui-icon-option">
+        <AssetIcon src={selected?.icon} size={20} />
+        <Select.Value>{() => selected?.label ?? placeholder ?? 'Select'}</Select.Value>
+      </span>
+      <Select.Icon className="ui-select-icon">v</Select.Icon>
+    </Select.Trigger>
+  );
+
   return (
-    <Select.Root value={value} onValueChange={(v) => onChange(v as string)}>
-      <Select.Trigger className="ui-select-trigger ui-select-trigger-icon">
-        <span className="ui-icon-option">
-          <AssetIcon src={selected?.icon} size={20} />
-          <Select.Value>{() => selected?.label ?? placeholder ?? 'Select'}</Select.Value>
-        </span>
-        <Select.Icon className="ui-select-icon">v</Select.Icon>
-      </Select.Trigger>
+    <Select.Root
+      value={value}
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery('');
+      }}
+      onValueChange={(v) => onChange(v as string)}
+    >
+      {stepLabels ? (
+        <div className="ui-select-stepper">
+          <button
+            type="button"
+            className="ui-select-step"
+            aria-label={stepLabels.previous}
+            title={stepLabels.previous}
+            disabled={options.length < 2}
+            onClick={() => step(-1)}
+          >
+            <ChevronLeft size={14} aria-hidden="true" />
+          </button>
+          {trigger}
+          <button
+            type="button"
+            className="ui-select-step"
+            aria-label={stepLabels.next}
+            title={stepLabels.next}
+            disabled={options.length < 2}
+            onClick={() => step(1)}
+          >
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
+        </div>
+      ) : trigger}
       <Select.Portal>
         <Select.Positioner className="ui-select-positioner" sideOffset={4} alignItemWithTrigger={false}>
-          <Select.Popup className="ui-select-popup">
+          <Select.Popup className={`ui-select-popup${searchPlaceholder ? ' ui-select-popup-searchable' : ''}`}>
+            {searchPlaceholder ? (
+              <SelectSearch placeholder={searchPlaceholder} value={query} onChange={setQuery} />
+            ) : null}
             {options.map((o) => (
-              <Select.Item key={o.value} value={o.value} className="ui-select-item">
+              <Select.Item
+                key={o.value}
+                value={o.value}
+                className="ui-select-item"
+                data-filtered={!matchesQuery(o) ? '' : undefined}
+                aria-hidden={!matchesQuery(o) || undefined}
+              >
                 <span className="ui-icon-option">
                   <AssetIcon src={o.icon} size={24} />
                   <Select.ItemText>{o.label}</Select.ItemText>
@@ -142,6 +243,7 @@ export function IconSelectField({
                 <Select.ItemIndicator className="ui-select-indicator">*</Select.ItemIndicator>
               </Select.Item>
             ))}
+            {visibleCount === 0 ? <p className="ui-select-empty" role="status">No matching weapons</p> : null}
           </Select.Popup>
         </Select.Positioner>
       </Select.Portal>

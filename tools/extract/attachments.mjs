@@ -174,6 +174,19 @@ function attachmentFrame(mdl, xform, attachment) {
   return { pos, quat: unitQuat };
 }
 
+/** Resolve one authored attachment in the published GLB coordinate frame. */
+export function extractModelAttachment(vpkRel, attachmentName) {
+  const mdl = parseMDL(ensureMdl(vpkRel));
+  const attachment = mdl.attachments.find((entry) => entry.name === attachmentName);
+  if (!attachment) return null;
+  const frame = attachmentFrame(mdl, rootFrameTransforms(mdl), attachment);
+  return {
+    ...frame,
+    forward: rotateVecByQuat(frame.quat, [1, 0, 0]),
+    up: rotateVecByQuat(frame.quat, [0, 0, 1]),
+  };
+}
+
 function round(v) {
   return v.map((n) => Math.round(n * 1e5) / 1e5);
 }

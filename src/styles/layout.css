@@ -209,8 +209,11 @@
     border-top-color: var(--border);
     transform: translateX(100%);
   }
+  /* The workbench trigger stays available here: below this width it is the
+     only way to reach Files/Edit/Export, and the drawer's own panels (this
+     one included) are responsive down to phone widths, so there is no reason
+     to hide the door to a room that still works. */
   .panel-edge-toggle,
-  .custom-workbench-trigger,
   .stage-toolbar-divider:first-of-type {
     display: none;
   }

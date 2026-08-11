@@ -19,6 +19,12 @@
   pointer-events: auto;
   transition: flex-basis 210ms ease, visibility 0s;
 }
+/* Files and Export are lists and read fine in a shallow drawer. Edit is a
+   workspace, so it opens taller by default. Dragging the handle still wins,
+   because that sets --workbench-h. */
+.custom-workbench-slot[data-open]:has(.custom-workbench[data-tab='editor']) {
+  flex-basis: var(--workbench-h, clamp(320px, 46vh, 560px));
+}
 /* Dragging the top edge writes --workbench-h every pointermove; an eased
    flex-basis would lag a frame behind the cursor. */
 .custom-workbench-slot:has(.custom-workbench-resizer[data-resizing]) { transition: none; }
@@ -383,7 +389,11 @@
   cursor: pointer;
 }
 .custom-asset-file-remove:hover { background: var(--border); color: var(--text); }
-@media (max-width: 860px) { .custom-workbench-slot { display: none; } }
+@media (max-width: 860px) {
+  .custom-workbench-slot[data-open] { flex-basis: min(52vh, 440px); }
+}
+
+.custom-workbench-close { width: 32px; height: 32px; }
 @media (prefers-reduced-motion: reduce) {
   .custom-workbench-slot,
   .custom-workbench { transition: none; }
@@ -472,4 +482,313 @@
 
 @container (max-width: 720px) {
   .workbench-source:not(.workbench-source-import) span { display: none; }
+}
+
+/* ---------- Edit tab: two-pane workbench split ----------
+   The Edit panel has no full-width action row. A fixed context column
+   (layer/sticker list, session-level history and save actions) sits beside a
+   content pane that gets every remaining pixel, matching the drawer's wide,
+   short shape better than a toolbar strip ever could. */
+.custom-workbench-editor-panel { container-type: inline-size; }
+
+.custom-workbench-edit-body {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+
+.custom-workbench-edit-context {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 0;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.custom-workbench-edit-mode {
+  display: flex;
+  flex: none;
+  margin: 0 10px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.custom-workbench-edit-mode button {
+  flex: 1;
+  min-height: 26px;
+  border: 0;
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.custom-workbench-edit-mode button + button { border-left: 1px solid var(--border); }
+
+.custom-workbench-edit-mode button:hover { color: var(--text); background: var(--panel-2); }
+
+.custom-workbench-edit-mode button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.custom-workbench-edit-mode button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.custom-workbench-edit-list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.custom-workbench-edit-layer-row,
+.custom-workbench-edit-sticker-row {
+  display: flex;
+  min-height: var(--control-h);
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.custom-workbench-edit-layer-row:hover,
+.custom-workbench-edit-sticker-row:hover { background: var(--panel-2); }
+
+.custom-workbench-edit-layer-row:focus-visible,
+.custom-workbench-edit-sticker-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.custom-workbench-edit-layer-row[aria-selected='true'],
+.custom-workbench-edit-sticker-row[aria-selected='true'] {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.custom-workbench-edit-layer-swatch {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 3px;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 60%, transparent);
+  background: currentColor;
+}
+
+.custom-workbench-edit-layer-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-workbench-edit-layer-count {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.custom-workbench-edit-sticker-thumb {
+  display: block;
+  overflow: hidden;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  /* Sticker art is transparent and can be any tone, including the greys a flat
+     backing would swallow. A checker reads as "no background" and keeps light,
+     dark and mid-grey art equally legible, matching the editor surface. */
+  background-color: color-mix(in srgb, var(--panel) 84%, var(--text));
+  background-image: conic-gradient(
+    from 90deg,
+    color-mix(in srgb, var(--panel-2) 94%, var(--text)) 25%,
+    transparent 0 50%,
+    color-mix(in srgb, var(--panel-2) 94%, var(--text)) 0 75%,
+    transparent 0
+  );
+  background-size: 8px 8px;
+}
+
+.custom-workbench-edit-sticker-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.custom-workbench-edit-sticker-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-workbench-edit-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.custom-workbench-edit-icon-btn {
+  display: grid;
+  width: var(--control-h);
+  height: var(--control-h);
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.custom-workbench-edit-icon-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.custom-workbench-edit-icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.custom-workbench-edit-icon-btn:disabled { cursor: default; opacity: 0.4; }
+
+.custom-workbench-edit-revert,
+.custom-workbench-edit-download {
+  display: inline-flex;
+  min-height: var(--control-h);
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.custom-workbench-edit-revert { margin-left: auto; }
+
+.custom-workbench-edit-revert:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--fail) 55%, var(--border));
+  background: color-mix(in srgb, var(--fail) 12%, var(--panel));
+  color: var(--fail);
+}
+
+.custom-workbench-edit-revert[data-confirm] {
+  border-color: color-mix(in srgb, var(--fail) 55%, var(--border));
+  background: color-mix(in srgb, var(--fail) 12%, var(--panel));
+  color: var(--fail);
+}
+
+.custom-workbench-edit-download {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.custom-workbench-edit-download:hover:not(:disabled) { filter: brightness(1.08); }
+
+.custom-workbench-edit-revert:focus-visible,
+.custom-workbench-edit-download:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.custom-workbench-edit-revert:disabled,
+.custom-workbench-edit-download:disabled { cursor: default; opacity: 0.4; }
+
+.custom-workbench-edit-content {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+@container (max-width: 900px) {
+  .custom-workbench-edit-body {
+    grid-template-columns: none;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .custom-workbench-edit-context {
+    flex-direction: row;
+    align-items: stretch;
+    padding: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .custom-workbench-edit-mode { margin: 8px 0 8px 8px; }
+  .custom-workbench-edit-list {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px;
+  }
+  .custom-workbench-edit-layer-row,
+  .custom-workbench-edit-sticker-row {
+    flex: none;
+    border-radius: var(--radius-sm);
+  }
+  .custom-workbench-edit-layer-row[aria-selected='true'],
+  .custom-workbench-edit-sticker-row[aria-selected='true'] {
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+  .custom-workbench-edit-footer {
+    margin: 0;
+    padding: 8px;
+    border-top: 0;
+    border-left: 1px solid var(--border);
+  }
+  .custom-workbench-edit-revert { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .custom-workbench-edit-mode button,
+  .custom-workbench-edit-layer-row,
+  .custom-workbench-edit-sticker-row,
+  .custom-workbench-edit-icon-btn,
+  .custom-workbench-edit-revert,
+  .custom-workbench-edit-download { transition: none; }
 }

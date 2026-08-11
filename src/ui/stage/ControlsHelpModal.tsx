@@ -4,6 +4,7 @@ import './ControlsHelpModal.css';
 
 type ControlsHelpModalProps = {
   open: boolean;
+  editingMode?: 'paint' | 'sticker' | null;
   onClose: () => void;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
 };
@@ -30,7 +31,7 @@ function ControlRow({ keys, children }: { keys: React.ReactNode; children: React
   );
 }
 
-export function ControlsHelpModal({ open, onClose, returnFocusRef }: ControlsHelpModalProps) {
+export function ControlsHelpModal({ open, editingMode = null, onClose, returnFocusRef }: ControlsHelpModalProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -101,7 +102,56 @@ export function ControlsHelpModal({ open, onClose, returnFocusRef }: ControlsHel
           </button>
         </header>
 
-        <div className="controls-help-body">
+        <div className="controls-help-body" data-mode={editingMode ?? 'camera'}>
+          {editingMode === 'sticker' ? (
+            <>
+              <section className="controls-help-section" aria-labelledby="sticker-weapon-heading">
+                <h3 id="sticker-weapon-heading">On the weapon</h3>
+                <div className="controls-help-group">
+                  <h4>Sticker</h4>
+                  <ControlRow keys={<Key>Drag handle</Key>}>Use the selected tool</ControlRow>
+                  <ControlRow keys={<Key>Corner handle</Key>}>Scale evenly</ControlRow>
+                  <ControlRow keys={<Key>Edge handle</Key>}>Change width or height</ControlRow>
+                  <ControlRow keys={<><Key>Shift</Key><Key>Drag</Key></>}>Place on another surface</ControlRow>
+                </div>
+                <div className="controls-help-group">
+                  <h4>Camera</h4>
+                  <ControlRow keys={<Key>Middle drag</Key>}>Rotate view</ControlRow>
+                  <ControlRow keys={<Key>Right drag</Key>}>Pan view</ControlRow>
+                  <ControlRow keys={<Key>Wheel</Key>}>Zoom view</ControlRow>
+                  <ControlRow keys={<Key>Middle double-click</Key>}>Reset view</ControlRow>
+                </div>
+              </section>
+
+              <section className="controls-help-section" aria-labelledby="sticker-uv-heading">
+                <h3 id="sticker-uv-heading">In the UV view</h3>
+                <div className="controls-help-group">
+                  <h4>Pointer</h4>
+                  <ControlRow keys={<Key>Drag handles</Key>}>Move, scale, or turn</ControlRow>
+                  <ControlRow keys={<Key>Ctrl</Key>}>Temporarily snap</ControlRow>
+                  <ControlRow keys={<Key>Wheel</Key>}>Zoom view</ControlRow>
+                  <ControlRow keys={<Key>Right drag</Key>}>Pan view</ControlRow>
+                </div>
+                <div className="controls-help-group">
+                  <h4>Keyboard</h4>
+                  <ControlRow keys={<Key>Arrow keys</Key>}>Move</ControlRow>
+                  <ControlRow keys={<Key>[ ]</Key>}>Scale</ControlRow>
+                  <ControlRow keys={<Key>Q E</Key>}>Turn</ControlRow>
+                  <ControlRow keys={<Key>+ -</Key>}>Zoom</ControlRow>
+                  <ControlRow keys={<Key>0</Key>}>Fit texture to view</ControlRow>
+                </div>
+              </section>
+
+              <section className="controls-help-section controls-help-history" aria-labelledby="sticker-history-heading">
+                <h3 id="sticker-history-heading">Edit history</h3>
+                <div className="controls-help-history-row">
+                  <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo</ControlRow>
+                  <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo</ControlRow>
+                </div>
+              </section>
+            </>
+          ) : (
+            <>
           <section className="controls-help-section" aria-labelledby="inspect-camera-heading">
             <h3 id="inspect-camera-heading">Inspect camera</h3>
             <ControlRow keys={<Key>Drag</Key>}>Rotate weapon</ControlRow>
@@ -110,20 +160,32 @@ export function ControlsHelpModal({ open, onClose, returnFocusRef }: ControlsHel
             <ControlRow keys={<Key>Double-click</Key>}>Reset view</ControlRow>
           </section>
 
-          <section className="controls-help-section" aria-labelledby="advanced-camera-heading">
-            <h3 id="advanced-camera-heading">Advanced camera</h3>
-            <ControlRow keys={<Key>Alt</Key>}>Enter or exit</ControlRow>
-            <ControlRow keys={<Key>Mouse</Key>}>Look around</ControlRow>
-            <ControlRow keys={<><Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key></>}>Fly and strafe</ControlRow>
-            <ControlRow keys={<><Key>E</Key><Key>Space</Key></>}>Ascend</ControlRow>
-            <ControlRow keys={<Key>Q</Key>}>Descend</ControlRow>
-            <ControlRow keys={<Key>Ctrl</Key>}>Move faster</ControlRow>
-            <ControlRow keys={<Key>Shift</Key>}>Move slower</ControlRow>
-            <ControlRow keys={<Key>Esc</Key>}>Release cursor</ControlRow>
-          </section>
+          {editingMode === 'paint' ? (
+            <section className="controls-help-section" aria-labelledby="paint-editing-heading">
+              <h3 id="paint-editing-heading">Paint editing</h3>
+              <ControlRow keys={<><Key>Shift</Key><Key>Click</Key></>}>Add or remove a part</ControlRow>
+              <ControlRow keys={<Key>Drag</Key>}>Rotate weapon</ControlRow>
+              <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo paint edit</ControlRow>
+              <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo paint edit</ControlRow>
+            </section>
+          ) : (
+            <section className="controls-help-section" aria-labelledby="advanced-camera-heading">
+              <h3 id="advanced-camera-heading">Advanced camera</h3>
+              <ControlRow keys={<Key>Alt</Key>}>Enter or exit</ControlRow>
+              <ControlRow keys={<Key>Mouse</Key>}>Look around</ControlRow>
+              <ControlRow keys={<><Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key></>}>Fly and strafe</ControlRow>
+              <ControlRow keys={<><Key>E</Key><Key>Space</Key></>}>Ascend</ControlRow>
+              <ControlRow keys={<Key>Q</Key>}>Descend</ControlRow>
+              <ControlRow keys={<Key>Ctrl</Key>}>Move faster</ControlRow>
+              <ControlRow keys={<Key>Shift</Key>}>Move slower</ControlRow>
+              <ControlRow keys={<Key>Esc</Key>}>Release cursor</ControlRow>
+            </section>
+          )}
+            </>
+          )}
         </div>
 
-        <p className="controls-help-mobile-note">Advanced camera requires a keyboard and mouse.</p>
+        {!editingMode && <p className="controls-help-mobile-note">Advanced camera requires a keyboard and mouse.</p>}
       </div>
     </div>
   );

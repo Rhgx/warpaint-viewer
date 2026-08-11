@@ -22,6 +22,7 @@ export function createTf2Uniforms() {
     uTf2DetailFactor: { value: 1 }, uTf2DetailTint: { value: new THREE.Color(1, 1, 1) },
     uTf2AmbientCube: { value: Array.from({ length: 6 }, () => new THREE.Vector3(.4, .4, .4)) },
     uTf2AmbientBasis: { value: new THREE.Matrix3() },
+    uTf2SpotFalloff: { value: 0 },
   };
 }
 

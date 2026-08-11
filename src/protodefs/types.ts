@@ -65,6 +65,41 @@ export interface ProtoDefRecipe {
   textureRefs: string[];
 }
 
+/**
+ * Where the resolver obtained one effective operation-field value.  Paths are
+ * expressed relative to the two editable kit messages, except for weapon and
+ * wear paths which name the external item-definition branch that supplied the
+ * override.  They deliberately remain data (rather than object references) so
+ * they can safely cross the worker boundary.
+ */
+export type ProtoDefValueScope = 'global' | 'weapon' | 'wear' | 'literal';
+
+export interface ProtoDefValueProvenance {
+  variableName?: string;
+  effectiveValue: string | undefined;
+  sourcePath: string[];
+  /**
+   * The local header variable that seeds this value before weapon/wear
+   * overrides. Unlike sourcePath it always points into the two-message editor
+   * snapshot when the variable can be safely frozen for an edit.
+   */
+  editableSourcePath?: string[];
+  scope: ProtoDefValueScope;
+  canOverride: boolean;
+}
+
+/** One operation field and the source that won during variable resolution. */
+export interface ProtoDefValueTrace {
+  /** Path to the field consumed by the operation graph. */
+  fieldPath: string[];
+  provenance: ProtoDefValueProvenance;
+}
+
+/** Normal recipe result plus optional, lossless value-source diagnostics. */
+export interface ProtoDefRecipeWithProvenance extends ProtoDefRecipe {
+  provenance: ProtoDefValueTrace[];
+}
+
 export interface ProtoDefOpenOptions {
   /** items_game definition index -> weapon key, from public/data/item-defs.json. */
   weaponsByItemDef: Record<string, string>;
@@ -116,6 +151,13 @@ export interface ProtoDefSource {
     team: 'red' | 'blu',
     wearIndex: number,
   ): Promise<ProtoDefRecipe | null>;
+  /** Resolve a recipe and retain the authored source of each effective value. */
+  resolveRecipeWithProvenance(
+    defindex: number,
+    weaponKey: string,
+    team: 'red' | 'blu',
+    wearIndex: number,
+  ): Promise<ProtoDefRecipeWithProvenance | null>;
   /**
    * The definition and operation for one kit, so it can be written into a
    * proto_defs container the game will load. Null when nothing is open or the

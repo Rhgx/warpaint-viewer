@@ -2,9 +2,9 @@
 // Produces, for each (paintkit definition, supported weapon slot, wear level, team), a fully
 // resolved compositor operation-stage tree with all variables substituted.
 
-// The 15 stock + repeated `item` + workshop weapon slot field names on CMsgPaintKit_Definition.
+// The paint tool, 15 stock, repeated `item`, and workshop weapon slot field names on CMsgPaintKit_Definition.
 export const WEAPON_SLOTS = [
-  'flamethrower', 'grenadelauncher', 'knife', 'medigun', 'minigun', 'pistol', 'revolver',
+  'paintkit_tool', 'flamethrower', 'grenadelauncher', 'knife', 'medigun', 'minigun', 'pistol', 'revolver',
   'rocketlauncher', 'scattergun', 'shotgun', 'smg', 'sniperrifle', 'stickybomb_launcher',
   'ubersaw', 'wrench', 'amputator', 'atom_launcher', 'back_scratcher', 'battleaxe',
   'bazaar_sniper', 'blackbox', 'claidheamohmor', 'crusaders_crossbow', 'degreaser',

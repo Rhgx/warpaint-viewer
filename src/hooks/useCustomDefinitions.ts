@@ -18,8 +18,11 @@ import type {
   ProtoDefJsonFragment,
   ProtoDefKit,
   ProtoDefOpenOptions,
+  ProtoDefRecipeWithProvenance,
   ProtoDefSource,
 } from '../protodefs/types';
+import { classifyProtoDefFragment } from '../protodefs/jsonFragments';
+import { serializeProtoDefKitMessages } from '../editor/jsonExport';
 
 // A stock container is under 10 MB. The cap only exists so a mis-picked file
 // cannot be read into memory in its entirety before it is rejected.
@@ -38,8 +41,21 @@ export interface CustomDefinitions {
   /** Thumbnail URLs by catalog id, resolved through the mounted package. */
   icons: Record<number, string>;
   getRecipe: (kitId: number, weaponKey: string, team: Team, wearIndex: number) => Promise<RecipeNode | null>;
+  /** Resolve the selected imported recipe while retaining editable field sources. */
+  getRecipeWithProvenance: (
+    kitId: number,
+    weaponKey: string,
+    team: Team,
+    wearIndex: number,
+  ) => Promise<ProtoDefRecipeWithProvenance | null>;
   /** An imported kit's definition and operation, for the export builder. */
   exportKit: (kitId: number) => Promise<ProtoDefKitMessages | null>;
+  /** Replace one imported kit with an in-memory JSON-backed editor preview. */
+  previewKitMessages: (kitId: number, messages: ProtoDefKitMessages) => Promise<void>;
+  /** Return recipe/export resolution to the originally imported container. */
+  clearPreviewKit: () => void;
+  /** Bumped whenever the active editor preview changes or is cleared. */
+  editGeneration: number;
   /** Catalog id to select after an import, changing only when a new one lands. */
   suggestedKitId: number | undefined;
   /** Bumped by every successful open, so repeat imports are distinguishable. */
@@ -57,6 +73,12 @@ interface LoadedFile {
   name: string;
   index: ProtoDefIndex;
   source: ProtoDefSource;
+}
+
+interface EditedKit {
+  kitId: number;
+  source: ProtoDefSource;
+  messages: ProtoDefKitMessages;
 }
 
 function diagnostic(level: SourceDiagnostic['level'], message: string, detail?: string): SourceDiagnostic {
@@ -98,10 +120,13 @@ export function useCustomDefinitions({
   const [icons, setIcons] = useState<Record<number, string>>({});
   const [suggestedKitId, setSuggestedKitId] = useState<number | undefined>();
   const [generation, setGeneration] = useState(0);
+  const [editGeneration, setEditGeneration] = useState(0);
   // Imports are cancelled by a newer import or a removal, exactly like the
   // Source package's transactional mount.
   const importOperationRef = useRef(0);
   const loadedRef = useRef<LoadedFile | null>(null);
+  const editedRef = useRef<EditedKit | null>(null);
+  const editOperationRef = useRef(0);
   const weaponsByItemDefRef = useRef<Promise<Record<string, string>> | null>(null);
   const baseDefsRef = useRef<Promise<Uint8Array> | null>(null);
   const recipeCacheRef = useRef(new Map<string, Promise<RecipeNode | null>>());
@@ -109,6 +134,9 @@ export function useCustomDefinitions({
   const textureKeys = manifest?.textures;
 
   const release = useCallback(() => {
+    editOperationRef.current += 1;
+    editedRef.current?.source.dispose();
+    editedRef.current = null;
     loadedRef.current?.source.dispose();
     loadedRef.current = null;
     recipeCacheRef.current.clear();
@@ -242,6 +270,55 @@ export function useCustomDefinitions({
     async (source, options) => source.openJsonFragments(await loadBaseDefs(), fragments, options),
   ), [openWith, loadBaseDefs]);
 
+  const clearPreviewKit = useCallback(() => {
+    editOperationRef.current += 1;
+    const edited = editedRef.current;
+    if (!edited) return;
+    edited.source.dispose();
+    editedRef.current = null;
+    recipeCacheRef.current.clear();
+    setEditGeneration((current) => current + 1);
+  }, []);
+
+  const previewKitMessages = useCallback(async (
+    kitId: number,
+    messages: ProtoDefKitMessages,
+  ): Promise<void> => {
+    if (!loadedRef.current) throw new Error('Import definitions before editing them.');
+    const defindex = customKitDefindex(kitId);
+    if (!loadedRef.current.index.kits.some((kit) => kit.defindex === defindex)) {
+      throw new Error('The selected paint is not part of the imported definitions.');
+    }
+    const operation = ++editOperationRef.current;
+    const [{ createProtoDefSource }, baseBytes, weaponsByItemDef] = await Promise.all([
+      import('../protodefs/client'),
+      loadBaseDefs(),
+      loadWeaponsByItemDef(),
+    ]);
+    const source = createProtoDefSource();
+    try {
+      const fragments = [...serializeProtoDefKitMessages(messages).fragments];
+      const index = await source.openJsonFragments(baseBytes, fragments, {
+        weaponsByItemDef,
+        builtInIds: manifest?.paintkits.map((kit) => kit.id) ?? [],
+      });
+      if (!index.kits.some((kit) => kit.defindex === defindex)) {
+        throw new Error('The edited fragments no longer contain the selected paint.');
+      }
+      if (operation !== editOperationRef.current) {
+        source.dispose();
+        return;
+      }
+      editedRef.current?.source.dispose();
+      editedRef.current = { kitId, source, messages: structuredClone(messages) };
+      recipeCacheRef.current.clear();
+      setEditGeneration((current) => current + 1);
+    } catch (cause) {
+      source.dispose();
+      throw cause;
+    }
+  }, [loadBaseDefs, loadWeaponsByItemDef, manifest]);
+
   const onImport = useCallback((files: File[]) => {
     const container = files.find((entry) => entry.name.toLowerCase().endsWith('.vpd'));
     const jsonFiles = files.filter((entry) => entry.name.toLowerCase().endsWith('.json'));
@@ -300,8 +377,6 @@ export function useCustomDefinitions({
     if (entries.length === 0) return;
     let cancelled = false;
     void (async () => {
-      // Loaded only once an archive actually carries JSON worth classifying.
-      const { classifyProtoDefFragment } = await import('../protodefs/jsonFragments');
       const found: ProtoDefJsonFragment[] = [];
       for (const entry of entries) {
         if (cancelled) return;
@@ -390,7 +465,8 @@ export function useCustomDefinitions({
     team: Team,
     wearIndex: number,
   ): Promise<RecipeNode | null> => {
-    const source = loadedRef.current?.source;
+    const edited = editedRef.current;
+    const source = edited?.kitId === kitId ? edited.source : loadedRef.current?.source;
     if (!source) return Promise.resolve(null);
     const key = `${kitId}|${weaponKey}|${team}|${wearIndex}`;
     const cached = recipeCacheRef.current.get(key);
@@ -407,13 +483,32 @@ export function useCustomDefinitions({
     return pending;
   }, [hasTexture]);
 
+  const getRecipeWithProvenance = useCallback((
+    kitId: number,
+    weaponKey: string,
+    team: Team,
+    wearIndex: number,
+  ): Promise<ProtoDefRecipeWithProvenance | null> => {
+    const edited = editedRef.current;
+    const source = edited?.kitId === kitId ? edited.source : loadedRef.current?.source;
+    if (!source) return Promise.resolve(null);
+    return source.resolveRecipeWithProvenance(
+      customKitDefindex(kitId),
+      weaponKey,
+      team,
+      wearIndex,
+    ).catch(() => null);
+  }, []);
+
   // The export builder needs an imported kit's own definition and operation
   // messages so it can write them into a proto_defs container the game loads.
   // Routed through the hook rather than by handing out the source, so the
   // loaded container stays owned in one place.
   const exportKit = useCallback(
     (kitId: number): Promise<ProtoDefKitMessages | null> => (
-      loadedRef.current?.source.exportKit(customKitDefindex(kitId)) ?? Promise.resolve(null)
+      editedRef.current?.kitId === kitId
+        ? Promise.resolve(structuredClone(editedRef.current.messages))
+        : loadedRef.current?.source.exportKit(customKitDefindex(kitId)) ?? Promise.resolve(null)
     ),
     [],
   );
@@ -430,8 +525,32 @@ export function useCustomDefinitions({
   }), [status, fileName, kitRows, diagnostics, packageCandidate, onImport, onToggleKit, onRemove]);
 
   return useMemo(
-    () => ({ state, catalogKits, icons, getRecipe, exportKit, suggestedKitId, generation }),
-    [state, catalogKits, icons, getRecipe, exportKit, suggestedKitId, generation],
+    () => ({
+      state,
+      catalogKits,
+      icons,
+      getRecipe,
+      getRecipeWithProvenance,
+      exportKit,
+      previewKitMessages,
+      clearPreviewKit,
+      suggestedKitId,
+      generation,
+      editGeneration,
+    }),
+    [
+      state,
+      catalogKits,
+      icons,
+      getRecipe,
+      getRecipeWithProvenance,
+      exportKit,
+      previewKitMessages,
+      clearPreviewKit,
+      suggestedKitId,
+      generation,
+      editGeneration,
+    ],
   );
 }
 

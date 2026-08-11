@@ -29,8 +29,43 @@ const ADVANCED_PRECISION_MULTIPLIER = 0.2;
 const ADVANCED_RESPONSE = 8;
 const ADVANCED_BOUNDARY_FACTOR = 12;
 const ADVANCED_SOFT_BOUNDARY_START = 0.8;
+const DOUBLE_CLICK_WINDOW_MS = 350;
+const DOUBLE_CLICK_DISTANCE_PX = 6;
 
 export type CameraMode = 'inspect' | 'advanced';
+/** Which inspect gesture owns a primary drag on empty canvas space. */
+export type InspectPrimaryDragMode = 'rotate' | 'disabled';
+
+/** Resolve only the inspect gesture; higher-level editors still own pointer capture. */
+export function inspectDragForPointer(
+  button: number,
+  primaryDragMode: InspectPrimaryDragMode,
+): 'none' | 'rotate' | 'pan' {
+  if (button === 0) return primaryDragMode === 'disabled' ? 'none' : 'rotate';
+  if (button === 1) return primaryDragMode === 'disabled' ? 'rotate' : 'pan';
+  return button === 2 ? 'pan' : 'none';
+}
+
+/** Sticker placement reserves primary double-click; middle keeps a reset route. */
+export function inspectDoubleClickResets(
+  button: number,
+  primaryDragMode: InspectPrimaryDragMode,
+): boolean {
+  return primaryDragMode === 'rotate' && button === 0;
+}
+
+export interface InspectPointerClick {
+  readonly clientX: number;
+  readonly clientY: number;
+  readonly time: number;
+}
+
+/** Detect a reliable middle double-click from completed pointer gestures. */
+export function isRapidInspectClickPair(first: InspectPointerClick, second: InspectPointerClick): boolean {
+  return second.time >= first.time
+    && second.time - first.time <= DOUBLE_CLICK_WINDOW_MS
+    && Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY) <= DOUBLE_CLICK_DISTANCE_PX;
+}
 
 export class InspectControls {
   private dom: HTMLElement;
@@ -60,10 +95,25 @@ export class InspectControls {
   private lastMoveTime = 0;
   private velYaw = 0; // rad/s inertia
   private velPitch = 0;
+  private pendingStickerMiddleClick: (InspectPointerClick & { readonly pointerId: number; moved: boolean }) | null = null;
+  private lastStickerMiddleClick: InspectPointerClick | null = null;
 
   // Advanced Camera state is independent so leaving it can restore the exact
   // Inspect Camera composition that was present on entry.
   private cameraMode: CameraMode = 'inspect';
+  // The visual paint editor deliberately owns Shift + primary-click for part
+  // selection. It also has a much simpler camera model, so free-fly is not
+  // available while that interaction is active.
+  private advancedCameraAvailable = true;
+  private interactionLocked = false;
+  private editorSelectionActive = false;
+  // Sticker placement reserves ordinary primary drags for its own surfaces.
+  // Keep this narrowly scoped: paint editing keeps the familiar orbit gesture.
+  private primaryDragMode: InspectPrimaryDragMode = 'rotate';
+  // Direct-manipulation controls may be rendered above this canvas while a
+  // higher-level editor owns their drag lifecycle. Keep inspect input out of
+  // those exact pointer starts without changing ordinary canvas drags.
+  private pointerDownExclusion: ((event: PointerEvent) => boolean) | null = null;
   private advancedPosition = new THREE.Vector3();
   private advancedStartPosition = new THREE.Vector3();
   private advancedVelocity = new THREE.Vector3();
@@ -135,15 +185,78 @@ export class InspectControls {
   }
 
   toggleAdvancedCamera(): CameraMode {
+    if (!this.advancedCameraAvailable || this.interactionLocked) return this.cameraMode;
     if (this.cameraMode === 'advanced') this.exitAdvancedCamera();
     else this.enterAdvancedCamera();
     return this.cameraMode;
   }
 
   setAdvancedCamera(enabled: boolean): CameraMode {
+    if (enabled && this.interactionLocked) return this.cameraMode;
+    if (enabled && !this.advancedCameraAvailable) return this.cameraMode;
     if (enabled && this.cameraMode !== 'advanced') this.enterAdvancedCamera();
     if (!enabled && this.cameraMode === 'advanced') this.exitAdvancedCamera();
     return this.cameraMode;
+  }
+
+  /**
+   * Enables or disables free-fly input without changing the normal inspect
+   * camera. Disabling it immediately leaves Advanced Camera if necessary.
+   */
+  setAdvancedCameraAvailable(available: boolean): CameraMode {
+    this.advancedCameraAvailable = available;
+    this.altPressed = false;
+    this.altChorded = false;
+    if (!available) this.setAdvancedCamera(false);
+    return this.cameraMode;
+  }
+
+  /** Freeze all camera input for an exact authored screenshot composition. */
+  setInteractionLocked(locked: boolean) {
+    this.interactionLocked = locked;
+    this.mode = 'none';
+    this.velYaw = 0;
+    this.velPitch = 0;
+    this.targetDist = this.dist;
+    this.altPressed = false;
+    this.altChorded = false;
+    if (locked) this.setAdvancedCamera(false);
+  }
+
+  /**
+   * In paint editing, Shift + primary-click belongs to the editor rather than
+   * beginning a model orbit. Other inspect-camera gestures continue to work.
+   */
+  setEditorSelectionActive(active: boolean) {
+    this.editorSelectionActive = active;
+    if (active) {
+      this.mode = 'none';
+      this.velYaw = 0;
+      this.velPitch = 0;
+    }
+  }
+
+  /**
+   * Configure only empty-canvas primary drags. Secondary camera gestures stay
+   * intact, which lets a direct-manipulation editor reserve left drag without
+   * turning its stage into a dead end for inspection.
+   */
+  setPrimaryDragMode(mode: InspectPrimaryDragMode) {
+    this.primaryDragMode = mode;
+    if (mode === 'disabled' && this.mode === 'rotate') {
+      this.mode = 'none';
+      this.velYaw = 0;
+      this.velPitch = 0;
+    }
+    if (mode !== 'disabled') {
+      this.pendingStickerMiddleClick = null;
+      this.lastStickerMiddleClick = null;
+    }
+  }
+
+  /** Reserve specific primary-pointer starts for a higher-level editor tool. */
+  setPointerDownExclusion(exclusion: ((event: PointerEvent) => boolean) | null) {
+    this.pointerDownExclusion = exclusion;
   }
 
   // Called by the viewer after loading a model: fixes the camera ray and the
@@ -195,6 +308,11 @@ export class InspectControls {
   // is exact.
   setViewDirection(dir: THREE.Vector3 | null) {
     this.setAdvancedCamera(false);
+    // Inspect controls always operate in a stable world-up frame. Model
+    // attachments can contain an authored roll for inventory-icon rendering,
+    // but carrying that roll into the interactive camera makes ordinary orbit
+    // and pan feel tilted and inconsistent between weapons.
+    this.camera.up.set(0, 1, 0);
     if (dir) {
       const d = dir.clone();
       // Straight up/down rays make camera.lookAt's default up vector
@@ -239,6 +357,20 @@ export class InspectControls {
   private onContextMenu = (e: Event) => e.preventDefault();
 
   private onPointerDown = (e: PointerEvent) => {
+    if (this.interactionLocked) {
+      e.preventDefault();
+      return;
+    }
+    if (e.button === 0 && this.pointerDownExclusion?.(e)) {
+      // A missed pointerup must not leave a stale inspect gesture or inertia
+      // tail running underneath an editor-owned transform.
+      this.mode = 'none';
+      this.velYaw = 0;
+      this.velPitch = 0;
+      if (this.dom.hasPointerCapture(e.pointerId)) this.dom.releasePointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
     if (this.cameraMode === 'advanced') {
       if (e.button === 0) {
         this.lastX = e.clientX;
@@ -248,9 +380,25 @@ export class InspectControls {
       }
       return;
     }
-    if (e.button === 0) this.mode = 'rotate';
-    else if (e.button === 2 || e.button === 1) this.mode = 'pan';
-    else return;
+    // Let the editor's React handler observe this exact pointer sequence. Do
+    // not capture or prevent it: the editor uses the release point and a
+    // small drag threshold to distinguish selection from a camera gesture.
+    if (this.editorSelectionActive && e.button === 0 && e.shiftKey) return;
+    if (e.button === 1 && this.primaryDragMode === 'disabled') {
+      const click = { clientX: e.clientX, clientY: e.clientY, time: performance.now() };
+      if (this.lastStickerMiddleClick && isRapidInspectClickPair(this.lastStickerMiddleClick, click)) {
+        this.lastStickerMiddleClick = null;
+        this.pendingStickerMiddleClick = null;
+        this.resetInspect();
+        e.preventDefault();
+        return;
+      }
+      this.pendingStickerMiddleClick = { ...click, pointerId: e.pointerId, moved: false };
+    }
+    // Sticker placement owns left drag. Middle becomes the deliberate inspect
+    // orbit gesture, while right remains the stable pan affordance.
+    this.mode = inspectDragForPointer(e.button, this.primaryDragMode);
+    if (this.mode === 'none') return;
     this.lastX = e.clientX;
     this.lastY = e.clientY;
     this.lastMoveTime = performance.now();
@@ -273,6 +421,11 @@ export class InspectControls {
       return;
     }
     if (this.mode === 'none') return;
+    const pendingMiddleClick = this.pendingStickerMiddleClick;
+    if (pendingMiddleClick?.pointerId === e.pointerId
+      && Math.hypot(e.clientX - pendingMiddleClick.clientX, e.clientY - pendingMiddleClick.clientY) > DOUBLE_CLICK_DISTANCE_PX) {
+      this.pendingStickerMiddleClick = { ...pendingMiddleClick, moved: true };
+    }
     const dx = e.clientX - this.lastX;
     const dy = e.clientY - this.lastY;
     this.lastX = e.clientX;
@@ -303,6 +456,14 @@ export class InspectControls {
   };
 
   private onPointerUp = (e: PointerEvent) => {
+    const pendingMiddleClick = this.pendingStickerMiddleClick;
+    if (pendingMiddleClick?.pointerId === e.pointerId) {
+      const released = { clientX: e.clientX, clientY: e.clientY, time: performance.now() };
+      const moved = pendingMiddleClick.moved
+        || Math.hypot(released.clientX - pendingMiddleClick.clientX, released.clientY - pendingMiddleClick.clientY) > DOUBLE_CLICK_DISTANCE_PX;
+      this.lastStickerMiddleClick = moved ? null : released;
+      this.pendingStickerMiddleClick = null;
+    }
     if (this.cameraMode === 'advanced' || this.mode === 'none') return;
     // If the pointer has been still for a beat before release, drop the inertia.
     if (performance.now() - this.lastMoveTime > 80 || this.mode !== 'rotate') {
@@ -314,6 +475,10 @@ export class InspectControls {
   };
 
   private onWheel = (e: WheelEvent) => {
+    if (this.interactionLocked) {
+      e.preventDefault();
+      return;
+    }
     if (this.cameraMode === 'advanced') return;
     e.preventDefault();
     this.targetDist = THREE.MathUtils.clamp(this.targetDist * Math.pow(ZOOM_STEP, e.deltaY / 100), this.minDist(), this.maxDist());
@@ -322,10 +487,13 @@ export class InspectControls {
   };
 
   private onDblClick = (e: MouseEvent) => {
-    if (this.cameraMode === 'inspect') {
+    if (this.interactionLocked) {
       e.preventDefault();
-      this.resetInspect();
+      return;
     }
+    if (this.cameraMode !== 'inspect' || !inspectDoubleClickResets(e.button, this.primaryDragMode)) return;
+    e.preventDefault();
+    this.resetInspect();
   };
 
   private onPointerLockChange = () => {
@@ -349,6 +517,7 @@ export class InspectControls {
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
+    if (this.interactionLocked) return;
     // Dialog shortcuts must stay local to the dialog. The help sheet is the
     // main consumer today, but this deliberately recognizes any modal.
     if (this.isKeyboardInputBlocked(e.target)) {
@@ -359,6 +528,7 @@ export class InspectControls {
     }
     if (this.shouldSuppressAdvancedShortcut(e)) e.preventDefault();
     if (e.key === 'Alt') {
+      if (!this.advancedCameraAvailable) return;
       if (!e.repeat) { this.altPressed = true; this.altChorded = false; }
       return;
     }
@@ -380,6 +550,7 @@ export class InspectControls {
     }
     if (this.shouldSuppressAdvancedShortcut(e)) e.preventDefault();
     if (e.key === 'Alt') {
+      if (!this.advancedCameraAvailable) return;
       const shouldToggle = this.altPressed && !this.altChorded;
       this.altPressed = false;
       this.altChorded = false;
@@ -420,6 +591,8 @@ export class InspectControls {
     this.mode = 'none';
     this.velYaw = 0;
     this.velPitch = 0;
+    this.pendingStickerMiddleClick = null;
+    this.lastStickerMiddleClick = null;
     this.advancedVelocity.set(0, 0, 0);
   };
 

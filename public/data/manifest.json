@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-07-29T14:34:52.279Z",
+ "generatedAt": "2026-08-10T18:25:36.840Z",
  "gameBuild": "10828683",
  "paintkits": [
   {
@@ -1080,7 +1080,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/102.png"
   },
@@ -1134,7 +1135,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/104.png"
   },
@@ -1188,7 +1190,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/105.png"
   },
@@ -1242,7 +1245,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/106.png"
   },
@@ -1296,7 +1300,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/109.png"
   },
@@ -1350,7 +1355,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/112.png"
   },
@@ -1404,7 +1410,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/113.png"
   },
@@ -1458,7 +1465,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/114.png"
   },
@@ -1512,7 +1520,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/120.png"
   },
@@ -1566,7 +1575,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/122.png"
   },
@@ -1620,7 +1630,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/130.png"
   },
@@ -1674,7 +1685,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/139.png"
   },
@@ -1728,7 +1740,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/143.png"
   },
@@ -1782,7 +1795,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/144.png"
   },
@@ -1836,7 +1850,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/151.png"
   },
@@ -1890,7 +1905,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/160.png"
   },
@@ -1944,7 +1960,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/161.png"
   },
@@ -1998,7 +2015,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/163.png"
   },
@@ -2052,7 +2070,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/200.png"
   },
@@ -2106,7 +2125,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/201.png"
   },
@@ -2160,7 +2180,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/202.png"
   },
@@ -2214,7 +2235,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/203.png"
   },
@@ -2268,7 +2290,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/204.png"
   },
@@ -2322,7 +2345,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/205.png"
   },
@@ -2376,7 +2400,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/206.png"
   },
@@ -2430,7 +2455,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/207.png"
   },
@@ -2484,7 +2510,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/208.png"
   },
@@ -2538,7 +2565,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/209.png"
   },
@@ -2592,7 +2620,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/210.png"
   },
@@ -2646,7 +2675,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/211.png"
   },
@@ -2700,7 +2730,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/212.png"
   },
@@ -2754,7 +2785,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/213.png"
   },
@@ -2808,7 +2840,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/214.png"
   },
@@ -2862,7 +2895,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/215.png"
   },
@@ -2916,7 +2950,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/217.png"
   },
@@ -2970,7 +3005,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/218.png"
   },
@@ -3024,7 +3060,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/220.png"
   },
@@ -3078,7 +3115,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/221.png"
   },
@@ -3132,7 +3170,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/223.png"
   },
@@ -3186,7 +3225,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/224.png"
   },
@@ -3240,7 +3280,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/225.png"
   },
@@ -3294,7 +3335,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/226.png"
   },
@@ -3348,7 +3390,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/228.png"
   },
@@ -3402,7 +3445,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/230.png"
   },
@@ -3456,7 +3500,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/232.png"
   },
@@ -3510,7 +3555,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/234.png"
   },
@@ -3564,7 +3610,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/235.png"
   },
@@ -3618,7 +3665,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/236.png"
   },
@@ -3672,7 +3720,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/237.png"
   },
@@ -3726,7 +3775,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/238.png"
   },
@@ -3780,7 +3830,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/239.png"
   },
@@ -3834,7 +3885,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/240.png"
   },
@@ -3888,7 +3940,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/241.png"
   },
@@ -3942,7 +3995,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/242.png"
   },
@@ -3996,7 +4050,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/243.png"
   },
@@ -4050,7 +4105,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/244.png"
   },
@@ -4104,7 +4160,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/245.png"
   },
@@ -4158,7 +4215,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/246.png"
   },
@@ -4212,7 +4270,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/247.png"
   },
@@ -4266,7 +4325,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/248.png"
   },
@@ -4320,7 +4380,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/249.png"
   },
@@ -4374,7 +4435,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -4473,7 +4535,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/251.png"
   },
@@ -4527,7 +4590,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/252.png"
   },
@@ -4581,7 +4645,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/253.png"
   },
@@ -4635,7 +4700,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -4734,7 +4800,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -4833,7 +4900,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/256.png"
   },
@@ -4887,7 +4955,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/257.png"
   },
@@ -4941,7 +5010,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/258.png"
   },
@@ -4995,7 +5065,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/259.png"
   },
@@ -5049,7 +5120,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/260.png"
   },
@@ -5103,7 +5175,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/261.png"
   },
@@ -5157,7 +5230,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/262.png"
   },
@@ -5211,7 +5285,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/263.png"
   },
@@ -5265,7 +5340,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -5364,7 +5440,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/265.png"
   },
@@ -5418,7 +5495,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/266.png"
   },
@@ -5472,7 +5550,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/267.png"
   },
@@ -5526,7 +5605,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/268.png"
   },
@@ -5580,7 +5660,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/269.png"
   },
@@ -5634,7 +5715,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/270.png"
   },
@@ -5688,7 +5770,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -5787,7 +5870,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -5886,7 +5970,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/273.png"
   },
@@ -5940,7 +6025,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/275.png"
   },
@@ -5994,7 +6080,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/276.png"
   },
@@ -6048,7 +6135,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/277.png"
   },
@@ -6102,7 +6190,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/278.png"
   },
@@ -6156,7 +6245,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/279.png"
   },
@@ -6210,7 +6300,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -6309,7 +6400,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/281.png"
   },
@@ -6363,7 +6455,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/282.png"
   },
@@ -6417,7 +6510,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/283.png"
   },
@@ -6471,7 +6565,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/284.png"
   },
@@ -6525,7 +6620,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -6624,7 +6720,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/286.png"
   },
@@ -6678,7 +6775,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/287.png"
   },
@@ -6732,7 +6830,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/289.png"
   },
@@ -6786,7 +6885,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/290.png"
   },
@@ -6840,7 +6940,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -6939,7 +7040,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/292.png"
   },
@@ -6993,7 +7095,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/293.png"
   },
@@ -7047,7 +7150,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -7146,7 +7250,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -7245,7 +7350,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -7344,7 +7450,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -7443,7 +7550,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -7542,7 +7650,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/301.png"
   },
@@ -7596,7 +7705,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/302.png"
   },
@@ -7650,7 +7760,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -7749,7 +7860,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/304.png"
   },
@@ -7803,7 +7915,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/305.png"
   },
@@ -7857,7 +7970,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/306.png"
   },
@@ -7911,7 +8025,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_grenadelauncher": "models\\paintkits\\c_grenadelauncher\\c_grenadelauncher_sheen",
@@ -7969,7 +8084,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/308.png"
   },
@@ -8023,7 +8139,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/309.png"
   },
@@ -8077,7 +8194,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_grenadelauncher": "models\\paintkits\\c_grenadelauncher\\c_grenadelauncher_sheen",
@@ -8100,7 +8218,8 @@
     "c_rocketlauncher",
     "c_scattergun",
     "c_shotgun",
-    "c_sniperrifle"
+    "c_sniperrifle",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_grenadelauncher": "models\\paintkits\\c_dragons_fury\\c_grenadelauncher_gold",
@@ -8165,7 +8284,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/391.png"
   },
@@ -8219,7 +8339,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/400.png"
   },
@@ -8273,7 +8394,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/401.png"
   },
@@ -8327,7 +8449,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -8426,7 +8549,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -8525,7 +8649,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/404.png"
   },
@@ -8579,7 +8704,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -8678,7 +8804,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/406.png"
   },
@@ -8732,7 +8859,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/407.png"
   },
@@ -8786,7 +8914,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/408.png"
   },
@@ -8840,7 +8969,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/409.png"
   },
@@ -8894,7 +9024,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/410.png"
   },
@@ -8948,7 +9079,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -9047,7 +9179,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/412.png"
   },
@@ -9101,7 +9234,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/413.png"
   },
@@ -9155,7 +9289,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -9254,7 +9389,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -9353,7 +9489,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -9452,7 +9589,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/417.png"
   },
@@ -9506,7 +9644,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -9605,7 +9744,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/419.png"
   },
@@ -9659,7 +9799,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/420.png"
   },
@@ -9713,7 +9854,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/421.png"
   },
@@ -9767,7 +9909,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -9866,7 +10009,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -9965,7 +10109,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/424.png"
   },
@@ -10019,7 +10164,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/425.png"
   },
@@ -10073,7 +10219,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -10172,7 +10319,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/427.png"
   },
@@ -10226,7 +10374,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -10325,7 +10474,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/429.png"
   },
@@ -10379,7 +10529,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/430.png"
   },
@@ -10433,7 +10584,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -10532,7 +10684,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/432.png"
   },
@@ -10586,7 +10739,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -10685,7 +10839,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -10784,7 +10939,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/435.png"
   },
@@ -10838,7 +10994,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/436.png"
   },
@@ -10892,7 +11049,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -10991,7 +11149,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -11090,7 +11249,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -11189,7 +11349,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -11288,7 +11449,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "icon": "icons/paints/441.png"
   },
@@ -11342,7 +11504,8 @@
     "c_trenchgun",
     "c_ubersaw",
     "c_winger_pistol",
-    "c_wrench"
+    "c_wrench",
+    "paintkit_tool"
    ],
    "materialOverrides": {
     "c_flamethrower": "models/paintkits/macaw/c_flamethrower",
@@ -11400,6 +11563,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_amputator.png",
+   "iconCamera": {
+    "position": [
+     26.11006,
+     10.019102,
+     28.239597
+    ],
+    "forward": [
+     -0.866236,
+     -0.211065,
+     -0.452865
+    ],
+    "up": [
+     -0.187048,
+     0.977472,
+     -0.097783
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 5,
@@ -11437,6 +11617,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_atom_launcher.png",
+   "iconCamera": {
+    "position": [
+     28.173008,
+     16.529537,
+     30.974512
+    ],
+    "forward": [
+     -0.678785,
+     -0.312083,
+     -0.664722
+    ],
+    "up": [
+     -0.222982,
+     0.950055,
+     -0.218345
+    ]
+   },
    "material": {
     "phongExponent": 5,
     "phongBoost": 5,
@@ -11478,6 +11675,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_back_scratcher.png",
+   "iconCamera": {
+    "position": [
+     -22.746035,
+     40.771957,
+     33.003895
+    ],
+    "forward": [
+     0.485804,
+     -0.533163,
+     -0.692627
+    ],
+    "up": [
+     0.428494,
+     -0.545396,
+     0.720372
+    ]
+   },
    "material": {
     "phongExponent": 10,
     "phongBoost": 1,
@@ -11515,6 +11729,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_battleaxe.png",
+   "iconCamera": {
+    "position": [
+     13.758595,
+     42.818993,
+     -49.842697
+    ],
+    "forward": [
+     -0.26838,
+     -0.327652,
+     0.905879
+    ],
+    "up": [
+     -0.821636,
+     0.568764,
+     -0.037703
+    ]
+   },
    "material": {
     "phongExponent": 5,
     "phongBoost": 10,
@@ -11552,6 +11783,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_bazaar_sniper.png",
+   "iconCamera": {
+    "position": [
+     52.455555,
+     15.883847,
+     62.459496
+    ],
+    "forward": [
+     -0.82251,
+     -0.21325,
+     -0.527259
+    ],
+    "up": [
+     -0.136743,
+     0.974001,
+     -0.180619
+    ]
+   },
    "material": {
     "phongExponent": 10,
     "phongBoost": 5,
@@ -11589,6 +11837,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_blackbox.png",
+   "iconCamera": {
+    "position": [
+     35.624546,
+     8.16973,
+     25.278122
+    ],
+    "forward": [
+     -0.799949,
+     -0.149272,
+     -0.581206
+    ],
+    "up": [
+     -0.120765,
+     0.988796,
+     -0.087738
+    ]
+   },
    "material": {
     "phongExponent": 30,
     "phongBoost": 0.6,
@@ -11626,6 +11891,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_claidheamohmor.png",
+   "iconCamera": {
+    "position": [
+     19.526031,
+     51.288971,
+     -59.891262
+    ],
+    "forward": [
+     -0.287293,
+     -0.327652,
+     0.900059
+    ],
+    "up": [
+     -0.820666,
+     0.568764,
+     -0.054902
+    ]
+   },
    "material": {
     "phongExponent": 12,
     "phongBoost": 5,
@@ -11663,6 +11945,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_crusaders_crossbow.png",
+   "iconCamera": {
+    "position": [
+     -19.331836,
+     19.601973,
+     31.434877
+    ],
+    "forward": [
+     0.644414,
+     -0.47539,
+     -0.598945
+    ],
+    "up": [
+     0.348208,
+     0.879775,
+     -0.323646
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 5,
@@ -11700,6 +11999,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_degreaser.png",
+   "iconCamera": {
+    "position": [
+     42.772156,
+     12.239485,
+     80.201447
+    ],
+    "forward": [
+     -0.721113,
+     -0.241664,
+     -0.649303
+    ],
+    "up": [
+     -0.179593,
+     0.97036,
+     -0.161703
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 1,
@@ -11737,6 +12053,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_demo_cannon.png",
+   "iconCamera": {
+    "position": [
+     26.783497,
+     7.797443,
+     43.660622
+    ],
+    "forward": [
+     -0.717024,
+     -0.180258,
+     -0.673338
+    ],
+    "up": [
+     -0.131404,
+     0.983619,
+     -0.123393
+    ]
+   },
    "material": {
     "phongExponent": 20,
     "phongBoost": 2,
@@ -11774,6 +12107,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_demo_sultan_sword.png",
+   "iconCamera": {
+    "position": [
+     -49.357234,
+     41.489204,
+     -13.749482
+    ],
+    "forward": [
+     0.904096,
+     -0.338143,
+     0.261284
+    ],
+    "up": [
+     -0.016859,
+     0.582735,
+     0.812487
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 2.5,
@@ -11811,6 +12161,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_detonator.png",
+   "iconCamera": {
+    "position": [
+     21.023468,
+     1.851712,
+     25.208174
+    ],
+    "forward": [
+     -0.853841,
+     0.059572,
+     -0.517113
+    ],
+    "up": [
+     0.050954,
+     0.998224,
+     0.030863
+    ]
+   },
    "material": {
     "phongExponent": 30,
     "phongBoost": 10,
@@ -11848,6 +12215,23 @@
    "compositeWidth": 1024,
    "compositeHeight": 1024,
    "icon": "icons/weapons/c_flameball.png",
+   "iconCamera": {
+    "position": [
+     44.336792,
+     2.713928,
+     73.155579
+    ],
+    "forward": [
+     -0.808828,
+     -0.002369,
+     -0.58804
+    ],
+    "up": [
+     -0.184765,
+     0.950372,
+     0.250308
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 5,
@@ -11885,6 +12269,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_flamethrower.png",
+   "iconCamera": {
+    "position": [
+     54.638538,
+     -4.040987,
+     73.7127
+    ],
+    "forward": [
+     -0.856653,
+     0.050364,
+     -0.513429
+    ],
+    "up": [
+     -0.162624,
+     0.91812,
+     0.361399
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 5,
@@ -11922,6 +12323,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_gatling_gun.png",
+   "iconCamera": {
+    "position": [
+     64.404915,
+     -22.405909,
+     74.928558
+    ],
+    "forward": [
+     -0.83427,
+     0.122133,
+     -0.537659
+    ],
+    "up": [
+     0.102659,
+     0.992514,
+     0.066163
+    ]
+   },
    "material": {
     "phongExponent": 20,
     "phongBoost": 6,
@@ -11963,6 +12381,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_grenadelauncher.png",
+   "iconCamera": {
+    "position": [
+     29.986479,
+     4.920827,
+     37.629875
+    ],
+    "forward": [
+     -0.823835,
+     -0.055556,
+     -0.564101
+    ],
+    "up": [
+     -0.045842,
+     0.998456,
+     -0.031385
+    ]
+   },
    "material": {
     "phongExponent": 20,
     "phongBoost": 2,
@@ -12000,6 +12435,23 @@
    "compositeWidth": 1024,
    "compositeHeight": 1024,
    "icon": "icons/weapons/c_holymackerel.png",
+   "iconCamera": {
+    "position": [
+     8.960179,
+     22.660732,
+     -18.555788
+    ],
+    "forward": [
+     -0.390893,
+     -0.379294,
+     0.838653
+    ],
+    "up": [
+     0.666101,
+     0.512246,
+     0.542138
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 5,
@@ -12037,6 +12489,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_jag.png",
+   "iconCamera": {
+    "position": [
+     19.774393,
+     16.640514,
+     19.657524
+    ],
+    "forward": [
+     -0.739204,
+     -0.169282,
+     -0.65186
+    ],
+    "up": [
+     0.475771,
+     0.553799,
+     -0.683337
+    ]
+   },
    "material": {
     "phongExponent": 15,
     "phongBoost": 5,
@@ -12074,6 +12543,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_knife.png",
+   "iconCamera": {
+    "position": [
+     12.494589,
+     3.836532,
+     -7.081479
+    ],
+    "forward": [
+     -0.869363,
+     0.017712,
+     0.493856
+    ],
+    "up": [
+     -0.392443,
+     0.582601,
+     -0.711733
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 5,
@@ -12111,6 +12597,23 @@
    "compositeWidth": 1024,
    "compositeHeight": 1024,
    "icon": "icons/weapons/c_lochnload.png",
+   "iconCamera": {
+    "position": [
+     40.007195,
+     3.586585,
+     34.24984
+    ],
+    "forward": [
+     -0.885941,
+     -0.024166,
+     -0.463167
+    ],
+    "up": [
+     -0.021418,
+     0.999708,
+     -0.011194
+    ]
+   },
    "material": {
     "phongExponent": 15,
     "phongBoost": 3,
@@ -12148,6 +12651,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_medigun.png",
+   "iconCamera": {
+    "position": [
+     26.150967,
+     20.597805,
+     37.324703
+    ],
+    "forward": [
+     -0.597291,
+     -0.520783,
+     -0.609942
+    ],
+    "up": [
+     -0.364374,
+     0.853689,
+     -0.372084
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 4,
@@ -12185,6 +12705,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_minigun.png",
+   "iconCamera": {
+    "position": [
+     52.746048,
+     -20.699181,
+     67.414886
+    ],
+    "forward": [
+     -0.83427,
+     0.122133,
+     -0.537659
+    ],
+    "up": [
+     0.102659,
+     0.992514,
+     0.066163
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 4,
@@ -12222,6 +12759,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_pistol.png",
+   "iconCamera": {
+    "position": [
+     13.056375,
+     9.403747,
+     13.444486
+    ],
+    "forward": [
+     -0.752849,
+     -0.353738,
+     -0.555057
+    ],
+    "up": [
+     -0.284723,
+     0.935345,
+     -0.209913
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 2.5,
@@ -12259,6 +12813,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_powerjack.png",
+   "iconCamera": {
+    "position": [
+     45.135433,
+     19.339556,
+     19.858807
+    ],
+    "forward": [
+     -0.914501,
+     -0.067586,
+     -0.3989
+    ],
+    "up": [
+     0.293461,
+     0.567911,
+     -0.768998
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 1,
@@ -12296,6 +12867,23 @@
    "compositeWidth": 1024,
    "compositeHeight": 1024,
    "icon": "icons/weapons/c_quadball.png",
+   "iconCamera": {
+    "position": [
+     30.291611,
+     9.027884,
+     44.936546
+    ],
+    "forward": [
+     -0.723052,
+     -0.169947,
+     -0.669563
+    ],
+    "up": [
+     -0.124697,
+     0.985453,
+     -0.115467
+    ]
+   },
    "material": {
     "phongExponent": 15,
     "phongBoost": 3,
@@ -12333,6 +12921,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_reserve_shooter.png",
+   "iconCamera": {
+    "position": [
+     39.540775,
+     -5.844637,
+     28.318649
+    ],
+    "forward": [
+     -0.95006,
+     0.194589,
+     -0.243969
+    ],
+    "up": [
+     0.107187,
+     0.9377,
+     0.330501
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 8,
@@ -12370,6 +12975,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_revolver.png",
+   "iconCamera": {
+    "position": [
+     15.376948,
+     -4.128693,
+     15.847956
+    ],
+    "forward": [
+     -0.840352,
+     0.22521,
+     -0.49304
+    ],
+    "up": [
+     0.194245,
+     0.97431,
+     0.113967
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 2,
@@ -12407,6 +13029,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_riding_crop.png",
+   "iconCamera": {
+    "position": [
+     -8.614601,
+     -0.67517,
+     29.829885
+    ],
+    "forward": [
+     0.300125,
+     0.333337,
+     -0.893762
+    ],
+    "up": [
+     -0.754989,
+     0.655676,
+     -0.008984
+    ]
+   },
    "material": {
     "phongExponent": 15,
     "phongBoost": 1.2,
@@ -12444,6 +13083,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_rocketlauncher.png",
+   "iconCamera": {
+    "position": [
+     38.266022,
+     -5.922373,
+     31.539955
+    ],
+    "forward": [
+     -0.736216,
+     0.255703,
+     -0.626579
+    ],
+    "up": [
+     0.194725,
+     0.966755,
+     0.165729
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 2.75,
@@ -12481,6 +13137,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_russian_riot.png",
+   "iconCamera": {
+    "position": [
+     47.703014,
+     -12.492667,
+     30.579096
+    ],
+    "forward": [
+     -0.905651,
+     0.272371,
+     -0.324977
+    ],
+    "up": [
+     0.143587,
+     0.918128,
+     0.369355
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 4,
@@ -12518,6 +13191,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_scattergun.png",
+   "iconCamera": {
+    "position": [
+     14.487176,
+     13.008338,
+     26.718403
+    ],
+    "forward": [
+     -0.669298,
+     -0.456861,
+     -0.585934
+    ],
+    "up": [
+     -0.343751,
+     0.889538,
+     -0.300928
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 6,
@@ -12555,6 +13245,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_scimitar.png",
+   "iconCamera": {
+    "position": [
+     -38.356449,
+     -17.917496,
+     19.281179
+    ],
+    "forward": [
+     0.903471,
+     0.393689,
+     -0.169552
+    ],
+    "up": [
+     0.425352,
+     -0.774449,
+     0.468299
+    ]
+   },
    "material": {
     "phongExponent": 10,
     "phongBoost": 5,
@@ -12592,6 +13299,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_scorch_shot.png",
+   "iconCamera": {
+    "position": [
+     16.011847,
+     6.965054,
+     21.065273
+    ],
+    "forward": [
+     -0.82139,
+     -0.231489,
+     -0.521278
+    ],
+    "up": [
+     -0.195454,
+     0.972838,
+     -0.124036
+    ]
+   },
    "material": {
     "phongExponent": 10,
     "phongBoost": 1,
@@ -12629,6 +13353,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_shortstop.png",
+   "iconCamera": {
+    "position": [
+     14.121148,
+     10.126283,
+     -3.430821
+    ],
+    "forward": [
+     -0.84457,
+     -0.428695,
+     0.320815
+    ],
+    "up": [
+     -0.400754,
+     0.903449,
+     0.152235
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 4,
@@ -12666,6 +13407,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_shotgun.png",
+   "iconCamera": {
+    "position": [
+     35.081215,
+     -8.063806,
+     25.242512
+    ],
+    "forward": [
+     -0.942987,
+     0.253084,
+     -0.216158
+    ],
+    "up": [
+     0.169036,
+     0.923631,
+     0.343995
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 2.5,
@@ -12703,6 +13461,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_smg.png",
+   "iconCamera": {
+    "position": [
+     27.129333,
+     4.073279,
+     27.86165
+    ],
+    "forward": [
+     -0.875989,
+     -0.174099,
+     -0.449814
+    ],
+    "up": [
+     -0.161603,
+     0.984621,
+     -0.066381
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 2.5,
@@ -12740,6 +13515,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_sniperrifle.png",
+   "iconCamera": {
+    "position": [
+     28.57423,
+     19.498678,
+     51.339199
+    ],
+    "forward": [
+     -0.714956,
+     -0.323786,
+     -0.619678
+    ],
+    "up": [
+     -0.190942,
+     0.943036,
+     -0.272442
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 2.5,
@@ -12777,6 +13569,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_soda_popper.png",
+   "iconCamera": {
+    "position": [
+     19.152578,
+     10.983881,
+     20.533751
+    ],
+    "forward": [
+     -0.767278,
+     -0.302117,
+     -0.565695
+    ],
+    "up": [
+     -0.243173,
+     0.953271,
+     -0.17928
+    ]
+   },
    "material": {
     "phongExponent": 15,
     "phongBoost": 5,
@@ -12814,6 +13623,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_stickybomb_launcher.png",
+   "iconCamera": {
+    "position": [
+     29.389162,
+     7.668045,
+     20.476324
+    ],
+    "forward": [
+     -0.905932,
+     -0.293125,
+     -0.305556
+    ],
+    "up": [
+     -0.236977,
+     0.949028,
+     -0.207815
+    ]
+   },
    "material": {
     "phongExponent": null,
     "phongBoost": 2.5,
@@ -12851,6 +13677,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_tele_shotgun.png",
+   "iconCamera": {
+    "position": [
+     23.987225,
+     19.391663,
+     45.919052
+    ],
+    "forward": [
+     -0.686552,
+     -0.467123,
+     -0.557173
+    ],
+    "up": [
+     -0.301306,
+     0.880206,
+     -0.366676
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 12,
@@ -12902,6 +13745,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_tomislav.png",
+   "iconCamera": {
+    "position": [
+     44.10865,
+     12.789588,
+     74.922302
+    ],
+    "forward": [
+     -0.737695,
+     -0.351593,
+     -0.576359
+    ],
+    "up": [
+     -0.27706,
+     0.936153,
+     -0.21646
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 2,
@@ -12939,6 +13799,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_trenchgun.png",
+   "iconCamera": {
+    "position": [
+     21.514887,
+     12.784503,
+     44.665363
+    ],
+    "forward": [
+     -0.653064,
+     -0.409752,
+     -0.636876
+    ],
+    "up": [
+     -0.260308,
+     0.911195,
+     -0.319317
+    ]
+   },
    "material": {
     "phongExponent": 17,
     "phongBoost": 9,
@@ -12976,6 +13853,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_ubersaw.png",
+   "iconCamera": {
+    "position": [
+     21.340527,
+     15.011558,
+     -2.692461
+    ],
+    "forward": [
+     -0.756219,
+     -0.503681,
+     0.417657
+    ],
+    "up": [
+     -0.384822,
+     0.858606,
+     0.338684
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 2,
@@ -13027,6 +13921,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_winger_pistol.png",
+   "iconCamera": {
+    "position": [
+     13.056375,
+     9.403747,
+     13.444486
+    ],
+    "forward": [
+     -0.752849,
+     -0.353738,
+     -0.555057
+    ],
+    "up": [
+     -0.284723,
+     0.935345,
+     -0.209913
+    ]
+   },
    "material": {
     "phongExponent": 25,
     "phongBoost": 10,
@@ -13064,6 +13975,23 @@
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_wrench.png",
+   "iconCamera": {
+    "position": [
+     24.971699,
+     16.871872,
+     22.847803
+    ],
+    "forward": [
+     -0.734812,
+     -0.149278,
+     -0.66164
+    ],
+    "up": [
+     0.438821,
+     0.63919,
+     -0.631564
+    ]
+   },
    "material": {
     "phongExponent": 15,
     "phongBoost": 5,
@@ -13092,6 +14020,60 @@
     "rimLightExponent": 20,
     "rimLightBoost": 0.25,
     "rimMask": false
+   }
+  },
+  {
+   "key": "paintkit_tool",
+   "name": "War Paint",
+   "model": "models/paintkit_tool.glb",
+   "compositeWidth": 2048,
+   "compositeHeight": 2048,
+   "icon": "icons/weapons/paintkit_tool.png",
+   "iconCamera": {
+    "position": [
+     52.889687,
+     28.172972,
+     32.564709
+    ],
+    "forward": [
+     -0.846124,
+     -0.172206,
+     -0.5044
+    ],
+    "up": [
+     -0.147919,
+     0.985061,
+     -0.088175
+    ]
+   },
+   "material": {
+    "phongExponent": null,
+    "phongBoost": 2.5,
+    "envmapTint": [
+     0.1,
+     0.1,
+     0.1
+    ],
+    "normalMap": null,
+    "phong": true,
+    "phongExponentFactor": 255,
+    "phongExponentTexture": null,
+    "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+    "halfLambert": true,
+    "baseMapAlphaPhongMask": true,
+    "baseMapAlphaEnvmapMask": false,
+    "normalMapAlphaEnvmapMask": false,
+    "phongAlbedoTint": true,
+    "phongTint": null,
+    "phongFresnelRanges": [
+     0.3,
+     0.5,
+     3
+    ],
+    "rimLight": true,
+    "rimLightExponent": 2,
+    "rimLightBoost": 2.5,
+    "rimMask": true
    }
   }
  ],
@@ -15743,7 +16725,7 @@
    "noMip": false,
    "noLod": false
   },
-  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_ao.webp": {
+  "textures/models/items/paintkit_tool/p_paintkit_tool_ao.webp": {
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
@@ -15767,7 +16749,7 @@
    "noMip": false,
    "noLod": false
   },
-  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_albedo.webp": {
+  "textures/models/items/paintkit_tool/p_paintkit_tool_albedo.webp": {
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
@@ -15803,7 +16785,7 @@
    "noMip": false,
    "noLod": false
   },
-  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_groups.webp": {
+  "textures/models/items/paintkit_tool/p_paintkit_tool_groups_three.webp": {
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
@@ -15827,7 +16809,7 @@
    "noMip": false,
    "noLod": false
   },
-  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_wearblend.webp": {
+  "textures/models/items/paintkit_tool/p_paintkit_tool_wearblend.webp": {
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
@@ -15886,6 +16868,54 @@
    "anisotropic": false,
    "noMip": false,
    "noLod": false
+  },
+  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_ao.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_albedo.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_groups.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_wearblend.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": true
   },
   "textures/models/weapons/c_models/c_grenadelauncher/p_grenadelauncher_ao.webp": {
    "width": 2048,
@@ -17939,7 +18969,7 @@
    "noMip": false,
    "noLod": false
   },
-  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_groups_02.webp": {
+  "textures/models/items/paintkit_tool/p_paintkit_tool_groups_four.webp": {
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
@@ -17948,7 +18978,7 @@
    "pointSample": false,
    "trilinear": false,
    "anisotropic": false,
-   "noMip": false,
+   "noMip": true,
    "noLod": false
   },
   "textures/patterns/solid_orange_bright.webp": {
@@ -17962,18 +18992,6 @@
    "anisotropic": false,
    "noMip": false,
    "noLod": false
-  },
-  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_wearblend_no_label.webp": {
-   "width": 2048,
-   "height": 2048,
-   "mipCount": 12,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": true
   },
   "textures/patterns/camo/sticky_01_blue.webp": {
    "width": 2048,
@@ -17998,6 +19016,30 @@
    "anisotropic": false,
    "noMip": false,
    "noLod": false
+  },
+  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_groups_02.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_wearblend_no_label.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": true
   },
   "textures/models/weapons/c_models/c_knife/p_knife_groups.webp": {
    "width": 2048,
@@ -18839,6 +19881,18 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/models/items/paintkit_tool/p_paintkit_tool_groups_left.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/autumn/autumn_acorn_light.webp": {
    "width": 1024,
    "height": 1024,
@@ -18874,6 +19928,18 @@
    "anisotropic": false,
    "noMip": false,
    "noLod": false
+  },
+  "textures/models/items/paintkit_tool/p_paintkit_tool_groups_four_equal.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": true,
+   "noLod": true
   },
   "textures/patterns/autumn/cobwebs.webp": {
    "width": 1024,
@@ -19163,6 +20229,18 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/models/items/paintkit_tool/p_paintkit_tool_groups_three_large.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/workshop/501990941/501990941_red.webp": {
    "width": 2048,
    "height": 2048,
@@ -19215,6 +20293,18 @@
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/models/items/paintkit_tool/p_paintkit_tool_groups_two.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
    "clampS": false,
    "clampT": false,
    "pointSample": false,
@@ -20627,7 +21717,7 @@
    "noMip": false,
    "noLod": false
   },
-  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_groups_03.webp": {
+  "textures/models/items/paintkit_tool/p_paintkit_tool_groups_four_02.webp": {
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
@@ -20655,6 +21745,18 @@
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/models/weapons/c_models/c_flamethrower/p_flamethrower_groups_03.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
    "clampS": false,
    "clampT": false,
    "pointSample": false,
@@ -23727,6 +24829,18 @@
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/weapons/dragons_fury_icon.webp": {
+   "width": 512,
+   "height": 512,
+   "mipCount": 10,
    "clampS": false,
    "clampT": false,
    "pointSample": false,

@@ -67,7 +67,7 @@ const WEAPON_IDS = [
   'c_riding_crop', 'c_rocketlauncher', 'c_russian_riot', 'c_scattergun', 'c_scimitar',
   'c_scorch_shot', 'c_shortstop', 'c_shotgun', 'c_smg', 'c_sniperrifle', 'c_soda_popper',
   'c_stickybomb_launcher', 'c_tele_shotgun', 'c_tomislav', 'c_trenchgun', 'c_ubersaw',
-  'c_winger_pistol', 'c_wrench',
+  'c_winger_pistol', 'c_wrench', 'paintkit_tool',
 ] as const;
 
 const SHEEN_IDS = ['none', 'team_shine', 'deadly_daffodil', 'manndarin', 'mean_green', 'agonizing_emerald', 'villainous_violet', 'hot_rod'] as const;

@@ -60,6 +60,12 @@ export interface WeaponEntry {
   compositeWidth?: number;
   compositeHeight?: number;
   icon?: string; // backpack icon PNG relative to public/data, e.g. "icons/weapons/c_shotgun.png"
+  /** Valve-authored inventory presentation attachment from the weapon MDL. */
+  iconCamera?: {
+    position: [number, number, number];
+    forward: [number, number, number];
+    up: [number, number, number];
+  };
   material: WeaponMaterial;
 }
 

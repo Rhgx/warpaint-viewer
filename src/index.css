@@ -135,6 +135,75 @@ button {
   width: var(--anchor-width);
   max-width: var(--available-width);
 }
+
+/* Stepping through a long list one item at a time, without opening it. The
+   buttons sit on the control row so the field keeps its single-row rhythm. */
+.ui-select-stepper {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.ui-select-stepper > .ui-select-trigger { flex: 1; min-width: 0; }
+
+.ui-select-step {
+  display: grid;
+  width: var(--control-h);
+  height: var(--control-h);
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.ui-select-step:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text); }
+.ui-select-step:focus-visible { border-color: var(--accent); outline: 1px solid var(--accent); outline-offset: 1px; }
+.ui-select-step:disabled { cursor: default; opacity: .4; }
+
+.ui-select-popup-searchable {
+  width: 240px;
+  max-width: var(--available-width);
+}
+
+/* Reuses the catalog filter's shape so the popup does not read as a new idea. */
+.ui-select-search {
+  position: sticky;
+  z-index: 1;
+  top: -4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -4px -4px 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-dim);
+}
+
+.ui-select-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  outline: none;
+}
+
+.ui-select-empty {
+  margin: 0;
+  padding: 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-align: center;
+}
 .ui-select-item {
   display: flex;
   align-items: center;
@@ -147,6 +216,7 @@ button {
   outline: none;
   transition: var(--transition-fast);
 }
+.ui-select-item[data-filtered] { display: none; }
 .ui-select-item[data-highlighted] {
   background: var(--accent);
   color: var(--accent-text);

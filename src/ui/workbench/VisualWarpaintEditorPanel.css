@@ -1,0 +1,205 @@
+.custom-workbench-editor-panel {
+  overflow: hidden;
+  padding: 0;
+}
+
+.visual-warpaint-editor-error {
+  margin: 8px 12px 0;
+  color: var(--fail);
+  font-size: 10px;
+}
+
+.visual-warpaint-editor-dirty-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.visual-warpaint-editor-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.visual-warpaint-editor-head {
+  display: flex;
+  flex: none;
+  min-height: var(--control-h);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.visual-warpaint-editor-head-title {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.visual-warpaint-editor-head-count {
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.visual-warpaint-editor-head-spacer { flex: 1; }
+
+.visual-warpaint-editor-layer-map-toggle,
+.visual-warpaint-editor-clear {
+  display: inline-flex;
+  flex: none;
+  min-height: var(--control-h);
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.visual-warpaint-editor-layer-map-toggle:hover:not(:disabled),
+.visual-warpaint-editor-clear:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.visual-warpaint-editor-layer-map-toggle:focus-visible,
+.visual-warpaint-editor-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.visual-warpaint-editor-layer-map-toggle:disabled,
+.visual-warpaint-editor-clear:disabled { cursor: default; opacity: 0.4; }
+
+.visual-warpaint-editor-layer-map-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.visual-warpaint-editor-clear[data-confirm] {
+  border-color: color-mix(in srgb, var(--fail) 55%, var(--border));
+  background: color-mix(in srgb, var(--fail) 12%, var(--panel));
+  color: var(--fail);
+}
+
+.visual-warpaint-editor-clear[data-confirm]:hover:not(:disabled) {
+  border-color: var(--fail);
+  color: var(--fail);
+}
+
+/* An always-mounted live region: committed assignment changes are announced
+   through it, but it only takes visible space while it has something to say,
+   so it never becomes the persistent instructional line the redesign removed. */
+.visual-warpaint-editor-notice {
+  flex: none;
+  height: 0;
+  overflow: hidden;
+  padding: 0 12px;
+  color: var(--text-dim);
+  font-size: 10px;
+  opacity: 0;
+  transition: var(--transition-fast);
+}
+
+.visual-warpaint-editor-notice[data-visible] {
+  height: auto;
+  padding: 7px 12px 0;
+  opacity: 1;
+}
+
+.visual-warpaint-editor-board {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  overflow: auto;
+}
+
+.visual-warpaint-editor-chip {
+  display: inline-flex;
+  max-width: 100%;
+  height: var(--control-h);
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.visual-warpaint-editor-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visual-warpaint-editor-chip:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.visual-warpaint-editor-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.visual-warpaint-editor-chip[aria-pressed='true'] {
+  border-color: var(--border-strong);
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.visual-warpaint-editor-chip-swatch {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 3px;
+  background: currentColor;
+  opacity: 0.35;
+}
+
+.visual-warpaint-editor-chip[data-elsewhere] .visual-warpaint-editor-chip-swatch { opacity: 0.85; }
+
+.visual-warpaint-editor-chip[aria-pressed='true'] .visual-warpaint-editor-chip-swatch { opacity: 1; }
+
+.visual-warpaint-editor-unavailable {
+  margin: 12px;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .visual-warpaint-editor-layer-map-toggle,
+  .visual-warpaint-editor-clear,
+  .visual-warpaint-editor-chip,
+  .visual-warpaint-editor-notice { transition: none; }
+}
+
+@media (forced-colors: active) {
+  .visual-warpaint-editor-dirty-dot { background: Highlight; }
+}

@@ -1,0 +1,1601 @@
+{
+  "source": {
+    "title": "War Paint Texture Groups Reference for War Paint Authors",
+    "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=3035470027"
+  },
+  "textures": {
+    "models/weapons/c_models/c_flamethrower/p_flamethrower_groups": {
+      "weapon": "Flame Thrower",
+      "groups": {
+        "32": "Trigger + Pump Handle Screw Heads",
+        "48": "Pump Handle",
+        "64": "Head",
+        "80": "Neck + Pilot Light Neck",
+        "96": "Pump Knuckle Guards + Wire Grommets + Hose Knobs near Tank + Pump Hose Gland + Hose Structure near Pump (sans Bolt Neck)",
+        "112": "Tank Neck Ring + Tank Heat Shield + Tank Hose Gland",
+        "128": "Pilot Light Head",
+        "144": "Ties",
+        "176": "Tank",
+        "208": "Hose + Pump Hose Grommet + Hose Structure near Pump Bolt Neck",
+        "224": "Pilot Light Cylinder"
+      }
+    },
+    "models/weapons/c_models/c_flamethrower/p_flamethrower_groups_02": {
+      "weapon": "Flame Thrower",
+      "groups": {
+        "16": "Hose",
+        "32": "Trigger + Pump Handle Screw Heads",
+        "48": "Pump Handle",
+        "64": "Head",
+        "80": "Neck + Pilot Light Cylinder Front Nub",
+        "96": "Pump Knuckle Guards + Wire Grommets + Pump Hose Gland + Hose Structure near Pump (sans Bolt Neck)",
+        "112": "Tank Neck Ring + Tank Heat Shield + Tank Hose Gland",
+        "128": "Pilot Light Head",
+        "144": "Ties + Tank Valve Assembly",
+        "176": "Tank",
+        "208": "Pump Hose Grommet + Hose Structure near Pump Bolt Neck",
+        "224": "Pilot Light Cylinder",
+        "255": "Pilot Light Neck"
+      }
+    },
+    "models/weapons/c_models/c_flamethrower/p_flamethrower_groups_03": {
+      "weapon": "Flame Thrower",
+      "groups": {
+        "16": "Hose",
+        "32": "Trigger + Pump Handle Screw Heads",
+        "48": "Pump Handle",
+        "64": "Head",
+        "80": "Neck",
+        "96": "Pump Knuckle Guards + Wire Grommets + Pump Hose Gland + Hose Structure near Pump (sans Bolt Neck)",
+        "112": "Tank Neck Ring + Tank Hose Gland",
+        "128": "Pilot Light Head",
+        "144": "Ties",
+        "160": "Tank Heat Shield",
+        "176": "Tank",
+        "192": "Pump Wires (though the wear texture always zeroes this out)",
+        "208": "Pump Hose Grommet + Hose Structure near Pump Bolt Neck",
+        "224": "Pilot Light Cylinder",
+        "240": "Hose Knobs near Tank",
+        "255": "Pilot Light Neck"
+      }
+    },
+    "models/weapons/c_models/c_grenadelauncher/p_grenadelauncher_groups": {
+      "weapon": "Grenade Launcher",
+      "groups": {
+        "16": "Trigger",
+        "32": "Underbarrel Fore Grip",
+        "48": "Stock",
+        "64": "Front Sight",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "128": "Hub Cylinder",
+        "144": "Cylinder Housing Fore of Hinge",
+        "160": "Chambers",
+        "176": "Front Sight Mount",
+        "192": "Cylinder Housing Aft of Hinge",
+        "208": "Stock Butt",
+        "224": "Bolt Heads",
+        "240": "Front Sight Knob"
+      }
+    },
+    "models/weapons/c_models/c_grenadelauncher/p_grenadelauncher_groups_02": {
+      "weapon": "Grenade Launcher",
+      "groups": {
+        "16": "Trigger",
+        "32": "Underbarrel Fore Grip",
+        "48": "Stock + Barrel",
+        "64": "Front Sight Horizontal Bars",
+        "80": "Chamber #1",
+        "96": "Chamber #2",
+        "112": "Chamber #3",
+        "128": "Chamber #4",
+        "144": "Chamber #5",
+        "160": "Chamber #6",
+        "176": "Hub Cylinder + Front Sight Mount",
+        "192": "Cylinder Housing",
+        "208": "Stock Butt",
+        "224": "Bolt Heads",
+        "240": "Front Sight Knob + Trigger Guard",
+        "255": "Front Sight Vertical Bars"
+      }
+    },
+    "models/weapons/c_models/c_grenadelauncher/p_grenadelauncher_groups02": {
+      "weapon": "Grenade Launcher",
+      "groups": {
+        "16": "Trigger",
+        "32": "Underbarrel Fore Grip",
+        "48": "Stock",
+        "64": "Front Sight",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "112": "Barrel and Chamber Bands",
+        "128": "Hub Cylinder",
+        "144": "Cylinder Housing Fore of Hinge",
+        "160": "Chambers",
+        "176": "Front Sight Mount",
+        "192": "Cylinder Housing Aft of Hinge",
+        "208": "Stock Butt",
+        "224": "Bolt Heads",
+        "240": "Front Sight Knob",
+        "255": "Maybe Reload Grenade?"
+      }
+    },
+    "models/weapons/c_models/c_grenadelauncher/p_grenadelauncher_groups03": {
+      "weapon": "Grenade Launcher",
+      "groups": {
+        "16": "Trigger",
+        "32": "Chamber Fore ~4/5ths",
+        "48": "Stock + Underbarrel Fore Grip",
+        "64": "Front Sight",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "112": "Barrel Fore Band + Barrel Rear Band + Hub Cylinder Band",
+        "128": "Hub Cylinder",
+        "144": "Cylinder Housing Fore of Hinge",
+        "160": "Chamber Rear ~1/5th",
+        "176": "Front Sight Mount",
+        "192": "Cylinder Housing Aft of Hinge",
+        "208": "Stock Butt",
+        "224": "Bolt Heads",
+        "240": "Front Sight Knob",
+        "255": "Maybe Reload Grenade?"
+      }
+    },
+    "models/weapons/c_models/c_grenadelauncher/p_grenadelauncher_groups04": {
+      "weapon": "Grenade Launcher",
+      "groups": {
+        "16": "Trigger",
+        "32": "Underbarrel Fore Grip",
+        "48": "Stock",
+        "64": "Front Sight",
+        "80": "Barrel Aft of Front Sight Mount",
+        "96": "Trigger Guard",
+        "112": "Cylinder Housing Top and Bottom",
+        "128": "Hub Cylinder",
+        "144": "Cylinder Housing Fore + Cylinder Housing Top Block",
+        "160": "Chambers",
+        "176": "Front Sight Mount",
+        "192": "Cylinder Housing Rear",
+        "208": "Stock Butt",
+        "224": "Bolt Heads + Front Sight Knob",
+        "240": "Barrel Rear Ring",
+        "255": "Barrel Fore of Front Sight Mount"
+      }
+    },
+    "models/weapons/c_models/c_knife/p_knife_groups": {
+      "weapon": "Knife",
+      "groups": {
+        "16": "Grip Fore Left",
+        "32": "Grip Fore Left Band",
+        "48": "Grip Fore Left Pin Head + Grip Fore Left Screw Head",
+        "64": "Grip Rear Right",
+        "80": "Grip Rear Right Band",
+        "96": "Grip Fore Right Pin Head + Grip Fore Right Screw Head",
+        "112": "Grip Fore Right",
+        "128": "Grip Fore Right Band",
+        "144": "Grip Rear Right Pin + Grip Rear Right Screw Head",
+        "160": "Grip Rear Left",
+        "176": "Grip Rear Left Band",
+        "192": "Grip Rear Left Pin + Grip Rear Left Screw Head",
+        "240": "Bottom Grip Latch",
+        "255": "Blade"
+      }
+    },
+    "models/weapons/c_models/c_knife/p_knife_groups_03": {
+      "weapon": "Knife",
+      "groups": {
+        "16": "Grip Fore Top Left Segment",
+        "32": "Grip Fore Middle Left Segment",
+        "48": "Grip Fore Left Pin Head + Grip Fore Left Screw Head",
+        "64": "Grip Rear Top Right Segment",
+        "80": "Grip Rear Middle Right Segment",
+        "96": "Grip Fore Right Pin Head + Grip Fore Right Screw Head",
+        "112": "Grip Fore Top Right Segment",
+        "128": "Grip Fore Middle Right Segment",
+        "144": "Grip Rear Right Pin + Grip Rear Right Screw Head",
+        "160": "Grip Rear Top Left Segment",
+        "176": "Grip Rear Middle Left Segment",
+        "192": "Grip Rear Left Pin + Grip Rear Left Screw Head",
+        "208": "Grip Bottom Segments",
+        "224": "Grip Stripes",
+        "240": "Bottom Grip Latch",
+        "255": "Blade"
+      }
+    },
+    "models/weapons/c_models/c_knife/p_knife_groups_04": {
+      "weapon": "Knife",
+      "groups": {
+        "16": "Grip Fore Top Left Segment",
+        "32": "Grip Fore Middle Left Segment",
+        "48": "Screw Heads",
+        "64": "Grip Rear Top Right Segment",
+        "80": "Grip Rear Middle Right Segment",
+        "96": "Grip Right Pin Heads",
+        "112": "Grip Fore Top Right Segment",
+        "128": "Grip Fore Middle Right Segment",
+        "160": "Grip Rear Top Left Segment",
+        "176": "Grip Rear Middle Left Segment",
+        "192": "Grip Left Pin Heads",
+        "208": "Grip Bottom Segments",
+        "224": "Between-Segment Bands",
+        "240": "Bottom Grip Latch",
+        "255": "Blade"
+      }
+    },
+    "models/weapons/c_models/c_knife/p_knife_groups_05": {
+      "weapon": "Knife",
+      "groups": {
+        "16": "Grip Fore Bottom Left Segment",
+        "32": "Grip Fore Middle Left Segment",
+        "48": "Grip Fore Top Left Segment",
+        "64": "Grip Rear Right Bottom Segment",
+        "80": "Grip Rear Middle Right Segment",
+        "96": "Grip Rear Top Right Segment",
+        "112": "Grip Fore Bottom Right Segment",
+        "128": "Grip Fore Middle Right Segment",
+        "144": "Grip Fore Top Right Segment",
+        "160": "Grip Rear Bottom Left Segment",
+        "176": "Grip Rear Middle Left Segment",
+        "192": "Grip Rear Top Left Segment",
+        "208": "Grip Pins + Grip Screw Heads",
+        "224": "Blade Tip",
+        "240": "Bottom Grip Latch",
+        "255": "Blade"
+      }
+    },
+    "models/weapons/c_models/c_knife/p_knife_groups02": {
+      "weapon": "Knife",
+      "groups": {
+        "16": "Grip Fore Left",
+        "32": "Grip Fore Left Band",
+        "48": "Grip Fore Left Pin Head + Grip Fore Left Screw Head",
+        "64": "Grip Rear Right",
+        "80": "Grip Rear Right Band",
+        "96": "Grip Fore Right Pin Head + Grip Fore Right Screw Head",
+        "112": "Grip Fore Right",
+        "128": "Grip Fore Right Band",
+        "144": "Grip Rear Right Pin + Grip Rear Right Screw Head",
+        "160": "Grip Rear Left",
+        "176": "Grip Rear Left Band",
+        "192": "Grip Rear Left Pin + Grip Rear Left Screw Head",
+        "224": "Grip Stripes",
+        "240": "Bottom Grip Latch",
+        "255": "Blade"
+      }
+    },
+    "models/weapons/c_models/c_medigun/p_medigun_groups": {
+      "weapon": "Medi Gun",
+      "groups": {
+        "32": "Lever",
+        "48": "Grip",
+        "64": "Muzzle",
+        "80": "Barrel",
+        "96": "Lever Box",
+        "144": "\"Receiver\" + Hose Gland + Rear Switches + Lever Box Side Disks",
+        "176": "Wrap",
+        "208": "Hose"
+      }
+    },
+    "models/weapons/c_models/c_medigun/p_medigun_groups02": {
+      "weapon": "Medi Gun",
+      "groups": {
+        "32": "Lever",
+        "48": "Grip",
+        "64": "Muzzle",
+        "80": "Barrel",
+        "96": "Lever Box",
+        "128": "Lever Side Caps",
+        "144": "\"Receiver\" + Hose Gland + Rear Switches",
+        "160": "Lever Box Side Disks",
+        "176": "Wrap",
+        "208": "Hose"
+      }
+    },
+    "models/weapons/c_models/c_medigun/p_medigun_groups03": {
+      "weapon": "Medi Gun",
+      "groups": {
+        "32": "Lever",
+        "48": "Grip",
+        "64": "Muzzle",
+        "80": "Barrel",
+        "96": "Lever Box",
+        "144": "\"Receiver\" + Hose Gland + Rear Switches + Lever Box Side Disks",
+        "176": "Wrap",
+        "192": "Barrel Stripes",
+        "208": "Hose"
+      }
+    },
+    "models/weapons/c_models/c_medigun/p_medigun_groups04": {
+      "weapon": "Medi Gun",
+      "groups": {
+        "32": "Lever + Rear Switches",
+        "48": "Grip",
+        "64": "Muzzle",
+        "80": "Barrel",
+        "96": "Lever Box",
+        "128": "\"Receiver\" Sides/Top/Bottom",
+        "144": "\"Receiver\"/Barrel Band + Hose Gland + \"Receiver\" Screws + Lever Side Caps + Lever Box Side Disks",
+        "176": "Wrap",
+        "192": "Barrel Stripes + Grip Stripes",
+        "208": "Hose",
+        "224": "Bolt + Right Wire + Back Switch Lever",
+        "240": "Wrap Rear",
+        "255": "\"Receiver\" Front Face + \"Receiver\" Rear Face"
+      }
+    },
+    "models/weapons/c_models/c_medigun/p_medigun_groups05": {
+      "weapon": "Medi Gun",
+      "groups": {
+        "16": "Muzzle Neck",
+        "32": "Lever",
+        "48": "Grip",
+        "64": "Muzzle Head",
+        "80": "Barrel",
+        "96": "Lever Box",
+        "112": "Hose Gland",
+        "128": "Lever Axle Connectors (sans Sides)",
+        "144": "\"Receiver\"",
+        "160": "Lever Box Side Disks",
+        "176": "Wrap Fore",
+        "192": "Left Wire",
+        "208": "Hose",
+        "224": "Lever Side Cap (sans Bolt)"
+      }
+    },
+    "models/weapons/c_models/c_minigun/p_minigun_groups": {
+      "weapon": "Minigun",
+      "groups": {
+        "32": "Under-Drum Conduit Connectors",
+        "48": "Fore Handle Grip",
+        "64": "Muzzle",
+        "80": "Barrels",
+        "96": "Fore Handle Mount Bracket",
+        "112": "Barrel Rings",
+        "128": "Drum Right Box Lower + Drum Rear Electrical Box",
+        "144": "Motor and Feed Cylinders + Drum Rear Mounting Panel and Bolts + Fore Handle Mounting Bolts + Drum Fore Mounting Bolts + Under-Drum Conduit Connector Bolt",
+        "160": "Drum Rear",
+        "176": "Drum Fore",
+        "192": "Under-Drum Conduit",
+        "208": "Fore Handle Mount Side Knobs",
+        "224": "Rear Handle",
+        "240": "Fore Handle",
+        "255": "Motor and Feed Cylinder Caps, Shroud, and Mount + Drum Fore Mounting Brackets + Drum Right Box Upper + Drum Fore Protrusion"
+      }
+    },
+    "models/weapons/c_models/c_minigun/p_minigun_groups02": {
+      "weapon": "Minigun",
+      "groups": {
+        "32": "Under-Drum Conduit Connectors",
+        "48": "Fore Handle Grip",
+        "64": "Muzzle + Barrels",
+        "80": "Muzzle Stripe + Drum Stripe",
+        "96": "Fore Handle Mount Bracket",
+        "112": "Barrel Rings",
+        "128": "Drum Right Feed Box Lower + Drum Rear Electrical Box + Drum Stripe",
+        "144": "Motor and Feed Cylinders + Drum Rear Mounting Panel and Bolts + Fore Handle Mounting Bolts + Drum Fore Mounting Bolts + Under-Drum Conduit Connector Bolt",
+        "160": "Drum Rear",
+        "176": "Drum Fore",
+        "192": "Under-Drum Conduit",
+        "208": "Fore Handle Mount Side Knobs",
+        "224": "Rear Handle",
+        "240": "Fore Handle",
+        "255": "Motor and Feed Cylinder Caps, Shroud, and Mount + Drum Fore Mounting Brackets + Drum Right Box Upper + Drum Fore Protrusion"
+      }
+    },
+    "models/weapons/c_models/c_minigun/p_minigun_groups03": {
+      "weapon": "Minigun",
+      "groups": {
+        "16": "Fore Handle Mount Side Knob Caps",
+        "32": "Under-Drum Conduit Connectors",
+        "48": "Fore Handle Grip",
+        "64": "Muzzle + Barrels + Drum Front Face",
+        "80": "Muzzle Stripe + Drum Stripes + Fore Handle Stripes",
+        "96": "Fore Handle Mount Bracket",
+        "112": "Barrel Rings",
+        "128": "Drum Right Feed Box Lower + Drum Rear Electrical Box",
+        "144": "Motor and Feed Cylinders + Drum Rear Mounting Panel and Bolts + Fore Handle Mounting Bolts + Drum Fore Mounting Bolts + Under-Drum Conduit Connector Bolt",
+        "160": "Drum Rear",
+        "176": "Drum Fore",
+        "192": "Under-Drum Conduit",
+        "208": "Fore Handle Mount Side Knobs + Drum Rear Wires + Drum Rear Electrical Box LED",
+        "224": "Rear Handle",
+        "240": "Fore Handle",
+        "255": "Motor and Feed Cylinder Caps, Shroud, and Mount + Drum Fore Mounting Brackets + Drum Right Box Upper + Drum Fore Protrusion"
+      }
+    },
+    "models/weapons/c_models/c_pistol/p_pistol_groups": {
+      "weapon": "Pistol",
+      "groups": {
+        "32": "Trigger",
+        "48": "Side Grips",
+        "64": "Front Sight",
+        "80": "Muzzle Ring",
+        "96": "Trigger Guard",
+        "112": "Hammer",
+        "128": "Ejection Port",
+        "144": "Receiver",
+        "160": "Slide",
+        "176": "Magazine (sans Foot)",
+        "208": "Side Grip Circles",
+        "224": "Magazine Foot"
+      }
+    },
+    "models/weapons/c_models/c_pistol/p_pistol_groups_02": {
+      "weapon": "Pistol",
+      "groups": {
+        "32": "Trigger",
+        "48": "Side Grips",
+        "64": "Front Sight",
+        "80": "Muzzle Ring",
+        "96": "Trigger Guard",
+        "112": "Hammer",
+        "128": "Ejection Port",
+        "144": "Receiver + Slide Top Groove",
+        "160": "Slide (sans Top Groove)",
+        "176": "Magazine (sans Foot)",
+        "208": "Side Grip Circles",
+        "224": "Magazine Foot"
+      }
+    },
+    "models/weapons/c_models/c_pistol/p_pistol_groups_03": {
+      "weapon": "Pistol",
+      "groups": {
+        "32": "Trigger",
+        "48": "Side Grips",
+        "64": "Front Sight",
+        "80": "Muzzle Ring",
+        "96": "Trigger Guard",
+        "112": "Hammer",
+        "128": "Ejection Port",
+        "144": "Receiver (sans Front)",
+        "160": "Slide (sans Top Groove and Front)",
+        "176": "Magazine (sans Foot)",
+        "208": "Grip Side Circles",
+        "224": "Magazine Foot",
+        "255": "Slide Front + Receiver Front + Slide Top Groove"
+      }
+    },
+    "models/weapons/c_models/c_revolver/p_revolver_groups": {
+      "weapon": "Revolver",
+      "groups": {
+        "32": "Trigger",
+        "48": "Side Grips",
+        "64": "Sights",
+        "80": "Barrel",
+        "112": "Hammer",
+        "128": "Cylinder",
+        "144": "Receiver + Trigger Guard",
+        "176": "Bullets",
+        "208": "Side Grip Circles",
+        "224": "Ejector Rod",
+        "240": "Cylinder Latch"
+      }
+    },
+    "models/weapons/c_models/c_revolver/p_revolver_groups_02": {
+      "weapon": "Revolver",
+      "groups": {
+        "32": "Trigger",
+        "48": "Side Grips",
+        "64": "Sights",
+        "80": "Barrel",
+        "112": "Hammer",
+        "128": "Cylinder",
+        "144": "Receiver + Trigger Guard + Front Sight Side Studs",
+        "176": "Bullets",
+        "192": "Top Rail + Underbarrel Support Cylinder",
+        "208": "Side Grip Circles",
+        "224": "Ejector Rod Neck",
+        "240": "Cylinder Latch",
+        "255": "Ejector Rod Head + Trigger Guard Studs"
+      }
+    },
+    "models/weapons/c_models/c_revolver/p_revolver_groups_03": {
+      "weapon": "Revolver",
+      "groups": {
+        "32": "Trigger",
+        "48": "Side Grips",
+        "64": "Sights",
+        "80": "Barrel",
+        "112": "Hammer",
+        "128": "Cylinder",
+        "144": "Receiver + Trigger Guard",
+        "176": "Bullets",
+        "192": "Top Rail + Underbarrel Support Cylinder",
+        "208": "Side Grip Circles",
+        "224": "Ejector Rod Neck",
+        "240": "Cylinder Latch",
+        "255": "Ejector Rod Head + Trigger Guard Studs"
+      }
+    },
+    "models/weapons/c_models/c_rocketlauncher/p_rocketlauncher_groups": {
+      "weapon": "Rocket Launcher",
+      "groups": {
+        "16": "Rear Sling Ring \"S\"-Fastener",
+        "32": "Trigger",
+        "48": "Grips",
+        "64": "Front Sight",
+        "80": "Muzzle",
+        "96": "Trigger Guard + Sling Rings",
+        "112": "Rear Rings",
+        "144": "Grip Mounts + Front Sight Mount + Shroud Supports",
+        "176": "Shroud",
+        "192": "Exhaust Cone",
+        "208": "Body Rear",
+        "224": "Body Middle"
+      }
+    },
+    "models/weapons/c_models/c_rocketlauncher/p_rocketlauncher_groups_02": {
+      "weapon": "Rocket Launcher",
+      "groups": {
+        "16": "Rear Sling Ring \"S\"-Fastener",
+        "32": "Trigger",
+        "48": "Grips",
+        "64": "Front Sight",
+        "80": "Muzzle + Shroud Outer Fore + Barrel Fore",
+        "96": "Trigger Guard + Sling Rings",
+        "112": "Rear Rings",
+        "144": "Grip Mounts + Shroud Supports",
+        "176": "Shroud Inner + Shroud Outer Rear",
+        "192": "Exhaust Cone",
+        "208": "Body Rear",
+        "224": "Body Middle",
+        "240": "Barrel Stripe + Shroud Stripe + Exhaust Cone Stripe",
+        "255": "Front Sight Mount"
+      }
+    },
+    "models/weapons/c_models/c_rocketlauncher/p_rocketlauncher_groups_04": {
+      "weapon": "Rocket Launcher",
+      "groups": {
+        "16": "Rear Sling Ring \"S\"-Fastener",
+        "32": "Trigger",
+        "48": "Grips",
+        "64": "Front Sight",
+        "80": "Muzzle",
+        "96": "Trigger Guard + Sling Rings",
+        "112": "Rear Rings",
+        "128": "Bolts",
+        "144": "Grip Mounts + Front Sight Mount Upper",
+        "160": "Exhaust Cone Outer Ring",
+        "176": "Shroud",
+        "192": "Exhaust Cone Exterior + Exhaust Cone Interior",
+        "208": "Body Rear",
+        "224": "Body Middle",
+        "240": "Front Sight Mount Lower"
+      }
+    },
+    "models/weapons/c_models/c_rocketlauncher/p_rocketlauncher_groups_05": {
+      "weapon": "Rocket Launcher",
+      "groups": {
+        "16": "Shroud Outer Fore",
+        "32": "Trigger + Rear Sling Ring \"S\"-Fastener",
+        "48": "Grips",
+        "64": "Front Sight",
+        "80": "Muzzle + Body Fore + Body Middle",
+        "96": "Trigger Guard + Sling Rings",
+        "112": "Rear Sling Ring Mount Ring Bracket",
+        "128": "Grip Mount Side Panels",
+        "144": "Grip Mounts + Front Sight Mount Lower",
+        "160": "Exhaust Cone Outer Ring + Exhaust Cone Interior",
+        "176": "Shroud Inner + Shroud Outer Rear",
+        "192": "Exhaust Cone Exterior",
+        "208": "Body Rear",
+        "224": "Front Sight Mount Upper",
+        "240": "Bolts",
+        "255": "Body Rear Ring Pair"
+      }
+    },
+    "models/weapons/c_models/c_rocketlauncher/p_rocketlauncher_groups03": {
+      "weapon": "Rocket Launcher",
+      "groups": {
+        "16": "Rear Sling Ring \"S\"-Fastener",
+        "32": "Trigger",
+        "64": "Front Sight",
+        "80": "Muzzle + Barrel Fore",
+        "96": "Trigger Guard + Sling Rings",
+        "112": "Rear Rings",
+        "128": "Grips + Exhaust Cone Interior + Exhaust Cone Exterior Outer Ring",
+        "144": "Grip Mounts + Shroud Supports + Front Sight",
+        "176": "Shroud",
+        "192": "Exhaust Cone Exterior",
+        "208": "Body Rear",
+        "224": "Body Middle + Body Rear Thin Stripes",
+        "240": "Body Fore Stripe + Body Rear Thick Stripes"
+      }
+    },
+    "models/weapons/c_models/c_scattergun/p_scattergun_groups": {
+      "weapon": "Scattergun",
+      "groups": {
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Sights",
+        "80": "Barrels",
+        "96": "Lever",
+        "128": "Ejection Port + Loading Port",
+        "144": "Receiver",
+        "176": "Drum",
+        "192": "Sight Rail",
+        "240": "Underbarrel Fore Grip"
+      }
+    },
+    "models/weapons/c_models/c_scattergun/p_scattergun_groups02": {
+      "weapon": "Scattergun",
+      "groups": {
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Sights",
+        "80": "Barrels",
+        "96": "Lever",
+        "128": "Ejection Port + Loading Port",
+        "144": "Receiver + Drum Rear",
+        "176": "Drum Side and Front",
+        "192": "Sight Rail",
+        "240": "Underbarrel Fore Grip",
+        "255": "Band along rear of Drum Side"
+      }
+    },
+    "models/weapons/c_models/c_shotgun/p_shotgun_groups": {
+      "weapon": "Shotgun",
+      "groups": {
+        "16": "Reload Shell Interior",
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Barrel/Tube Mag Front Fastener + Action Bar",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "128": "Ejection Port + Loading Port",
+        "144": "Receiver",
+        "160": "Pump Grip",
+        "176": "Tube Mag",
+        "255": "Reload Shell Exterior"
+      }
+    },
+    "models/weapons/c_models/c_shotgun/p_shotgun_groups02": {
+      "weapon": "Shotgun",
+      "groups": {
+        "16": "Reload Shell Interior",
+        "32": "Trigger",
+        "48": "Rear Grip + Barrel/Tube Mag Front Buttress",
+        "64": "Barrel/Tube Mag Front Fastener",
+        "80": "Barrel (Fore 4/5ths)",
+        "96": "Trigger Guard",
+        "112": "Barrel (Bands at rear 1/5th)",
+        "128": "Ejection Port + Loading Port",
+        "144": "Receiver + Barrel (Rear 1/5th) + Action Bar",
+        "160": "Pump Grip",
+        "176": "Tube Mag",
+        "255": "Reload Shell Exterior"
+      }
+    },
+    "models/weapons/c_models/c_shotgun/p_shotgun_groups03": {
+      "weapon": "Shotgun",
+      "groups": {
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Action Bar",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "112": "Pump Grip Rear Taper",
+        "128": "Ejection Port + Loading Port",
+        "144": "Receiver",
+        "160": "Pump Grip (sans Rear Taper)",
+        "176": "Tube Mag",
+        "192": "Barrel/Tube Mag Front Buttress",
+        "208": "Barrel/Tube Mag Front Fastener",
+        "224": "Trigger Guard",
+        "255": "Front Sight Fin"
+      }
+    },
+    "models/weapons/c_models/c_smg/p_smg_groups": {
+      "weapon": "SMG",
+      "groups": {
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Font Sight + Rear Sight Fins",
+        "80": "Barrel Body",
+        "96": "Barrel Head + Front Sight Mount Ring + Barrel Foot",
+        "128": "Side Grip Circle + Butt Latch",
+        "144": "Receiver",
+        "160": "Ejection Port + Bolt Frame + Bolt",
+        "176": "Magazine",
+        "208": "Rear Sight Bolt + Butt Sling Ring",
+        "224": "Trigger Guard"
+      }
+    },
+    "models/weapons/c_models/c_smg/p_smg_groups_02": {
+      "weapon": "SMG",
+      "groups": {
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Font Sight + Rear Sight Fins",
+        "80": "Barrel Body Underside",
+        "96": "Barrel Head Underside + Front Sight Mount Ring Underside + Barrel Foot Underside",
+        "128": "Side Grip Circle + Butt Latch",
+        "144": "Receiver",
+        "160": "Ejection Port + Bolt Frame + Bolt",
+        "176": "Magazine",
+        "208": "Rear Sight Bolt + Butt Sling Ring",
+        "224": "Trigger Guard",
+        "240": "Magazine Well",
+        "255": "Barrel Head Overside + Front Sight Mount Ring Overside + Barrel Body Overside + Barrel Foot Overside"
+      }
+    },
+    "models/weapons/c_models/c_smg/p_smg_groups_03": {
+      "weapon": "SMG",
+      "groups": {
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Front Sight Head + Front Sight Neck + Rear Sight Fins",
+        "80": "Barrel Body",
+        "96": "Front Sight Mount Ring",
+        "112": "Barrel Foot",
+        "128": "Side Grip Circle + Butt Latch",
+        "144": "Receiver",
+        "160": "Ejection Port + Bolt Frame",
+        "176": "Magazine",
+        "192": "Barrel Head",
+        "208": "Rear Sight Bolt + Butt Sling Ring"
+      }
+    },
+    "models/weapons/c_models/c_sniperrifle/p_sniperrifle_groups": {
+      "weapon": "Sniper Rifle",
+      "groups": {
+        "32": "Trigger",
+        "48": "Stock",
+        "64": "Scope",
+        "80": "Barrel + Receiver + Bolt Neck",
+        "96": "Trigger Guard",
+        "112": "Scope Mounting Bar",
+        "144": "Scope Mounting Blocks",
+        "176": "Scope Mounting Cradles + Scope Rear Ring + Scope Lens Cover + Scope Lens Cover Mount + Laser Wire Grommets + Laser Wire Fastener + Laser Wire Battery + Magnification Knob + Bolt Head",
+        "208": "Laser Wire",
+        "224": "Laser Pointer"
+      }
+    },
+    "models/weapons/c_models/c_sniperrifle/p_sniperrifle_groups02": {
+      "weapon": "Sniper Rifle",
+      "groups": {
+        "32": "Trigger",
+        "48": "Stock",
+        "64": "Scope",
+        "80": "Barrel + Receiver + Bolt Neck",
+        "96": "Trigger Guard",
+        "112": "Scope Mounting Bar",
+        "128": "Barrel Stripes + Scope Stripes",
+        "144": "Scope Mounting Blocks",
+        "176": "Scope Mounting Cradles + Scope Rear Ring + Scope Lens Cover + Scope Lens Cover Mount + Laser Wire Grommets + Laser Wire Fastener + Laser Wire Battery + Magnification Knob + Bolt Head",
+        "208": "Laser Wire",
+        "224": "Laser Pointer"
+      }
+    },
+    "models/weapons/c_models/c_sniperrifle/p_sniperrifle_groups03": {
+      "weapon": "Sniper Rifle",
+      "groups": {
+        "16": "Scope Mounting Bar Aft of Fore Scope Mounting Block",
+        "32": "Trigger",
+        "48": "Stock",
+        "64": "Scope",
+        "80": "Barrel + Receiver",
+        "96": "Trigger Guard",
+        "112": "Scope Mounting Bar Fore of Fore Scope Mounting Block",
+        "128": "Muzzle Stripe",
+        "144": "Scope Mounting Blocks",
+        "160": "Ejection Port + Bolt Neck + Receiver Rear",
+        "176": "Scope Mounting Cradles",
+        "192": "Laser Wire Grommets + Laser Wire Fastener + Laser Wire Battery + Magnification Knob + Bolt Head",
+        "208": "Laser Wire",
+        "224": "Laser Pointer",
+        "240": "Scope Rear Ring + Scope Lens Cover + Scope Lens Cover Mount",
+        "255": "Laser Pointer Front Disk"
+      }
+    },
+    "models/weapons/c_models/c_stickybomb_launcher/p_stickybomb_launcher_groups": {
+      "weapon": "Stickybomb Launcher",
+      "groups": {
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Front Sight",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "112": "Sling Ring",
+        "128": "Bolt Neck + Bolt Slide + Ejection Port",
+        "144": "Ejection Port Frame + Receiver + Butt Collar + Butt Nub + Screw Heads",
+        "160": "Drum Top Cradle + Front Drum Bracket + Rear Drum Bracket + Sling Ring Bracket",
+        "176": "Drum",
+        "240": "Bolt Head",
+        "255": "Fore Grip"
+      }
+    },
+    "models/weapons/c_models/c_stickybomb_launcher/p_stickybomb_launcher_groups_04": {
+      "weapon": "Stickybomb Launcher",
+      "groups": {
+        "16": "Front Sights + Screw Heads + Sling Ring + Bolt Head + Bolt Neck + Drum Front Nub",
+        "32": "Trigger",
+        "48": "Front Grip + Rear Grip",
+        "64": "Bolt Slide + Butt Collar + Sling Ring Bracket",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "112": "Drum Fore Stripe",
+        "128": "Ejection Port",
+        "144": "Ejection Port Frame",
+        "160": "Drum Top Cradle + Front Drum Bracket + Rear Drum Bracket",
+        "176": "Drum Back Face",
+        "192": "Drum Rear Stripe",
+        "208": "Receiver",
+        "224": "Drum Front Face",
+        "240": "Drum Middle Stripe",
+        "255": "Receiver Rear Stripe + Butt Nub"
+      }
+    },
+    "models/weapons/c_models/c_stickybomb_launcher/p_stickybomb_launcher_groups_06": {
+      "weapon": "Stickybomb Launcher",
+      "groups": {
+        "16": "Screw Heads",
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Front Sight",
+        "80": "Barrel Head",
+        "96": "Trigger Guard",
+        "112": "Sling Ring",
+        "128": "Bolt + Bolt Slide + Ejection Port",
+        "144": "Ejection Port Frame",
+        "160": "Drum Top Cradle + Front Drum Bracket + Rear Drum Bracket + Sling Ring Bracket",
+        "176": "Drum",
+        "192": "Barrel Neck",
+        "208": "Receiver",
+        "224": "Rear Neck Ring + Rear Nub",
+        "240": "Bolt Head",
+        "255": "Fore Grip"
+      }
+    },
+    "models/weapons/c_models/c_stickybomb_launcher/p_stickybomb_launcher_groups02": {
+      "weapon": "Stickybomb Launcher",
+      "groups": {
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Front Sight",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "112": "Sling Ring",
+        "128": "Bolt Neck + Bolt Slide + Ejection Port",
+        "144": "Ejection Port Frame + Receiver + Butt Collar + Butt Nub + Screw Heads",
+        "160": "Drum Top Cradle + Front Drum Bracket + Rear Drum Bracket + Sling Ring Bracket",
+        "176": "Drum",
+        "192": "Barrel Neck Stripe",
+        "240": "Bolt Head",
+        "255": "Fore Grip"
+      }
+    },
+    "models/weapons/c_models/c_ubersaw/p_ubersaw_groups": {
+      "weapon": "Ubersaw",
+      "groups": {
+        "32": "Handle",
+        "80": "Blade/Handle Mounting Bracket",
+        "112": "Top Bar",
+        "128": "Major Screw Outer Ring",
+        "160": "Major Screw Heads",
+        "176": "Tube Rear Cap",
+        "192": "Tube Middle",
+        "208": "Tube Fore Cap",
+        "224": "Minor Screw Heads",
+        "240": "Needle",
+        "255": "Blade"
+      }
+    },
+    "models/weapons/c_models/c_wrench/p_wrench_groups": {
+      "weapon": "Wrench",
+      "groups": {
+        "32": "Screw Nut",
+        "48": "Side Grips",
+        "64": "Upper Jaw",
+        "80": "Handle + Bar",
+        "96": "Screw",
+        "176": "Screw Upper Cap",
+        "192": "Lower Jaw Lower Band",
+        "208": "Lower Jaw Bridge",
+        "224": "Screw Heads",
+        "240": "Lower Jaw"
+      }
+    },
+    "models/weapons/c_models/c_wrench/p_wrench_groups_02": {
+      "weapon": "Wrench",
+      "groups": {
+        "32": "Screw Nut",
+        "48": "Side Grips",
+        "64": "Upper Jaw",
+        "80": "Handle",
+        "96": "Screw",
+        "112": "Bar Lower",
+        "128": "Bar Upper",
+        "176": "Screw Upper Cap",
+        "192": "Lower Jaw Lower Band",
+        "208": "Lower Jaw Bridge",
+        "224": "Screw Heads",
+        "240": "Lower Jaw"
+      }
+    },
+    "models/weapons/c_models/c_wrench/p_wrench_groups02": {
+      "weapon": "Wrench",
+      "groups": {
+        "32": "Screw Nut",
+        "48": "Side Grips",
+        "64": "Upper Jaw",
+        "80": "Handle",
+        "96": "Screw",
+        "112": "Bar",
+        "176": "Screw Upper Cap",
+        "192": "Lower Jaw Lower Band",
+        "208": "Lower Jaw Bridge",
+        "224": "Screw Heads",
+        "240": "Lower Jaw",
+        "255": "Bar Stripes"
+      }
+    },
+    "models/workshop/weapons/c_models/c_amputator/p_amputator_groups": {
+      "weapon": "Amputator",
+      "groups": {
+        "16": "Knuckle Guard",
+        "32": "Grip (sans Rings)",
+        "48": "Grip Rings",
+        "64": "Forefinger Rear Guard",
+        "80": "Handle Body",
+        "96": "Handle Head",
+        "112": "Blade Mounting Bar",
+        "128": "Emblem Frame Ring",
+        "144": "Emblem Outer",
+        "160": "Emblem Inner",
+        "176": "Grip Bottom Cap + Knuckle Guard Screw",
+        "192": "Handle Head Screw",
+        "208": "Blade Mounting Bar Screws",
+        "224": "Handle Body Bolt",
+        "240": "Handle Head Spike",
+        "255": "Blade"
+      }
+    },
+    "models/workshop/weapons/c_models/c_atom_launcher/p_atom_launcher_groups": {
+      "weapon": "Air Strike",
+      "groups": {
+        "16": "Exhaust Ring",
+        "32": "Trigger",
+        "48": "Grips",
+        "64": "Front Sight",
+        "80": "Muzzle",
+        "96": "Trigger Guard",
+        "112": "Rear Bands",
+        "128": "Muzzle/Body Band",
+        "144": "Grip Mounts",
+        "160": "Screw Heads",
+        "176": "Top/Side Attachments",
+        "192": "Tail Casing",
+        "208": "Tail",
+        "224": "Body",
+        "240": "Tail Buttresses",
+        "255": "Bolt Heads"
+      }
+    },
+    "models/workshop/weapons/c_models/c_atom_launcher/p_atom_launcher_groups_02": {
+      "weapon": "Air Strike",
+      "groups": {
+        "16": "Exhaust Ring",
+        "32": "Trigger",
+        "48": "Grips",
+        "64": "Front Sight",
+        "80": "Muzzle",
+        "96": "Trigger Guard",
+        "112": "Rear Bands + Tail Buttresses",
+        "128": "Pair of Bands on Body",
+        "144": "Grip Mounts",
+        "160": "Screw Heads",
+        "176": "Top/Side Attachments",
+        "192": "Tail Casing",
+        "208": "Tail",
+        "224": "Body Middle",
+        "240": "Body Fore",
+        "255": "Bolt Heads"
+      }
+    },
+    "models/workshop/weapons/c_models/c_back_scratcher/p_back_scratcher_groups": {
+      "weapon": "Back Scratcher",
+      "groups": {
+        "16": "Pommel Butt",
+        "32": "Pommel",
+        "48": "Neck Base Ring",
+        "64": "Neck",
+        "80": "Handle",
+        "255": "Head"
+      }
+    },
+    "models/workshop/weapons/c_models/c_back_scratcher/p_back_scratcher_groups_02": {
+      "weapon": "Back Scratcher",
+      "groups": {
+        "16": "Pommel Butt",
+        "32": "Pommel",
+        "48": "Neck Base Ring",
+        "64": "Neck",
+        "80": "Handle Surface #1",
+        "96": "Handle Band",
+        "112": "Handle Surface #2",
+        "255": "Head"
+      }
+    },
+    "models/workshop/weapons/c_models/c_back_scratcher/p_back_scratcher_groups_03": {
+      "weapon": "Back Scratcher",
+      "groups": {
+        "16": "Pommel Butt",
+        "32": "Pommel",
+        "48": "Neck Base Ring",
+        "64": "Neck",
+        "80": "Handle Surface #1",
+        "96": "Handle Surface #2",
+        "112": "Handle Surface #3",
+        "128": "Handle Surface #4",
+        "144": "Handle Surface #5",
+        "160": "Handle Surface #6",
+        "176": "Handle Surface #7",
+        "192": "Handle Surface #8",
+        "255": "Head"
+      }
+    },
+    "models/workshop/weapons/c_models/c_battleaxe/p_battleaxe_groups": {
+      "weapon": "Scotsman's Skullcutter",
+      "groups": {
+        "16": "Pommel",
+        "32": "Grip",
+        "48": "Guard Ring",
+        "64": "Guard Spikes",
+        "80": "Shaft",
+        "96": "Shaft/Neck Band",
+        "112": "Neck",
+        "128": "Neck/Head Band",
+        "144": "Head",
+        "160": "Head Spike Base",
+        "176": "Head Spike",
+        "192": "Rear Blade",
+        "208": "Fore Blade"
+      }
+    },
+    "models/workshop/weapons/c_models/c_bazaar_sniper/p_bazaar_sniper_groups": {
+      "weapon": "Bazaar Bargain",
+      "groups": {
+        "32": "Trigger",
+        "48": "Stock",
+        "64": "Top Rail",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "112": "Receiver",
+        "128": "Stock Butt",
+        "144": "Bands",
+        "176": "Scope + Scope Mount + Bolt Handle + Stock Side Panels + Top Rail Mounting Bracket + Front Barrel/Stock/Laser Band",
+        "208": "Laser Wire + Front Sight Fin",
+        "224": "Laser Pointer",
+        "255": "Laser Wire Grommets + Bolt/.Screw Heads + Top Rail Bolts"
+      }
+    },
+    "models/workshop/weapons/c_models/c_blackbox/p_blackbox_groups": {
+      "weapon": "Black Box",
+      "groups": {
+        "16": "Front and Back Cover Hinges (attached to Body)",
+        "32": "Trigger",
+        "48": "Grips",
+        "64": "Front and Back Cover Latches",
+        "80": "Front Muzzle Panel",
+        "96": "Front Cover Brackets",
+        "112": "Ties",
+        "128": "Exhaust Port",
+        "144": "Trigger Frame + Front and Back Cover Latch Cradles",
+        "160": "Front and Back Panel Screw Heads",
+        "176": "Front and Back Cover Hinges (attached to Covers) + Tie Fasteners + Front and Back Cover Latch Teeth",
+        "192": "Rear Exhaust Panel",
+        "208": "Body Rear",
+        "224": "Body Fore",
+        "240": "Back Cover",
+        "255": "Front Cover"
+      }
+    },
+    "models/workshop/weapons/c_models/c_claidheamohmor/p_claidheamohmor_groups": {
+      "weapon": "Claidheamh Mòr",
+      "groups": {
+        "16": "Pommel",
+        "32": "Grip Wrap",
+        "48": "Grip",
+        "64": "Knot Guard 1",
+        "80": "Knot Guard 2",
+        "96": "Cross Guard 1",
+        "112": "Cross Guard 2",
+        "128": "Cross Guard Core",
+        "240": "Cross Blade",
+        "255": "Blade"
+      }
+    },
+    "models/workshop/weapons/c_models/c_claidheamohmor/p_claidheamohmor_groups_02": {
+      "weapon": "Claidheamh Mòr",
+      "groups": {
+        "16": "Pommel",
+        "32": "Grip Wrap",
+        "48": "Grip",
+        "64": "Knot Guard 1",
+        "80": "Knot Guard 2",
+        "96": "Cross Guard 1",
+        "112": "Cross Guard 2",
+        "128": "Cross Guard Core",
+        "144": "Stroke Down Blade",
+        "160": "Blade Tip",
+        "240": "Cross Blade",
+        "255": "Blade"
+      }
+    },
+    "models/workshop/weapons/c_models/c_crusaders_crossbow/p_crusaders_crossbow_groups": {
+      "weapon": "Crusader's Crossbow",
+      "groups": {
+        "16": "Cross Emblem",
+        "32": "Trigger",
+        "48": "Frame + Thing Taped to the Under-Frame Bracket",
+        "64": "Cylinder",
+        "80": "Barrel + Muzzle",
+        "96": "Trigger Hinge",
+        "112": "Foremost Brackets + Barrel/Frame Mounting Bracket",
+        "128": "Cross Emblem Outer",
+        "144": "Cylinder/Frame Mounts",
+        "160": "Rear Cylinder Bulb Bracket + Front Sight + Bow Inner Brace",
+        "176": "Cylinder Front Nub + Cylinder Rear Bulb",
+        "192": "Cylinder Rear Nub + Bulb Bracket/Frame Mount",
+        "208": "Under-Frame Bracket + Trigger Brackets",
+        "224": "Bow",
+        "240": "Tape",
+        "255": "Screw Heads"
+      }
+    },
+    "models/workshop/weapons/c_models/c_degreaser/p_degreaser_groups": {
+      "weapon": "Degreaser",
+      "groups": {
+        "16": "Funnel",
+        "32": "Trigger",
+        "48": "Pump Handle + Tank Hose Gland",
+        "64": "Head",
+        "80": "Neck",
+        "96": "Pump Knuckle Guard + Pump Hose Gland",
+        "112": "Tank Neck Ring",
+        "128": "Head Inner Burner",
+        "144": "Ties",
+        "160": "Head Burner Grate",
+        "176": "Tank",
+        "192": "Muffler",
+        "208": "Hose + Pilot Light Tube",
+        "224": "Pilot Light Cylinder",
+        "240": "Pilot Light Tube Fasteners + Funnel Sheaths + Pump Cap + Pump Ridges + Pump Knobs",
+        "255": "Tank Studs + Muffler Studs + Funnel/Tank Mount + Tie Clasps + Pilot Light Cylinder/Pilot Light Tube Grommet"
+      }
+    },
+    "models/workshop/weapons/c_models/c_demo_cannon/p_demo_cannon_groups": {
+      "weapon": "Loose Cannon",
+      "groups": {
+        "16": "Trigger",
+        "32": "Underbarrel Fore Grip",
+        "48": "Stock",
+        "64": "Front Sight",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "112": "Fuse Plug",
+        "128": "Breech Base Ring",
+        "144": "Barrel Hinge Leaf",
+        "160": "Standing Breech",
+        "176": "Barrel Brackets",
+        "192": "Receiver",
+        "208": "Stock Butt",
+        "224": "Bolt Heads + Fuse Vent + Action Release",
+        "240": "Front Sight Top Knob",
+        "255": "Fuse"
+      }
+    },
+    "models/workshop/weapons/c_models/c_demo_cannon/p_demo_cannon_groups_02": {
+      "weapon": "Loose Cannon",
+      "groups": {
+        "16": "Trigger",
+        "32": "Underbarrel Fore Grip",
+        "48": "Stock",
+        "64": "Front Sight",
+        "80": "Barrel Between Rearmost and Foremost Barrel Brackets",
+        "96": "Trigger Guard",
+        "112": "Fuse Plug",
+        "128": "Breech Base Ring",
+        "144": "Barrel Hinge Leaf",
+        "160": "Standing Breech",
+        "176": "Barrel Brackets",
+        "192": "Receiver",
+        "208": "Stock Butt",
+        "224": "Bolt Heads + Fuse Vent + Action Release + Fuse",
+        "240": "Barrel Rear of Rearmost Barrel Bracket",
+        "255": "BarrelFore of Foremost Barrel Bracket"
+      }
+    },
+    "models/workshop/weapons/c_models/c_demo_sultan_sword/p_demo_sultan_sword_groups": {
+      "weapon": "Persian Persuader",
+      "groups": {
+        "16": "Pommel Snake",
+        "32": "Pommel Snake Mouth Interior",
+        "48": "Pommel Snake Fangs",
+        "64": "Pommel Snake Eyes",
+        "80": "Grip Band #1 (meets Pommel)",
+        "96": "Grip Surface #1",
+        "112": "Grip Band #2",
+        "128": "Grip Surface #2",
+        "144": "Grip Band #3",
+        "160": "Grip Surface #3",
+        "176": "Grip Band #4",
+        "192": "Grip Band #5",
+        "208": "Cross Guard",
+        "224": "Pommel Snake... Mane?",
+        "240": "Blade Base Triangle",
+        "255": "Blade"
+      }
+    },
+    "models/workshop/weapons/c_models/c_detonator/p_detonator_groups": {
+      "weapon": "Detonator",
+      "groups": {
+        "16": "Front Sight Center Fin",
+        "32": "Trigger",
+        "48": "Side Grips",
+        "64": "Front Sight",
+        "80": "Barrel Fore",
+        "96": "Hammer Frame",
+        "112": "Hammer",
+        "128": "Muzzle Ring + Barrel Rear",
+        "144": "Receiver + Trigger Guard",
+        "160": "Barrel Hinge Base + Rear Feathers Mount",
+        "176": "Rear Feathers Box",
+        "192": "Underbarrel Fore Grip",
+        "208": "Screw Heads",
+        "224": "Tape",
+        "240": "Rear Feathers",
+        "255": "Standing Breech"
+      }
+    },
+    "models/workshop/weapons/c_models/c_gatling_gun/p_gatling_gun_groups": {
+      "weapon": "Brass Beast",
+      "groups": {
+        "16": "Bolt Heads and Studs",
+        "32": "Ammo Belt",
+        "48": "Fore Handle Grip",
+        "64": "Front \"Sight\" + Barrels Central Axis",
+        "80": "Barrels",
+        "96": "Minor Drum Rear Face + Minor Drum Left Mounting Bracket",
+        "112": "Barrel Rings",
+        "128": "Rearmost Bracket",
+        "144": "Fore Handle Grip Caps + Fore Handle Mounting Brackets + Rear Grip Mounting Brackets + Ammo Belt Egress Port",
+        "160": "Major Drum Top and Bottom Disks",
+        "176": "Major Drum Core",
+        "192": "Minor Drum (sans Rear Face)",
+        "208": "Fore Handle Left and Right Mounting Attachments + Major Drum Top and Bottom Nubs + Minor Drum Fore and Rear Nubs + Receiver Rear Cap",
+        "224": "Receiver + Rear Grip",
+        "240": "Fore Handle",
+        "255": "Scaffolding"
+      }
+    },
+    "models/workshop/weapons/c_models/c_holymackerel/p_holymackerel_groups": {
+      "weapon": "Holy Mackerel",
+      "groups": {
+        "16": "Fish Mouth Interior",
+        "32": "Rubber Bands",
+        "48": "Newspaper Exterior",
+        "64": "Newspaper Edges",
+        "80": "Fish",
+        "96": "Fish Dorsal Fin",
+        "112": "Fish Pectoral Fins",
+        "128": "Fish Pelvic Fins",
+        "160": "Newspaper Interior Petal #1",
+        "176": "Newspaper Interior Petal #2",
+        "192": "Newspaper Interior Petal #3",
+        "208": "Fish Right Pupil",
+        "224": "Fish Left Pupil",
+        "240": "Fish Right Iris",
+        "255": "Fish Left Iris"
+      }
+    },
+    "models/workshop/weapons/c_models/c_jag/p_jag_groups": {
+      "weapon": "Jag",
+      "groups": {
+        "16": "Pommel",
+        "32": "Grip Band",
+        "48": "Grip",
+        "64": "Upper Jaw",
+        "80": "Bar",
+        "96": "Inner Nub",
+        "112": "Neck Band #1",
+        "128": "Neck Band #2",
+        "160": "Neck Band #3",
+        "176": "Neck",
+        "192": "Lower Jaw Lower Platform",
+        "208": "Lower Jaw Bridge",
+        "224": "Screw Heads",
+        "240": "Lower Jaw",
+        "255": "Neck Band #4 (meets Lower Jaw Lower Platform)"
+      }
+    },
+    "models/workshop/weapons/c_models/c_lochnload/p_lochnload_groups": {
+      "weapon": "Loch-n-Load",
+      "groups": {
+        "16": "Trigger",
+        "32": "Underbarrel Fore Grip",
+        "48": "Stock",
+        "64": "Front Sight",
+        "80": "Barrels",
+        "96": "Trigger Guard",
+        "112": "Rear Sight",
+        "128": "Top Rail",
+        "144": "Barrel Hinge Leaf",
+        "160": "Standing Breech + Receiver Hinge Leaf",
+        "176": "Front Sight Mount",
+        "192": "Receiver/Standing Breech Junction",
+        "208": "Stock Butt",
+        "224": "Bolt Heads",
+        "240": "Front Sight Pin",
+        "255": "Hammer"
+      }
+    },
+    "models/workshop/weapons/c_models/c_lochnload/p_lochnload_groups_02": {
+      "weapon": "Loch-n-Load",
+      "groups": {
+        "16": "Trigger",
+        "32": "Underbarrel Fore Grip",
+        "48": "Stock",
+        "64": "Front Sight",
+        "80": "Barrels Aft of Front Sight Mount",
+        "96": "Trigger Guard",
+        "112": "Rear Sight",
+        "128": "Top Rail",
+        "144": "Barrel Hinge Leaf",
+        "160": "Standing Breech + Receiver Hinge Leaf",
+        "176": "Front Sight Mount",
+        "192": "Receiver/Standing Breech Junction",
+        "208": "Stock Butt",
+        "224": "Bolt Heads",
+        "240": "Barrel Fore of Front Sight Mount",
+        "255": "Hammer"
+      }
+    },
+    "models/workshop/weapons/c_models/c_powerjack/p_powerjack_groups": {
+      "weapon": "Powerjack",
+      "groups": {
+        "16": "Pommel",
+        "32": "Grip Screw Threads",
+        "48": "Grip Screw Core",
+        "64": "Grip Screw Caps",
+        "80": "Ratchet Axle Cap",
+        "96": "Ratchet Axle",
+        "112": "Gears",
+        "128": "Ratchet Handle",
+        "144": "Jack Leg",
+        "160": "Jack Leg Sides",
+        "176": "Jack Foot Buttresses",
+        "192": "Jack Foot",
+        "208": "Battery Casing",
+        "224": "Battery Ties",
+        "240": "Battery Top Panels",
+        "255": "Battery Terminals"
+      }
+    },
+    "models/workshop/weapons/c_models/c_quadball/p_quadball_groups": {
+      "weapon": "Iron Bomber",
+      "groups": {
+        "16": "Trigger",
+        "32": "Underbarrel Fore Grip",
+        "48": "Stock",
+        "64": "Front Sight",
+        "80": "Barrels",
+        "96": "Trigger Guard",
+        "112": "Barrel Hinge Leaf + Top Latch",
+        "128": "Barrel Box",
+        "144": "Barrel Box Bracket + Side Brackets + Top Bars",
+        "160": "Standing Breech + Receiver Hinge Leaf",
+        "176": "Front Sight Mount",
+        "192": "Rear Sights + Rear Sight Mount + Action Release",
+        "208": "Stock Butt",
+        "224": "Bolt Heads",
+        "240": "Front Sight Pin + Top Bar Diagonal Ring Connectors + Box Front Lower Studs",
+        "255": "Barrels Hub Disk"
+      }
+    },
+    "models/workshop/weapons/c_models/c_reserve_shooter/p_reserve_shooter_groups": {
+      "weapon": "Reserve Shooter",
+      "groups": {
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Tube Mag Front Sheath + Action Bar",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "112": "Barrel Front Sheath + Barrel/Tube Mag Rear Sheath",
+        "128": "Ejection Port + Rear Grip/Trigger Guard Junction",
+        "144": "Receiver",
+        "160": "Pump Grip",
+        "176": "Tube Mag",
+        "192": "Front Sight + Receiver Top Attachment Rear Interior",
+        "208": "Receiver Top Attachment",
+        "224": "Screw/Bolt Heads and Holes"
+      }
+    },
+    "models/workshop/weapons/c_models/c_riding_crop/p_riding_crop_groups": {
+      "weapon": "Disciplinary Action",
+      "groups": {
+        "48": "Grip",
+        "64": "Grip Bottom Butt",
+        "80": "Neck",
+        "96": "Grip/Neck Band",
+        "112": "Neck/Head Band",
+        "128": "Head Bottom Butt",
+        "144": "Head",
+        "160": "Head Top Butt",
+        "192": "Flap Side",
+        "208": "Flap Exterior",
+        "224": "Flap Interior"
+      }
+    },
+    "models/workshop/weapons/c_models/c_russian_riot/p_russian_riot_groups": {
+      "weapon": "Family Business",
+      "groups": {
+        "16": "Stock Body",
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Action Bar",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "112": "Barrel/Tube Mag Front Sheath",
+        "128": "Ejection Port + Loading Port",
+        "144": "Receiver",
+        "160": "Pump Grip",
+        "176": "Tube Mag + Stock Tube",
+        "192": "Front Sight + Tube Mag Front Cap + Reload Shell (always fully worn to 0 though)",
+        "208": "Stock Butt",
+        "224": "Screw Heads",
+        "240": "Selector Knob (sans Pointer)",
+        "255": "Selector Knob Pointer"
+      }
+    },
+    "models/workshop/weapons/c_models/c_scimitar/p_scimitar_groups": {
+      "weapon": "Shahanshah",
+      "groups": {
+        "16": "Pommel",
+        "32": "Grip Band #1 (meets Pommel)",
+        "48": "Grip Band #2",
+        "64": "Grip Band #3",
+        "80": "Grip Band #4",
+        "96": "Cross Guard/Grip Band",
+        "112": "Grip",
+        "128": "Cross Guard",
+        "255": "Blade"
+      }
+    },
+    "models/workshop/weapons/c_models/c_scorch_shot/p_scorch_shot_groups": {
+      "weapon": "Scorch Shot",
+      "groups": {
+        "32": "Trigger",
+        "48": "Side Grips",
+        "64": "Underbarrel Fore Grip Mounts",
+        "80": "Barrel + Underbarrel Fore Grip Butts",
+        "112": "Hammer (sans Stud)",
+        "128": "Grip",
+        "144": "Receiver",
+        "160": "Trigger Guard",
+        "208": "Screw Heads",
+        "224": "Underbarrel Fore Grip",
+        "240": "Underbarrel Fore Grip Pin",
+        "255": "Hammer Stud"
+      }
+    },
+    "models/workshop/weapons/c_models/c_shortstop/p_shortstop_groups": {
+      "weapon": "Shortstop",
+      "groups": {
+        "32": "Trigger",
+        "48": "Side Grips",
+        "64": "Front Sight + Barrel Rail",
+        "80": "Muzzle Rings",
+        "96": "Hinge Arm",
+        "112": "Hammer",
+        "128": "Barrel Sheath",
+        "144": "Receiver + Trigger Guard",
+        "160": "Barrel",
+        "176": "Standing Breech",
+        "192": "Barrel Cradle",
+        "224": "Hinge Arm Front Panel",
+        "240": "Speedloader"
+      }
+    },
+    "models/workshop/weapons/c_models/c_soda_popper/p_soda_popper_groups": {
+      "weapon": "Soda Popper",
+      "groups": {
+        "16": "Rubber Bands",
+        "32": "Trigger",
+        "48": "Stock",
+        "64": "Action Release",
+        "80": "Barrels",
+        "96": "Trigger Guard",
+        "112": "Soda Can",
+        "128": "Barrel Selector Switch",
+        "144": "Hinge Assembly",
+        "160": "Soda Can Rear Mount",
+        "176": "Standing Breech + Top Strap",
+        "192": "Between-Barrel Rail",
+        "208": "Receiver Left Pin",
+        "224": "Barrel/Soda Can Front Buttress"
+      }
+    },
+    "models/workshop/weapons/c_models/c_tele_shotgun/p_tele_shotgun_groups": {
+      "weapon": "Rescue Ranger",
+      "groups": {
+        "16": "Wire Grommets",
+        "32": "Trigger",
+        "48": "Rear Grip",
+        "64": "Barrel/Tube Mag Front Fastener",
+        "80": "Barrel",
+        "96": "Trigger Guard",
+        "112": "Scope Power Switch",
+        "128": "Ejection Port + Loading Port",
+        "144": "Receiver",
+        "160": "Pump Grip",
+        "176": "Tube Mag",
+        "192": "Muzzle Attachment",
+        "208": "Scope Outer Shell",
+        "224": "Scope Power Button Frame + Scope Nuts + Wire Fasteners + Muzzle Attachment Screws + Muzzle Attachment LED Frame + Rear Grip/Trigger Guard Junction",
+        "240": "Top Rail + Scope Inner Shell + Scope Mount + Action Bar",
+        "255": "Wire"
+      }
+    },
+    "models/workshop/weapons/c_models/c_tomislav/p_tomislav_groups": {
+      "weapon": "Tomislav",
+      "groups": {
+        "16": "Rev Trigger + Rear Grip Base",
+        "32": "Sling Rings",
+        "48": "Fore Handle Grip",
+        "64": "Muzzle",
+        "80": "Barrel Fore",
+        "96": "Barrel Rear (Accordion)",
+        "112": "Underbarrel Fore Grip",
+        "128": "Rear Drum Bracket",
+        "144": "Rear \"Sight\" + Left Knob + Screw Heads + Rev Trigger Frame + Drum Rear Axle Cap",
+        "160": "Drum Brackets",
+        "176": "Drum",
+        "192": "Sling",
+        "208": "Sling Ring Brackets",
+        "224": "Rear Grip",
+        "240": "Fore Handle",
+        "255": "Receiver"
+      }
+    },
+    "models/workshop/weapons/c_models/c_trenchgun/p_trenchgun_groups": {
+      "weapon": "Panic Attack",
+      "groups": {
+        "16": "Drum",
+        "32": "Trigger",
+        "48": "Stock",
+        "64": "Action Bar",
+        "80": "Barrel Exterior (sans Front)",
+        "96": "Trigger Guard",
+        "112": "Heat Shield",
+        "128": "Ejection Port + Loading Port",
+        "144": "Receiver",
+        "160": "Pump Grip",
+        "176": "Tube Mag",
+        "192": "Front Sight + Drum Axle + Hammer",
+        "208": "Barrel/Tube Mag Rear Sheath",
+        "224": "Screw Heads",
+        "240": "Barrel/Drum Mount Front Buttress",
+        "255": "Drum Mount"
+      }
+    },
+    "models/workshop/weapons/c_models/c_winger_pistol/p_winger_pistol_groups": {
+      "weapon": "Winger",
+      "groups": {
+        "32": "Trigger",
+        "48": "Side Grips",
+        "64": "Front Sight",
+        "80": "Muzzle Ring",
+        "96": "Trigger Guard",
+        "112": "Wing",
+        "128": "Barrel",
+        "144": "Receiver",
+        "160": "Slide",
+        "176": "Magazine (sans Foot)",
+        "208": "Screw Heads",
+        "224": "Magazine Foot"
+      }
+    }
+  }
+}

@@ -226,7 +226,7 @@ export async function openVpkSourcePackage(
 export function vpkErrorDiagnostic(error: unknown): SourceDiagnostic {
   if (error instanceof VpkPackageError) {
     const details = [error.path, error.missingSegments?.join(', ')].filter((value): value is string => Boolean(value))
-    return { id: `vpk-${error.code}`, level: 'error', message: error.message, detail: details.join(' — ') || undefined }
+    return { id: `vpk-${error.code}`, level: 'error', message: error.message, detail: details.join(' - ') || undefined }
   }
   return { id: 'vpk-unknown-error', level: 'error', message: error instanceof Error ? error.message : String(error) }
 }

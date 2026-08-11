@@ -61,12 +61,14 @@ function ToolbarButton({
 // available.
 export function StageToolbar({
   workbenchOpen,
+  editingMode = null,
   onToggleWorkbench,
   onSavePng,
   onCopyImage,
   onResetView,
 }: {
   workbenchOpen: boolean;
+  editingMode?: 'paint' | 'sticker' | null;
   onToggleWorkbench: () => void;
   onSavePng: () => Promise<void>;
   onCopyImage: () => Promise<void>;
@@ -119,6 +121,7 @@ export function StageToolbar({
       </div>
       <ControlsHelpModal
         open={controlsHelpOpen}
+        editingMode={editingMode}
         onClose={closeControlsHelp}
         returnFocusRef={controlsHelpTriggerRef}
       />

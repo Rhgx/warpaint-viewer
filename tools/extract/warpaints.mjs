@@ -33,6 +33,7 @@ import {
 } from './state.mjs';
 import { extractAndDecodeTextures } from './textures.mjs';
 import { verifyExtraction } from './verify.mjs';
+import { extractModelAttachment } from './attachments.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..', '..');
@@ -397,7 +398,9 @@ async function main() {
       }
       kitWeapons.add(weaponKey);
       const materialOverride = slot.data?.material_override;
-      if (typeof materialOverride === 'string' && materialOverride) {
+      // The paint can model always uses its dedicated material. Unlike weapon
+      // slots, Source does not apply a paint-kit material override to it.
+      if (weaponKey !== 'paintkit_tool' && typeof materialOverride === 'string' && materialOverride) {
         kitMaterialOverrides[weaponKey] = materialOverride.toLowerCase();
       }
 
@@ -544,12 +547,21 @@ async function main() {
           width: COMPOSITE_1024_WEAPONS.has(w.key) ? 1024 : 2048,
           height: COMPOSITE_1024_WEAPONS.has(w.key) ? 1024 : 2048,
         };
+        const iconCamera = w.modelPath ? extractModelAttachment(w.modelPath, 'icon_camera') : null;
+        const roundVector = (values) => values.map((value) => Math.round(value * 1e6) / 1e6);
         return ({
         key: w.key,
         name: w.name,
         model: `models/${w.key}.glb`,
         ...(dimensions ? { compositeWidth: dimensions.width, compositeHeight: dimensions.height } : {}),
         ...(w.icon ? { icon: w.icon } : {}),
+        ...(iconCamera ? {
+          iconCamera: {
+            position: roundVector(iconCamera.pos),
+            forward: roundVector(iconCamera.forward),
+            up: roundVector(iconCamera.up),
+          },
+        } : {}),
         material: w.material || { phongExponent: null, phongBoost: 1, envmapTint: [0, 0, 0], normalMap: null },
       }); });
     const manifest = {
@@ -568,7 +580,10 @@ async function main() {
       wearNames: WEAR_NAMES,
     };
     ensureDir(PUBLIC_DATA);
-    fs.writeFileSync(path.join(PUBLIC_DATA, 'manifest.json'), JSON.stringify(manifest, null, 1));
+    const manifestPath = path.join(PUBLIC_DATA, 'manifest.json');
+    const manifestTempPath = `${manifestPath}.tmp`;
+    fs.writeFileSync(manifestTempPath, JSON.stringify(manifest, null, 1));
+    fs.renameSync(manifestTempPath, manifestPath);
     fs.writeFileSync(path.join(STAGING, 'weapon_models.json'), JSON.stringify(weaponModels, null, 1));
     const itemDefMap = buildItemDefMap(itemsGame, weaponRegistry);
     fs.writeFileSync(path.join(PUBLIC_DATA, 'item-defs.json'), JSON.stringify(itemDefMap));

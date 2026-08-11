@@ -128,6 +128,7 @@ export function Inspector({
   weaponOptions,
   hasTeamTextures,
   state,
+  viewAngle,
   onChange,
   onRandomizeSeed,
   onUndoSeed,
@@ -138,13 +139,13 @@ export function Inspector({
   weaponOptions: IconOption[];
   hasTeamTextures: boolean;
   state: ControlsState;
+  viewAngle: string;
   onChange: (patch: Partial<ControlsState>) => void;
   onRandomizeSeed: () => void;
   onUndoSeed: () => void;
   canUndoSeed: boolean;
   onViewAngle: (id: string) => void;
 }) {
-  const [viewAngle, setViewAngle] = useState('default');
   const presetOptions = LIGHTING_PRESETS.map((p) => ({ value: p.id, label: p.label }));
   const unusualOptions = UNUSUAL_PRESETS.map((p) => ({ value: p.id, label: p.label }));
   const viewAngleOptions = VIEW_ANGLES.map((p) => ({ value: p.id, label: p.label }));
@@ -164,6 +165,9 @@ export function Inspector({
             value={state.weaponKey}
             onChange={(v) => onChange({ weaponKey: v })}
             options={weaponOptions}
+            ariaLabel="Weapon"
+            stepLabels={{ previous: 'Previous weapon', next: 'Next weapon' }}
+            searchPlaceholder="Filter weapons..."
           />
         </Control>
 
@@ -230,10 +234,7 @@ export function Inspector({
         <Control label={<><Camera size={12} /><span>View angle</span></>}>
           <SelectField
             value={viewAngle}
-            onChange={(v) => {
-              setViewAngle(v);
-              onViewAngle(v);
-            }}
+            onChange={onViewAngle}
             options={viewAngleOptions}
           />
         </Control>

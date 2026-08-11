@@ -49,11 +49,11 @@ export function loadEditorEnvCube(
   new THREE.CubeTextureLoader().setPath(root).load(
     ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png'],
     (texture) => {
-      // skin_dx9_helper.cpp only enables sRGB reads on the envmap sampler when
-      // HDR_TYPE_NONE; TF2 runs HDR and editor/cubemap is an LDR texture, so
-      // the game feeds its stored gamma values straight into lighting math.
-      // Decoding to linear here made reflections ~5x too dim on metal.
-      texture.colorSpace = THREE.NoColorSpace;
+      // The shipped TF2 archives contain editor/cubemap.vtf (LDR), not an
+      // editor/cubemap.hdr.vtf asset. VertexLitGeneric loads that LDR cubemap
+      // with TEXTUREFLAGS_SRGB, so reflections must decode to linear before
+      // the material's neutral envmap tint is applied.
+      texture.colorSpace = THREE.SRGBColorSpace;
       texture.needsUpdate = true;
       onLoad(texture);
     },

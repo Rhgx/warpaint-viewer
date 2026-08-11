@@ -6,11 +6,13 @@ import { TextureCache, textureCacheBudgetBytes } from './textureCache';
 import type { TextureMetadata } from '../data/types';
 export { textureUvMatrix } from './transforms';
 import { textureUvMatrix } from './transforms';
+import { compositorReadbackToEditorPixels } from '../editor/stickerSurface';
 import {
   FRAG,
   VERT,
   MODE_ADD,
   MODE_BLEND,
+  MODE_GROUP_STICKER_ARTWORK,
   MODE_LERP,
   MODE_MULTIPLY,
   MODE_SELECT,
@@ -31,6 +33,18 @@ export interface CompositorOptions {
 export interface ComposeDimensions {
   width: number;
   height: number;
+}
+
+export interface GroupStickerArtworkInput {
+  readonly mask: string;
+  readonly selectorBase: THREE.Texture;
+  readonly endpointZero: THREE.Texture;
+  readonly endpointOne: THREE.Texture;
+  readonly levels: readonly [black: number, white: number, gamma: number];
+  readonly destTl: readonly [number, number];
+  readonly destTr: readonly [number, number];
+  readonly destBl: readonly [number, number];
+  readonly size?: number;
 }
 
 const IDENTITY3 = new THREE.Matrix3();
@@ -120,8 +134,8 @@ export class Compositor {
     this.scene.add(this.quad);
   }
 
-  private makeTarget(): THREE.WebGLRenderTarget {
-    const t = new THREE.WebGLRenderTarget(this.width, this.height, {
+  private makeTarget(width = this.width, height = this.height): THREE.WebGLRenderTarget {
+    const t = new THREE.WebGLRenderTarget(width, height, {
       // TF2 composites into an 8-bit target. Matching that format also halves
       // render-target bandwidth and memory versus the previous half-float path.
       type: THREE.UnsignedByteType,
@@ -417,9 +431,84 @@ export class Compositor {
     return task;
   }
 
+  /** Compose an already resolved tree without consuming a second RNG stream. */
+  composeResolved(recipe: ResolvedNode, dimensions?: ComposeDimensions): Promise<ComposeResult> {
+    const task = this.composeQueue.then(() => this.composeResolvedNow(recipe, dimensions));
+    this.composeQueue = task.then(() => undefined, () => undefined);
+    return task;
+  }
+
+  /**
+   * Render one selector-writing group sticker as standalone transparent
+   * artwork. This is a single small GPU pass over already retained compositor
+   * endpoints, so selecting a group sticker does not trigger another full
+   * recipe composition and moving it remains uniform-only in the Viewer.
+   */
+  composeGroupStickerArtworkDataUrl(input: GroupStickerArtworkInput): Promise<string> {
+    const task = this.composeQueue.then(async () => {
+      const size = Number.isFinite(input.size)
+        ? Math.max(64, Math.min(1024, Math.floor(input.size!)))
+        : 512;
+      const maskKey = this.textures.keyFor(input.mask);
+      const unpin = this.textures.pin([maskKey]);
+      let target: THREE.WebGLRenderTarget | null = null;
+      try {
+        const mask = await this.textures.load(input.mask);
+        target = this.makeTarget(size, size);
+        const u = this.material.uniforms;
+        u.uMode.value = MODE_GROUP_STICKER_ARTWORK;
+        this.setTextures(input.selectorBase, input.endpointZero, input.endpointOne, mask);
+        u.uSrgb0.value = 1;
+        u.uSrgb1.value = 1;
+        u.uSrgb2.value = 1;
+        u.uSrgb3.value = 1;
+        (u.uAdjust0.value as THREE.Vector3).set(0, 1, 1);
+        (u.uAdjust1.value as THREE.Vector3).set(0, 1, 1);
+        (u.uAdjust2.value as THREE.Vector3).set(0, 1, 1);
+        (u.uAdjust3.value as THREE.Vector3).fromArray(input.levels);
+        (u.uUv0.value as THREE.Matrix3).copy(IDENTITY3);
+        (u.uUv1.value as THREE.Matrix3).copy(IDENTITY3);
+        (u.uUv2.value as THREE.Matrix3).copy(IDENTITY3);
+        (u.uUv3.value as THREE.Matrix3).copy(IDENTITY3);
+        (u.uDestTl.value as THREE.Vector2).fromArray(input.destTl);
+        (u.uDestTr.value as THREE.Vector2).fromArray(input.destTr);
+        (u.uDestBl.value as THREE.Vector2).fromArray(input.destBl);
+        this.renderInto(target);
+        return this.toPreviewDataUrl(target, size, false);
+      } finally {
+        target?.dispose();
+        unpin();
+      }
+    });
+    this.composeQueue = task.then(() => undefined, () => undefined);
+    return task;
+  }
+
+  /**
+   * Compose and read a PNG preview as one queue task. The editor shares this
+   * renderer with the visible weapon, so keeping GPU evaluation, readback, and
+   * target release together prevents a later compose from reusing compositor
+   * state while a preview still needs it.
+   */
+  composePreviewDataUrl(recipe: RecipeNode, seed: PaintSeed, dimensions?: ComposeDimensions): Promise<string> {
+    const task = this.composeQueue.then(async () => {
+      const result = await this.composeNow(recipe, seed, dimensions);
+      try {
+        return this.toPreviewDataUrl(result.target);
+      } finally {
+        this.releaseResult(result);
+      }
+    });
+    this.composeQueue = task.then(() => undefined, () => undefined);
+    return task;
+  }
+
   private async composeNow(recipe: RecipeNode, seed: PaintSeed, dimensions?: ComposeDimensions): Promise<ComposeResult> {
+    return this.composeResolvedNow(resolveRecipe(recipe, seed), dimensions);
+  }
+
+  private async composeResolvedNow(resolved: ResolvedNode, dimensions?: ComposeDimensions): Promise<ComposeResult> {
     if (dimensions) this.setOutputSize(dimensions.width, dimensions.height);
-    const resolved = resolveRecipe(recipe, seed);
     const refs: { ref: string; nearest: boolean }[] = [];
     this.collectRefs(resolved, refs);
     const uniqueRefs = [...new Map(refs.map((ref) => [this.textures.keyFor(ref.ref, { nearest: ref.nearest }), ref])).values()];
@@ -489,6 +578,78 @@ export class Compositor {
       out[i + 3] = bytes[i + 3] / 255;
     }
     return out;
+  }
+
+  /**
+   * Make a browser-displayable, top-to-bottom PNG preview of a composited
+   * texture. Render targets are read bottom-to-top by WebGL, but the first
+   * readback row is compositor UV v=0. This project uses unflipped Source/
+   * glTF textures, where v=0 is the source image's visual top. Canvas row zero
+   * is also visual top, so copying the rows in their original order preserves
+   * the exact UV coordinate system used by the 2D editor and the weapon.
+   *
+   * The compositor alpha channel carries material/mask information; it is not
+   * literal weapon transparency. Force the editor preview opaque so browsers
+   * do not wash the paint out against the checkerboard.
+   *
+   * This is intended for the editor only. The viewer continues to keep its
+   * paint GPU-resident; opening the sticker editor is the explicit request for
+   * an accurate 2D copy of that same composed surface.
+   */
+  toPreviewDataUrl(target: THREE.WebGLRenderTarget, maxDimension = 1024, forceOpaque = true): string {
+    const width = target.width;
+    const height = target.height;
+    if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
+      throw new Error('The composed surface has invalid dimensions.');
+    }
+    const bytes = new Uint8ClampedArray(width * height * 4);
+    this.renderer.readRenderTargetPixels(target, 0, 0, width, height, bytes);
+
+    const source = document.createElement('canvas');
+    source.width = width;
+    source.height = height;
+    const sourceContext = source.getContext('2d');
+    if (!sourceContext) throw new Error('The browser could not create a 2D preview canvas.');
+    const image = sourceContext.createImageData(width, height);
+    image.data.set(compositorReadbackToEditorPixels(bytes, width, height, forceOpaque));
+    sourceContext.putImageData(image, 0, 0);
+
+    const limit = Number.isFinite(maxDimension) ? Math.max(1, Math.floor(maxDimension)) : 1024;
+    const scale = Math.min(1, limit / Math.max(width, height));
+    if (scale === 1) return source.toDataURL('image/png');
+    const preview = document.createElement('canvas');
+    preview.width = Math.max(1, Math.round(width * scale));
+    preview.height = Math.max(1, Math.round(height * scale));
+    const previewContext = preview.getContext('2d');
+    if (!previewContext) throw new Error('The browser could not scale the 2D preview canvas.');
+    previewContext.imageSmoothingEnabled = true;
+    previewContext.drawImage(source, 0, 0, preview.width, preview.height);
+    return preview.toDataURL('image/png');
+  }
+
+  /**
+   * Copy a composed target into a texture that can be uploaded by another
+   * WebGL renderer. Unlike toPreviewDataUrl(), this preserves alpha because
+   * the viewer interprets it as TF2's phong/environment mask.
+   */
+  toTransferTexture(target: THREE.WebGLRenderTarget): THREE.DataTexture {
+    const width = target.width;
+    const height = target.height;
+    if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
+      throw new Error('The composed surface has invalid dimensions.');
+    }
+    const bytes = new Uint8Array(width * height * 4);
+    this.renderer.readRenderTargetPixels(target, 0, 0, width, height, bytes);
+    const texture = new THREE.DataTexture(bytes, width, height, THREE.RGBAFormat, THREE.UnsignedByteType);
+    texture.flipY = false;
+    // The TF2 viewer shader performs the sRGB decode itself while retaining
+    // the untouched alpha channel as material data.
+    texture.colorSpace = THREE.NoColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    texture.needsUpdate = true;
+    return texture;
   }
 
   getRenderer() {
