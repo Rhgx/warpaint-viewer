@@ -1,6 +1,6 @@
 // CPU group-map sampling parity check.
 //
-//   node tools/verify/group-sampling.mjs
+//   node tools/verify/editor/group-sampling.mjs
 //
 // Bundles the TypeScript source with Vite so this check exercises the same
 // module the browser editor will import.
@@ -10,7 +10,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const BUILD_DIR = path.join(ROOT, 'staging', 'group-sampling-verify');
 
 function bundleModule() {

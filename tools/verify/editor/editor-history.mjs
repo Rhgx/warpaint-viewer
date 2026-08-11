@@ -1,6 +1,6 @@
 // Focused history contract check for immutable proto-def editor snapshots.
 //
-//   node tools/verify/editor-history.mjs
+//   node tools/verify/editor/editor-history.mjs
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,7 +8,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const BUILD_DIR = path.join(ROOT, 'staging', 'editor-history-verify');
 
 function bundleImplementation() {

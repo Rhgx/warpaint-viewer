@@ -1,6 +1,6 @@
 // End-to-end UV-orientation contract for the 2D sticker editor.
 //
-//   node tools/verify/sticker-uv-alignment.mjs
+//   node tools/verify/editor/sticker-uv-alignment.mjs
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,7 +8,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const BUILD_DIR = path.join(ROOT, 'staging', 'sticker-uv-alignment-verify');
 
 function bundle(entry, output) {

@@ -1,6 +1,6 @@
 // Contract verification for src/editor/jsonExport.ts.
 //
-//   node tools/verify/editor-json-export.mjs
+//   node tools/verify/editor/editor-json-export.mjs
 //
 // This intentionally uses the current JSON-fragment normalizer, rather than a
 // second parser, so it catches export/import contract drift at the boundary the
@@ -12,7 +12,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const STAGING = path.join(ROOT, 'staging');
 const BUILD_DIR = path.join(STAGING, 'editor-json-export-verify');
 
