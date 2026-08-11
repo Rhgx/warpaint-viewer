@@ -101,7 +101,8 @@ try {
     'the temporary base removes exactly the selected depth-first occurrence',
   );
   const effectStart = appSource.indexOf('// Every sticker uses a retained base with its stage removed plus a lightweight');
-  const effectEnd = appSource.indexOf('\n\n  useEffect(() => {', effectStart + 1);
+  const currentEffect = appSource.indexOf('\n  useEffect(() => {', effectStart);
+  const effectEnd = appSource.indexOf('\n  useEffect(() => {', currentEffect + 1);
   assert.ok(effectStart >= 0 && effectEnd > effectStart, 'the retained sticker editor base has a dedicated compose effect');
   const previewEffect = appSource.slice(effectStart, effectEnd);
   const dependencyBlock = previewEffect.slice(previewEffect.lastIndexOf('}, ['), previewEffect.lastIndexOf(']);'));

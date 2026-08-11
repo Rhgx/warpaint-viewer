@@ -222,12 +222,14 @@ function MainApp() {
     redo: redoEditor,
     reset: resetEditor,
     reload: reloadEditor,
-    serialize: serializeEditor,
+    getCurrentMessages: getEditorMessages,
   } = editorSession;
   const { previewKitMessages, clearPreviewKit } = definitions;
   const [groupImage, setGroupImage] = useState<RgbaImageDataLike | null>(null);
   const [groupImageError, setGroupImageError] = useState<string | null>(null);
   const [editorPreviewError, setEditorPreviewError] = useState<string | null>(null);
+  const [editorPackageExportError, setEditorPackageExportError] = useState<string | null>(null);
+  const [editorPackageExporting, setEditorPackageExporting] = useState(false);
   const [editorPreviewPending, setEditorPreviewPending] = useState(false);
   const [editorAssignmentNotice, setEditorAssignmentNotice] = useState<string | null>(null);
   const [showLayerMap, setShowLayerMap] = useState(false);
@@ -1606,18 +1608,25 @@ function MainApp() {
     }
   }, [updateStickerDraft]);
 
-  const downloadEditorJson = useCallback(() => {
-    const serialized = serializeEditor({ name: selectedKit?.name });
-    if (!serialized) return;
-    for (const fragment of serialized.fragments) {
-      const url = URL.createObjectURL(new Blob([fragment.text], { type: 'application/json' }));
+  const downloadEditorPackage = useCallback(() => {
+    const messages = getEditorMessages();
+    if (!messages || editorPackageExporting) return;
+    setEditorPackageExportError(null);
+    setEditorPackageExporting(true);
+    void import('./editor/packageExport').then(({ exportEditedPackage }) => exportEditedPackage(messages, {
+      package: sourceProvider.package,
+      name: selectedKit?.name,
+    })).then((result) => {
+      const url = URL.createObjectURL(result.blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = fragment.name;
+      anchor.download = result.fileName;
       anchor.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    }
-  }, [serializeEditor, selectedKit?.name]);
+    }).catch((cause) => {
+      setEditorPackageExportError(cause instanceof Error ? cause.message : 'The edited package could not be exported.');
+    }).finally(() => setEditorPackageExporting(false));
+  }, [editorPackageExporting, getEditorMessages, selectedKit?.name, sourceProvider]);
 
   // Set up viewer + compositor on the canvas. The three.js stack is dynamically
   // imported so it lands in its own chunk and the UI shell paints first.
@@ -2256,11 +2265,12 @@ function MainApp() {
                   onClearSelection: clearEditorGroups,
                   onPreviewGroup: setPanelPreviewGroup,
                   dirty: editorDirty,
-                  canDownload: editableKitId !== null && !editorLoading,
+                  canDownload: editableKitId !== null && !editorLoading && !editorPackageExporting,
+                  exporting: editorPackageExporting,
                   canUndo: editorCanUndo,
                   canRedo: editorCanRedo,
                   error: editableKitId !== null
-                    ? (editorSessionError ? 'That area could not be changed.' : editorPreviewError)
+                    ? (editorPackageExportError ?? (editorSessionError ? 'That area could not be changed.' : editorPreviewError))
                     : null,
                   selectors: editorSelectors,
                   activeSelectorId: String(activeEditorSelector),
@@ -2272,7 +2282,7 @@ function MainApp() {
                   onUndo: undoEditorSynced,
                   onRedo: redoEditorSynced,
                   onReset: resetEditorSynced,
-                  onDownloadJson: downloadEditorJson,
+                  onDownloadPackage: downloadEditorPackage,
                 }}
                 sourcePackage={sourcePackage}
                 resolvePackageTexture={resolvePackageTexture}

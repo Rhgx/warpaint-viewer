@@ -89,6 +89,7 @@ export function CustomWarpaintWorkbench({
     };
     dirty: boolean;
     canDownload: boolean;
+    exporting: boolean;
     canUndo: boolean;
     canRedo: boolean;
     error?: string | null;
@@ -98,7 +99,7 @@ export function CustomWarpaintWorkbench({
     onUndo: () => void;
     onRedo: () => void;
     onReset: () => void;
-    onDownloadJson: () => void;
+    onDownloadPackage: () => void;
   };
   sourcePackage: SourcePackageState;
   /** Async Source package resolver used only for the non-destructive preview. */
@@ -651,10 +652,11 @@ export function CustomWarpaintWorkbench({
                     type="button"
                     className="custom-workbench-edit-download"
                     disabled={!editor.canDownload}
-                    onClick={editor.onDownloadJson}
-                    title="Download edited definition JSON files"
+                    aria-busy={editor.exporting}
+                    onClick={editor.onDownloadPackage}
+                    title="Download the complete edited package as a ZIP"
                   >
-                    <Download size={13} /> Download
+                    <Download size={13} /> {editor.exporting ? 'Preparing ZIP...' : 'Download ZIP'}
                   </button>
                 </div>
               </div>
