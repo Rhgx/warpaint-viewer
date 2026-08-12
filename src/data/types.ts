@@ -4,6 +4,8 @@ export interface WeaponMaterial {
   phongExponent: number | null;
   phongBoost: number;
   envmapTint: [number, number, number];
+  /** Source cubemap named by $envmap. Imported package materials may supply it. */
+  envmapTexture?: string | null;
   normalMap: string | null;
   phong: boolean;
   phongExponentFactor: number | null;

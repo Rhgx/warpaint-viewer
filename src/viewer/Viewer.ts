@@ -220,6 +220,8 @@ export class Viewer {
   });
   private meshes: THREE.Mesh[] = [];
   private envMap: THREE.CubeTexture;
+  private defaultEnvMap: THREE.CubeTexture;
+  private customEnvMap: THREE.CubeTexture | null = null;
   private envReady: Promise<void>;
   private modelLoader = new ModelLoader();
   private texLoader = new THREE.TextureLoader();
@@ -376,6 +378,7 @@ export class Viewer {
     window.addEventListener('pointercancel', this.onStickerGizmoPointerUp);
 
     this.envMap = makeEnvCube(0x9fb8d6, 0x40382c);
+    this.defaultEnvMap = this.envMap;
     this.material = new THREE.MeshPhongMaterial({
       color: 0xffffff,
       shininess: 30,
@@ -391,6 +394,7 @@ export class Viewer {
         if (this.disposed) { texture.dispose(); resolve(); return; }
         this.envMap.dispose();
         this.envMap = texture;
+        this.defaultEnvMap = texture;
         this.material.envMap = texture;
         this.material.needsUpdate = true;
         this.invalidate();
@@ -2070,7 +2074,13 @@ export class Viewer {
     this.material.customProgramCacheKey = () => TF2_VERTEXLIT_CACHE_KEY;
   }
 
-  async applyMaterialParams(mat: WeaponMaterial, resolveTexture: (ref: string) => string | Promise<string> = (ref) => ref): Promise<void> {
+  async applyMaterialParams(
+    mat: WeaponMaterial,
+    resolveTexture: (ref: string) => string | Promise<string> = (ref) => ref,
+    resolveCubemap: (ref: string) => Promise<string[] | null> = async () => null,
+  ): Promise<void> {
+    await this.envReady;
+    if (this.disposed) return;
     const u = this.tf2Uniforms;
     configureTf2Material(mat, this.material, u);
     this.invalidate();
@@ -2093,6 +2103,27 @@ export class Viewer {
     u.uTf2DetailMap.value = null;
 
     const loads: Promise<void>[] = [];
+    if (mat.envmapTexture) {
+      loads.push(resolveCubemap(mat.envmapTexture).then((urls) => {
+        if (token !== this.materialLoadToken || this.disposed) return;
+        if (!urls) {
+          this.resetMaterialEnvMap();
+          return;
+        }
+        return new THREE.CubeTextureLoader().loadAsync(urls).then((texture) => {
+          if (token !== this.materialLoadToken || this.disposed) { texture.dispose(); return; }
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.needsUpdate = true;
+          this.customEnvMap?.dispose();
+          this.customEnvMap = texture;
+          this.setMaterialEnvMap(texture);
+        });
+      }).catch(() => {
+        if (token === this.materialLoadToken && !this.disposed) this.resetMaterialEnvMap();
+      }));
+    } else {
+      this.resetMaterialEnvMap();
+    }
     if (mat.normalMap) loads.push(Promise.resolve(resolveTexture(mat.normalMap)).then((url) => this.texLoader.loadAsync(url)).then((t) => {
       if (token !== this.materialLoadToken || this.disposed) { t.dispose(); return; }
       t.colorSpace = THREE.NoColorSpace;
@@ -2154,6 +2185,19 @@ export class Viewer {
     this.material.needsUpdate = true;
     await Promise.all(loads);
     this.invalidate();
+  }
+
+  private setMaterialEnvMap(texture: THREE.CubeTexture): void {
+    this.envMap = texture;
+    this.material.envMap = texture;
+    this.material.needsUpdate = true;
+    this.invalidate();
+  }
+
+  private resetMaterialEnvMap(): void {
+    this.customEnvMap?.dispose();
+    this.customEnvMap = null;
+    this.setMaterialEnvMap(this.defaultEnvMap);
   }
 
   /**
@@ -2448,7 +2492,8 @@ export class Viewer {
     this.detailTexture?.dispose();
     this.emissiveMaterial?.dispose();
     for (const texture of this.emissiveTextures) texture.dispose();
-    this.envMap.dispose();
+    this.customEnvMap?.dispose();
+    this.defaultEnvMap.dispose();
     if (!this.currentGeoCached) for (const mesh of this.meshes) mesh.geometry.dispose();
     this.modelLoader.dispose();
     this.renderer.dispose();

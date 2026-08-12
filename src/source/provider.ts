@@ -39,6 +39,8 @@ export class SourceTextureProvider {
   #metadata = new Map<string, Partial<TextureMetadata>>();
   #thumbnailUrls = new Map<string, string>();
   #loads = new Map<string, Promise<string>>();
+  #cubemapLoads = new Map<string, Promise<string[] | null>>();
+  #cubemapUrls = new Set<string>();
   #usedPaths = new Set<string>();
   #fallbackIdentities = new Set<string>();
   #nameMatchedPaths = new Map<string, string>();
@@ -127,6 +129,29 @@ export class SourceTextureProvider {
    */
   async resolvePreview(ref: string): Promise<string> {
     return this.#resolve(ref, false);
+  }
+
+  /** Resolve an imported six-face VTF cubemap, or null when the package does not provide it. */
+  async resolveCubemap(ref: string): Promise<string[] | null> {
+    const pkg = this.#package;
+    if (!pkg) return null;
+    const path = this.packagePathFor(ref);
+    if (!path || sourcePathExtension(path) !== 'vtf') return null;
+    const key = `${this.#generation}:${path}`;
+    const cached = this.#cubemapLoads.get(key);
+    if (cached) return cached;
+    const generation = this.#generation;
+    const load = pkg.read(path).then(async (bytes) => {
+      const { decodeVtfCubemapToPng } = await import('./vtfDecode');
+      const faces = await decodeVtfCubemapToPng(bytes);
+      if (generation !== this.#generation || pkg !== this.#package) return null;
+      const urls = faces.map((png) => URL.createObjectURL(new Blob([png], { type: 'image/png' })));
+      urls.forEach((url) => this.#cubemapUrls.add(url));
+      this.#recordUsed(path);
+      return urls;
+    }).catch(() => null);
+    this.#cubemapLoads.set(key, load);
+    return load;
   }
 
   /** A package-scoped preview produced during its first texture decode. */
@@ -319,8 +344,9 @@ export class SourceTextureProvider {
 
   #clearTransientState(): void {
     for (const url of this.#urls.values()) URL.revokeObjectURL(url);
+    for (const url of this.#cubemapUrls) URL.revokeObjectURL(url);
     for (const url of this.#thumbnailUrls.values()) URL.revokeObjectURL(url);
-    this.#urls.clear(); this.#thumbnailUrls.clear(); this.#metadata.clear(); this.#loads.clear(); this.#usedPaths.clear(); this.#fallbackIdentities.clear();
+    this.#urls.clear(); this.#cubemapUrls.clear(); this.#cubemapLoads.clear(); this.#thumbnailUrls.clear(); this.#metadata.clear(); this.#loads.clear(); this.#usedPaths.clear(); this.#fallbackIdentities.clear();
     this.#nameMatchedPaths.clear(); this.#ambiguousNameMatches.clear();
     this.#materials.clear(); this.#materialPaths.clear();
     this.#nameIndexPackage = null; this.#nameIndexByStem = null;

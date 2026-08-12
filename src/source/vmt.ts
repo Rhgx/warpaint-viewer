@@ -232,6 +232,7 @@ export function parseWeaponMaterialVmt(text: string): ParsedVmt {
   const bumpMap = kvString(kvGet(body, '$bumpmap'));
   const exponentTexture = kvString(kvGet(body, '$phongexponenttexture'));
   const lightwarpTexture = kvString(kvGet(body, '$lightwarptexture'));
+  const envmapTexture = texturePublicPath(kvString(kvGet(body, '$envmap')));
   // Source only reads $envmaptint when the material has an $envmap; a material
   // with a cubemap but no explicit tint reflects it at full strength.
   const hasEnvMap = kvGet(body, '$envmap') !== undefined;
@@ -247,6 +248,7 @@ export function parseWeaponMaterialVmt(text: string): ParsedVmt {
     phongExponent: phongExponent ? phongExponent[0] : null,
     phongBoost: vmtNumber(body, '$phongboost', 1),
     envmapTint: vmtColor(body, '$envmaptint', hasEnvMap ? [1, 1, 1] : [0, 0, 0]),
+    envmapTexture,
     normalMap: texturePublicPath(bumpMap),
     phong: vmtBool(body, '$phong'),
     phongExponentFactor: phongExponentFactor ? phongExponentFactor[0] : null,
@@ -301,6 +303,7 @@ export function parseWeaponMaterialVmt(text: string): ParsedVmt {
   };
 
   const textureRefs = [
+    material.envmapTexture,
     material.normalMap,
     material.phongExponentTexture,
     material.lightwarpTexture,

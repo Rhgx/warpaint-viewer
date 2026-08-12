@@ -404,9 +404,9 @@ function MainApp() {
       target.canToggle && targets.findIndex((candidate) => candidate.canToggle && candidate.sourceKey === target.sourceKey) === index
     )) ?? []
   ), [groupDiscovery]);
-  const editorSelectors = useMemo(() => editableGroupTargets.map((_, index) => ({
+  const editorSelectors = useMemo(() => editableGroupTargets.map((target, index) => ({
     id: String(index),
-    label: `Layer ${index + 1}`,
+    label: target.label,
   })), [editableGroupTargets]);
   const activeGroupTarget = editableGroupTargets[activeEditorSelector] ?? editableGroupTargets[0] ?? null;
   const activeGroupOperationIndex = activeGroupTarget && groupDiscovery
@@ -1991,6 +1991,7 @@ function MainApp() {
       .then((packaged) => viewer.applyMaterialParams(
         packaged?.material ?? builtInMaterial,
         (ref) => sourceProvider.resolve(ref),
+        (ref) => sourceProvider.resolveCubemap(ref),
       ));
     void Promise.all([
       viewer.ready(),

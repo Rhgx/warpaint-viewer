@@ -176,3 +176,16 @@ export async function decodeVtfToPng(bytes: Uint8Array, options?: DecodeVtfOptio
     }
   });
 }
+
+/** Decode the six largest-mip VTF cubemap faces in Three.js CubeTexture order. */
+export async function decodeVtfCubemapToPng(bytes: Uint8Array): Promise<ArrayBuffer[]> {
+  const { decodeVTFCubemap, parseVTFHeader } = await import('../../tools/lib/vtf-core.mjs');
+  const header = parseVTFHeader(bytes) as VtfHeaderDetails & { faces: number };
+  const pixels = header.width * header.height * 6;
+  if (!Number.isSafeInteger(pixels) || pixels > MAX_CUBEMAP_PIXELS) {
+    throw new VtfDecodeError('VTF cubemap exceeds the 16 megapixel limit.', header);
+  }
+  return Promise.all(decodeVTFCubemap(bytes).map((face) => encodeRgbaPng(face.rgba, face.width, face.height)));
+}
+
+const MAX_CUBEMAP_PIXELS = 16 * 1024 * 1024;
