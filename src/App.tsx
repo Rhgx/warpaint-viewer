@@ -2523,6 +2523,7 @@ function MainApp() {
                   groupLabels: activeGroupLabels,
                   notice: editorAssignmentNotice,
                   activeLayerIndex: activeEditorLayerIndex,
+                  activeLayerLabel: editorSelectors[activeEditorLayerIndex]?.label,
                   groupLayerIndex: groupBucketLayerIndex,
                   layerColors: editorLayerCssColors,
                   layerSwatchColors: editorLayerSwatchCssColors,

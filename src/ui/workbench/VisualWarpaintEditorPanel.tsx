@@ -32,6 +32,8 @@ export interface VisualWarpaintEditorPanelProps {
   readonly onShowLayerMapChange?: (active: boolean) => void;
   /** 0-based index of the layer currently being edited, among all layers. */
   readonly activeLayerIndex?: number;
+  /** Authored display label for the active layer, shared with the layer list. */
+  readonly activeLayerLabel?: string;
   /** Every assigned part's layer, across all layers, keyed by compositor bucket. */
   readonly groupLayerIndex?: Readonly<Record<number, number>>;
   /** CSS (sRGB) colour per layer index, matching the context column swatches and the viewer's layer map. */
@@ -55,13 +57,14 @@ export function VisualWarpaintEditorPanel({
   showLayerMap,
   onShowLayerMapChange,
   activeLayerIndex,
+  activeLayerLabel,
   groupLayerIndex,
   layerColors,
 }: VisualWarpaintEditorPanelProps) {
   const [confirmClear, setConfirmClear] = useState(false);
   const clearButtonRef = useRef<HTMLButtonElement>(null);
   const areaCount = selectedGroupIds.length;
-  const layerNumber = (activeLayerIndex ?? 0) + 1;
+  const layerLabel = activeLayerLabel ?? `Layer ${(activeLayerIndex ?? 0) + 1}`;
   const activeLayerColor = activeLayerIndex !== undefined ? layerColors?.[activeLayerIndex] : undefined;
 
   const availableParts = Object.entries(groupLabels ?? {})
@@ -148,7 +151,7 @@ export function VisualWarpaintEditorPanel({
   return (
     <section className="visual-warpaint-editor-panel" aria-label="Paint areas">
       <div className="visual-warpaint-editor-head">
-        <span className="visual-warpaint-editor-head-title">Parts in Layer {layerNumber}</span>
+        <span className="visual-warpaint-editor-head-title">Parts in {layerLabel}</span>
         <span className="visual-warpaint-editor-head-count">{areaCount} of {availableParts.length}</span>
         <div className="visual-warpaint-editor-head-spacer" />
         <button
