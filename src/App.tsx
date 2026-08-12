@@ -51,6 +51,7 @@ import {
   constrainStickerPlacementToTexture,
   snapStickerRotationToCardinal,
   stickerPlacementFromQuad,
+  applyStickerPlacementToQuad,
   stickerPlacementToQuad,
   type StickerPlacement,
 } from './editor/stickerGeometry';
@@ -1663,7 +1664,11 @@ function MainApp() {
   ]);
 
   const changeStickerPlacement = useCallback((placement: StickerPlacement) => {
-    const quad = stickerPlacementToQuad(constrainStickerPlacementToTexture(placement));
+    const constrained = constrainStickerPlacementToTexture(placement);
+    const base = stickerDraftRef.current ?? authoredStickerQuad;
+    const quad = base
+      ? applyStickerPlacementToQuad(base, constrained)
+      : stickerPlacementToQuad(constrained);
     if (!quad) return;
     // The 2D editor owns its lightweight local transform while dragging. Push
     // the matching shader uniforms now instead of waiting for React's effect
@@ -1672,7 +1677,7 @@ function MainApp() {
     // to the editor session only at interaction end.
     previewStickerDraft(quad);
     updateStickerDraft(quad);
-  }, [previewStickerDraft, updateStickerDraft]);
+  }, [authoredStickerQuad, previewStickerDraft, updateStickerDraft]);
 
   const changeStickerQuad = useCallback((quad: StickerPlacementQuad) => {
     const constrained = constrainStickerQuadToTexture(quad);

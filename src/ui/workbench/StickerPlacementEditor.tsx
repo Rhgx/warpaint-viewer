@@ -539,7 +539,7 @@ export function StickerPlacementEditor({
       bl: [values.blX as number, values.blY as number],
     };
     if (!stickerPlacementFromQuad(next).editable) {
-      setCornerError('Those corners have to make a straight, unflipped rectangle.');
+      setCornerError('Those corners have to make a non-degenerate parallelogram.');
       return;
     }
     setCornerError(null);

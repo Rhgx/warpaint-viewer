@@ -20,8 +20,6 @@ export interface StickerPoint {
   readonly y: number;
 }
 
-const RECTANGULAR_QUAD_ORTHOGONALITY_EPSILON = 1e-5;
-
 /** Test a V-down UV point against a rotated sticker rectangle. */
 export function stickerPlacementContainsPoint(placement: StickerPlacement, point: StickerPoint): boolean {
   const radians = -placement.rotation * Math.PI / 180;
@@ -223,9 +221,10 @@ export function stickerPlacementToQuad(placement: StickerPlacement): StickerAffi
 }
 
 /**
- * Read an authored destination into the compact editor form when it is a
- * rectangle. Skew and reflection are rejected instead of being silently
- * flattened into width, height, and turn values.
+ * Read an authored affine destination into the compact transform controls.
+ * The controls describe its centre and two edge lengths; callers that edit a
+ * skewed quad must apply the placement delta to the original quad rather than
+ * rebuilding a rectangle with stickerPlacementToQuad().
  */
 export function stickerPlacementFromQuad(quad: StickerAffineQuad): StickerPlacementReadResult {
   if (!isFiniteQuad(quad)) return { editable: false, reason: 'This sticker has invalid placement data.' };
@@ -236,15 +235,9 @@ export function stickerPlacementFromQuad(quad: StickerAffineQuad): StickerPlacem
   if (width < 1e-9 || height < 1e-9) {
     return { editable: false, reason: 'This sticker has no usable size.' };
   }
-  const dot = horizontal.x * vertical.x + horizontal.y * vertical.y;
-  // This relative epsilon accepts ordinary float serialization noise but does
-  // not allow the UI to erase a visible authored shear.
-  if (Math.abs(dot) > width * height * RECTANGULAR_QUAD_ORTHOGONALITY_EPSILON) {
-    return { editable: false, reason: 'This sticker is skewed and cannot be adjusted here.' };
-  }
   const cross = horizontal.x * vertical.y - horizontal.y * vertical.x;
-  if (cross <= width * height * 1e-8) {
-    return { editable: false, reason: 'This sticker is mirrored and cannot be adjusted here.' };
+  if (Math.abs(cross) <= width * height * 1e-8) {
+    return { editable: false, reason: 'This sticker placement is degenerate and cannot be adjusted here.' };
   }
   return {
     editable: true,
@@ -256,6 +249,31 @@ export function stickerPlacementFromQuad(quad: StickerAffineQuad): StickerPlacem
       rotation: normalizeStickerRotation(Math.atan2(horizontal.y, horizontal.x) * (180 / Math.PI)),
     },
   };
+}
+
+/** Apply a compact move/scale/rotation delta while preserving authored shear. */
+export function applyStickerPlacementToQuad(
+  quad: StickerAffineQuad,
+  next: StickerPlacement,
+): StickerAffineQuad | undefined {
+  const current = stickerPlacementFromQuad(quad);
+  if (!current.editable || !current.placement) return undefined;
+  const source = current.placement;
+  const scaleX = next.width / source.width;
+  const scaleY = next.height / source.height;
+  const sourceRadians = source.rotation * Math.PI / 180;
+  const nextRadians = next.rotation * Math.PI / 180;
+  const map = ([x, y]: readonly [number, number]): readonly [number, number] => {
+    const dx = x - source.x;
+    const dy = y - source.y;
+    const localX = dx * Math.cos(sourceRadians) + dy * Math.sin(sourceRadians);
+    const localY = -dx * Math.sin(sourceRadians) + dy * Math.cos(sourceRadians);
+    return [
+      next.x + localX * scaleX * Math.cos(nextRadians) - localY * scaleY * Math.sin(nextRadians),
+      next.y + localX * scaleX * Math.sin(nextRadians) + localY * scaleY * Math.cos(nextRadians),
+    ];
+  };
+  return { tl: map(quad.tl), tr: map(quad.tr), bl: map(quad.bl) };
 }
 
 /**

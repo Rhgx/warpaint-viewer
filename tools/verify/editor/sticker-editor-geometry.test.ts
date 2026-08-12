@@ -47,9 +47,7 @@ test('compact sticker editor geometry', () => {
   assert.equal(nested[0].id, 'small', 'nested selection prefers the smallest containing sticker');
 
   const skewed = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0.1, 0.2] });
-  assert.equal(skewed.editable, false, 'skewed quad is not silently flattened');
-  assert.ok(skewed.reason);
-  assert.match(skewed.reason, /skewed/i, 'skew has a useful refusal reason');
+  assert.equal(skewed.editable, true, 'skewed affine quads expose transform controls');
 
   const rocketStickerOne = geometry.stickerPlacementFromQuad({
     tl: [0.1061291099, 0.05910533667],
@@ -77,14 +75,21 @@ test('compact sticker editor geometry', () => {
     tr: [0.4, 0.2],
     bl: [0.200836, 0.4],
   });
-  assert.equal(authoredSkew.editable, false, 'visible authored shear remains read-only');
-  assert.ok(authoredSkew.reason);
-  assert.match(authoredSkew.reason, /skewed/i, 'authored shear keeps the skew refusal');
+  assert.equal(authoredSkew.editable, true, 'visible authored shear remains editable');
+  assert.ok(authoredSkew.placement);
+  const movedSkew = geometry.applyStickerPlacementToQuad(
+    { tl: [0.2, 0.2], tr: [0.4, 0.2], bl: [0.200836, 0.4] },
+    { ...authoredSkew.placement, x: authoredSkew.placement.x + 0.1 },
+  );
+  assert.ok(movedSkew);
+  closePoint(movedSkew.tl, [0.3, 0.2], 'affine movement preserves top-left');
+  closePoint(movedSkew.tr, [0.5, 0.2], 'affine movement preserves top-right');
+  closePoint(movedSkew.bl, [0.300836, 0.4], 'affine movement preserves authored shear');
 
   const mirrored = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0, -0.2] });
-  assert.equal(mirrored.editable, false, 'mirrored quad is not silently flattened');
-  assert.ok(mirrored.reason);
-  assert.match(mirrored.reason, /mirrored/i, 'mirror has a useful refusal reason');
+  assert.equal(mirrored.editable, true, 'mirrored affine quads retain their reflection while edited');
+  const degenerate = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0.2, 0] });
+  assert.equal(degenerate.editable, false, 'a collinear quad remains read-only');
 
   const resized = geometry.resizeStickerFromCorner(
     { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 },
