@@ -258,6 +258,32 @@ assert.equal(
   'removing a sticker deletes its authored stage',
 );
 
+const soleStickerWrapper: FixtureMessages = structuredClone({ definition, operation: {
+  header: { defindex: 701, variables: [] },
+  operation_node: { stage: { apply_sticker: {
+    sticker: { base: { string: 'stickers/only' } },
+    dest_tl: { string: '0 0' }, dest_tr: { string: '1 0' }, dest_bl: { string: '0 1' },
+    operation_node: { stage: { texture_lookup: { texture: { string: 'patterns/surface' } } } },
+  } } },
+} });
+const soleTarget = implementation.discoverStickerPlacementTargets(soleStickerWrapper, resolve(soleStickerWrapper))[0];
+const withoutSoleSticker = implementation.removeStickerStages(
+  soleStickerWrapper,
+  { stagePaths: soleTarget.stagePaths },
+);
+const promotedSurface = fixtureOperation(withoutSoleSticker.operation).operation_node;
+assert.ok(promotedSurface && !Array.isArray(promotedSurface));
+assert.equal(
+  implementation.discoverStickerPlacementTargets(withoutSoleSticker, resolve(withoutSoleSticker)).length,
+  0,
+  'removing the sole sticker deletes its authored stage',
+);
+assert.equal(
+  promotedSurface.stage?.texture_lookup?.texture?.string,
+  'patterns/surface',
+  'removing the sole sticker preserves the wrapped paint recipe',
+);
+
 const duplicatedWear = structuredClone(original);
 const duplicateCombine = fixtureStickerCombine(duplicatedWear.operation);
 const duplicateNodes = requiredArray(duplicateCombine.operation_node, 'Fixture multiply nodes');
