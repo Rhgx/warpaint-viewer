@@ -711,19 +711,15 @@ export function removeStickerStages(
   for (const entries of byOwner.values()) {
     const first = entries[0];
     const removed = new Set(entries.map((entry) => entry.index));
-    const retained = first.nodes.filter((_, index) => !removed.has(index));
-    if (retained.length > 0) {
-      replaceMany(first.owner, 'operation_node', first.prior, retained);
-      continue;
-    }
+    const unwrapped = first.nodes.flatMap((node, index) => {
+      if (!removed.has(index)) return [node];
+      return many(node.stage?.apply_sticker?.operation_node);
+    });
 
-    // apply_sticker stages wrap the recipe they decorate. If every node in
-    // this collection is being removed, dropping the wrappers would also drop
-    // the complete paint recipe below them. Promote those inputs instead.
-    const promoted = entries.flatMap((entry) => (
-      many(entry.nodes[entry.index]?.stage?.apply_sticker?.operation_node)
-    ));
-    replaceMany(first.owner, 'operation_node', first.prior, promoted);
+    // An apply_sticker stage wraps the paint recipe it decorates. Removing
+    // the wrapper must always promote that recipe in place, even when the
+    // wrapper has siblings in the same operation-node collection.
+    replaceMany(first.owner, 'operation_node', first.prior, unwrapped);
   }
   removeUnusedHeaderVariables(next, placementVariables);
   return next;

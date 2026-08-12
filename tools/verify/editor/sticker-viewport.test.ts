@@ -45,5 +45,10 @@ test('sticker viewport UV contract', () => {
   const editorSource = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'workbench', 'StickerPlacementEditor.tsx'), 'utf8');
   assert.match(editorSource, /if \(event\.button !== 2\) return;/, 'UV panning is reserved for right drag');
   assert.match(editorSource, /onContextMenu=\{\(event\) => event\.preventDefault\(\)\}/, 'right drag suppresses the context menu');
+  assert.match(
+    editorSource,
+    /interactionRef\.current = \{ kind: 'pan', initial: next, pointer \};/,
+    'wheel zoom rebases an active right-drag so its next pointer event preserves the new viewport',
+  );
   assert.doesNotMatch(editorSource, /middle drag pans|Middle \/ Space drag/, 'UV guidance does not advertise the old middle-drag pan');
 });

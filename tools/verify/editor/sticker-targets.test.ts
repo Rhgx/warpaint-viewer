@@ -284,6 +284,32 @@ assert.equal(
   'removing the sole sticker preserves the wrapped paint recipe',
 );
 
+const stickerWrapperWithSibling: FixtureMessages = structuredClone({ definition, operation: {
+  header: { defindex: 701, variables: [] },
+  operation_node: [
+    { stage: { texture_lookup: { texture: { string: 'patterns/sibling' } } } },
+    { stage: { apply_sticker: {
+      sticker: { base: { string: 'stickers/only' } },
+      dest_tl: { string: '0 0' }, dest_tr: { string: '1 0' }, dest_bl: { string: '0 1' },
+      operation_node: { stage: { texture_lookup: { texture: { string: 'patterns/wrapped' } } } },
+    } } },
+  ],
+} });
+const siblingTarget = implementation.discoverStickerPlacementTargets(
+  stickerWrapperWithSibling,
+  resolve(stickerWrapperWithSibling),
+)[0];
+const withoutSiblingSticker = implementation.removeStickerStages(
+  stickerWrapperWithSibling,
+  { stagePaths: siblingTarget.stagePaths },
+);
+assert.deepEqual(
+  requiredArray(fixtureOperation(withoutSiblingSticker.operation).operation_node, 'Sibling fixture nodes')
+    .map((node) => node.stage?.texture_lookup?.texture?.string),
+  ['patterns/sibling', 'patterns/wrapped'],
+  'removing a sticker with siblings preserves both the siblings and its wrapped paint recipe',
+);
+
 const duplicatedWear = structuredClone(original);
 const duplicateCombine = fixtureStickerCombine(duplicatedWear.operation);
 const duplicateNodes = requiredArray(duplicateCombine.operation_node, 'Fixture multiply nodes');

@@ -587,12 +587,22 @@ export function StickerPlacementEditor({
       const delta = Math.min(800, Math.max(-800, event.deltaY));
       const size = surfaceSize(surface);
       const pointer = pointerInSurface(event, surface);
-      setViewport((current) => zoomStickerViewportAt(
-        current,
-        current.zoom * Math.exp(-delta * 0.0015),
-        pointer,
-        size,
-      ));
+      setViewport((current) => {
+        const next = zoomStickerViewportAt(
+          current,
+          current.zoom * Math.exp(-delta * 0.0015),
+          pointer,
+          size,
+        );
+        const interaction = interactionRef.current;
+        if (interaction?.kind === 'pan') {
+          // Pointer moves calculate pan from the gesture's baseline. Rebase
+          // that baseline after wheel zoom so the next right-drag event does
+          // not restore the zoom and pan values from before the wheel event.
+          interactionRef.current = { kind: 'pan', initial: next, pointer };
+        }
+        return next;
+      });
     };
     surface.addEventListener('wheel', zoom, { passive: false });
     return () => surface.removeEventListener('wheel', zoom);
