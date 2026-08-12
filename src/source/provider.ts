@@ -325,12 +325,25 @@ export class SourceTextureProvider {
     // resolves against the built-ins. Only inputs neither side has are worth
     // a warning, because those simply do not get drawn.
     const unresolvable = material.missingTextures.filter((ref) => !this.hasBuiltIn(ref));
-    if (unresolvable.length) {
+    const envmapTexture = material.material.envmapTexture;
+    const missingEnvmap = envmapTexture && unresolvable.includes(envmapTexture)
+      ? envmapTexture
+      : null;
+    if (missingEnvmap) {
+      this.#addDiagnostic({
+        id: `material-missing-envmap:${material.path}`,
+        level: 'warning',
+        message: 'This material\'s $envmap is not present in the package or bundled TF2 cubemaps, so the editor cubemap was used.',
+        detail: missingEnvmap,
+      });
+    }
+    const otherUnresolvable = unresolvable.filter((ref) => ref !== missingEnvmap);
+    if (otherUnresolvable.length) {
       this.#addDiagnostic({
         id: `material-missing-textures:${material.path}`,
         level: 'warning',
-        message: `This material names ${unresolvable.length.toLocaleString()} texture${unresolvable.length === 1 ? '' : 's'} that neither the package nor this viewer has, so ${unresolvable.length === 1 ? 'it is' : 'they are'} left out.`,
-        detail: unresolvable.join(', '),
+        message: `This material names ${otherUnresolvable.length.toLocaleString()} texture${otherUnresolvable.length === 1 ? '' : 's'} that neither the package nor this viewer has, so ${otherUnresolvable.length === 1 ? 'it is' : 'they are'} left out.`,
+        detail: otherUnresolvable.join(', '),
       });
     }
     return material;

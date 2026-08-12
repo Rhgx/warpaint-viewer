@@ -7,6 +7,7 @@ import './ui/stage/Inspector.css';
 import './styles/stage.css';
 import './styles/layout.css';
 import type { StickerGizmoDrag, Viewer } from './viewer/Viewer';
+import { isStockMaterialCubemap, stockMaterialCubemapUrls } from './viewer/env';
 import type { Compositor, ComposeResult } from './compositor/compositor';
 import type { PaintkitEntry } from './data/types';
 import type { RecipeNode } from './compositor/types';
@@ -236,7 +237,7 @@ function MainApp() {
   const { provider: sourceProvider, sourcePackage, packageGeneration, suggestedPaintkitId, removePackage } = useSourcePackage(
     data?.resolveTexture ?? ((ref) => ref),
     () => setAssetOverrideCache({}),
-    (ref) => !!data?.manifest.textures?.[ref],
+    (ref) => !!data?.manifest.textures?.[ref] || isStockMaterialCubemap(ref),
   );
   const getAssetUrl = useCallback((rel: string) => data?.getAssetUrl(rel) ?? null, [data]);
   const definitions = useCustomDefinitions({
@@ -1991,7 +1992,7 @@ function MainApp() {
       .then((packaged) => viewer.applyMaterialParams(
         packaged?.material ?? builtInMaterial,
         (ref) => sourceProvider.resolve(ref),
-        (ref) => sourceProvider.resolveCubemap(ref),
+        async (ref) => await sourceProvider.resolveCubemap(ref) ?? stockMaterialCubemapUrls(ref),
       ));
     void Promise.all([
       viewer.ready(),

@@ -57,23 +57,41 @@ function extractSheenMask(texList, miscList) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Sheen cubemap -> 6 face PNGs.
+// 2. Stock material cubemaps -> 6 face PNGs.
 // ---------------------------------------------------------------------------
 
-function extractSheenCubemap(texList) {
-  const rel = 'materials/cubemaps/cubemap_sheen001.vtf';
-  if (!texList.has(rel)) throw new Error(`sheen cubemap not found: ${rel}`);
-  extractBatch(TEXTURES_VPK, [rel], STAGING);
-  const buf = fs.readFileSync(path.join(STAGING, rel));
-  const faces = decodeVTFCubemap(buf);
+function extractMaterialCubemaps(texList) {
+  const paths = [...texList].filter((entry) => (
+    /^materials\/cubemaps\/[^/]+\.vtf$/.test(entry) && !entry.endsWith('.hdr.vtf')
+  )).sort();
   const names = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
-  const outDir = path.join(OUT, 'sheen', 'cubemap');
-  ensureDir(outDir);
-  faces.forEach((face, i) => {
-    fs.writeFileSync(path.join(outDir, `${names[i]}.png`), encodePNG(face.rgba, face.width, face.height));
-  });
-  log(`sheen cubemap: 6 faces, ${faces[0].width}x${faces[0].height} -> sheen/cubemap/{${names.join(',')}}.png`);
-  return { size: faces[0].width };
+  const manifest = {};
+  let size = 0;
+  for (const rel of paths) {
+    const ref = path.basename(rel, '.vtf');
+    extractBatch(TEXTURES_VPK, [rel], STAGING);
+    const faces = decodeVTFCubemap(fs.readFileSync(path.join(STAGING, rel)));
+    const materialDir = path.join(OUT, 'material-cubemaps', ref);
+    ensureDir(materialDir);
+    faces.forEach((face, i) => {
+      fs.writeFileSync(path.join(materialDir, `${names[i]}.png`), encodePNG(face.rgba, face.width, face.height));
+    });
+    if (ref === 'cubemap_sheen001') {
+      const sheenDir = path.join(OUT, 'sheen', 'cubemap');
+      ensureDir(sheenDir);
+      faces.forEach((face, i) => {
+        fs.writeFileSync(path.join(sheenDir, `${names[i]}.png`), encodePNG(face.rgba, face.width, face.height));
+      });
+    }
+    size = faces[0].width;
+    manifest[`cubemaps/${ref}`] = ref;
+    log(`${ref}: 6 faces, ${size}x${size}`);
+  }
+  fs.writeFileSync(
+    path.join(ROOT, 'src', 'viewer', 'stockCubemaps.generated.json'),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+  );
+  return { size, count: paths.length };
 }
 
 // ---------------------------------------------------------------------------
@@ -510,7 +528,7 @@ function main() {
   const sources = buildVpkSources(texList, miscList, hl2TexList, hl2MiscList);
 
   const sheenMeta = extractSheenMask(texList, miscList);
-  const cubemapMeta = extractSheenCubemap(texList);
+  const cubemapMeta = extractMaterialCubemaps(texList);
   const { unusuals, materials } = extractUnusuals(miscList);
   const particleIndex = extractParticleTextures(materials, sources);
 
@@ -522,7 +540,7 @@ function main() {
   const stripPath = path.join(OUT, 'sheen', 'mask_strip.png');
   log(`sheen mask strip exists: ${fs.existsSync(stripPath)}, frames=${sheenMeta.maskFrames}, ${sheenMeta.maskWidth}x${sheenMeta.maskHeight}`);
   const cubeFaces = ['px', 'nx', 'py', 'ny', 'pz', 'nz'].map((n) => path.join(OUT, 'sheen', 'cubemap', `${n}.png`));
-  log(`cubemap faces present: ${cubeFaces.filter((p) => fs.existsSync(p)).length}/6, size=${cubemapMeta.size}`);
+  log(`stock material cubemaps: ${cubemapMeta.count}, sheen faces present: ${cubeFaces.filter((p) => fs.existsSync(p)).length}/6, size=${cubemapMeta.size}`);
 
   let allNonEmpty = true;
   for (const name of UNUSUAL_PCFS) {
