@@ -132,6 +132,17 @@ export interface ProtoDefKitMessages {
   operation: Record<string, unknown>;
 }
 
+/**
+ * One weapon slot on a paintkit definition, resolved to the weapon it paints
+ * and the authored location of its item message inside the definition
+ * message: ['definition', <slotName>] for a named WEAPON_SLOTS field, or
+ * ['definition', 'item', <index>] for a repeated `item` entry.
+ */
+export interface ProtoDefKitWeaponSlot {
+  weaponKey: string;
+  path: readonly string[];
+}
+
 export interface ProtoDefSource {
   open(bytes: Uint8Array, options: ProtoDefOpenOptions): Promise<ProtoDefIndex>;
   /**
@@ -164,6 +175,13 @@ export interface ProtoDefSource {
    * kit names an operation the container does not hold.
    */
   exportKit(defindex: number): Promise<ProtoDefKitMessages | null>;
+  /**
+   * Every weapon slot on one kit's definition, resolved to the weapon it
+   * paints and its authored location, so an editor can read or write that
+   * weapon's own material_override without guessing which definition field
+   * holds it. Null when nothing is open or the kit is not found.
+   */
+  exportKitWeaponSlots(defindex: number): Promise<ProtoDefKitWeaponSlot[] | null>;
   dispose(): void;
 }
 

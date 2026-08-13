@@ -17,6 +17,7 @@ import type {
   ProtoDefIndex,
   ProtoDefJsonFragment,
   ProtoDefKit,
+  ProtoDefKitWeaponSlot,
   ProtoDefOpenOptions,
   ProtoDefRecipeWithProvenance,
   ProtoDefSource,
@@ -51,6 +52,8 @@ export interface CustomDefinitions {
   ) => Promise<ProtoDefRecipeWithProvenance | null>;
   /** An imported kit's definition and operation, for the export builder. */
   exportKit: (kitId: number) => Promise<ProtoDefKitMessages | null>;
+  /** An imported kit's weapon slots, resolved to weapon key and authored path. */
+  exportKitWeaponSlots: (kitId: number) => Promise<ProtoDefKitWeaponSlot[] | null>;
   /** Replace one imported kit with an in-memory JSON-backed editor preview. */
   previewKitMessages: (kitId: number, messages: ProtoDefKitMessages) => Promise<void>;
   /** Return recipe/export resolution to the originally imported container. */
@@ -524,6 +527,15 @@ export function useCustomDefinitions({
     [],
   );
 
+  const exportKitWeaponSlots = useCallback(
+    (kitId: number): Promise<ProtoDefKitWeaponSlot[] | null> => (
+      editedRef.current?.kitId === kitId
+        ? editedRef.current.source.exportKitWeaponSlots(customKitDefindex(kitId))
+        : loadedRef.current?.source.exportKitWeaponSlots(customKitDefindex(kitId)) ?? Promise.resolve(null)
+    ),
+    [],
+  );
+
   const state = useMemo<CustomDefinitions['state']>(() => ({
     status,
     fileName,
@@ -543,6 +555,7 @@ export function useCustomDefinitions({
       getRecipe,
       getRecipeWithProvenance,
       exportKit,
+      exportKitWeaponSlots,
       previewKitMessages,
       clearPreviewKit,
       suggestedKitId,
@@ -556,6 +569,7 @@ export function useCustomDefinitions({
       getRecipe,
       getRecipeWithProvenance,
       exportKit,
+      exportKitWeaponSlots,
       previewKitMessages,
       clearPreviewKit,
       suggestedKitId,

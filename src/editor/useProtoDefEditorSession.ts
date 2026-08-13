@@ -7,6 +7,11 @@ import {
   moveStickerStages,
   removeStickerStages,
   setStickerDestQuad,
+  setTextureTransformFlip,
+  setTextureTransformRange,
+  pushTextureTransformRangeToAllWeapons,
+  setWeaponMaterialOverride,
+  setWeaponMaterialOverrides,
   toggleSelectGroupId,
   type SelectGroupAssignmentResult,
   type SelectGroupAssignmentTarget,
@@ -14,6 +19,11 @@ import {
   type StickerQuad,
   type StickerStructureTarget,
   type StickerTarget,
+  type TextureTransformRangeField,
+  type TextureTransformRangeValue,
+  type TextureTransformTarget,
+  type WeaponMaterialTarget,
+  type WeaponMaterialUpdate,
 } from './mutations';
 import { SnapshotHistory } from './history';
 import {
@@ -76,6 +86,27 @@ export interface ProtoDefEditorSession {
   addSticker: (target: StickerStructureTarget, quad: StickerQuad, baseReference: string) => boolean;
   removeSticker: (target: StickerStructureTarget) => boolean;
   moveSticker: (target: StickerStructureTarget, direction: -1 | 1) => boolean;
+  /**
+   * Opens a batched transform gesture: calls to setTransformRange/setTransformFlip
+   * made before the matching endTransformGesture() update `current` live (so the
+   * viewer keeps redrawing as a slider moves) but collapse into the single
+   * history entry recorded by the first of those calls, exactly like a sticker
+   * drag committing one quad at pointer-up.
+   */
+  beginTransformGesture: () => void;
+  endTransformGesture: () => void;
+  setTransformRange: (target: TextureTransformTarget, field: TextureTransformRangeField, value: TextureTransformRangeValue) => boolean;
+  pushTransformRangeToAll: (
+    target: TextureTransformTarget,
+    field: TextureTransformRangeField,
+    value: TextureTransformRangeValue,
+    weaponOverridePaths: readonly (readonly string[])[],
+  ) => boolean;
+  setTransformFlip: (target: TextureTransformTarget, axis: 'u' | 'v', allowed: boolean) => boolean;
+  /** Writes or clears one weapon's material override as a single undo step. */
+  setWeaponMaterial: (target: WeaponMaterialTarget, overridePath: string | null) => boolean;
+  /** Applies several material overrides as one undoable editor action. */
+  setWeaponMaterials: (updates: readonly WeaponMaterialUpdate[]) => boolean;
   undo: () => void;
   redo: () => void;
   reset: () => void;
@@ -330,6 +361,114 @@ export function useProtoDefEditorSession({
     }
   }, [commitEdit]);
 
+  // Batches a transform drag or typing burst into one history entry while
+  // still updating `current` (and therefore the live viewer) on every
+  // intermediate value, unlike setStickerQuad's single end-of-drag commit:
+  // a rotated/scaled paint layer has no cheap shader-uniform preview the way
+  // a sticker quad does, so the live redraw has to go through the same
+  // recipe recomposite path a committed edit already uses.
+  const transformGestureRef = useRef<{ baseline: ProtoDefKitMessages; recorded: boolean } | null>(null);
+
+  const beginTransformGesture = useCallback(() => {
+    const current = currentRef.current;
+    if (current) transformGestureRef.current = { baseline: current, recorded: false };
+  }, []);
+
+  const endTransformGesture = useCallback(() => {
+    transformGestureRef.current = null;
+  }, []);
+
+  const applyTransformEdit = useCallback((mutate: (prior: ProtoDefKitMessages) => ProtoDefKitMessages): boolean => {
+    const prior = currentRef.current;
+    if (!prior) {
+      setError('Load an imported definition before editing it.');
+      return false;
+    }
+    try {
+      const next = snapshot(mutate(prior));
+      const gesture = transformGestureRef.current;
+      if (gesture) {
+        if (!gesture.recorded) {
+          historyRef.current.record(gesture.baseline);
+          gesture.recorded = true;
+        }
+        currentRef.current = next;
+        dirtyRef.current = true;
+        setCurrent(next);
+        setRevision((value) => value + 1);
+        setDirty(true);
+        setCanUndo(historyRef.current.canUndo);
+        setCanRedo(historyRef.current.canRedo);
+        setError(null);
+      } else {
+        commitEdit(prior, next);
+      }
+      return true;
+    } catch (cause) {
+      setError(errorMessage(cause));
+      return false;
+    }
+  }, [commitEdit]);
+
+  const setTransformRange = useCallback((
+    target: TextureTransformTarget,
+    field: TextureTransformRangeField,
+    value: TextureTransformRangeValue,
+  ): boolean => applyTransformEdit((prior) => setTextureTransformRange(prior, target, field, value)), [applyTransformEdit]);
+
+  const setTransformFlip = useCallback((
+    target: TextureTransformTarget,
+    axis: 'u' | 'v',
+    allowed: boolean,
+  ): boolean => applyTransformEdit((prior) => setTextureTransformFlip(prior, target, axis, allowed)), [applyTransformEdit]);
+
+  const pushTransformRangeToAll = useCallback((
+    target: TextureTransformTarget,
+    field: TextureTransformRangeField,
+    value: TextureTransformRangeValue,
+    weaponOverridePaths: readonly (readonly string[])[],
+  ): boolean => applyTransformEdit((prior) => pushTextureTransformRangeToAllWeapons(
+    prior,
+    target,
+    field,
+    value,
+    weaponOverridePaths,
+  )), [applyTransformEdit]);
+
+  const setWeaponMaterial = useCallback((target: WeaponMaterialTarget, overridePath: string | null): boolean => {
+    const prior = currentRef.current;
+    if (!prior) {
+      setError('Load an imported definition before editing it.');
+      return false;
+    }
+    try {
+      const changed = setWeaponMaterialOverride(prior, target, overridePath);
+      if (changed === prior) return false;
+      commitEdit(prior, snapshot(changed));
+      return true;
+    } catch (cause) {
+      setError(errorMessage(cause));
+      return false;
+    }
+  }, [commitEdit]);
+
+  const setWeaponMaterials = useCallback((updates: readonly WeaponMaterialUpdate[]): boolean => {
+    const prior = currentRef.current;
+    if (!prior) {
+      setError('Load an imported definition before editing it.');
+      return false;
+    }
+    try {
+      const changed = setWeaponMaterialOverrides(prior, updates);
+      if (changed === prior) return false;
+      commitEdit(prior, snapshot(changed));
+      return true;
+    } catch (cause) {
+      setError(errorMessage(cause));
+      return false;
+    }
+  }, [commitEdit]);
+
   const applyStickerStructureEdit = useCallback((edit: (prior: ProtoDefKitMessages) => ProtoDefKitMessages): boolean => {
     const prior = currentRef.current;
     if (!prior) {
@@ -450,6 +589,13 @@ export function useProtoDefEditorSession({
     addSticker,
     removeSticker,
     moveSticker,
+    beginTransformGesture,
+    endTransformGesture,
+    setTransformRange,
+    pushTransformRangeToAll,
+    setTransformFlip,
+    setWeaponMaterial,
+    setWeaponMaterials,
     undo,
     redo,
     reset,

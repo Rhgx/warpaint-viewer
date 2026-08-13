@@ -85,6 +85,9 @@ export interface GroupLayerOverlayMap {
 /** The deliberately low-strength opacity used for the all-layer surface cue. */
 export const GROUP_LAYER_OVERLAY_OPACITY = 0.16;
 
+/** Opacity of the normal paint while a transform layer is isolated. */
+export const TRANSFORM_ISOLATION_CONTEXT_OPACITY = 0.32;
+
 /**
  * Distinct but muted default tints for editor layers. The UI may use these for
  * its own swatches and passes the chosen value explicitly to Viewer.
@@ -232,6 +235,7 @@ export class Viewer {
   private detailTexture: THREE.Texture | null = null;
   private materialLoadToken = 0;
   private tf2Uniforms = createTf2Uniforms();
+  private transformIsolationContextOpacity = { value: 1 };
   private raf = 0;
   private lastTime = 0;
   private disposed = false;
@@ -281,6 +285,17 @@ export class Viewer {
   // every distinct group-map source) at once. It deliberately remains a
   // separate pass so it never changes the composed war-paint texture.
   private groupLayerOverlayPasses: GroupLayerOverlayPass[] = [];
+
+  // Transform isolation keeps the complete paint as a translucent context
+  // pass, then redraws only the selected groups with the isolated recipe.
+  private transformIsolationMaskTexture: THREE.DataTexture | null = null;
+  private transformIsolationMaterial: THREE.MeshPhongMaterial | null = null;
+  private transformIsolationMeshes: THREE.Mesh[] = [];
+  private transformIsolationBaseState: {
+    readonly opacity: number;
+    readonly transparent: boolean;
+    readonly depthWrite: boolean;
+  } | null = null;
 
   // Editor sticker preview: another copy of the actual weapon geometry, not
   // a plane in world space. The fragment shader turns each mesh UV back into
@@ -672,6 +687,128 @@ export class Viewer {
     this.material.map = visibleStickerEditorMap(this.composedMap, this.stickerEditorBaseMap);
     this.material.needsUpdate = true;
     this.invalidate();
+  }
+
+  /**
+   * Ghost the complete paint and draw the isolated recipe at full strength on
+   * only the group buckets addressed by the active layer.
+   */
+  setTransformIsolation(
+    texture: THREE.Texture,
+    pixels: Uint8Array | Uint8ClampedArray,
+    width: number,
+    height: number,
+    buckets: readonly number[],
+  ): void {
+    if (!Number.isSafeInteger(width) || width <= 0
+      || !Number.isSafeInteger(height) || height <= 0
+      || pixels.length < width * height * 4
+      || buckets.length === 0
+      || buckets.some((bucket) => !Number.isInteger(bucket) || bucket < 1 || bucket > 16)) {
+      this.clearTransformIsolation();
+      return;
+    }
+
+    this.teardownTransformIsolationPass();
+    if (!this.transformIsolationBaseState) {
+      this.transformIsolationBaseState = {
+        opacity: this.material.opacity,
+        transparent: this.material.transparent,
+        depthWrite: this.material.depthWrite,
+      };
+    }
+    this.transformIsolationContextOpacity.value = TRANSFORM_ISOLATION_CONTEXT_OPACITY;
+    this.material.transparent = true;
+    this.material.depthWrite = true;
+    this.material.needsUpdate = true;
+
+    const selectedBuckets = new Set(buckets);
+    const maskData = new Uint8Array(width * height * 4);
+    for (let sourceOffset = 0, targetOffset = 0; targetOffset < maskData.length; sourceOffset += 4, targetOffset += 4) {
+      const bucket = Math.floor(pixels[sourceOffset] / 16 + 0.5);
+      const selected = selectedBuckets.has(bucket) ? 255 : 0;
+      maskData[targetOffset] = selected;
+      maskData[targetOffset + 1] = selected;
+      maskData[targetOffset + 2] = selected;
+      maskData[targetOffset + 3] = 255;
+    }
+    const mask = new THREE.DataTexture(maskData, width, height, THREE.RGBAFormat, THREE.UnsignedByteType);
+    mask.colorSpace = THREE.NoColorSpace;
+    mask.flipY = false;
+    mask.generateMipmaps = false;
+    mask.magFilter = THREE.NearestFilter;
+    mask.minFilter = THREE.NearestFilter;
+    mask.wrapS = THREE.ClampToEdgeWrapping;
+    mask.wrapT = THREE.ClampToEdgeWrapping;
+    mask.needsUpdate = true;
+
+    const material = this.material.clone();
+    material.map = texture;
+    material.alphaMap = mask;
+    material.alphaTest = 0.5;
+    material.opacity = 1;
+    material.transparent = false;
+    material.depthWrite = true;
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = -1;
+    material.polygonOffsetUnits = -1;
+    const compileTf2Material = this.material.onBeforeCompile;
+    material.onBeforeCompile = (shader, renderer) => {
+      compileTf2Material(shader, renderer);
+      shader.uniforms.uTf2IsolationContextOpacity = { value: 1 };
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'if ( uTf2AlphaTestRef > 0.0 && diffuseColor.a < uTf2AlphaTestRef ) discard;',
+        `if ( uTf2AlphaTestRef > 0.0 && diffuseColor.a < uTf2AlphaTestRef ) discard;
+#ifdef USE_ALPHAMAP
+  if ( texture2D( alphaMap, vAlphaMapUv ).g < 0.5 ) discard;
+#endif`,
+      );
+    };
+    material.customProgramCacheKey = () => `${TF2_VERTEXLIT_CACHE_KEY}:transform-isolation`;
+    material.needsUpdate = true;
+
+    this.transformIsolationMaskTexture = mask;
+    this.transformIsolationMaterial = material;
+    this.rebuildTransformIsolationMeshes();
+    this.invalidate();
+  }
+
+  /** Restore the normal opaque paint after transform isolation. */
+  clearTransformIsolation(): void {
+    this.teardownTransformIsolationPass();
+    if (this.transformIsolationBaseState) {
+      this.material.opacity = this.transformIsolationBaseState.opacity;
+      this.material.transparent = this.transformIsolationBaseState.transparent;
+      this.material.depthWrite = this.transformIsolationBaseState.depthWrite;
+      this.transformIsolationContextOpacity.value = 1;
+      this.material.needsUpdate = true;
+      this.transformIsolationBaseState = null;
+    }
+    this.invalidate();
+  }
+
+  private rebuildTransformIsolationMeshes(): void {
+    this.teardownTransformIsolationMeshes();
+    if (!this.transformIsolationMaterial) return;
+    for (const mesh of this.paintableMeshes) {
+      const isolated = new THREE.Mesh(mesh.geometry, this.transformIsolationMaterial);
+      isolated.renderOrder = 3;
+      this.centerGroup.add(isolated);
+      this.transformIsolationMeshes.push(isolated);
+    }
+  }
+
+  private teardownTransformIsolationMeshes(): void {
+    for (const mesh of this.transformIsolationMeshes) this.centerGroup.remove(mesh);
+    this.transformIsolationMeshes = [];
+  }
+
+  private teardownTransformIsolationPass(): void {
+    this.teardownTransformIsolationMeshes();
+    this.transformIsolationMaterial?.dispose();
+    this.transformIsolationMaterial = null;
+    this.transformIsolationMaskTexture?.dispose();
+    this.transformIsolationMaskTexture = null;
   }
 
   setSheen(sheenId: string, team: 'red' | 'blu') {
@@ -2069,7 +2206,17 @@ export class Viewer {
   private installTf2Shader() {
     this.material.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, this.tf2Uniforms);
+      shader.uniforms.uTf2IsolationContextOpacity = this.transformIsolationContextOpacity;
       installTf2VertexLit(shader);
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          'void main() {',
+          'uniform float uTf2IsolationContextOpacity;\nvoid main() {',
+        )
+        .replace(
+          '#include <opaque_fragment>',
+          '#include <opaque_fragment>\ngl_FragColor.a = uTf2IsolationContextOpacity;',
+        );
     };
     this.material.customProgramCacheKey = () => TF2_VERTEXLIT_CACHE_KEY;
   }
@@ -2282,6 +2429,7 @@ export class Viewer {
     this.teardownEmissiveMeshes();
     this.teardownGroupLayerOverlayMeshes();
     this.teardownGroupHighlightMeshes();
+    this.teardownTransformIsolationMeshes();
     this.teardownStickerPreviewMeshes();
     for (const mesh of this.meshes) {
       this.centerGroup.remove(mesh);
@@ -2302,6 +2450,7 @@ export class Viewer {
     if (this.emissiveEnabled) this.rebuildEmissiveMeshes();
     for (const pass of this.groupLayerOverlayPasses) this.rebuildGroupLayerOverlayMeshes(pass);
     if (this.groupHighlightTexture && this.groupHighlightMaterial) this.rebuildGroupHighlightMeshes();
+    if (this.transformIsolationMaterial) this.rebuildTransformIsolationMeshes();
     if (this.stickerPreviewTexture && this.stickerPreviewMaterial) this.rebuildStickerPreviewMeshes();
     this.invalidate();
   }
@@ -2314,6 +2463,7 @@ export class Viewer {
     // A group map belongs to the previous weapon/paint pairing. Do not retain
     // its GPU texture after a failed or explicit model clear.
     this.clearGroupHighlight();
+    this.clearTransformIsolation();
     for (const mesh of this.meshes) {
       this.centerGroup.remove(mesh);
       if (!this.currentGeoCached) mesh.geometry.dispose();
@@ -2475,6 +2625,7 @@ export class Viewer {
     this.stickerPreviewMaterial = null;
     this.clearGroupLayerOverlay();
     this.clearGroupHighlight();
+    this.clearTransformIsolation();
     this.groupHighlightMaterial?.dispose();
     this.groupHighlightMaterial = null;
     this.sheenMaterial?.dispose();

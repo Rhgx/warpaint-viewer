@@ -1,6 +1,6 @@
 import type { WeaponMaterial } from '../data/types';
 import type { SourcePackage } from './contracts';
-import { isSupportedTexturePath, normalizeSourcePath, sourcePathExtension, sourceTextureCandidates } from './paths';
+import { isSupportedTexturePath, normalizeSourcePath, sourcePathExtension, sourceTextureCandidates, sourceTextureIdentity } from './paths';
 
 // Runtime VMT support for imported packages.
 //
@@ -329,6 +329,41 @@ export function parseWeaponMaterialVmt(text: string): ParsedVmt {
 }
 
 // Package lookup
+
+export interface PackageMaterialPathIndex {
+  readonly paths: ReadonlySet<string>;
+  readonly uniqueFilenames: ReadonlySet<string>;
+}
+
+/** Indexes VMT paths once so material override rows do not rescan a large archive. */
+export function indexPackageMaterialPaths(pkg: SourcePackage): PackageMaterialPathIndex {
+  const paths = new Set<string>();
+  const filenameCounts = new Map<string, number>();
+  for (const path of pkg.entries.keys()) {
+    if (sourcePathExtension(path) !== 'vmt') continue;
+    paths.add(path);
+    const filename = path.slice(path.lastIndexOf('/') + 1);
+    filenameCounts.set(filename, (filenameCounts.get(filename) ?? 0) + 1);
+  }
+  return {
+    paths,
+    uniqueFilenames: new Set(
+      [...filenameCounts].flatMap(([filename, count]) => count === 1 ? [filename] : []),
+    ),
+  };
+}
+
+/** Matches the exact override path or one unambiguous relocated VMT filename. */
+export function packageHasMaterialOverride(
+  index: PackageMaterialPathIndex,
+  materialOverrideId: string,
+): boolean {
+  let path: string;
+  try { path = `${sourceTextureIdentity(materialOverrideId.replace(/\.vmt$/i, ''))}.vmt`; }
+  catch { return false; }
+  if (index.paths.has(path)) return true;
+  return index.uniqueFilenames.has(path.slice(path.lastIndexOf('/') + 1));
+}
 
 /**
  * Where a package would place the material for this weapon, most specific

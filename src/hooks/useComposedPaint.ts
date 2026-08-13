@@ -11,6 +11,7 @@ import { isCustomKitId } from '../protodefs/types';
 const COMPOSE_BADGE_DELAY_MS = 250;
 const IDLE_TIMEOUT_MS = 2_000;
 const IDLE_FALLBACK_DELAY_MS = 250;
+const INTERACTIVE_COMPOSE_MAX_DIMENSION = 256;
 
 interface IdleDeadlineLike {
   didTimeout: boolean;
@@ -71,6 +72,12 @@ export function applyTextureOverrides(node: RecipeNode, textures: Record<string,
 interface UseComposedPaintOptions {
   /** Another editor-owned composition is currently supplying the visible map. */
   suspended?: boolean;
+  /** Prefer a fast, lower-resolution map while a continuous edit is active. */
+  interactive?: boolean;
+  /** Detached recipe used only while a continuous editor gesture is active. */
+  interactiveRecipe?: RecipeNode | null;
+  /** Stable value key for the detached interactive recipe. */
+  interactiveKey?: string;
   engineReady: boolean;
   data: DataSource | null;
   selectedKit: PaintkitEntry | null;
@@ -100,6 +107,9 @@ interface UseComposedPaintOptions {
 
 export function useComposedPaint({
   suspended = false,
+  interactive = false,
+  interactiveRecipe = null,
+  interactiveKey = '',
   engineReady,
   data,
   selectedKit,
@@ -148,12 +158,19 @@ export function useComposedPaint({
     if (!engineReady || !ds || !selectedKit || !state.weaponKey || loadedAssetKey !== selectedAssetKey) return;
     if (!selectedKit.weapons.includes(state.weaponKey)) return;
     const weapon = ds.manifest.weapons.find((entry) => entry.key === state.weaponKey);
-    const dimensions = {
+    const fullDimensions = {
       width: weapon?.compositeWidth ?? 1024,
       height: weapon?.compositeHeight ?? 1024,
     };
+    const interactiveScale = interactive
+      ? Math.min(1, INTERACTIVE_COMPOSE_MAX_DIMENSION / Math.max(fullDimensions.width, fullDimensions.height))
+      : 1;
+    const dimensions = {
+      width: Math.max(1, Math.round(fullDimensions.width * interactiveScale)),
+      height: Math.max(1, Math.round(fullDimensions.height * interactiveScale)),
+    };
 
-    const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|definition:${definitionGeneration}`;
+    const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|definition:${definitionGeneration}|interactive:${interactive ? interactiveKey : '0'}`;
     if (composeKey === lastComposeKeyRef.current) return;
 
     let cancelled = false;
@@ -176,7 +193,7 @@ export function useComposedPaint({
     };
 
     const likelyVariant = (): { team: ControlsState['team']; wear: number } | null => {
-      if (Object.keys(activeTextureOverrides).length || !allowSpeculativeCompose()) return null;
+      if (interactive || Object.keys(activeTextureOverrides).length || !allowSpeculativeCompose()) return null;
       // A team toggle preserves every other control and is the strongest next
       // interaction. Otherwise warm only the closest wear category.
       if (selectedKit.hasTeamTextures) {
@@ -249,7 +266,8 @@ export function useComposedPaint({
       }, COMPOSE_BADGE_DELAY_MS);
       const t0 = performance.now();
       try {
-        const sourceRecipe = await resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
+        const sourceRecipe = interactiveRecipe
+          ?? await resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
         if (cancelled) return;
         if (!sourceRecipe) {
           console.warn(`[warpaint-viewer] no recipe for ${composeKey}`);
@@ -262,7 +280,10 @@ export function useComposedPaint({
         if (!firstPaintLoggedRef.current) advanceBoot(70, 'Composing initial warpaint…');
         // TF2 selects the complete paint-kit recipe for the wear category; it
         // does not crossfade that result with Factory New.
-        const result = await comp.compose(recipe, state.seed, dimensions);
+        const result = interactive
+          ? await comp.composeLatest('transform-paint', recipe, state.seed, dimensions)
+          : await comp.compose(recipe, state.seed, dimensions);
+        if (!result) return;
         if (cancelled) {
           comp.releaseResult(result);
           return;
@@ -337,7 +358,7 @@ export function useComposedPaint({
       window.clearTimeout(badgeTimer);
       cancelPendingIdle?.();
     };
-  }, [suspended, engineReady, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
+  }, [suspended, interactive, interactiveRecipe, interactiveKey, engineReady, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
 
   return { composing, visibleDefinitionGeneration, resetComposeKey, disposeCache };
 }
