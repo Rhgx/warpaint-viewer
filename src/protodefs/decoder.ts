@@ -17,7 +17,7 @@ import { Root } from 'protobufjs/light';
 import type { INamespace, Type } from 'protobufjs/light';
 import type { RecipeNode } from '../compositor/types';
 import type {
-  ProtoDefIndex, ProtoDefJsonFragment, ProtoDefKit, ProtoDefOpenOptions, ProtoDefRecipe,
+  ProtoDefIndex, ProtoDefJsonFragment, ProtoDefKit, ProtoDefKitWeaponSlot, ProtoDefOpenOptions, ProtoDefRecipe,
   ProtoDefRecipeWithProvenance, ProtoDefValueProvenance, ProtoDefValueTrace,
 } from './types';
 import { parseContainer } from './container';
@@ -340,6 +340,19 @@ function manyEntryPath<T>(root: string[], source: Many<T>, index: number): strin
   return Array.isArray(source) ? [...root, String(index)] : root;
 }
 
+// Where one weapon slot's item message lives inside the definition message: a
+// named WEAPON_SLOTS field, or a position in the repeated `item` array.
+// Shared by the provenance tracer (traceResolvedValues) and the editor-facing
+// slot list (getKitWeaponSlots) so both report the exact same authored path.
+function slotSourcePath(paintkitDef: PaintkitDefinitionMsg, slotItem: ItemMsg): string[] {
+  for (const name of WEAPON_SLOTS) {
+    if (asItem(paintkitDef[name]) === slotItem) return ['definition', name];
+  }
+  const items = many(paintkitDef.item);
+  const index = items.indexOf(slotItem);
+  return index >= 0 ? manyEntryPath(['definition', 'item'], paintkitDef.item, index) : ['weaponSlot'];
+}
+
 function literalFieldValue(field: VarFieldMsg | undefined): string | undefined {
   return varFieldValue(field && { ...field, variable: undefined }, new Map());
 }
@@ -539,14 +552,7 @@ function traceResolvedValues(
   if (!operationMsg) return [];
 
   const dict = buildTracedVarDict(headerVariables, headerPath);
-  const slotPath = (() => {
-    for (const name of WEAPON_SLOTS) {
-      if (asItem(paintkitDef[name]) === slotItem) return ['definition', name];
-    }
-    const items = many(paintkitDef.item);
-    const index = items.indexOf(slotItem);
-    return index >= 0 ? manyEntryPath(['definition', 'item'], paintkitDef.item, index) : ['weaponSlot'];
-  })();
+  const slotPath = slotSourcePath(paintkitDef, slotItem);
   applyTracedFieldOverrides(dict, slotItem.data?.variable, [...slotPath, 'data', 'variable'], 'weapon');
   applyTracedDefOverrides(dict, itemDef.header?.variables, ['itemDefinition', String(itemDef.header.defindex), 'header', 'variables']);
   if (perWearDef) {
@@ -800,6 +806,23 @@ export function extractKitMessages(
   const operation = decoded.ctx.opByIdx.get(operationDefindex);
   if (!operation) return null;
   return { definition, operation: operation as unknown as Record<string, unknown> };
+}
+
+/**
+ * Every weapon slot on one kit's definition, resolved to the weapon it paints
+ * and its authored location (see slotSourcePath). Reuses the slot/weaponKey
+ * resolution collectRawSlots + resolveSlots already computed at open() time
+ * (kit.slots on DecodedContainer) rather than re-deriving it, so an editor
+ * that only received the exported definition/operation messages can still
+ * discover which weapon each authored slot paints.
+ */
+export function getKitWeaponSlots(decoded: DecodedContainer, defindex: number): ProtoDefKitWeaponSlot[] {
+  const kit = decoded.kitsByDefindex.get(defindex);
+  if (!kit) return [];
+  return kit.slots.map((slot) => ({
+    weaponKey: slot.weaponKey,
+    path: slotSourcePath(kit.def, slot.item),
+  }));
 }
 
 export function resolveKitRecipe(

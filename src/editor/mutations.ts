@@ -1,5 +1,8 @@
 import type { ProtoDefKitMessages } from '../protodefs/types';
-import { many, type Many, type OperationNodeMsg, type OperationStageMsg, type SelectStageMsg, type StickerStageMsg, type VarDefMsg, type VarFieldMsg } from '../protodefs/messages';
+import {
+  asItem, many, type ItemDataMsg, type ItemMsg, type Many, type OperationNodeMsg, type OperationStageMsg,
+  type SelectStageMsg, type StickerStageMsg, type TextureStageMsg, type VarDefMsg, type VarFieldMsg,
+} from '../protodefs/messages';
 
 /** A refused edit is preferable to silently changing a different authored scope. */
 export class EditorMutationAmbiguityError extends Error {
@@ -750,4 +753,226 @@ export function moveStickerStages(
     replaceMany(location.owner, 'operation_node', location.prior, nodes);
   }
   return next;
+}
+
+export type TextureTransformRangeField = 'rotation' | 'scale_uv' | 'translate_u' | 'translate_v';
+export type TextureTransformFlipField = 'flip_u' | 'flip_v';
+
+export interface TextureTransformRangeValue {
+  mode: 'fixed' | 'varies';
+  min: number;
+  max: number;
+}
+
+export interface TextureTransformTarget {
+  /** Exact authored path from the operation root to this stage's texture_lookup object. */
+  stagePath: readonly string[];
+  /** Per-field exact weapon-local override, when one already exists for that field's variable. */
+  fieldSourcePaths?: Partial<Record<TextureTransformRangeField | TextureTransformFlipField, readonly string[]>>;
+  /** Weapon-local variable collection that can receive a brand new override, when unambiguous. */
+  weaponOverridePath?: readonly string[];
+}
+
+function textureTransformStage(operation: Record<string, unknown>, target: TextureTransformTarget): TextureStageMsg {
+  const path = target.stagePath;
+  if (path[0] !== 'operation' || path.at(-1) !== 'texture_lookup' || path.at(-2) !== 'stage') {
+    throw new EditorMutationAmbiguityError('This texture transform target does not identify an editable texture_lookup stage.');
+  }
+  let cursor: unknown = operation;
+  for (const part of path.slice(1)) {
+    if (Array.isArray(cursor)) {
+      const index = Number(part);
+      cursor = Number.isInteger(index) ? cursor[index] : undefined;
+    } else if (cursor && typeof cursor === 'object') {
+      cursor = (cursor as Record<string, unknown>)[part];
+    } else {
+      cursor = undefined;
+    }
+  }
+  if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) {
+    throw new EditorMutationAmbiguityError('This texture transform stage no longer exists in this operation.');
+  }
+  return cursor as TextureStageMsg;
+}
+
+function formatTransformNumber(value: number): string {
+  if (!Number.isFinite(value)) throw new TypeError('Texture transform values must be finite numbers.');
+  // Round away binary floating-point noise from repeated slider edits, rather
+  // than authoring an ever-growing decimal tail into the proto string.
+  return String(Math.round(value * 1e6) / 1e6);
+}
+
+function formatTransformRange(value: TextureTransformRangeValue): string {
+  const min = formatTransformNumber(value.min);
+  if (value.mode === 'fixed') return min;
+  return `${min} ${formatTransformNumber(value.max)}`;
+}
+
+/**
+ * Writes one range field (rotation, scale_uv, translate_u or translate_v) on
+ * an exact texture_lookup stage, preserving whether the authored value is a
+ * single Fixed number or a two-number Varies range. Follows the same
+ * provenance rules as the select/sticker mutations above: an existing
+ * weapon-local source wins, then a fresh weapon-local override (kept
+ * inheritable), then the shared header default.
+ */
+export function setTextureTransformRange(
+  messages: ProtoDefKitMessages,
+  target: TextureTransformTarget,
+  field: TextureTransformRangeField,
+  value: TextureTransformRangeValue,
+): ProtoDefKitMessages {
+  if (!Number.isFinite(value.min) || !Number.isFinite(value.max)) {
+    throw new TypeError('Texture transform values must be finite numbers.');
+  }
+  const next = cloneMessages(messages);
+  const stage = textureTransformStage(next.operation, target);
+  const existing = stage[field] ?? {};
+  const raw = formatTransformRange(value);
+  const sourcePath = target.fieldSourcePaths?.[field];
+  const written = setSelectFieldValue(next, existing, raw, false, sourcePath, !sourcePath ? target.weaponOverridePath : undefined);
+  stage[field] = written;
+  return next;
+}
+
+/**
+ * Promotes one effective range to the shared header value and removes copies
+ * of that same variable from every weapon slot. The whole promotion is one
+ * immutable mutation so callers can record it as one undoable edit.
+ */
+export function pushTextureTransformRangeToAllWeapons(
+  messages: ProtoDefKitMessages,
+  target: TextureTransformTarget,
+  field: TextureTransformRangeField,
+  value: TextureTransformRangeValue,
+  weaponOverridePaths: readonly (readonly string[])[],
+): ProtoDefKitMessages {
+  const next = setTextureTransformRange(messages, { stagePath: target.stagePath }, field, value);
+  const stage = textureTransformStage(next.operation, target);
+  const variableName = stage[field]?.variable;
+  if (!variableName) return next;
+
+  for (const path of weaponOverridePaths) {
+    const [root, ...parts] = path;
+    if (root !== 'definition' || parts.length === 0) continue;
+    let owner: Record<string, unknown> = next.definition;
+    let valid = true;
+    for (const part of parts.slice(0, -1)) {
+      const child = owner[part];
+      if (!child || typeof child !== 'object' || Array.isArray(child)) {
+        valid = false;
+        break;
+      }
+      owner = child as Record<string, unknown>;
+    }
+    if (!valid) continue;
+    const key = parts.at(-1)!;
+    const prior = owner[key] as Many<VarFieldMsg> | undefined;
+    const fields = many(prior);
+    const filtered = fields.filter((entry) => entry.variable !== variableName);
+    if (filtered.length !== fields.length) replaceMany(owner, key, prior, filtered);
+  }
+  return next;
+}
+
+/** Writes one mirroring flip field ("a seeded flip is allowed", not "is flipped"). */
+export function setTextureTransformFlip(
+  messages: ProtoDefKitMessages,
+  target: TextureTransformTarget,
+  axis: 'u' | 'v',
+  allowed: boolean,
+): ProtoDefKitMessages {
+  const field: TextureTransformFlipField = axis === 'u' ? 'flip_u' : 'flip_v';
+  const next = cloneMessages(messages);
+  const stage = textureTransformStage(next.operation, target);
+  const existing = stage[field] ?? {};
+  const raw = allowed ? 'true' : 'false';
+  const sourcePath = target.fieldSourcePaths?.[field];
+  const written = setSelectFieldValue(next, existing, raw, false, sourcePath, !sourcePath ? target.weaponOverridePath : undefined);
+  stage[field] = written;
+  return next;
+}
+
+export interface WeaponMaterialTarget {
+  /** The weapon this slot paints, e.g. "rocketlauncher". For display/lookup only. */
+  weaponKey: string;
+  /**
+   * The slot's exact authored location inside the definition message:
+   * ['definition', <slotName>] for a named field, or
+   * ['definition', 'item', <index>] for a repeated entry. From
+   * getKitWeaponSlots (src/protodefs/decoder.ts).
+   */
+  path: readonly string[];
+}
+
+export interface WeaponMaterialUpdate {
+  target: WeaponMaterialTarget;
+  overridePath: string | null;
+}
+
+/** Locates the item message a weapon-slot path names, so its data can be read or replaced. */
+function weaponSlotItem(
+  definition: Record<string, unknown>,
+  path: readonly string[],
+): { owner: Record<string, unknown>; key: string; item: ItemMsg } | null {
+  if (path[0] !== 'definition' || path.length < 2) return null;
+  let cursor: unknown = definition;
+  const parts = path.slice(1);
+  for (const part of parts.slice(0, -1)) {
+    if (Array.isArray(cursor)) {
+      const index = Number(part);
+      cursor = Number.isInteger(index) ? cursor[index] : undefined;
+    } else if (cursor && typeof cursor === 'object') {
+      cursor = (cursor as Record<string, unknown>)[part];
+    } else {
+      return null;
+    }
+  }
+  if (!cursor || typeof cursor !== 'object') return null;
+  const key = parts.at(-1)!;
+  const owner = cursor as Record<string, unknown>;
+  const item = asItem(owner[key]);
+  return item ? { owner, key, item } : null;
+}
+
+/**
+ * Writes or clears one weapon's item_data material_override. Unlike the
+ * transform/select fields, this is a plain string on the weapon's own slot
+ * entry rather than a shared variable, so there is no header/weapon scope
+ * choice to make: it always writes the exact authored slot named by the
+ * target's path, rather than guessing a named definition field.
+ */
+export function setWeaponMaterialOverride(
+  messages: ProtoDefKitMessages,
+  target: WeaponMaterialTarget,
+  overridePath: string | null,
+): ProtoDefKitMessages {
+  return setWeaponMaterialOverrides(messages, [{ target, overridePath }]);
+}
+
+/** Writes several per-weapon overrides through one cloned definition snapshot. */
+export function setWeaponMaterialOverrides(
+  messages: ProtoDefKitMessages,
+  updates: readonly WeaponMaterialUpdate[],
+): ProtoDefKitMessages {
+  if (updates.length === 0) return messages;
+  const next = cloneMessages(messages);
+  const definition = next.definition as Record<string, unknown>;
+  let changed = false;
+  for (const { target, overridePath } of updates) {
+    const located = weaponSlotItem(definition, target.path);
+    if (!located) {
+      throw new EditorMutationAmbiguityError(`Weapon "${target.weaponKey}" is not an editable slot on this definition.`);
+    }
+    const { owner, key, item } = located;
+    const trimmed = overridePath?.trim() || null;
+    const current = item.data?.material_override?.trim() || null;
+    if (current === trimmed) continue;
+    const data: ItemDataMsg = { ...item.data };
+    if (trimmed) data.material_override = trimmed;
+    else delete data.material_override;
+    owner[key] = { ...item, data };
+    changed = true;
+  }
+  return changed ? next : messages;
 }

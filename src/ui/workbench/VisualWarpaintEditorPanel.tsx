@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Eye, Trash2 } from 'lucide-react';
 import { formatGroupNameForDisplay } from '../../editor/groupNames';
 import './VisualWarpaintEditorPanel.css';
@@ -42,6 +43,12 @@ export interface VisualWarpaintEditorPanelProps {
   readonly layerSwatchColors?: readonly string[];
   /** Small source-texture previews for the layer list in the edit context column. */
   readonly layerThumbnails?: readonly (string | null)[];
+  /**
+   * The Parts/Transform switch, supplied by the workbench. It sits in this
+   * head so the sub-views share one header row instead of stacking a second
+   * bar above the panel.
+   */
+  readonly headerSlot?: ReactNode;
 }
 
 export function VisualWarpaintEditorPanel({
@@ -60,6 +67,7 @@ export function VisualWarpaintEditorPanel({
   activeLayerLabel,
   groupLayerIndex,
   layerColors,
+  headerSlot,
 }: VisualWarpaintEditorPanelProps) {
   const [confirmClear, setConfirmClear] = useState(false);
   const clearButtonRef = useRef<HTMLButtonElement>(null);
@@ -153,6 +161,7 @@ export function VisualWarpaintEditorPanel({
       <div className="visual-warpaint-editor-head">
         <span className="visual-warpaint-editor-head-title">Parts in {layerLabel}</span>
         <span className="visual-warpaint-editor-head-count">{areaCount} of {availableParts.length}</span>
+        {headerSlot}
         <div className="visual-warpaint-editor-head-spacer" />
         <button
           type="button"

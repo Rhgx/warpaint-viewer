@@ -67,6 +67,18 @@ interface EvaluatedInput {
   target: THREE.WebGLRenderTarget | null;
 }
 
+interface LatestComposeRequest {
+  readonly recipe: ResolvedNode;
+  readonly dimensions?: ComposeDimensions;
+  readonly resolve: (result: ComposeResult | null) => void;
+  readonly reject: (cause: unknown) => void;
+}
+
+interface LatestComposeChannel {
+  running: boolean;
+  pending: LatestComposeRequest | null;
+}
+
 // Reimplements TF2's paintkit compositor on the GPU via three.js render targets,
 // sharing the viewer's WebGL context. Evaluates a resolved stage tree bottom-up
 // into ping-ponged 8-bit sRGB render targets, with shader math in linear space.
@@ -87,6 +99,7 @@ export class Compositor {
   // The compositor owns one shader/uniform set and render-target pool. Serializing
   // requests prevents rapid wear/seed changes from interleaving GPU passes.
   private composeQueue: Promise<void> = Promise.resolve();
+  private latestComposeChannels = new Map<string, LatestComposeChannel>();
 
   constructor(resolver: TextureResolver, opts: CompositorOptions & { renderer?: THREE.WebGLRenderer } = {}) {
     this.width = this.height = opts.size ?? 1024;
@@ -448,6 +461,57 @@ export class Compositor {
     const task = this.composeQueue.then(() => this.composeResolvedNow(recipe, dimensions));
     this.composeQueue = task.then(() => undefined, () => undefined);
     return task;
+  }
+
+  /**
+   * Keep at most one pending composition for a continuous interaction. If the
+   * pointer moves again while the GPU is busy, only the newest recipe survives.
+   */
+  composeLatest(
+    channel: string,
+    recipe: RecipeNode,
+    seed: PaintSeed,
+    dimensions?: ComposeDimensions,
+  ): Promise<ComposeResult | null> {
+    return this.composeResolvedLatest(channel, resolveRecipe(recipe, seed), dimensions);
+  }
+
+  composeResolvedLatest(
+    channel: string,
+    recipe: ResolvedNode,
+    dimensions?: ComposeDimensions,
+  ): Promise<ComposeResult | null> {
+    let state = this.latestComposeChannels.get(channel);
+    if (!state) {
+      state = { running: false, pending: null };
+      this.latestComposeChannels.set(channel, state);
+    }
+    return new Promise<ComposeResult | null>((resolve, reject) => {
+      state!.pending?.resolve(null);
+      state!.pending = { recipe, dimensions, resolve, reject };
+      if (!state!.running) void this.runLatestComposeChannel(channel, state!);
+    });
+  }
+
+  private async runLatestComposeChannel(channel: string, state: LatestComposeChannel): Promise<void> {
+    state.running = true;
+    while (state.pending) {
+      const request = state.pending;
+      state.pending = null;
+      try {
+        const result = await this.composeResolved(request.recipe, request.dimensions);
+        if (state.pending) {
+          this.releaseResult(result);
+          request.resolve(null);
+        } else {
+          request.resolve(result);
+        }
+      } catch (cause) {
+        request.reject(cause);
+      }
+    }
+    state.running = false;
+    if (!state.pending) this.latestComposeChannels.delete(channel);
   }
 
   /**

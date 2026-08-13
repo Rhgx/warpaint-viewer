@@ -3,6 +3,7 @@ import type { Manifest, Team } from '../data/types';
 import type { RecipeNode } from '../compositor/types';
 import type {
   ProtoDefKitMessages,
+  ProtoDefKitWeaponSlot,
   ProtoDefRecipeWithProvenance,
   ProtoDefSource,
 } from '../protodefs/types';
@@ -93,6 +94,11 @@ export function useStockDefinitions(manifest: Manifest | null, getAssetUrl: (rel
     return (await openSource()).exportKit(kitId);
   }, [openSource]);
 
+  const exportKitWeaponSlots = useCallback(async (kitId: number): Promise<ProtoDefKitWeaponSlot[] | null> => {
+    const source = editedRef.current?.kitId === kitId ? editedRef.current.source : await openSource();
+    return source.exportKitWeaponSlots(kitId);
+  }, [openSource]);
+
   const getRecipe = useCallback(async (
     kitId: number,
     weaponKey: string,
@@ -156,6 +162,7 @@ export function useStockDefinitions(manifest: Manifest | null, getAssetUrl: (rel
   return {
     editGeneration,
     exportKit,
+    exportKitWeaponSlots,
     getRecipe,
     getRecipeWithProvenance,
     previewKitMessages,

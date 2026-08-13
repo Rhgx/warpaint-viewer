@@ -5,8 +5,8 @@
 
 import type { DecodedContainer } from './decoder';
 import type {
-  ProtoDefIndex, ProtoDefJsonFragment, ProtoDefKitMessages, ProtoDefOpenOptions, ProtoDefRecipe,
-  ProtoDefRecipeWithProvenance, ProtoDefSource,
+  ProtoDefIndex, ProtoDefJsonFragment, ProtoDefKitMessages, ProtoDefKitWeaponSlot, ProtoDefOpenOptions,
+  ProtoDefRecipe, ProtoDefRecipeWithProvenance, ProtoDefSource,
 } from './types';
 
 type Team = 'red' | 'blu';
@@ -76,6 +76,12 @@ class InProcessSource {
     if (!this.decoded) return null;
     const { extractKitMessages } = await import('./decoder');
     return extractKitMessages(this.decoded, defindex);
+  }
+
+  async exportKitWeaponSlots(defindex: number): Promise<ProtoDefKitWeaponSlot[] | null> {
+    if (!this.decoded) return null;
+    const { getKitWeaponSlots } = await import('./decoder');
+    return getKitWeaponSlots(this.decoded, defindex);
   }
 
   dispose(): void {
@@ -211,6 +217,16 @@ export class ProtoDefClient implements ProtoDefSource {
       return (await this.post({ kind: 'exportKit', defindex })) as ProtoDefKitMessages | null;
     } catch {
       return (await this.ensureFallback()).exportKit(defindex);
+    }
+  }
+
+  async exportKitWeaponSlots(defindex: number): Promise<ProtoDefKitWeaponSlot[] | null> {
+    if (this.fallback) return this.fallback.exportKitWeaponSlots(defindex);
+    if (!this.worker) return (await this.ensureFallback()).exportKitWeaponSlots(defindex);
+    try {
+      return (await this.post({ kind: 'exportKitWeaponSlots', defindex })) as ProtoDefKitWeaponSlot[] | null;
+    } catch {
+      return (await this.ensureFallback()).exportKitWeaponSlots(defindex);
     }
   }
 
