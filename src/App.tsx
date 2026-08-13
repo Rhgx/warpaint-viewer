@@ -466,7 +466,16 @@ function MainApp() {
   const [stickerAspectLocked, setStickerAspectLocked] = useState(true);
   const [activeStickerTarget, setActiveStickerTarget] = useState(0);
   const [pendingAddedStickerRef, setPendingAddedStickerRef] = useState<string | null>(null);
-  const [stickerRecipe, setStickerRecipe] = useState<ProtoDefRecipeWithProvenance | null>(null);
+  const stickerRecipeKey = editableKitId !== null && state.weaponKey
+    ? `${editableKitId}|${state.weaponKey}|${state.team}|${state.wearIndex}`
+    : '';
+  const [loadedStickerRecipe, setLoadedStickerRecipe] = useState<{
+    readonly key: string;
+    readonly recipe: ProtoDefRecipeWithProvenance | null;
+  } | null>(null);
+  const stickerRecipe = loadedStickerRecipe?.key === stickerRecipeKey
+    ? loadedStickerRecipe.recipe
+    : null;
   const [stickerTargetThumbnails, setStickerTargetThumbnails] = useState<Record<string, string>>({});
   const [stickerTargetArtwork, setStickerTargetArtwork] = useState<Record<string, string>>({});
   const [stickerSpecularUrl, setStickerSpecularUrl] = useState<string | null>(null);
@@ -862,7 +871,7 @@ function MainApp() {
 
   useEffect(() => {
     if (editableKitId === null || !selectedKit || !state.weaponKey) {
-      setStickerRecipe(null);
+      setLoadedStickerRecipe(null);
       return;
     }
     let cancelled = false;
@@ -870,7 +879,7 @@ function MainApp() {
       ? getImportedRecipeWithProvenance
       : getStockRecipeWithProvenance;
     void resolver(editableKitId, state.weaponKey, state.team, state.wearIndex).then((resolved) => {
-      if (!cancelled) setStickerRecipe(resolved);
+      if (!cancelled) setLoadedStickerRecipe({ key: stickerRecipeKey, recipe: resolved });
     });
     return () => { cancelled = true; };
   }, [
@@ -882,6 +891,7 @@ function MainApp() {
     editableKitId,
     editorCurrent,
     selectedKit,
+    stickerRecipeKey,
     state.team,
     state.weaponKey,
     state.wearIndex,
@@ -1728,11 +1738,13 @@ function MainApp() {
   ]);
 
   const { composing, visibleDefinitionGeneration, resetComposeKey, disposeCache } = useComposedPaint({
-    suspended: stickerPlacementActive && selectedStickerUsesComposedArtwork
-      || (paintSubView === 'transform' && transformIsolateLayer),
-    interactive: paintSubView === 'transform' && transformDraft !== null,
-    interactiveRecipe: transformDraft ? transformPreviewRecipe : null,
-    interactiveKey: transformDraft
+    suspended: stickerPlacementActive && selectedStickerUsesComposedArtwork,
+    // Isolation owns the live layer preview. Keep the normal compositor idle
+    // during its drag, but available for weapon and committed recipe changes so
+    // the translucent context always belongs to the current weapon.
+    interactive: paintSubView === 'transform' && !transformIsolateLayer && transformDraft !== null,
+    interactiveRecipe: !transformIsolateLayer && transformDraft ? transformPreviewRecipe : null,
+    interactiveKey: !transformIsolateLayer && transformDraft
       ? `${transformDraft.key}:${transformDraft.value.mode}:${transformDraft.value.min}:${transformDraft.value.max}`
       : '',
     engineReady,
