@@ -16,6 +16,7 @@ import {
   PackageOpen,
   PencilRuler,
   Plus,
+  RefreshCw,
   RotateCcw,
   Redo2,
   ScrollText,
@@ -44,6 +45,14 @@ import {
   StickerPlacementEditor,
   type StickerPlacementEditorProps,
 } from './StickerPlacementEditor';
+import {
+  TextureTransformPanel,
+  type TextureTransformPanelProps,
+} from './TextureTransformPanel';
+import {
+  MaterialOverridesPanel,
+  type MaterialOverridesPanelProps,
+} from './MaterialOverridesPanel';
 import './CustomWarpaintWorkbench.css';
 import './SourcePackagePanel.css';
 import './DefinitionsPanel.css';
@@ -107,6 +116,15 @@ export function CustomWarpaintWorkbench({
       onRemoveTarget: () => void;
       onMoveTarget: (direction: -1 | 1) => void;
     };
+    /** Gates the Materials mode button; absent means nothing to override yet. */
+    materials?: MaterialOverridesPanelProps;
+    /** Gates the Parts/Transform sub-view switch for paint mode. */
+    transform?: TextureTransformPanelProps;
+    /** Ignored while `transform` is absent, so today's paint view never changes shape. */
+    paintSubView?: 'parts' | 'transform';
+    onPaintSubViewChange?: (view: 'parts' | 'transform') => void;
+    /** Per-layer marker, aligned with `selectors`, for a non-default transform range. */
+    layerHasTransformEdits?: readonly boolean[];
     dirty: boolean;
     canDownload: boolean;
     exporting: boolean;
@@ -154,6 +172,10 @@ export function CustomWarpaintWorkbench({
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmRevert, setConfirmRevert] = useState(false);
+  // Materials is a third top-level view alongside Paint/Stickers, but it does
+  // not extend `mode` (paint vs. sticker stays the app's concern) so the
+  // gating prop can be added without touching that existing contract.
+  const [materialsActive, setMaterialsActive] = useState(false);
   const [editorDownloadFormat, setEditorDownloadFormat] = useState<EditorDownloadFormat>('zip');
   const [resizing, setResizing] = useState(false);
   const [dropping, setDropping] = useState(false);
@@ -207,6 +229,13 @@ export function CustomWarpaintWorkbench({
   }, [confirmRevert]);
 
   useEffect(() => setConfirmRevert(false), [editor?.dirty, editor?.activeSelectorId]);
+
+  // A paint or weapon change remounts this component (see the `key` prop at
+  // the call site), but the materials source can still disappear on its own,
+  // so guard against being left on a view with nothing left to show.
+  useEffect(() => {
+    if (!editor?.materials) setMaterialsActive(false);
+  }, [editor?.materials]);
 
   useEffect(() => {
     if (!dropHint) return;
@@ -595,36 +624,52 @@ export function CustomWarpaintWorkbench({
           {editor ? (
             <div className="custom-workbench-edit-body">
               <div className="custom-workbench-edit-context">
-                {editor.sticker && (
+                {(editor.sticker || editor.materials) && (
                   <div className="custom-workbench-edit-mode" role="group" aria-label="Edit tool">
                     <button
                       type="button"
-                      aria-pressed={editor.mode === 'paint'}
-                      onClick={() => editor.onModeChange('paint')}
+                      aria-pressed={!materialsActive && editor.mode === 'paint'}
+                      onClick={() => { setMaterialsActive(false); editor.onModeChange('paint'); }}
                     >
                       Paint
                     </button>
-                    <button
-                      type="button"
-                      aria-pressed={editor.mode === 'sticker'}
-                      onClick={() => editor.onModeChange('sticker')}
-                    >
-                      Stickers
-                    </button>
+                    {editor.sticker && (
+                      <button
+                        type="button"
+                        aria-pressed={!materialsActive && editor.mode === 'sticker'}
+                        onClick={() => { setMaterialsActive(false); editor.onModeChange('sticker'); }}
+                      >
+                        Stickers
+                      </button>
+                    )}
+                    {editor.materials && (
+                      <button
+                        type="button"
+                        aria-pressed={materialsActive}
+                        onClick={() => setMaterialsActive(true)}
+                      >
+                        Materials
+                      </button>
+                    )}
                   </div>
                 )}
                 <div
                   className="custom-workbench-edit-list"
                   role="listbox"
-                  aria-label={editor.mode === 'paint' ? 'Paint layers' : 'Stickers'}
+                  aria-label={materialsActive ? 'Material overrides' : (editor.mode === 'paint' ? 'Paint layers' : 'Stickers')}
                 >
-                  {editor.mode === 'paint' ? editor.selectors.map((selector, index) => {
+                  {materialsActive ? (
+                    <p className="custom-workbench-edit-materials-note">
+                      Material overrides apply to the whole paint, so this list is not used in Materials.
+                    </p>
+                  ) : editor.mode === 'paint' ? editor.selectors.map((selector, index) => {
                     const active = editor.activeSelectorId === selector.id;
                     const swatchColor = editor.layerSwatchColors?.[index] ?? editor.layerColors?.[index];
                     const thumbnail = editor.layerThumbnails?.[index];
                     const count = editor.groupLayerIndex
                       ? Object.values(editor.groupLayerIndex).filter((layerIndex) => layerIndex === index).length
                       : 0;
+                    const hasTransformEdits = editor.layerHasTransformEdits?.[index] ?? false;
                     return (
                       <button
                         type="button"
@@ -642,6 +687,11 @@ export function CustomWarpaintWorkbench({
                           />
                         </span>
                         <span className="custom-workbench-edit-layer-label">{selector.label}</span>
+                        {hasTransformEdits && (
+                          <span className="custom-workbench-edit-layer-vary" title="This layer has non-default transform ranges">
+                            <RefreshCw size={11} aria-hidden="true" />
+                          </span>
+                        )}
                         <span className="custom-workbench-edit-layer-count">{count}</span>
                       </button>
                     );
@@ -666,7 +716,7 @@ export function CustomWarpaintWorkbench({
                     );
                   })}
                 </div>
-                {editor.mode === 'sticker' && editor.sticker && (() => {
+                {!materialsActive && editor.mode === 'sticker' && editor.sticker && (() => {
                   const active = editor.sticker.targets.find((target) => target.id === editor.sticker?.activeTargetId);
                   return (
                     <div className="custom-workbench-edit-sticker-actions" role="toolbar" aria-label="Sticker actions">
@@ -695,7 +745,7 @@ export function CustomWarpaintWorkbench({
                     </div>
                   );
                 })()}
-                {editor.mode === 'sticker' && editor.sticker && stickerPickerOpen && (
+                {!materialsActive && editor.mode === 'sticker' && editor.sticker && stickerPickerOpen && (
                   <div className="custom-workbench-sticker-picker" role="dialog" aria-label="Add sticker">
                     <div className="custom-workbench-sticker-picker-head">
                       <strong>Add sticker</strong>
@@ -842,7 +892,9 @@ export function CustomWarpaintWorkbench({
               </div>
               <div className="custom-workbench-edit-content">
                 {editor.error && <div className="visual-warpaint-editor-error" role="alert">{editor.error}</div>}
-                {editor.mode === 'sticker' && editor.sticker
+                {materialsActive && editor.materials ? (
+                  <MaterialOverridesPanel {...editor.materials} />
+                ) : editor.mode === 'sticker' && editor.sticker
                   ? (() => {
                     const sticker = editor.sticker;
                     const active = sticker.targets.find((target) => target.id === sticker.activeTargetId);
@@ -854,7 +906,33 @@ export function CustomWarpaintWorkbench({
                       />
                     );
                   })()
-                  : <VisualWarpaintEditorPanel {...editor} />}
+                  : (() => {
+                    // One switch instance, handed to whichever sub-view is
+                    // showing, so both keep a single header row and the
+                    // control never moves between them.
+                    const subView = editor.paintSubView ?? 'parts';
+                    const subViewSwitch = editor.transform ? (
+                      <div className="custom-workbench-paint-subview" role="group" aria-label="Layer view">
+                        <button
+                          type="button"
+                          aria-pressed={subView === 'parts'}
+                          onClick={() => editor.onPaintSubViewChange?.('parts')}
+                        >
+                          Parts
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={subView === 'transform'}
+                          onClick={() => editor.onPaintSubViewChange?.('transform')}
+                        >
+                          Transform
+                        </button>
+                      </div>
+                    ) : undefined;
+                    return editor.transform && subView === 'transform'
+                      ? <TextureTransformPanel {...editor.transform} headerSlot={subViewSwitch} />
+                      : <VisualWarpaintEditorPanel {...editor} headerSlot={subViewSwitch} />;
+                  })()}
               </div>
             </div>
           ) : (

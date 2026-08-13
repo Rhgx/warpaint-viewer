@@ -1,0 +1,183 @@
+.texture-transform-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.texture-transform-panel-head {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  min-height: 42px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.texture-transform-panel-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.texture-transform-panel-title small {
+  margin-left: 6px;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 500;
+}
+.texture-transform-panel-head-spacer { flex: 1; }
+
+.texture-transform-panel-scope-select {
+  min-height: 28px;
+  max-width: 220px;
+  padding: 0 24px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.texture-transform-panel-scope-select:disabled { cursor: default; opacity: 0.5; }
+
+.texture-transform-panel-actions { position: relative; flex: none; }
+.texture-transform-panel-actions summary {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text-dim);
+  cursor: pointer;
+  list-style: none;
+}
+.texture-transform-panel-actions summary::-webkit-details-marker { display: none; }
+.texture-transform-panel-actions summary:hover,
+.texture-transform-panel-actions[open] summary { border-color: var(--border-strong); color: var(--text); }
+.texture-transform-panel-actions-menu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 5px);
+  right: 0;
+  display: grid;
+  width: 190px;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 32%);
+}
+.texture-transform-panel-actions-menu button {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.texture-transform-panel-actions-menu button:hover:not(:disabled) { background: var(--panel-2); }
+.texture-transform-panel-actions-menu button[aria-checked='true'] { color: var(--accent); }
+.texture-transform-panel-actions-menu button:disabled { cursor: default; opacity: 0.45; }
+
+.texture-transform-panel-fields {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--panel);
+}
+.texture-transform-panel-field { display: flex; flex: none; flex-direction: column; }
+
+.texture-transform-panel-mirror-row {
+  display: flex;
+  min-height: 40px;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 12px 6px 29px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 66%, transparent);
+}
+.texture-transform-panel-mirror-row > span {
+  margin-right: auto;
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+.texture-transform-panel-check {
+  position: relative;
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.texture-transform-panel-check input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+.texture-transform-panel-check-box {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--panel-2);
+  color: transparent;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+.texture-transform-panel-check:hover:not(:has(input:disabled)) .texture-transform-panel-check-box {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+}
+.texture-transform-panel-check input:checked + .texture-transform-panel-check-box {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.texture-transform-panel-check input:focus-visible + .texture-transform-panel-check-box {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.texture-transform-panel-check:has(input:checked) { color: var(--text); }
+.texture-transform-panel-check:has(input:disabled) { cursor: default; opacity: 0.5; }
+
+.texture-transform-panel-scope-select:focus-visible,
+.texture-transform-panel-actions summary:focus-visible,
+.texture-transform-panel-actions-menu button:focus-visible,
+.texture-transform-panel-check input:focus-visible { outline: 0; }
+
+@media (max-width: 900px) {
+  .texture-transform-panel-title small { display: none; }
+  .texture-transform-panel-scope-select { max-width: 155px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .texture-transform-panel-actions-menu button { transition: none; }
+}

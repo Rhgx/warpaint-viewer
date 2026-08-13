@@ -651,6 +651,25 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Findable without opening every layer in turn: a layer with a non-default
+   transform range carries this marker beside its name in the list. */
+.custom-workbench-edit-layer-vary {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  place-items: center;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.custom-workbench-edit-materials-note {
+  margin: 10px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+
 .custom-workbench-edit-sticker-thumb {
   display: block;
   overflow: hidden;
@@ -1038,6 +1057,33 @@
   overflow: hidden;
 }
 
+/* Rendered into whichever sub-view is showing, through its headerSlot, so the
+   two views share one header row and the switch never shifts position. Absent
+   entirely when there is no transform view to switch to, leaving the paint
+   panel exactly as it was before. */
+.custom-workbench-paint-subview {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.custom-workbench-paint-subview button {
+  min-height: 24px;
+  padding: 0 12px;
+  border: 0;
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.custom-workbench-paint-subview button + button { border-left: 1px solid var(--border); }
+.custom-workbench-paint-subview button:hover { background: var(--panel-2); color: var(--text); }
+.custom-workbench-paint-subview button[aria-pressed='true'] { background: var(--accent-soft); color: var(--text); }
+.custom-workbench-paint-subview button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
 @container (max-width: 900px) {
   .custom-workbench-edit-body {
     grid-template-columns: none;
@@ -1103,5 +1149,6 @@
   .custom-workbench-edit-sticker-row,
   .custom-workbench-edit-icon-btn,
   .custom-workbench-edit-revert,
-  .custom-workbench-edit-download { transition: none; }
+  .custom-workbench-edit-download,
+  .custom-workbench-paint-subview button { transition: none; }
 }
