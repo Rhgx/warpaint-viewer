@@ -86,7 +86,7 @@ export interface GroupLayerOverlayMap {
 export const GROUP_LAYER_OVERLAY_OPACITY = 0.16;
 
 /** Opacity of the normal paint while a transform layer is isolated. */
-export const TRANSFORM_ISOLATION_CONTEXT_OPACITY = 0.32;
+export const TRANSFORM_ISOLATION_CONTEXT_OPACITY = 0.2;
 
 /**
  * Distinct but muted default tints for editor layers. The UI may use these for

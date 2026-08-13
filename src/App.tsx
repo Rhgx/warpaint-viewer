@@ -202,8 +202,8 @@ function collectRecipeLayerNodes(node: RecipeNode, output: (RecipeNode | undefin
 
 function collectResolvedLayerTextureNodes(
   node: ResolvedNode,
-  output: (Extract<ResolvedNode, { type: 'texture_lookup' }> | undefined)[] = [],
-): (Extract<ResolvedNode, { type: 'texture_lookup' }> | undefined)[] {
+  output: (Extract<ResolvedNode, { type: 'texture_lookup' | 'combine_multiply' | 'combine_add' | 'combine_lerp' }> | undefined)[] = [],
+): (Extract<ResolvedNode, { type: 'texture_lookup' | 'combine_multiply' | 'combine_add' | 'combine_lerp' }> | undefined)[] {
   if (node.type === 'select') output.push(undefined);
   if ('nodes' in node) node.nodes.forEach((child, index) => {
     if (child.type !== 'select') {
@@ -211,7 +211,12 @@ function collectResolvedLayerTextureNodes(
       return;
     }
     const preceding = index > 0 ? node.nodes[index - 1] : undefined;
-    output.push(preceding?.type === 'texture_lookup' ? preceding : undefined);
+    output.push(preceding && (
+      preceding.type === 'texture_lookup'
+      || preceding.type === 'combine_multiply'
+      || preceding.type === 'combine_add'
+      || preceding.type === 'combine_lerp'
+    ) ? preceding : undefined);
   });
   return output;
 }

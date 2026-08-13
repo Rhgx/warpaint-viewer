@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
+import { resolveRecipe } from '../../../src/compositor/resolve';
+import type { RecipeNode } from '../../../src/compositor/types';
 import { SnapshotHistory } from '../../../src/editor/history';
 import {
   pushTextureTransformRangeToAllWeapons,
@@ -140,4 +142,55 @@ test('texture transform scope, normalization, history and JSON round trip', () =
   const roundTrip = { definition: literal.definition, operation: importedOperation.value };
   assert.deepEqual(textureStage(roundTrip).translate_u, { string: '0.25' });
   assert.equal(headerVariable(roundTrip).value, '0 360');
+});
+
+test('combine stages can receive and resolve texture transforms', () => {
+  const messages: ProtoDefKitMessages = {
+    operation: {
+      header: { defindex: 710 },
+      operation_node: [
+        { stage: { combine_multiply: { operation_node: [
+          { stage: { texture_lookup: { texture: { string: 'patterns/first' } } } },
+          { stage: { texture_lookup: { texture: { string: 'patterns/second' } } } },
+        ] } } },
+        { stage: { select: { groups: { string: 'patterns/groups' }, select: { uint32: 16 } } } },
+      ],
+    },
+    definition: {
+      header: { defindex: 711 },
+      operation_template: { defindex: 710, type: 7 },
+    },
+  };
+
+  const discovered = discoverTextureTransformTargets(messages).targets[0];
+  assert.ok(discovered);
+  assert.deepEqual(discovered.target.stagePath, [
+    'operation', 'operation_node', '0', 'stage', 'combine_multiply',
+  ]);
+  assert.deepEqual([discovered.scaleUv.min, discovered.scaleUv.max], [1, 1]);
+  assert.deepEqual(discovered.blockers, []);
+
+  const edited = setTextureTransformRange(messages, discovered.target, 'scale_uv', {
+    mode: 'varies', min: 2, max: 3,
+  });
+  const combine = record(record(record((edited.operation.operation_node as unknown[])[0]).stage).combine_multiply);
+  assert.deepEqual(combine.scale_uv, { string: '2 3' });
+
+  const recipe: RecipeNode = {
+    type: 'combine_multiply',
+    rotation: [45, 45],
+    translateU: [0.25, 0.25],
+    translateV: [0.5, 0.5],
+    scaleUV: [2, 2],
+    nodes: [
+      { type: 'texture_lookup', texture: 'patterns/first' },
+      { type: 'texture_lookup', texture: 'patterns/second' },
+    ],
+  };
+  const resolved = resolveRecipe(recipe, '123');
+  assert.equal(resolved.type, 'combine_multiply');
+  assert.equal(resolved.rotationDeg, 45);
+  assert.equal(resolved.translateU, 0.25);
+  assert.equal(resolved.translateV, 0.5);
+  assert.equal(resolved.scale, 2);
 });

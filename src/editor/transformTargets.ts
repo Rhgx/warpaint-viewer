@@ -1,5 +1,5 @@
 import type { ProtoDefKitMessages, ProtoDefValueTrace } from '../protodefs/types';
-import { many, type Many, type OperationNodeMsg, type TextureStageMsg, type VarDefMsg, type VarFieldMsg } from '../protodefs/messages';
+import { many, type CombineStageMsg, type Many, type OperationNodeMsg, type TextureStageMsg, type VarDefMsg, type VarFieldMsg } from '../protodefs/messages';
 import type { TextureTransformFlipField, TextureTransformRangeField, TextureTransformTarget } from './mutations';
 
 /** Proto defaults for the four range fields (tools/lib/resolve.mjs DEFAULTS, mirrored here for parsing). */
@@ -283,16 +283,23 @@ function buildTarget(
   weaponOverridePath: readonly string[] | undefined,
 ): TextureTransformTargetInfo {
   if (!precedingNode || !precedingPath) return blockedTarget('no-texture-lookup-stage');
-  const textureLookup = precedingNode.stage?.texture_lookup;
-  if (!textureLookup) return blockedTarget('ambiguous-source-stage');
+  const authoredStage = precedingNode.stage;
+  if (!authoredStage) return blockedTarget('ambiguous-source-stage');
+  const stageEntry: readonly [string, TextureStageMsg | CombineStageMsg] | null =
+    authoredStage.texture_lookup ? ['texture_lookup', authoredStage.texture_lookup] :
+    authoredStage.combine_multiply ? ['combine_multiply', authoredStage.combine_multiply] :
+    authoredStage.combine_add ? ['combine_add', authoredStage.combine_add] :
+    authoredStage.combine_lerp ? ['combine_lerp', authoredStage.combine_lerp] : null;
+  if (!stageEntry) return blockedTarget('ambiguous-source-stage');
+  const [stageName, transformStage] = stageEntry;
 
-  const stagePath = [...precedingPath, 'stage', 'texture_lookup'];
-  const rotation = buildRangeField(messages, textureLookup.rotation, stagePath, 'rotation', variables, provenance, weaponOverridePath);
-  const scaleUv = buildRangeField(messages, textureLookup.scale_uv, stagePath, 'scale_uv', variables, provenance, weaponOverridePath);
-  const translateU = buildRangeField(messages, textureLookup.translate_u, stagePath, 'translate_u', variables, provenance, weaponOverridePath);
-  const translateV = buildRangeField(messages, textureLookup.translate_v, stagePath, 'translate_v', variables, provenance, weaponOverridePath);
-  const flipU = buildFlipField(messages, textureLookup.flip_u, stagePath, 'flip_u', variables, provenance, weaponOverridePath);
-  const flipV = buildFlipField(messages, textureLookup.flip_v, stagePath, 'flip_v', variables, provenance, weaponOverridePath);
+  const stagePath = [...precedingPath, 'stage', stageName];
+  const rotation = buildRangeField(messages, transformStage.rotation, stagePath, 'rotation', variables, provenance, weaponOverridePath);
+  const scaleUv = buildRangeField(messages, transformStage.scale_uv, stagePath, 'scale_uv', variables, provenance, weaponOverridePath);
+  const translateU = buildRangeField(messages, transformStage.translate_u, stagePath, 'translate_u', variables, provenance, weaponOverridePath);
+  const translateV = buildRangeField(messages, transformStage.translate_v, stagePath, 'translate_v', variables, provenance, weaponOverridePath);
+  const flipU = buildFlipField(messages, transformStage.flip_u, stagePath, 'flip_u', variables, provenance, weaponOverridePath);
+  const flipV = buildFlipField(messages, transformStage.flip_v, stagePath, 'flip_v', variables, provenance, weaponOverridePath);
 
   const fieldSourcePaths: TextureTransformTarget['fieldSourcePaths'] = {};
   const fields: [TextureTransformRangeField | TextureTransformFlipField, { sourcePath?: readonly string[] }][] = [
@@ -314,7 +321,7 @@ function buildTarget(
       ...(Object.keys(fieldSourcePaths).length > 0 ? { fieldSourcePaths } : {}),
       ...(weaponOverridePath ? { weaponOverridePath } : {}),
     },
-    textureRef: textureRefOf(textureLookup, variables),
+    ...(stageName === 'texture_lookup' ? { textureRef: textureRefOf(transformStage as TextureStageMsg, variables) } : {}),
     rotation: rotation.state,
     scaleUv: scaleUv.state,
     translateU: translateU.state,
@@ -361,13 +368,10 @@ function walk(
 }
 
 /**
- * Per paint layer, find the texture_lookup stage whose rotation/scale/offset/
- * flip fields the layer's selector masks. Mirrors discoverGroupSelectTargets():
- * a select stage's transform source is its immediately preceding sibling node,
- * and only a direct texture_lookup sibling is a safe, unambiguous edit
- * surface. A combine or sticker sibling (multiple textures folded together)
- * has no single stage to attribute a rotation/scale to, so it is refused
- * rather than guessed at.
+ * Per paint layer, find the texture or combine stage whose transform fields
+ * the layer's selector masks. Both stage types own these fields in TF2, so an
+ * immediately preceding sibling of either type is safe to edit. Sticker and
+ * other sibling types remain ambiguous here.
  */
 export function discoverTextureTransformTargets(
   messages: ProtoDefKitMessages,

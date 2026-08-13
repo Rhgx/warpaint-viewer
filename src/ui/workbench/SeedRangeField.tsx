@@ -39,6 +39,7 @@ type Bound = 'min' | 'max';
 type DragBound = Bound | 'pending';
 
 const GESTURE_DEBOUNCE_MS = 450;
+const LIVE_PREVIEW_MIN_INTERVAL_MS = 1000 / 30;
 const CLOSE_THUMBS_PX = 10;
 const DIRECTION_LOCK_PX = 2;
 const STEP_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']);
@@ -101,6 +102,8 @@ export function SeedRangeField({
   const gestureOpenRef = useRef(false);
   const debounceRef = useRef<number | null>(null);
   const previewFrameRef = useRef<number | null>(null);
+  const previewTimerRef = useRef<number | null>(null);
+  const lastPreviewAtRef = useRef(0);
   const pendingPreviewRef = useRef<SeedRangeValue | null>(null);
   const emittedPreviewRef = useRef<SeedRangeValue | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -137,6 +140,7 @@ export function SeedRangeField({
 
   useEffect(() => () => {
     if (debounceRef.current !== null) window.clearTimeout(debounceRef.current);
+    if (previewTimerRef.current !== null) window.clearTimeout(previewTimerRef.current);
     if (previewFrameRef.current !== null) window.cancelAnimationFrame(previewFrameRef.current);
     endGesture();
     // Only ever runs on unmount, to close a history entry left open by typing.
@@ -181,6 +185,11 @@ export function SeedRangeField({
   };
 
   const handleRangeInput = (bound: Bound, raw: string) => {
+    // Pointer drags are owned by the track handlers below. Chromium can also
+    // emit a native range change from the thumb during that same gesture. That
+    // event is based on the last rendered prop and can briefly overwrite the
+    // newer dragValueRef preview, which makes the thumb appear to roll back.
+    if (dragBoundRef.current !== null) return;
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return;
     commitBound(bound, parsed);
@@ -211,15 +220,25 @@ export function SeedRangeField({
     dragValueRef.current = next;
     setDragValue(next);
     pendingPreviewRef.current = next;
-    if (previewFrameRef.current === null) {
-      previewFrameRef.current = window.requestAnimationFrame(() => {
-        previewFrameRef.current = null;
-        const pending = pendingPreviewRef.current;
-        pendingPreviewRef.current = null;
-        if (!pending || sameValue(pending, emittedPreviewRef.current ?? value)) return;
-        emittedPreviewRef.current = pending;
-        onChange(pending);
-      });
+    if (previewFrameRef.current === null && previewTimerRef.current === null) {
+      const requestPreviewFrame = () => {
+        previewTimerRef.current = null;
+        previewFrameRef.current = window.requestAnimationFrame(() => {
+          previewFrameRef.current = null;
+          const pending = pendingPreviewRef.current;
+          pendingPreviewRef.current = null;
+          if (!pending || sameValue(pending, emittedPreviewRef.current ?? value)) return;
+          emittedPreviewRef.current = pending;
+          lastPreviewAtRef.current = performance.now();
+          onChange(pending);
+        });
+      };
+      const remaining = LIVE_PREVIEW_MIN_INTERVAL_MS - (performance.now() - lastPreviewAtRef.current);
+      if (remaining > 0) {
+        previewTimerRef.current = window.setTimeout(requestPreviewFrame, remaining);
+      } else {
+        requestPreviewFrame();
+      }
     }
   };
 
@@ -234,6 +253,10 @@ export function SeedRangeField({
       window.cancelAnimationFrame(previewFrameRef.current);
       previewFrameRef.current = null;
     }
+    if (previewTimerRef.current !== null) {
+      window.clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
     pendingPreviewRef.current = null;
     dragBoundRef.current = null;
     dragValueRef.current = null;
@@ -241,6 +264,7 @@ export function SeedRangeField({
     setDragValue(null);
     if (committed && !sameValue(committed, emittedPreviewRef.current ?? value)) onChange(committed);
     emittedPreviewRef.current = null;
+    lastPreviewAtRef.current = 0;
     endGesture();
   };
 

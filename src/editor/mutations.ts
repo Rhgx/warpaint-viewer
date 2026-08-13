@@ -1,7 +1,7 @@
 import type { ProtoDefKitMessages } from '../protodefs/types';
 import {
   asItem, many, type ItemDataMsg, type ItemMsg, type Many, type OperationNodeMsg, type OperationStageMsg,
-  type SelectStageMsg, type StickerStageMsg, type TextureStageMsg, type VarDefMsg, type VarFieldMsg,
+  type CombineStageMsg, type SelectStageMsg, type StickerStageMsg, type TextureStageMsg, type VarDefMsg, type VarFieldMsg,
 } from '../protodefs/messages';
 
 /** A refused edit is preferable to silently changing a different authored scope. */
@@ -765,7 +765,7 @@ export interface TextureTransformRangeValue {
 }
 
 export interface TextureTransformTarget {
-  /** Exact authored path from the operation root to this stage's texture_lookup object. */
+  /** Exact authored path from the operation root to a texture or combine stage. */
   stagePath: readonly string[];
   /** Per-field exact weapon-local override, when one already exists for that field's variable. */
   fieldSourcePaths?: Partial<Record<TextureTransformRangeField | TextureTransformFlipField, readonly string[]>>;
@@ -773,10 +773,14 @@ export interface TextureTransformTarget {
   weaponOverridePath?: readonly string[];
 }
 
-function textureTransformStage(operation: Record<string, unknown>, target: TextureTransformTarget): TextureStageMsg {
+type TransformStageMsg = TextureStageMsg | CombineStageMsg;
+
+const TRANSFORM_STAGE_NAMES = new Set(['texture_lookup', 'combine_multiply', 'combine_add', 'combine_lerp']);
+
+function textureTransformStage(operation: Record<string, unknown>, target: TextureTransformTarget): TransformStageMsg {
   const path = target.stagePath;
-  if (path[0] !== 'operation' || path.at(-1) !== 'texture_lookup' || path.at(-2) !== 'stage') {
-    throw new EditorMutationAmbiguityError('This texture transform target does not identify an editable texture_lookup stage.');
+  if (path[0] !== 'operation' || !TRANSFORM_STAGE_NAMES.has(path.at(-1) ?? '') || path.at(-2) !== 'stage') {
+    throw new EditorMutationAmbiguityError('This texture transform target does not identify an editable texture or combine stage.');
   }
   let cursor: unknown = operation;
   for (const part of path.slice(1)) {
@@ -792,7 +796,7 @@ function textureTransformStage(operation: Record<string, unknown>, target: Textu
   if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) {
     throw new EditorMutationAmbiguityError('This texture transform stage no longer exists in this operation.');
   }
-  return cursor as TextureStageMsg;
+  return cursor as TransformStageMsg;
 }
 
 function formatTransformNumber(value: number): string {

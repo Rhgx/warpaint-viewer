@@ -128,6 +128,7 @@ export function useComposedPaint({
   setState,
 }: UseComposedPaintOptions) {
   const lastResultRef = useRef<ComposeResult | null>(null);
+  const interactiveResultRef = useRef<ComposeResult | null>(null);
   const composeCacheRef = useRef(new Map<string, ComposeResult>());
   const lastComposeKeyRef = useRef<string>('');
   const firstPaintLoggedRef = useRef(false);
@@ -144,8 +145,12 @@ export function useComposedPaint({
     lastComposeKeyRef.current = '';
     for (const result of new Set(composeCache.values())) result.target.dispose();
     composeCache.clear();
+    if (interactiveResultRef.current) {
+      compositorRef.current?.releaseResult(interactiveResultRef.current);
+      interactiveResultRef.current = null;
+    }
     lastResultRef.current = null;
-  }, []);
+  }, [compositorRef]);
 
   // Recompose when recipe inputs change: debounced, deduped, and the previous
   // texture stays on the mesh until the new one is ready (no untextured flash).
@@ -252,6 +257,10 @@ export function useComposedPaint({
         composeCacheRef.current.delete(composeKey);
         composeCacheRef.current.set(composeKey, cached);
         viewer.setMap(cached.texture);
+        if (interactiveResultRef.current) {
+          comp.releaseResult(interactiveResultRef.current);
+          interactiveResultRef.current = null;
+        }
         setVisibleDefinitionGeneration(definitionGeneration);
         lastResultRef.current = cached;
         lastComposeKeyRef.current = composeKey;
@@ -289,8 +298,14 @@ export function useComposedPaint({
           return;
         }
         viewer.setMap(result.texture);
+        const priorInteractive = interactiveResultRef.current;
+        interactiveResultRef.current = interactive ? result : null;
+        if (priorInteractive && priorInteractive !== result) comp.releaseResult(priorInteractive);
         setVisibleDefinitionGeneration(definitionGeneration);
-        cacheResult(composeKey, result, comp);
+        // Pointer previews are transient. Retaining every sampled slider value
+        // in the normal LRU wastes render targets and forces later frames to
+        // allocate instead of immediately recycling the previous preview.
+        if (!interactive) cacheResult(composeKey, result, comp);
         lastResultRef.current = result;
         lastComposeKeyRef.current = composeKey;
         const dt = performance.now() - t0;

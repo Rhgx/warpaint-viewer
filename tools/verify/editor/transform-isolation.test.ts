@@ -58,6 +58,41 @@ test('transform isolation preserves layer alignment for an unpaired select', () 
   assert.deepEqual(collectResolvedLayerIsolationNodes(select), [undefined]);
 });
 
+test('transform isolation keeps a combined layer inside its selected groups', () => {
+  const combined: ResolvedNode = {
+    type: 'combine_multiply',
+    black: 0,
+    white: 1,
+    gamma: 1,
+    rotationDeg: 30,
+    translateU: 0.2,
+    translateV: 0.4,
+    scale: 2,
+    flipU: false,
+    flipV: false,
+    nodes: [texture('patterns/first', 0), texture('patterns/second', 0)],
+  };
+  const select: ResolvedSelect = { type: 'select', groups: 'patterns/groups', select: [16] };
+  const recipe: ResolvedNode = {
+    type: 'combine_lerp',
+    black: 0,
+    white: 1,
+    gamma: 1,
+    rotationDeg: 0,
+    translateU: 0,
+    translateV: 0,
+    scale: 1,
+    flipU: false,
+    flipV: false,
+    nodes: [texture('patterns/base', 0), combined, select],
+  };
+
+  const [isolated] = collectResolvedLayerIsolationNodes(recipe);
+  assert.ok(isolated?.type === 'combine_lerp');
+  assert.equal(isolated.nodes[1], combined);
+  assert.equal(isolated.nodes[2], select);
+});
+
 test('transform isolation previews the final colour occurrence of a reused authored layer', () => {
   const targets = [
     { sourceKey: 'variables:texture_layer_3_select_1' },

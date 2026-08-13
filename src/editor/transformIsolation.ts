@@ -47,7 +47,12 @@ export function collectResolvedLayerIsolationNodes(
       return;
     }
     const preceding = index > 0 ? node.nodes[index - 1] : undefined;
-    output.push(preceding?.type === 'texture_lookup' ? {
+    output.push(preceding && (
+      preceding.type === 'texture_lookup'
+      || preceding.type === 'combine_multiply'
+      || preceding.type === 'combine_add'
+      || preceding.type === 'combine_lerp'
+    ) ? {
       type: 'combine_lerp',
       black: 0,
       white: 1,
