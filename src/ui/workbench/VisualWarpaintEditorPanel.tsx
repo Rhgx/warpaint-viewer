@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Eye, Trash2 } from 'lucide-react';
 import { formatGroupNameForDisplay } from '../../editor/groupNames';
+import { rawGroupIdForBucket } from '../../editor/groupSampling';
 import './VisualWarpaintEditorPanel.css';
 
 const CLEAR_CONFIRM_MS = 3000;
@@ -82,6 +83,7 @@ export function VisualWarpaintEditorPanel({
 
   const boardParts = availableParts.map((part) => {
     const conciseName = formatGroupNameForDisplay(part.name);
+    const rawGroupId = rawGroupIdForBucket(part.groupId);
     const inActiveLayer = selectedGroupIds.includes(part.groupId);
     const otherLayerIndex = !inActiveLayer ? groupLayerIndex?.[part.groupId] : undefined;
     const swatchColor = inActiveLayer
@@ -90,7 +92,7 @@ export function VisualWarpaintEditorPanel({
     return {
       groupId: part.groupId,
       fullName: part.name,
-      displayName: `${conciseName} (${part.groupId})`,
+      displayName: `${conciseName} [${rawGroupId ?? part.groupId}]`,
       inActiveLayer,
       inOtherLayer: otherLayerIndex !== undefined,
       swatchColor,
