@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { resolveRecipe } from '../../../src/compositor/resolve';
+import { advancePaintkitStream, createPaintkitRandomState, resolveRange } from '../../../src/compositor/rng';
 import type { RecipeNode } from '../../../src/compositor/types';
 import { SnapshotHistory } from '../../../src/editor/history';
 import {
@@ -193,4 +194,39 @@ test('combine stages can receive and resolve texture transforms', () => {
   assert.equal(resolved.translateU, 0.25);
   assert.equal(resolved.translateV, 0.5);
   assert.equal(resolved.scale, 2);
+});
+
+test('transformless combine stages preserve seeded child texture placement', () => {
+  const seed = '3753779166464894300';
+  const recipe: RecipeNode = {
+    type: 'combine_multiply',
+    nodes: [{
+      type: 'texture_lookup',
+      texture: 'patterns/alpha-control',
+      rotation: [0, 360],
+      translateU: [0, 1],
+      translateV: [0, 1],
+      scaleUV: [0.4, 0.5],
+    }],
+  };
+
+  const state = createPaintkitRandomState(seed);
+  resolveRange(state.streams[state.current], undefined, 0);
+  resolveRange(state.streams[state.current], undefined, 1);
+  resolveRange(state.streams[state.current], undefined, 1);
+  advancePaintkitStream(state);
+  const rng = state.streams[state.current];
+  const expectedTranslateU = resolveRange(rng, [0, 1], 0);
+  const expectedTranslateV = resolveRange(rng, [0, 1], 0);
+  const expectedRotation = resolveRange(rng, [0, 360], 0);
+  const expectedScale = resolveRange(rng, [0.4, 0.5], 1);
+
+  const resolved = resolveRecipe(recipe, seed);
+  assert.equal(resolved.type, 'combine_multiply');
+  const child = resolved.nodes[0];
+  assert.equal(child.type, 'texture_lookup');
+  assert.equal(child.translateU, expectedTranslateU);
+  assert.equal(child.translateV, expectedTranslateV);
+  assert.equal(child.rotationDeg, expectedRotation);
+  assert.equal(child.scale, expectedScale);
 });

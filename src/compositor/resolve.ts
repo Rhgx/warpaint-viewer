@@ -89,6 +89,35 @@ function resolveTextureTransform(node: StageTransform, rng: UniformRandomStream)
   };
 }
 
+function resolveCombineTransform(node: StageTransform, rng: UniformRandomStream): ResolvedTransform {
+  const hasUvTransform = node.flipU !== undefined
+    || node.flipV !== undefined
+    || node.translateU !== undefined
+    || node.translateV !== undefined
+    || node.rotation !== undefined
+    || node.scaleUV !== undefined;
+  if (hasUvTransform) return resolveTextureTransform(node, rng);
+
+  // Combine stages without authored UV fields historically consume only their
+  // three levels draws. Consuming the four absent UV defaults shifts every
+  // seeded child transform, which breaks recipes whose alpha-control textures
+  // intentionally share placement with a later paint layer (Ghastly Guns).
+  const black = resolveRange(rng, node.adjustBlack, 0);
+  const offset = resolveRange(rng, node.adjustOffset, 1);
+  const gamma = resolveRange(rng, node.adjustGamma, 1);
+  return {
+    black,
+    white: black + offset,
+    gamma,
+    rotationDeg: 0,
+    translateU: 0,
+    translateV: 0,
+    scale: 1,
+    flipU: false,
+    flipV: false,
+  };
+}
+
 function resolveNode(node: RecipeNode, state: PaintkitRandomState): ResolvedNode {
   const rng = state.streams[state.current];
   switch (node.type) {
@@ -104,7 +133,7 @@ function resolveNode(node: RecipeNode, state: PaintkitRandomState): ResolvedNode
     case 'combine_multiply':
     case 'combine_add':
     case 'combine_lerp': {
-      const transform = resolveTextureTransform(node, rng);
+      const transform = resolveCombineTransform(node, rng);
       advancePaintkitStream(state);
       return {
         type: node.type,
