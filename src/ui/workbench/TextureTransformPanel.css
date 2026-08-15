@@ -51,8 +51,7 @@
 }
 .texture-transform-panel-scope-select:disabled { cursor: default; opacity: 0.5; }
 
-.texture-transform-panel-actions { position: relative; flex: none; }
-.texture-transform-panel-actions summary {
+.texture-transform-panel-action {
   display: grid;
   width: 28px;
   height: 28px;
@@ -62,42 +61,14 @@
   background: var(--panel);
   color: var(--text-dim);
   cursor: pointer;
-  list-style: none;
 }
-.texture-transform-panel-actions summary::-webkit-details-marker { display: none; }
-.texture-transform-panel-actions summary:hover,
-.texture-transform-panel-actions[open] summary { border-color: var(--border-strong); color: var(--text); }
-.texture-transform-panel-actions-menu {
-  position: absolute;
-  z-index: 10;
-  top: calc(100% + 5px);
-  right: 0;
-  display: grid;
-  width: 190px;
-  padding: 4px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  background: var(--panel);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 32%);
+.texture-transform-panel-action:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text); }
+.texture-transform-panel-action[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: var(--accent);
 }
-.texture-transform-panel-actions-menu button {
-  display: flex;
-  min-height: 30px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text);
-  font: inherit;
-  font-size: 10.5px;
-  text-align: left;
-  cursor: pointer;
-}
-.texture-transform-panel-actions-menu button:hover:not(:disabled) { background: var(--panel-2); }
-.texture-transform-panel-actions-menu button[aria-checked='true'] { color: var(--accent); }
-.texture-transform-panel-actions-menu button:disabled { cursor: default; opacity: 0.45; }
+.texture-transform-panel-action:disabled { cursor: default; opacity: 0.45; }
 
 .texture-transform-panel-body {
   display: grid;
@@ -230,8 +201,7 @@
 .texture-transform-panel-check:has(input:disabled) { cursor: default; opacity: 0.5; }
 
 .texture-transform-panel-scope-select:focus-visible,
-.texture-transform-panel-actions summary:focus-visible,
-.texture-transform-panel-actions-menu button:focus-visible,
+.texture-transform-panel-action:focus-visible,
 .texture-transform-panel-check input:focus-visible { outline: 0; }
 
 @media (max-width: 900px) {
@@ -248,8 +218,4 @@
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .texture-transform-panel-actions-menu button { transition: none; }
 }

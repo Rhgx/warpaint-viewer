@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Check, Eye, MoreHorizontal, RotateCcw } from 'lucide-react';
+import { Check, Eye, RotateCcw } from 'lucide-react';
 import { SeedRangeField, type SeedRangeDivergence, type SeedRangeValue } from './SeedRangeField';
 import { WeaponUvSurface } from './WeaponUvSurface';
 import './TextureTransformPanel.css';
@@ -17,7 +17,7 @@ export interface TextureTransformPanelProps {
   readonly layerCount: number;
   readonly fields: TextureTransformFields;
   readonly currentSeedValues?: Partial<Record<keyof TextureTransformFields, number>>;
-  readonly defaults: TextureTransformFields;
+  readonly originalValues: TextureTransformFields;
   readonly flipU: boolean;
   readonly flipV: boolean;
   readonly scope: 'all' | 'weapon';
@@ -26,6 +26,8 @@ export interface TextureTransformPanelProps {
   readonly isolateLayer: boolean;
   /** Complete composed weapon texture shown in its flat UV domain. */
   readonly uvTextureSrc?: string | null;
+  /** Neutral mask that dims texture groups outside the isolated layer. */
+  readonly uvIsolationOverlaySrc?: string | null;
   /** Width divided by height for the weapon's composed texture. */
   readonly previewAspect?: number;
   readonly uvSurfaceLoading?: boolean;
@@ -82,7 +84,7 @@ export function TextureTransformPanel({
   layerCount,
   fields,
   currentSeedValues,
-  defaults,
+  originalValues,
   flipU,
   flipV,
   scope,
@@ -90,6 +92,7 @@ export function TextureTransformPanel({
   divergence,
   isolateLayer,
   uvTextureSrc,
+  uvIsolationOverlaySrc,
   previewAspect = 1,
   uvSurfaceLoading = false,
   headerSlot,
@@ -130,46 +133,27 @@ export function TextureTransformPanel({
             {scopeWeaponLabel ? `This weapon only (${scopeWeaponLabel})` : 'This weapon only'}
           </option>
         </select>
-        <details
-          className="texture-transform-panel-actions"
-          onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) event.currentTarget.removeAttribute('open');
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') event.currentTarget.removeAttribute('open');
-          }}
+        <button
+          type="button"
+          className="texture-transform-panel-action"
+          title="Reset all transforms to their original values"
+          aria-label="Reset all transforms to their original values"
+          disabled={disabled}
+          onClick={onResetAll}
         >
-          <summary role="button" aria-haspopup="menu" aria-label="More transform actions" title="More transform actions">
-            <MoreHorizontal size={15} aria-hidden="true" />
-          </summary>
-          <div className="texture-transform-panel-actions-menu" role="menu">
-            <button
-              type="button"
-              role="menuitemcheckbox"
-              aria-checked={isolateLayer}
-              disabled={disabled}
-              onClick={(event) => {
-                onIsolateLayerChange(!isolateLayer);
-                event.currentTarget.closest('details')?.removeAttribute('open');
-              }}
-            >
-              <Eye size={13} aria-hidden="true" />
-              <span>{isolateLayer ? 'Stop isolating layer' : 'Isolate selected layer'}</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              disabled={disabled}
-              onClick={(event) => {
-                onResetAll();
-                event.currentTarget.closest('details')?.removeAttribute('open');
-              }}
-            >
-              <RotateCcw size={13} aria-hidden="true" />
-              <span>Reset all transforms</span>
-            </button>
-          </div>
-        </details>
+          <RotateCcw size={14} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="texture-transform-panel-action"
+          title={isolateLayer ? 'Stop isolating selected layer' : 'Isolate selected layer'}
+          aria-label={isolateLayer ? 'Stop isolating selected layer' : 'Isolate selected layer'}
+          aria-pressed={isolateLayer}
+          disabled={disabled}
+          onClick={() => onIsolateLayerChange(!isolateLayer)}
+        >
+          <Eye size={15} aria-hidden="true" />
+        </button>
       </div>
 
       <div className="texture-transform-panel-body">
@@ -181,7 +165,10 @@ export function TextureTransformPanel({
               style={{ aspectRatio: Number.isFinite(previewAspect) && previewAspect > 0 ? previewAspect : 1 }}
               aria-label="Complete composed weapon texture in UV space"
             >
-              <WeaponUvSurface textureSrc={uvTextureSrc} />
+              <WeaponUvSurface
+                textureSrc={uvTextureSrc}
+                isolationOverlaySrc={uvIsolationOverlaySrc}
+              />
               {!uvTextureSrc ? (
                 <span className="texture-transform-panel-preview-status" role="status">
                   {uvSurfaceLoading ? 'Preparing weapon surface…' : 'Weapon texture unavailable.'}
@@ -194,9 +181,9 @@ export function TextureTransformPanel({
         <div className="texture-transform-panel-fields">
           {FIELD_ORDER.map((config) => {
           const fieldValue = fields[config.key];
-          const defaultValue = defaults[config.key];
+          const originalValue = originalValues[config.key];
           const currentSeedValue = currentSeedValues?.[config.key];
-          const bounds = authoredBounds(config.bounds, fieldValue, defaultValue, currentSeedValue);
+          const bounds = authoredBounds(config.bounds, fieldValue, originalValue, currentSeedValue);
           return (
           <div className="texture-transform-panel-field" key={config.key}>
             <SeedRangeField
@@ -207,7 +194,7 @@ export function TextureTransformPanel({
               decimals={config.decimals}
               value={fieldValue}
               currentSeedValue={currentSeedValue}
-              defaultValue={defaultValue}
+              originalValue={originalValue}
               divergence={divergence?.[config.key]}
               disabled={disabled}
               onChange={(value) => handleFieldChange(config.key, value)}

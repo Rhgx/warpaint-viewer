@@ -20,17 +20,29 @@
   background-size: 16px 16px;
 }
 
-.weapon-uv-surface-texture {
+.weapon-uv-surface-texture,
+.weapon-uv-surface-isolation-overlay {
   position: absolute;
   inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   user-select: none;
+  object-fit: contain;
 }
 
 .weapon-uv-surface-texture {
   z-index: 1;
   background: color-mix(in srgb, var(--panel-2) 86%, black);
-  object-fit: contain;
+}
+
+.weapon-uv-surface-isolation-overlay {
+  z-index: 2;
+  filter: grayscale(1) brightness(0.46) contrast(0.82);
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
 }

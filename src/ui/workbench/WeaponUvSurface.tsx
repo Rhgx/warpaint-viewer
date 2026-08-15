@@ -3,6 +3,7 @@ import './WeaponUvSurface.css';
 
 export interface WeaponUvSurfaceProps {
   readonly textureSrc?: string | null;
+  readonly isolationOverlaySrc?: string | null;
   readonly className?: string;
   readonly textureAlt?: string;
   readonly onTextureLoad?: ReactEventHandler<HTMLImageElement>;
@@ -15,6 +16,7 @@ export interface WeaponUvSurfaceProps {
  */
 export function WeaponUvSurface({
   textureSrc,
+  isolationOverlaySrc,
   className,
   textureAlt = '',
   onTextureLoad,
@@ -32,6 +34,18 @@ export function WeaponUvSurface({
           alt={textureAlt}
           draggable={false}
           onLoad={onTextureLoad}
+        />
+      ) : null}
+      {textureSrc && isolationOverlaySrc ? (
+        <img
+          className="weapon-uv-surface-isolation-overlay"
+          src={textureSrc}
+          alt=""
+          draggable={false}
+          style={{
+            maskImage: `url(${JSON.stringify(isolationOverlaySrc)})`,
+            WebkitMaskImage: `url(${JSON.stringify(isolationOverlaySrc)})`,
+          }}
         />
       ) : null}
     </div>

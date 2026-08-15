@@ -392,6 +392,7 @@ function MainApp() {
   const editorSession = useProtoDefEditorSession({ kitId: editableKitId, loadKit: loadEditorKit });
   const {
     status: editorStatus,
+    original: editorOriginal,
     current: editorCurrent,
     dirty: editorDirty,
     canUndo: editorCanUndo,
@@ -456,6 +457,9 @@ function MainApp() {
   const [transformUvSurfaceLoading, setTransformUvSurfaceLoading] = useState(false);
   const transformUvSurfaceUrlRef = useRef<string | null>(null);
   const transformUvSurfaceGenerationRef = useRef(0);
+  const [transformUvIsolationOverlayUrl, setTransformUvIsolationOverlayUrl] = useState<string | null>(null);
+  const transformUvIsolationOverlayUrlRef = useRef<string | null>(null);
+  const transformUvIsolationOverlayGenerationRef = useRef(0);
   const [transformGestureActive, setTransformGestureActive] = useState(false);
   const transformGestureActiveRef = useRef(false);
   const transformDraftRef = useRef<{ key: keyof TextureTransformFields; value: SeedRangeValue } | null>(null);
@@ -577,6 +581,14 @@ function MainApp() {
     () => editorCurrent ? discoverTextureTransformTargets(editorCurrent) : null,
     [editorCurrent],
   );
+  const originalTransformDiscovery = useMemo(
+    () => editorOriginal ? discoverTextureTransformTargets(editorOriginal, stickerRecipe?.provenance) : null,
+    [editorOriginal, stickerRecipe],
+  );
+  const originalSharedTransformDiscovery = useMemo(
+    () => editorOriginal ? discoverTextureTransformTargets(editorOriginal) : null,
+    [editorOriginal],
+  );
   const editableGroupTargets = useMemo(() => (
     groupDiscovery?.targets.filter((target, index, targets) => (
       target.canToggle && targets.findIndex((candidate) => candidate.canToggle && candidate.sourceKey === target.sourceKey) === index
@@ -599,6 +611,9 @@ function MainApp() {
     : -1;
   const activeTransformTargetInfo = activeGroupVisualIndex >= 0
     ? (transformScope === 'all' ? sharedTransformDiscovery : transformDiscovery)?.targets[activeGroupVisualIndex] ?? null
+    : null;
+  const originalTransformTargetInfo = activeGroupVisualIndex >= 0
+    ? (transformScope === 'all' ? originalSharedTransformDiscovery : originalTransformDiscovery)?.targets[activeGroupVisualIndex] ?? null
     : null;
   // The RecipeNode counterpart of activeTransformTargetInfo, used to composite
   // preview tiles (which need the authored subtree, not just its field values).
@@ -643,6 +658,74 @@ function MainApp() {
     .filter((bucket): bucket is number => bucket !== null && bucket > 0)
     .filter((bucket, index, buckets) => buckets.indexOf(bucket) === index)
     .sort((a, b) => a - b), [activeSelectedRawGroupIds]);
+
+  useEffect(() => {
+    const generation = ++transformUvIsolationOverlayGenerationRef.current;
+    const clearOverlay = () => {
+      const priorUrl = transformUvIsolationOverlayUrlRef.current;
+      transformUvIsolationOverlayUrlRef.current = null;
+      setTransformUvIsolationOverlayUrl(null);
+      if (priorUrl) URL.revokeObjectURL(priorUrl);
+    };
+    if (!transformIsolateLayer || paintSubView !== 'transform' || !groupImage
+      || activeSelectedGroupBuckets.length === 0) {
+      clearOverlay();
+      return;
+    }
+
+    // The UV pane is capped at 460 CSS pixels. A 512px mask preserves crisp
+    // group edges at its actual display size while avoiding four times the
+    // pixel work and memory of a 1024px intermediate.
+    const maxDimension = 512;
+    const scale = Math.min(1, maxDimension / Math.max(groupImage.width, groupImage.height));
+    const width = Math.max(1, Math.round(groupImage.width * scale));
+    const height = Math.max(1, Math.round(groupImage.height * scale));
+    const selectedBuckets = new Set(activeSelectedGroupBuckets);
+    const overlayPixels = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y += 1) {
+      const sourceY = Math.min(groupImage.height - 1, Math.floor(y / scale));
+      for (let x = 0; x < width; x += 1) {
+        const sourceX = Math.min(groupImage.width - 1, Math.floor(x / scale));
+        const sourceOffset = (sourceY * groupImage.width + sourceX) * 4;
+        const bucket = groupByteToCompositorBucket(Number(groupImage.data[sourceOffset]));
+        if (bucket !== null && selectedBuckets.has(bucket)) continue;
+        const offset = (y * width + x) * 4;
+        overlayPixels[offset] = 255;
+        overlayPixels[offset + 1] = 255;
+        overlayPixels[offset + 2] = 255;
+        overlayPixels[offset + 3] = 255;
+      }
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      clearOverlay();
+      return;
+    }
+    context.putImageData(new ImageData(overlayPixels, width, height), 0, 0);
+    canvas.toBlob((blob) => {
+      if (generation !== transformUvIsolationOverlayGenerationRef.current) return;
+      if (!blob) {
+        clearOverlay();
+        return;
+      }
+      const nextUrl = URL.createObjectURL(blob);
+      const priorUrl = transformUvIsolationOverlayUrlRef.current;
+      transformUvIsolationOverlayUrlRef.current = nextUrl;
+      setTransformUvIsolationOverlayUrl(nextUrl);
+      if (priorUrl) URL.revokeObjectURL(priorUrl);
+    }, 'image/png');
+  }, [activeSelectedGroupBuckets, groupImage, paintSubView, transformIsolateLayer]);
+
+  useEffect(() => () => {
+    transformUvIsolationOverlayGenerationRef.current += 1;
+    const priorUrl = transformUvIsolationOverlayUrlRef.current;
+    transformUvIsolationOverlayUrlRef.current = null;
+    if (priorUrl) URL.revokeObjectURL(priorUrl);
+  }, []);
   const activeGroupLabels = useMemo(() => {
     if (!activeGroupRef) return {};
     const labels: Record<number, string> = {};
@@ -2849,13 +2932,14 @@ function MainApp() {
   const handleTransformResetAll = () => {
     if (!activeTransformTarget || transformDisabled) return;
     const target = transformTargetForScope(activeTransformTarget, transformScope);
+    const original = originalTransformTargetInfo;
     beginSessionTransformGesture();
-    setSessionTransformRange(target, 'rotation', { mode: 'fixed', min: 0, max: 0 });
-    setSessionTransformRange(target, 'scale_uv', { mode: 'fixed', min: 1, max: 1 });
-    setSessionTransformRange(target, 'translate_u', { mode: 'fixed', min: 0, max: 0 });
-    setSessionTransformRange(target, 'translate_v', { mode: 'fixed', min: 0, max: 0 });
-    setSessionTransformFlip(target, 'u', false);
-    setSessionTransformFlip(target, 'v', false);
+    setSessionTransformRange(target, 'rotation', transformRangeFieldValue(original?.rotation, TRANSFORM_FIELD_DEFAULTS.rotation));
+    setSessionTransformRange(target, 'scale_uv', transformRangeFieldValue(original?.scaleUv, TRANSFORM_FIELD_DEFAULTS.scale));
+    setSessionTransformRange(target, 'translate_u', transformRangeFieldValue(original?.translateU, TRANSFORM_FIELD_DEFAULTS.offsetU));
+    setSessionTransformRange(target, 'translate_v', transformRangeFieldValue(original?.translateV, TRANSFORM_FIELD_DEFAULTS.offsetV));
+    setSessionTransformFlip(target, 'u', original?.flipU.allowed ?? false);
+    setSessionTransformFlip(target, 'v', original?.flipV.allowed ?? false);
     endSessionTransformGesture();
   };
   const authoredTransformFields: TextureTransformFields = {
@@ -2867,6 +2951,12 @@ function MainApp() {
   const transformFields: TextureTransformFields = transformDraft
     ? { ...authoredTransformFields, [transformDraft.key]: transformDraft.value }
     : authoredTransformFields;
+  const originalTransformFields: TextureTransformFields = {
+    rotation: transformRangeFieldValue(originalTransformTargetInfo?.rotation, TRANSFORM_FIELD_DEFAULTS.rotation),
+    scale: transformRangeFieldValue(originalTransformTargetInfo?.scaleUv, TRANSFORM_FIELD_DEFAULTS.scale),
+    offsetU: transformRangeFieldValue(originalTransformTargetInfo?.translateU, TRANSFORM_FIELD_DEFAULTS.offsetU),
+    offsetV: transformRangeFieldValue(originalTransformTargetInfo?.translateV, TRANSFORM_FIELD_DEFAULTS.offsetV),
+  };
   const handlePushTransformFieldToAll = (key: keyof TextureTransformFields) => {
     if (!activeTransformTarget || transformDisabled) return;
     const overridePaths = weaponSlots.map((slot) => [...slot.path, 'data', 'variable']);
@@ -2888,7 +2978,7 @@ function MainApp() {
       offsetU: activeSeedTransform.translateU,
       offsetV: activeSeedTransform.translateV,
     } : undefined,
-    defaults: TRANSFORM_FIELD_DEFAULTS,
+    originalValues: originalTransformFields,
     divergence: transformDivergence,
     flipU: activeTransformTargetInfo?.flipU.allowed ?? false,
     flipV: activeTransformTargetInfo?.flipV.allowed ?? false,
@@ -2896,6 +2986,7 @@ function MainApp() {
     scopeWeaponLabel: weaponName,
     isolateLayer: transformIsolateLayer,
     uvTextureSrc: transformUvSurfaceUrl,
+    uvIsolationOverlaySrc: transformUvIsolationOverlayUrl,
     previewAspect: (() => {
       const weapon = data?.manifest.weapons.find((entry) => entry.key === state.weaponKey);
       return (weapon?.compositeWidth ?? 1024) / (weapon?.compositeHeight ?? 1024);

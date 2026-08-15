@@ -25,8 +25,8 @@ export interface SeedRangeFieldProps {
   readonly value: SeedRangeValue;
   /** Resolved value for the active paint seed, shown as one track marker. */
   readonly currentSeedValue?: number;
-  /** Proto default, drives the revert affordance. */
-  readonly defaultValue: SeedRangeValue;
+  /** Value present when the editor session loaded, used by the reset affordance. */
+  readonly originalValue: SeedRangeValue;
   readonly divergence?: SeedRangeDivergence;
   readonly disabled?: boolean;
   readonly onChange: (value: SeedRangeValue) => void;
@@ -88,7 +88,7 @@ export function SeedRangeField({
   decimals,
   value,
   currentSeedValue,
-  defaultValue,
+  originalValue,
   divergence,
   disabled = false,
   onChange,
@@ -373,15 +373,15 @@ export function SeedRangeField({
     onInteractionEnd?.();
   };
 
-  const revertToDefault = () => {
+  const revertToOriginal = () => {
     if (disabled) return;
     onInteractionStart?.();
-    onChange(defaultValue);
+    onChange(originalValue);
     onInteractionEnd?.();
   };
 
   const displayValue = dragValue ?? value;
-  const isDirty = !sameValue(value, defaultValue);
+  const isDirty = !sameValue(value, originalValue);
   const isVaries = displayValue.mode === 'varies';
   const lo = Math.min(displayValue.min, displayValue.max);
   const hi = Math.max(displayValue.min, displayValue.max);
@@ -449,10 +449,10 @@ export function SeedRangeField({
           <button
             type="button"
             className="seed-range-field-revert"
-            title={`Reset ${label} to its default`}
-            aria-label={`Reset ${label} to its default`}
+            title={`Reset ${label} to its original value`}
+            aria-label={`Reset ${label} to its original value`}
             disabled={disabled}
-            onClick={revertToDefault}
+            onClick={revertToOriginal}
           >
             <RotateCcw size={12} aria-hidden="true" />
           </button>
