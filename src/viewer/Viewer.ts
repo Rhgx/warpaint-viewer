@@ -52,7 +52,6 @@ import {
   type StickerGizmoTool,
   stickerGizmoTurnHandle,
 } from '../editor/stickerGizmo';
-import { createUvWireframe, type UvWireframe } from '../editor/uvWireframe';
 import {
   buildStickerUvTopology,
   type StickerUvCandidate,
@@ -332,11 +331,6 @@ export class Viewer {
   private stickerUvTopology: StickerUvTopology | null = null;
   private stickerUvTopologyTriangles = new Map<string, StickerUvTopologyTriangle>();
   private stickerGizmoAnchorChartId: number | null = null;
-
-  // Built from the weapon's static BufferGeometry on demand. This never reads
-  // a WebGL render target, so opening the 2D sticker view cannot stall the
-  // compositing/inspect canvas.
-  private uvWireframeCache: UvWireframe | null | undefined;
 
   // $EmissiveBlend pass: like the sheen, a second material over per-mesh
   // clones of the weapon geometry, created on demand by an imported material.
@@ -1143,22 +1137,6 @@ export class Viewer {
       return { intent: 'scale', quad: scaleStickerQuadAxisAroundCentre(drag.baseQuad, 'y', ratio) };
     }
     return { intent: 'scale', quad: scaleStickerQuadAroundCentre(drag.baseQuad, ratio) };
-  }
-
-  /**
-   * The current weapon's true paintable UV islands as a transparent SVG.
-   * Consumers should layer `dataUrl` over their 2D texture preview; it uses
-   * the same unflipped (v-down) convention as the Viewer/compositor textures.
-   * Lens-only geometry is intentionally excluded because war-paint and
-   * stickers do not apply to it.
-   */
-  getPaintableUvWireframe(): UvWireframe | null {
-    if (this.uvWireframeCache === undefined) {
-      this.uvWireframeCache = createUvWireframe(
-        this.paintableMeshes.map((mesh) => mesh.geometry),
-      );
-    }
-    return this.uvWireframeCache;
   }
 
   /**
@@ -2443,7 +2421,6 @@ export class Viewer {
     // picking hit them would sample an unrelated point in the group map.
     this.paintableMeshes = this.meshes.filter((_, i) => !this.meshIsLens[i]);
     this.resetStickerUvTopology();
-    this.uvWireframeCache = undefined;
     this.centerGroup.add(...this.meshes);
     this.frameCamera(parts.map((part) => part.geometry), initialView);
     if (this.sheenId !== 'none' && this.sheenMaterial) this.rebuildSheenMeshes();
@@ -2471,7 +2448,6 @@ export class Viewer {
     this.meshes = [];
     this.paintableMeshes = [];
     this.resetStickerUvTopology();
-    this.uvWireframeCache = undefined;
     this.meshIsLens = [];
     this.currentGeoCached = false;
     this.invalidate();

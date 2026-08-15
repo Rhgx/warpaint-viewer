@@ -1,0 +1,36 @@
+.weapon-uv-surface {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.weapon-uv-surface-underlay {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-color: color-mix(in srgb, var(--panel-2) 86%, black);
+  background-image: conic-gradient(
+    from 90deg,
+    color-mix(in srgb, var(--panel-2) 92%, var(--text)) 25%,
+    transparent 0 50%,
+    color-mix(in srgb, var(--panel-2) 92%, var(--text)) 0 75%,
+    transparent 0
+  );
+  background-size: 16px 16px;
+}
+
+.weapon-uv-surface-texture {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+.weapon-uv-surface-texture {
+  z-index: 1;
+  background: color-mix(in srgb, var(--panel-2) 86%, black);
+  object-fit: contain;
+}

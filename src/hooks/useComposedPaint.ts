@@ -78,6 +78,8 @@ interface UseComposedPaintOptions {
   interactiveRecipe?: RecipeNode | null;
   /** Stable value key for the detached interactive recipe. */
   interactiveKey?: string;
+  /** Receives the exact accepted target already installed on the 3D weapon. */
+  onVisibleResult?: (result: ComposeResult, context: { interactive: boolean }) => void;
   engineReady: boolean;
   data: DataSource | null;
   selectedKit: PaintkitEntry | null;
@@ -110,6 +112,7 @@ export function useComposedPaint({
   interactive = false,
   interactiveRecipe = null,
   interactiveKey = '',
+  onVisibleResult,
   engineReady,
   data,
   selectedKit,
@@ -257,6 +260,11 @@ export function useComposedPaint({
         composeCacheRef.current.delete(composeKey);
         composeCacheRef.current.set(composeKey, cached);
         viewer.setMap(cached.texture);
+        try {
+          onVisibleResult?.(cached, { interactive: false });
+        } catch (cause) {
+          console.warn('[warpaint-viewer] composed preview consumer failed:', cause);
+        }
         if (interactiveResultRef.current) {
           comp.releaseResult(interactiveResultRef.current);
           interactiveResultRef.current = null;
@@ -298,6 +306,11 @@ export function useComposedPaint({
           return;
         }
         viewer.setMap(result.texture);
+        try {
+          onVisibleResult?.(result, { interactive });
+        } catch (cause) {
+          console.warn('[warpaint-viewer] composed preview consumer failed:', cause);
+        }
         const priorInteractive = interactiveResultRef.current;
         interactiveResultRef.current = interactive ? result : null;
         if (priorInteractive && priorInteractive !== result) comp.releaseResult(priorInteractive);
@@ -373,7 +386,7 @@ export function useComposedPaint({
       window.clearTimeout(badgeTimer);
       cancelPendingIdle?.();
     };
-  }, [suspended, interactive, interactiveRecipe, interactiveKey, engineReady, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
+  }, [suspended, interactive, interactiveRecipe, interactiveKey, onVisibleResult, engineReady, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
 
   return { composing, visibleDefinitionGeneration, resetComposeKey, disposeCache };
 }

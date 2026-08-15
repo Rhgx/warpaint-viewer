@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Check, Eye, MoreHorizontal, RotateCcw } from 'lucide-react';
 import { SeedRangeField, type SeedRangeDivergence, type SeedRangeValue } from './SeedRangeField';
+import { WeaponUvSurface } from './WeaponUvSurface';
 import './TextureTransformPanel.css';
 
 export interface TextureTransformFields {
@@ -23,6 +24,11 @@ export interface TextureTransformPanelProps {
   readonly scopeWeaponLabel?: string;
   readonly divergence?: Partial<Record<keyof TextureTransformFields, SeedRangeDivergence>>;
   readonly isolateLayer: boolean;
+  /** Complete composed weapon texture shown in its flat UV domain. */
+  readonly uvTextureSrc?: string | null;
+  /** Width divided by height for the weapon's composed texture. */
+  readonly previewAspect?: number;
+  readonly uvSurfaceLoading?: boolean;
   /**
    * The Parts/Transform switch, supplied by the workbench. It belongs in this
    * panel's own header rather than in a bar above it, so both sub-views keep a
@@ -83,6 +89,9 @@ export function TextureTransformPanel({
   scopeWeaponLabel,
   divergence,
   isolateLayer,
+  uvTextureSrc,
+  previewAspect = 1,
+  uvSurfaceLoading = false,
   headerSlot,
   disabled = false,
   onFieldChange,
@@ -163,8 +172,27 @@ export function TextureTransformPanel({
         </details>
       </div>
 
-      <div className="texture-transform-panel-fields">
-        {FIELD_ORDER.map((config) => {
+      <div className="texture-transform-panel-body">
+        <div className="texture-transform-panel-preview-pane">
+          <span className="texture-transform-panel-preview-title">Weapon UV</span>
+          <div className="texture-transform-panel-preview-frame">
+            <div
+              className="texture-transform-panel-preview"
+              style={{ aspectRatio: Number.isFinite(previewAspect) && previewAspect > 0 ? previewAspect : 1 }}
+              aria-label="Complete composed weapon texture in UV space"
+            >
+              <WeaponUvSurface textureSrc={uvTextureSrc} />
+              {!uvTextureSrc ? (
+                <span className="texture-transform-panel-preview-status" role="status">
+                  {uvSurfaceLoading ? 'Preparing weapon surface…' : 'Weapon texture unavailable.'}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="texture-transform-panel-fields">
+          {FIELD_ORDER.map((config) => {
           const fieldValue = fields[config.key];
           const defaultValue = defaults[config.key];
           const currentSeedValue = currentSeedValues?.[config.key];
@@ -189,30 +217,31 @@ export function TextureTransformPanel({
             />
           </div>
           );
-        })}
+          })}
 
-        <div className="texture-transform-panel-mirror-row">
-          <span>Mirroring</span>
-          <label className="texture-transform-panel-check">
-            <input
-              type="checkbox"
-              checked={flipU}
-              disabled={disabled}
-              onChange={(event) => onFlipChange('u', event.target.checked)}
-            />
-            <span className="texture-transform-panel-check-box" aria-hidden="true"><Check size={10} /></span>
-            <span>Flip U</span>
-          </label>
-          <label className="texture-transform-panel-check">
-            <input
-              type="checkbox"
-              checked={flipV}
-              disabled={disabled}
-              onChange={(event) => onFlipChange('v', event.target.checked)}
-            />
-            <span className="texture-transform-panel-check-box" aria-hidden="true"><Check size={10} /></span>
-            <span>Flip V</span>
-          </label>
+          <div className="texture-transform-panel-mirror-row">
+            <span>Mirroring</span>
+            <label className="texture-transform-panel-check">
+              <input
+                type="checkbox"
+                checked={flipU}
+                disabled={disabled}
+                onChange={(event) => onFlipChange('u', event.target.checked)}
+              />
+              <span className="texture-transform-panel-check-box" aria-hidden="true"><Check size={10} /></span>
+              <span>Flip U</span>
+            </label>
+            <label className="texture-transform-panel-check">
+              <input
+                type="checkbox"
+                checked={flipV}
+                disabled={disabled}
+                onChange={(event) => onFlipChange('v', event.target.checked)}
+              />
+              <span className="texture-transform-panel-check-box" aria-hidden="true"><Check size={10} /></span>
+              <span>Flip V</span>
+            </label>
+          </div>
         </div>
       </div>
     </div>

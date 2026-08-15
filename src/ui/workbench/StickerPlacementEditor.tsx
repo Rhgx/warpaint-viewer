@@ -31,6 +31,7 @@ import {
   GroupStickerUvPreview,
   type GroupStickerPreviewSources,
 } from './GroupStickerUvPreview';
+import { WeaponUvSurface } from './WeaponUvSurface';
 import './StickerPlacementEditor.css';
 
 export type StickerPlacementChangeReason = 'move' | 'resize' | 'rotate' | 'nudge' | 'value' | 'fit';
@@ -45,8 +46,6 @@ export interface StickerSelectionTarget {
 export interface StickerPlacementEditorProps {
   /** The unwrapped weapon texture the decal is positioned on. URLs may be object URLs. */
   readonly textureSrc: string | null;
-  /** Optional real mesh UV wireframe, rendered over the unwrapped texture. */
-  readonly uvWireframeSrc?: string | null;
   /** The decal artwork. URLs may be object URLs. */
   readonly stickerSrc: string | null;
   /** Live selector inputs for a group sticker. Its visible colour depends on placement. */
@@ -171,7 +170,6 @@ function nextNumber(value: string): number | null {
  */
 export function StickerPlacementEditor({
   textureSrc,
-  uvWireframeSrc,
   stickerSrc,
   groupPreview,
   renderStickerArtwork = true,
@@ -903,9 +901,14 @@ export function StickerPlacementEditor({
             className="sticker-placement-editor-canvas"
             style={{ transform: `translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.zoom})` }}
           >
-            <span className="sticker-placement-editor-texture-underlay" aria-hidden="true" />
-            {textureSrc ? <img className="sticker-placement-editor-texture" src={textureSrc} alt="Weapon UV texture" draggable={false} onLoad={(event) => setTexturePixels({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} /> : null}
-            {uvWireframeSrc ? <img className="sticker-placement-editor-wireframe" src={uvWireframeSrc} alt="" draggable={false} /> : null}
+            <WeaponUvSurface
+              textureSrc={textureSrc}
+              textureAlt="Weapon UV texture"
+              onTextureLoad={(event) => setTexturePixels({
+                width: event.currentTarget.naturalWidth,
+                height: event.currentTarget.naturalHeight,
+              })}
+            />
             <span className="sticker-placement-editor-grid" aria-hidden="true" />
             {stickerSrc || groupPreview ? (
               <div

@@ -439,41 +439,7 @@
   will-change: transform;
 }
 
-.sticker-placement-editor-texture-underlay {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  background: color-mix(in srgb, var(--panel-2) 86%, black);
-  pointer-events: none;
-}
-
 .sticker-placement-editor-surface:focus-visible { border-color: var(--accent); outline: 1px solid var(--accent); outline-offset: 1px; }
-
-.sticker-placement-editor-texture {
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: 100%;
-  height: 100%;
-  /* A composed preview may contain transparent pixels. Keep the texture
-     visually solid instead of letting the editor checkerboard leak through. */
-  background: color-mix(in srgb, var(--panel-2) 86%, black);
-  object-fit: contain;
-  opacity: 1;
-  user-select: none;
-}
-
-.sticker-placement-editor-wireframe {
-  position: absolute;
-  z-index: 2;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  /* UV islands are useful orientation evidence, not a competing image. */
-  opacity: .34;
-  user-select: none;
-}
 
 .sticker-placement-editor-grid {
   position: absolute;

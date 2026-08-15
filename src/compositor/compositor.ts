@@ -672,35 +672,59 @@ export class Compositor {
    * paint GPU-resident; opening the sticker editor is the explicit request for
    * an accurate 2D copy of that same composed surface.
    */
-  toPreviewDataUrl(target: THREE.WebGLRenderTarget, maxDimension = 1024, forceOpaque = true): string {
+  private toPreviewCanvas(target: THREE.WebGLRenderTarget, maxDimension = 1024, forceOpaque = true): HTMLCanvasElement {
     const width = target.width;
     const height = target.height;
     if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
       throw new Error('The composed surface has invalid dimensions.');
     }
-    const bytes = new Uint8ClampedArray(width * height * 4);
-    this.renderer.readRenderTargetPixels(target, 0, 0, width, height, bytes);
-
-    const source = document.createElement('canvas');
-    source.width = width;
-    source.height = height;
-    const sourceContext = source.getContext('2d');
-    if (!sourceContext) throw new Error('The browser could not create a 2D preview canvas.');
-    const image = sourceContext.createImageData(width, height);
-    image.data.set(compositorReadbackToEditorPixels(bytes, width, height, forceOpaque));
-    sourceContext.putImageData(image, 0, 0);
-
     const limit = Number.isFinite(maxDimension) ? Math.max(1, Math.floor(maxDimension)) : 1024;
     const scale = Math.min(1, limit / Math.max(width, height));
-    if (scale === 1) return source.toDataURL('image/png');
-    const preview = document.createElement('canvas');
-    preview.width = Math.max(1, Math.round(width * scale));
-    preview.height = Math.max(1, Math.round(height * scale));
-    const previewContext = preview.getContext('2d');
-    if (!previewContext) throw new Error('The browser could not scale the 2D preview canvas.');
-    previewContext.imageSmoothingEnabled = true;
-    previewContext.drawImage(source, 0, 0, preview.width, preview.height);
-    return preview.toDataURL('image/png');
+    const previewWidth = Math.max(1, Math.round(width * scale));
+    const previewHeight = Math.max(1, Math.round(height * scale));
+    let readTarget = target;
+    let scaledTarget: THREE.WebGLRenderTarget | null = null;
+    if (scale < 1) {
+      scaledTarget = this.makeTarget(previewWidth, previewHeight);
+      const u = this.material.uniforms;
+      u.uMode.value = MODE_TEXTURE;
+      this.setTextures(target.texture, null, null, null);
+      u.uSrgb0.value = 1;
+      (u.uAdjust0.value as THREE.Vector3).set(0, 1, 1);
+      (u.uUv0.value as THREE.Matrix3).copy(IDENTITY3);
+      this.renderInto(scaledTarget);
+      readTarget = scaledTarget;
+    }
+
+    const bytes = new Uint8ClampedArray(previewWidth * previewHeight * 4);
+    try {
+      this.renderer.readRenderTargetPixels(readTarget, 0, 0, previewWidth, previewHeight, bytes);
+    } finally {
+      scaledTarget?.dispose();
+    }
+
+    const source = document.createElement('canvas');
+    source.width = previewWidth;
+    source.height = previewHeight;
+    const sourceContext = source.getContext('2d');
+    if (!sourceContext) throw new Error('The browser could not create a 2D preview canvas.');
+    const image = sourceContext.createImageData(previewWidth, previewHeight);
+    image.data.set(compositorReadbackToEditorPixels(bytes, previewWidth, previewHeight, forceOpaque));
+    sourceContext.putImageData(image, 0, 0);
+    return source;
+  }
+
+  toPreviewDataUrl(target: THREE.WebGLRenderTarget, maxDimension = 1024, forceOpaque = true): string {
+    return this.toPreviewCanvas(target, maxDimension, forceOpaque).toDataURL('image/png');
+  }
+
+  /** Browser-displayable PNG without retaining a large base64 string. */
+  toPreviewBlob(target: THREE.WebGLRenderTarget, maxDimension = 1024, forceOpaque = true): Promise<Blob> {
+    const canvas = this.toPreviewCanvas(target, maxDimension, forceOpaque);
+    return new Promise((resolve, reject) => canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error('The browser could not encode the texture preview.')),
+      'image/png',
+    ));
   }
 
   /**

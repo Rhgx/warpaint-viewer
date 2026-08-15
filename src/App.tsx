@@ -452,6 +452,10 @@ function MainApp() {
   const [paintSubView, setPaintSubView] = useState<'parts' | 'transform'>('parts');
   const [transformScope, setTransformScope] = useState<'all' | 'weapon'>('all');
   const [transformIsolateLayer, setTransformIsolateLayer] = useState(false);
+  const [transformUvSurfaceUrl, setTransformUvSurfaceUrl] = useState<string | null>(null);
+  const [transformUvSurfaceLoading, setTransformUvSurfaceLoading] = useState(false);
+  const transformUvSurfaceUrlRef = useRef<string | null>(null);
+  const transformUvSurfaceGenerationRef = useRef(0);
   const [transformGestureActive, setTransformGestureActive] = useState(false);
   const transformGestureActiveRef = useRef(false);
   const transformDraftRef = useRef<{ key: keyof TextureTransformFields; value: SeedRangeValue } | null>(null);
@@ -483,7 +487,6 @@ function MainApp() {
   const [stickerSurfaceUrl, setStickerSurfaceUrl] = useState<string | null>(null);
   const [stickerBaseSurfaceKey, setStickerBaseSurfaceKey] = useState<string | null>(null);
   const [groupStickerResourcesKey, setGroupStickerResourcesKey] = useState<string | null>(null);
-  const [stickerUvWireframeUrl, setStickerUvWireframeUrl] = useState<string | null>(null);
   const [stickerAspect, setStickerAspect] = useState(1);
   const [stickerSurfaceAspect, setStickerSurfaceAspect] = useState(1.6);
   const [stickerDraftQuad, setStickerDraftQuad] = useState<StickerPlacementQuad | null>(null);
@@ -1737,16 +1740,59 @@ function MainApp() {
     sourceProvider,
   ]);
 
+  const handleVisiblePaintResult = useCallback((
+    result: ComposeResult,
+    context: { interactive: boolean },
+  ) => {
+    if (!editorTabActive || paintSubView !== 'transform') return;
+    const compositor = compositorRef.current;
+    if (!compositor) return;
+    const generation = ++transformUvSurfaceGenerationRef.current;
+    setTransformUvSurfaceLoading(true);
+    void compositor.toPreviewBlob(
+      result.target,
+      context.interactive ? TRANSFORM_LIVE_PREVIEW_MAX_SIZE : 1024,
+    ).then((blob) => {
+      if (generation !== transformUvSurfaceGenerationRef.current) return;
+      const nextUrl = URL.createObjectURL(blob);
+      const priorUrl = transformUvSurfaceUrlRef.current;
+      transformUvSurfaceUrlRef.current = nextUrl;
+      setTransformUvSurfaceUrl(nextUrl);
+      setTransformUvSurfaceLoading(false);
+      if (priorUrl) URL.revokeObjectURL(priorUrl);
+    }).catch(() => {
+      if (generation === transformUvSurfaceGenerationRef.current) setTransformUvSurfaceLoading(false);
+    });
+  }, [editorTabActive, paintSubView]);
+
+  useEffect(() => {
+    if (editorTabActive && paintSubView === 'transform') return;
+    transformUvSurfaceGenerationRef.current += 1;
+    const priorUrl = transformUvSurfaceUrlRef.current;
+    transformUvSurfaceUrlRef.current = null;
+    setTransformUvSurfaceUrl(null);
+    setTransformUvSurfaceLoading(false);
+    if (priorUrl) URL.revokeObjectURL(priorUrl);
+  }, [editorTabActive, paintSubView]);
+
+  useEffect(() => () => {
+    transformUvSurfaceGenerationRef.current += 1;
+    const priorUrl = transformUvSurfaceUrlRef.current;
+    transformUvSurfaceUrlRef.current = null;
+    if (priorUrl) URL.revokeObjectURL(priorUrl);
+  }, []);
+
   const { composing, visibleDefinitionGeneration, resetComposeKey, disposeCache } = useComposedPaint({
     suspended: stickerPlacementActive && selectedStickerUsesComposedArtwork,
     // Isolation owns the live layer preview. Keep the normal compositor idle
     // during its drag, but available for weapon and committed recipe changes so
     // the translucent context always belongs to the current weapon.
-    interactive: paintSubView === 'transform' && !transformIsolateLayer && transformDraft !== null,
-    interactiveRecipe: !transformIsolateLayer && transformDraft ? transformPreviewRecipe : null,
-    interactiveKey: !transformIsolateLayer && transformDraft
+    interactive: paintSubView === 'transform' && transformDraft !== null,
+    interactiveRecipe: transformDraft ? transformPreviewRecipe : null,
+    interactiveKey: transformDraft
       ? `${transformDraft.key}:${transformDraft.value.mode}:${transformDraft.value.min}:${transformDraft.value.max}`
       : '',
+    onVisibleResult: handleVisiblePaintResult,
     engineReady,
     data,
     selectedKit,
@@ -2397,7 +2443,6 @@ function MainApp() {
     const weapon = data.manifest.weapons.find((w) => w.key === state.weaponKey);
     if (!weapon || !selectedAssetKey) return;
     setLoadedAssetKey('');
-    setStickerUvWireframeUrl(null);
     advanceBoot(48, 'Loading initial weapon…');
     const overrideId = selectedKit?.materialOverrides?.[state.weaponKey];
     const builtInMaterial = (overrideId && data.manifest.materials?.[overrideId]) || weapon.material;
@@ -2423,7 +2468,6 @@ function MainApp() {
       applyMaterial,
     ]).then(() => {
       if (cancelled) return;
-      setStickerUvWireframeUrl(viewer.getPaintableUvWireframe()?.dataUrl ?? null);
       setLoadedAssetKey(selectedAssetKey);
       advanceBoot(62, 'Weapon and material maps ready');
     }).catch((e) => {
@@ -2851,6 +2895,12 @@ function MainApp() {
     scope: transformScope,
     scopeWeaponLabel: weaponName,
     isolateLayer: transformIsolateLayer,
+    uvTextureSrc: transformUvSurfaceUrl,
+    previewAspect: (() => {
+      const weapon = data?.manifest.weapons.find((entry) => entry.key === state.weaponKey);
+      return (weapon?.compositeWidth ?? 1024) / (weapon?.compositeHeight ?? 1024);
+    })(),
+    uvSurfaceLoading: transformUvSurfaceLoading,
     disabled: transformDisabled,
     onFieldChange: handleTransformFieldChange,
     onFlipChange: handleTransformFlipChange,
@@ -3101,7 +3151,6 @@ function MainApp() {
                         }
                       },
                       textureSrc: stickerSurfaceUrl,
-                      uvWireframeSrc: stickerUvWireframeUrl,
                       stickerSrc: effectiveStickerTextureUrl,
                       groupPreview: groupStickerUvPreview,
                       renderStickerArtwork: !selectedStickerUsesComposedArtwork,
