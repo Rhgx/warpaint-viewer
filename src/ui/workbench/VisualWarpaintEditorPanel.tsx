@@ -80,11 +80,8 @@ export function VisualWarpaintEditorPanel({
     .filter((part) => Number.isInteger(part.groupId) && part.groupId > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const displayCounts = new Map<string, number>();
   const boardParts = availableParts.map((part) => {
     const conciseName = formatGroupNameForDisplay(part.name);
-    const count = (displayCounts.get(conciseName) ?? 0) + 1;
-    displayCounts.set(conciseName, count);
     const inActiveLayer = selectedGroupIds.includes(part.groupId);
     const otherLayerIndex = !inActiveLayer ? groupLayerIndex?.[part.groupId] : undefined;
     const swatchColor = inActiveLayer
@@ -93,7 +90,7 @@ export function VisualWarpaintEditorPanel({
     return {
       groupId: part.groupId,
       fullName: part.name,
-      displayName: count === 1 ? conciseName : `${conciseName} (${count})`,
+      displayName: `${conciseName} (${part.groupId})`,
       inActiveLayer,
       inOtherLayer: otherLayerIndex !== undefined,
       swatchColor,
