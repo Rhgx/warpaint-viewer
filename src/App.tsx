@@ -1832,10 +1832,17 @@ function MainApp() {
     if (!compositor) return;
     const generation = ++transformUvSurfaceGenerationRef.current;
     setTransformUvSurfaceLoading(true);
-    void compositor.toPreviewBlob(
-      result.target,
-      context.interactive ? TRANSFORM_LIVE_PREVIEW_MAX_SIZE : 1024,
-    ).then((blob) => {
+    let previewBlob: Promise<Blob>;
+    try {
+      previewBlob = compositor.toPreviewBlob(
+        result.target,
+        context.interactive ? TRANSFORM_LIVE_PREVIEW_MAX_SIZE : 1024,
+      );
+    } catch {
+      if (generation === transformUvSurfaceGenerationRef.current) setTransformUvSurfaceLoading(false);
+      return;
+    }
+    void previewBlob.then((blob) => {
       if (generation !== transformUvSurfaceGenerationRef.current) return;
       const nextUrl = URL.createObjectURL(blob);
       const priorUrl = transformUvSurfaceUrlRef.current;

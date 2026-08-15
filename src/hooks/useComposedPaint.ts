@@ -179,7 +179,21 @@ export function useComposedPaint({
     };
 
     const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|definition:${definitionGeneration}|interactive:${interactive ? interactiveKey : '0'}`;
-    if (composeKey === lastComposeKeyRef.current) return;
+    if (composeKey === lastComposeKeyRef.current) {
+      // The consumer can become active after the texture was already accepted
+      // (for example, opening Transform from Parts). Replay the retained GPU
+      // result instead of forcing an identical composition just to populate a
+      // secondary preview surface.
+      const retained = lastResultRef.current;
+      if (retained) {
+        try {
+          onVisibleResult?.(retained, { interactive });
+        } catch (cause) {
+          console.warn('[warpaint-viewer] composed preview consumer failed:', cause);
+        }
+      }
+      return;
+    }
 
     let cancelled = false;
     let badgeTimer = 0;
