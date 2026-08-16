@@ -1,6 +1,7 @@
 import type { ProtoDefKitMessages, ProtoDefValueTrace } from '../protodefs/types';
 import { many, type Many, type OperationNodeMsg, type OperationStageMsg, type VarDefMsg, type VarFieldMsg } from '../protodefs/messages';
-import type { SelectGroupTarget } from './mutations';
+import type { GroupTextureTarget, SelectGroupTarget } from './mutations';
+import { normalizeGroupTextureReference } from './groupNames';
 
 /**
  * A literal select stage that the editor can associate with a decoded groups
@@ -48,6 +49,28 @@ export interface ChooseGroupTargetOptions {
    * known. Supplying this avoids guessing when a paint uses multiple maps.
    */
   groupsRef?: string;
+}
+
+/** Find the inherited groups variable and scope its write to the active weapon. */
+export function discoverGroupTextureTarget(
+  provenance: readonly ProtoDefValueTrace[] | undefined,
+  groupsRef: string | undefined,
+  weaponOverridePath: readonly string[] | undefined,
+): GroupTextureTarget | null {
+  if (!provenance || !groupsRef || !weaponOverridePath) return null;
+  const variables = [...new Set(provenance.flatMap((trace) => (
+    trace.fieldPath.at(-1) === 'groups'
+      && trace.fieldPath.at(-2) === 'select'
+      && typeof trace.provenance.effectiveValue === 'string'
+      && normalizeGroupTextureReference(trace.provenance.effectiveValue) === normalizeGroupTextureReference(groupsRef)
+      && trace.provenance.variableName
+      && trace.provenance.canOverride
+      && (trace.provenance.scope === 'global'
+        || trace.provenance.editableSourcePath?.[0] === 'definition')
+      ? [trace.provenance.variableName]
+      : []
+  )))];
+  return variables.length === 1 ? { variableName: variables[0], overridePath: weaponOverridePath } : null;
 }
 
 const LITERAL_KEYS = ['string', 'float', 'double', 'uint32', 'uint64', 'sint32', 'sint64', 'bool'] as const;

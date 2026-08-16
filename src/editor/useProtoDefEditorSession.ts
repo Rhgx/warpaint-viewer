@@ -12,10 +12,12 @@ import {
   pushTextureTransformRangeToAllWeapons,
   setWeaponMaterialOverride,
   setWeaponMaterialOverrides,
+  setGroupTextureReference,
   toggleSelectGroupId,
   type SelectGroupAssignmentResult,
   type SelectGroupAssignmentTarget,
   type SelectGroupTarget,
+  type GroupTextureTarget,
   type StickerQuad,
   type StickerStructureTarget,
   type StickerTarget,
@@ -81,6 +83,8 @@ export interface ProtoDefEditorSession {
   ) => readonly Omit<SelectGroupAssignmentResult, 'messages'>[] | null;
   /** Clears several selected ids from one layer in one atomic editor action. */
   clearSelectGroups: (target: SelectGroupTarget, groupIds: readonly number[]) => boolean;
+  /** Changes the active weapon's inherited stock group-map layout. */
+  setGroupTexture: (target: GroupTextureTarget, textureRef: string) => boolean;
   /** Moves, scales, or rotates one sticker as a single undoable quad edit. */
   setStickerDestQuad: (target: StickerTarget, quad: StickerQuad) => boolean;
   addSticker: (target: StickerStructureTarget, quad: StickerQuad, baseReference: string) => boolean;
@@ -342,6 +346,21 @@ export function useProtoDefEditorSession({
     }
   }, [commitEdit]);
 
+  const setGroupTexture = useCallback((target: GroupTextureTarget, textureRef: string): boolean => {
+    const prior = currentRef.current;
+    if (!prior) {
+      setError('Load an imported definition before editing it.');
+      return false;
+    }
+    try {
+      commitEdit(prior, snapshot(setGroupTextureReference(prior, target, textureRef)));
+      return true;
+    } catch (cause) {
+      setError(errorMessage(cause));
+      return false;
+    }
+  }, [commitEdit]);
+
   const setStickerQuad = useCallback((target: StickerTarget, quad: StickerQuad): boolean => {
     const prior = currentRef.current;
     if (!prior) {
@@ -585,6 +604,7 @@ export function useProtoDefEditorSession({
     assignSelectGroup,
     assignSelectGroups,
     clearSelectGroups,
+    setGroupTexture,
     setStickerDestQuad: setStickerQuad,
     addSticker,
     removeSticker,

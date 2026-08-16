@@ -33,6 +33,11 @@ export interface SelectGroupTarget {
   valueOverridePath?: readonly string[];
 }
 
+export interface GroupTextureTarget {
+  readonly variableName: string;
+  readonly overridePath: readonly string[];
+}
+
 /** One editable paint layer considered by an exclusive group assignment. */
 export interface SelectGroupAssignmentTarget {
   readonly target: SelectGroupTarget;
@@ -234,6 +239,19 @@ function stickerTarget(operation: Record<string, unknown>, target: StickerTarget
 
 function replaceMany<T>(owner: Record<string, unknown>, key: string, prior: Many<T>, next: T[]): void {
   owner[key] = Array.isArray(prior) ? next : (next.length === 1 ? next[0] : next);
+}
+
+/** Writes one weapon's inherited group-map reference without changing the shared operation. */
+export function setGroupTextureReference(
+  messages: ProtoDefKitMessages,
+  target: GroupTextureTarget,
+  textureRef: string,
+): ProtoDefKitMessages {
+  const trimmed = textureRef.trim();
+  if (!trimmed) throw new TypeError('A group texture reference is required.');
+  const next = cloneMessages(messages);
+  upsertVariableFieldAtPath(next, target.variableName, target.overridePath, trimmed);
+  return next;
 }
 
 type StickerNodeLocation = {

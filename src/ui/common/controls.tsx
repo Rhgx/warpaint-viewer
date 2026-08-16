@@ -4,7 +4,7 @@ import { NumberField } from '@base-ui/react/number-field';
 import { Switch } from '@base-ui/react/switch';
 import { Toggle } from '@base-ui/react/toggle';
 import { Input } from '@base-ui/react/input';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 
@@ -120,7 +120,7 @@ export function SelectField({
         <Select.Value>
           {(v: string) => options.find((o) => o.value === v)?.label ?? placeholder ?? 'Select'}
         </Select.Value>
-        <Select.Icon className="ui-select-icon">v</Select.Icon>
+        <Select.Icon className="ui-select-icon"><ChevronDown size={12} aria-hidden="true" /></Select.Icon>
       </Select.Trigger>
       <Select.Portal>
         <Select.Positioner className="ui-select-positioner" sideOffset={4} alignItemWithTrigger={false}>
@@ -128,7 +128,7 @@ export function SelectField({
             {options.map((o) => (
               <Select.Item key={o.value} value={o.value} className="ui-select-item">
                 <Select.ItemText>{o.label}</Select.ItemText>
-                <Select.ItemIndicator className="ui-select-indicator">*</Select.ItemIndicator>
+                <Select.ItemIndicator className="ui-select-indicator"><Check size={12} aria-hidden="true" /></Select.ItemIndicator>
               </Select.Item>
             ))}
           </Select.Popup>
@@ -183,7 +183,7 @@ export function IconSelectField({
         <AssetIcon src={selected?.icon} size={20} />
         <Select.Value>{() => selected?.label ?? placeholder ?? 'Select'}</Select.Value>
       </span>
-      <Select.Icon className="ui-select-icon">v</Select.Icon>
+      <Select.Icon className="ui-select-icon"><ChevronDown size={12} aria-hidden="true" /></Select.Icon>
     </Select.Trigger>
   );
 
@@ -240,7 +240,7 @@ export function IconSelectField({
                   <AssetIcon src={o.icon} size={24} />
                   <Select.ItemText>{o.label}</Select.ItemText>
                 </span>
-                <Select.ItemIndicator className="ui-select-indicator">*</Select.ItemIndicator>
+                <Select.ItemIndicator className="ui-select-indicator"><Check size={12} aria-hidden="true" /></Select.ItemIndicator>
               </Select.Item>
             ))}
             {visibleCount === 0 ? <p className="ui-select-empty" role="status">No matching weapons</p> : null}
@@ -273,7 +273,7 @@ export function SwatchSelectField({
           <OptionSwatch option={selected} />
           <Select.Value>{() => selected?.label ?? placeholder ?? 'Select'}</Select.Value>
         </span>
-        <Select.Icon className="ui-select-icon">v</Select.Icon>
+        <Select.Icon className="ui-select-icon"><ChevronDown size={12} aria-hidden="true" /></Select.Icon>
       </Select.Trigger>
       <Select.Portal>
         <Select.Positioner className="ui-select-positioner" sideOffset={4} alignItemWithTrigger={false}>
@@ -284,7 +284,7 @@ export function SwatchSelectField({
                   <OptionSwatch option={o} />
                   <Select.ItemText>{o.label}</Select.ItemText>
                 </span>
-                <Select.ItemIndicator className="ui-select-indicator">*</Select.ItemIndicator>
+                <Select.ItemIndicator className="ui-select-indicator"><Check size={12} aria-hidden="true" /></Select.ItemIndicator>
               </Select.Item>
             ))}
           </Select.Popup>

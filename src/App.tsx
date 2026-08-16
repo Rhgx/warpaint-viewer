@@ -36,7 +36,7 @@ import { collectTextureRefs, exportPathFor, resolvePackageTextures } from './exp
 import { customKitDefindex, isCustomKitId } from './protodefs/types';
 import type { CustomDefinitionsState, ProtoDefKitWeaponSlot, ProtoDefRecipeWithProvenance } from './protodefs/types';
 import { useProtoDefEditorSession } from './editor/useProtoDefEditorSession';
-import { discoverGroupSelectTargets } from './editor/groupTargets';
+import { discoverGroupSelectTargets, discoverGroupTextureTarget } from './editor/groupTargets';
 import { discoverTextureTransformTargets, type TextureTransformRangeFieldState } from './editor/transformTargets';
 import { collectResolvedLayerIsolationNodes, preferredLayerOccurrenceIndex } from './editor/transformIsolation';
 import { discoverWeaponMaterialTargets } from './editor/materialTargets';
@@ -52,7 +52,12 @@ import {
   type RgbaImageDataLike,
 } from './editor/groupSampling';
 import { loadRgbaImageData, loadRgbaThumbnail, rgbaThumbnailDataUrl } from './editor/imageData';
-import { formatGroupNameForDisplay, lookupGroupNameForBucket } from './editor/groupNames';
+import {
+  compatibleGroupTextures,
+  formatGroupNameForDisplay,
+  lookupGroupNameForBucket,
+  normalizeGroupTextureReference,
+} from './editor/groupNames';
 import { chooseEditorLayerColors, EDITOR_LAYER_MAP_COLORS, linearLayerColorToCss } from './editor/layerMap';
 import { discoverStickerPlacementTargets } from './editor/stickerTargets';
 import {
@@ -400,6 +405,7 @@ function MainApp() {
     error: editorSessionError,
     assignSelectGroups: assignSessionGroups,
     clearSelectGroups: clearSessionGroups,
+    setGroupTexture: setSessionGroupTexture,
     setStickerDestQuad: setSessionStickerQuad,
     addSticker: addSessionSticker,
     removeSticker: removeSessionSticker,
@@ -435,6 +441,8 @@ function MainApp() {
   }, [editableKitId, loadEditorKitWeaponSlots]);
   const [groupImage, setGroupImage] = useState<RgbaImageDataLike | null>(null);
   const [groupImageError, setGroupImageError] = useState<string | null>(null);
+  const [requestedGroupTextureRef, setRequestedGroupTextureRef] = useState<string | null>(null);
+  const groupImageCacheRef = useRef(new Map<string, Promise<RgbaImageDataLike>>());
   const [editorPreviewError, setEditorPreviewError] = useState<string | null>(null);
   const [editorPackageExportError, setEditorPackageExportError] = useState<string | null>(null);
   const [editorPackageExporting, setEditorPackageExporting] = useState(false);
@@ -642,6 +650,31 @@ function MainApp() {
     ? resolvedGroupSelects[activeGroupOperationIndex]
     : undefined;
   const activeGroupRef = activeResolvedGroupSelect?.groups ?? activeGroupTarget?.groupsRef;
+  const resolvedGroupTextureValue = activeGroupRef ? normalizeGroupTextureReference(activeGroupRef) : undefined;
+  const activeGroupTextureValue = requestedGroupTextureRef ?? resolvedGroupTextureValue;
+  const displayedGroupRef = requestedGroupTextureRef ?? activeGroupRef;
+  const groupTextureChoices = useMemo(
+    () => displayedGroupRef ? compatibleGroupTextures(displayedGroupRef) : [],
+    [displayedGroupRef],
+  );
+  const activeWeaponVariablePath = weaponSlots.find((slot) => slot.weaponKey === state.weaponKey)?.path;
+  const groupTextureTarget = useMemo(() => discoverGroupTextureTarget(
+    stickerRecipe?.provenance,
+    activeGroupRef,
+    activeWeaponVariablePath ? [...activeWeaponVariablePath, 'data', 'variable'] : undefined,
+  ), [activeGroupRef, activeWeaponVariablePath, stickerRecipe?.provenance]);
+
+  useEffect(() => {
+    if (requestedGroupTextureRef && requestedGroupTextureRef === resolvedGroupTextureValue) {
+      setRequestedGroupTextureRef(null);
+    }
+  }, [requestedGroupTextureRef, resolvedGroupTextureValue]);
+
+  useEffect(() => {
+    setRequestedGroupTextureRef(null);
+    setGroupImage(null);
+    groupImageCacheRef.current.clear();
+  }, [editableKitId, state.weaponKey]);
   // The operation can inherit its starting selector values from the selected
   // weapon or wear. Show the values the model is actually using until an edit
   // intentionally locks those slots into the draft operation.
@@ -727,14 +760,14 @@ function MainApp() {
     if (priorUrl) URL.revokeObjectURL(priorUrl);
   }, []);
   const activeGroupLabels = useMemo(() => {
-    if (!activeGroupRef) return {};
+    if (!displayedGroupRef) return {};
     const labels: Record<number, string> = {};
     for (let bucket = 1; bucket <= 16; bucket += 1) {
-      const name = lookupGroupNameForBucket(activeGroupRef, bucket);
+      const name = lookupGroupNameForBucket(displayedGroupRef, bucket);
       if (name) labels[bucket] = name;
     }
     return labels;
-  }, [activeGroupRef]);
+  }, [displayedGroupRef]);
   const groupAssignmentTargets = useMemo(() => editableGroupTargets.map((target, index) => {
     const matchingOperationIndexes = groupDiscovery?.targets.flatMap((candidate, operationIndex) => (
       candidate.sourceKey === target.sourceKey ? [operationIndex] : []
@@ -1694,24 +1727,36 @@ function MainApp() {
   }, [clearImportedPreviewKit, clearStockPreviewKit, editableKitId]);
 
   useEffect(() => {
+    groupImageCacheRef.current.clear();
+  }, [activeTextureOverrides, packageGeneration]);
+
+  useEffect(() => {
     setEditorSample(null);
-    setGroupImage(null);
     setGroupImageError(null);
-    if (!activeGroupRef) return;
+    if (!displayedGroupRef) {
+      setGroupImage(null);
+      return;
+    }
     let cancelled = false;
-    void (async () => {
-      try {
-        const url = activeTextureOverrides[activeGroupRef]
-          ?? await sourceProvider.resolvePreview(activeGroupRef);
-        const image = await loadRgbaImageData(url);
-        if (!cancelled) setGroupImage(image);
-      } catch (cause) {
+    const cacheKey = `${packageGeneration}:${activeTextureOverrides[displayedGroupRef] ?? displayedGroupRef}`;
+    let pending = groupImageCacheRef.current.get(cacheKey);
+    if (!pending) {
+      pending = (async () => {
+        const url = activeTextureOverrides[displayedGroupRef]
+          ?? await sourceProvider.resolvePreview(displayedGroupRef);
+        return loadRgbaImageData(url);
+      })();
+      groupImageCacheRef.current.set(cacheKey, pending);
+      void pending.catch(() => groupImageCacheRef.current.delete(cacheKey));
+    }
+    void pending.then((image) => {
+      if (!cancelled) setGroupImage(image);
+    }).catch((cause) => {
         console.warn('[warpaint-viewer] editable areas could not be loaded:', cause);
         if (!cancelled) setGroupImageError('The editable areas could not be loaded.');
-      }
-    })();
+    });
     return () => { cancelled = true; };
-  }, [activeGroupRef, activeTextureOverrides, sourceProvider, packageGeneration]);
+  }, [activeTextureOverrides, displayedGroupRef, sourceProvider, packageGeneration]);
 
   const editorEnabled = editorStatus === 'ready' && Boolean(activeGroupEditTarget && groupImage);
   // Camera policy follows the Edit tab itself, even while its group map is
@@ -1801,9 +1846,20 @@ function MainApp() {
     let cancelled = false;
     void Promise.all(refs.map(async (ref) => {
       try {
-        if (ref === activeGroupRef && groupImage) return [ref, groupImage] as const;
-        const url = activeTextureOverrides[ref] ?? await sourceProvider.resolvePreview(ref);
-        return [ref, await loadRgbaImageData(url)] as const;
+        if (normalizeGroupTextureReference(ref) === normalizeGroupTextureReference(displayedGroupRef ?? '') && groupImage) {
+          return [ref, groupImage] as const;
+        }
+        const cacheKey = `${packageGeneration}:${activeTextureOverrides[ref] ?? ref}`;
+        let pending = groupImageCacheRef.current.get(cacheKey);
+        if (!pending) {
+          pending = (async () => {
+            const url = activeTextureOverrides[ref] ?? await sourceProvider.resolvePreview(ref);
+            return loadRgbaImageData(url);
+          })();
+          groupImageCacheRef.current.set(cacheKey, pending);
+          void pending.catch(() => groupImageCacheRef.current.delete(cacheKey));
+        }
+        return [ref, await pending] as const;
       } catch (cause) {
         console.warn('[warpaint-viewer] one layer-map source could not be loaded:', cause);
         return null;
@@ -1813,8 +1869,8 @@ function MainApp() {
     });
     return () => { cancelled = true; };
   }, [
-    activeGroupRef,
     activeTextureOverrides,
+    displayedGroupRef,
     groupAssignmentTargets,
     groupAssignActive,
     groupImage,
@@ -3298,6 +3354,18 @@ function MainApp() {
                   onToggleGroup: toggleEditorGroup,
                   onClearSelection: clearEditorGroups,
                   onPreviewGroup: setPanelPreviewGroup,
+                  groupTextureChoices,
+                  activeGroupTextureRef: activeGroupTextureValue,
+                  onGroupTextureChange: groupTextureTarget ? (ref) => {
+                    const normalizedRef = normalizeGroupTextureReference(ref);
+                    setRequestedGroupTextureRef(normalizedRef);
+                    if (setSessionGroupTexture(groupTextureTarget, ref)) {
+                      setEditorSample(null);
+                      setPanelPreviewGroup(null);
+                    } else {
+                      setRequestedGroupTextureRef(null);
+                    }
+                  } : undefined,
                   dirty: editorDirty,
                   canDownload: editableKitId !== null && !editorLoading && !editorPackageExporting,
                   exporting: editorPackageExporting,

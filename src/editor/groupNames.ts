@@ -96,4 +96,35 @@ export function lookupGroupNameWeapon(groupsRef: string): string | null {
   return GROUP_NAME_REFERENCE.textures[normalizeGroupTextureReference(groupsRef)]?.weapon ?? null;
 }
 
+export interface CompatibleGroupTexture {
+  readonly ref: string;
+  readonly label: string;
+}
+
+function groupTextureLayoutNumber(ref: string): number | null {
+  const base = ref.split('/').at(-1) ?? ref;
+  const match = base.match(/_groups(?:_?0*([1-9]\d*))?$/i);
+  if (!match) return null;
+  return match[1] === undefined ? 1 : Number(match[1]);
+}
+
+/** Return every curated stock group-map layout for the same weapon. */
+export function compatibleGroupTextures(groupsRef: string): CompatibleGroupTexture[] {
+  const current = GROUP_NAME_REFERENCE.textures[normalizeGroupTextureReference(groupsRef)];
+  if (!current) return [];
+  return Object.entries(GROUP_NAME_REFERENCE.textures)
+    .filter(([, entry]) => entry.weapon === current.weapon)
+    .map(([ref]) => ({ ref, number: groupTextureLayoutNumber(ref) }))
+    .sort((left, right) => {
+      if (left.number !== null && right.number !== null && left.number !== right.number) return left.number - right.number;
+      if (left.number !== null) return -1;
+      if (right.number !== null) return 1;
+      return left.ref.localeCompare(right.ref);
+    })
+    .map(({ ref, number }, index) => ({
+      ref,
+      label: `Layout ${number ?? index + 1}`,
+    }));
+}
+
 export const groupNameReferenceSource = GROUP_NAME_REFERENCE.source;

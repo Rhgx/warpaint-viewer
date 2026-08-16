@@ -13,6 +13,20 @@ const IDLE_TIMEOUT_MS = 2_000;
 const IDLE_FALLBACK_DELAY_MS = 250;
 const INTERACTIVE_COMPOSE_MAX_DIMENSION = 256;
 
+/** Stable, compact identity for a resolved recipe used by the GPU-result LRU. */
+export function recipeFingerprint(recipe: RecipeNode): string {
+  const text = JSON.stringify(recipe);
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code, 0x85ebca6b);
+    second ^= second >>> 13;
+  }
+  return `${text.length}:${(first >>> 0).toString(16)}:${(second >>> 0).toString(16)}`;
+}
+
 interface IdleDeadlineLike {
   didTimeout: boolean;
   timeRemaining(): number;
@@ -134,6 +148,7 @@ export function useComposedPaint({
   const interactiveResultRef = useRef<ComposeResult | null>(null);
   const composeCacheRef = useRef(new Map<string, ComposeResult>());
   const lastComposeKeyRef = useRef<string>('');
+  const lastRequestKeyRef = useRef<string>('');
   const firstPaintLoggedRef = useRef(false);
 
   const [composing, setComposing] = useState(false);
@@ -141,11 +156,13 @@ export function useComposedPaint({
 
   const resetComposeKey = useCallback(() => {
     lastComposeKeyRef.current = '';
+    lastRequestKeyRef.current = '';
   }, []);
 
   const disposeCache = useCallback(() => {
     const composeCache = composeCacheRef.current;
     lastComposeKeyRef.current = '';
+    lastRequestKeyRef.current = '';
     for (const result of new Set(composeCache.values())) result.target.dispose();
     composeCache.clear();
     if (interactiveResultRef.current) {
@@ -178,8 +195,8 @@ export function useComposedPaint({
       height: Math.max(1, Math.round(fullDimensions.height * interactiveScale)),
     };
 
-    const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|definition:${definitionGeneration}|interactive:${interactive ? interactiveKey : '0'}`;
-    if (composeKey === lastComposeKeyRef.current) {
+    const requestKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|definition:${definitionGeneration}|interactive:${interactive ? interactiveKey : '0'}`;
+    if (requestKey === lastRequestKeyRef.current) {
       // The consumer can become active after the texture was already accepted
       // (for example, opening Transform from Parts). Replay the retained GPU
       // result instead of forcing an identical composition just to populate a
@@ -268,6 +285,22 @@ export function useComposedPaint({
       const comp = compositorRef.current;
       const viewer = viewerRef.current;
       if (cancelled || !comp || !viewer) return;
+      let sourceRecipe: RecipeNode | null;
+      try {
+        sourceRecipe = interactiveRecipe
+          ?? await resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
+      } catch (cause) {
+        console.error('[warpaint-viewer] recipe resolution failed:', cause);
+        return;
+      }
+      if (cancelled) return;
+      if (!sourceRecipe) {
+        console.warn(`[warpaint-viewer] no recipe for ${requestKey}`);
+        if (!firstPaintLoggedRef.current) setError('The initial warpaint recipe is missing.');
+        return;
+      }
+      const recipe = applyTextureOverrides(sourceRecipe, activeTextureOverrides);
+      const composeKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|recipe:${recipeFingerprint(recipe)}|interactive:${interactive ? interactiveKey : '0'}`;
 
       const cached = composeCacheRef.current.get(composeKey);
       if (cached) {
@@ -286,6 +319,7 @@ export function useComposedPaint({
         setVisibleDefinitionGeneration(definitionGeneration);
         lastResultRef.current = cached;
         lastComposeKeyRef.current = composeKey;
+        lastRequestKeyRef.current = requestKey;
         setComposing(false);
         return;
       }
@@ -295,17 +329,7 @@ export function useComposedPaint({
       badgeTimer = window.setTimeout(() => {
         if (!cancelled) setComposing(true);
       }, COMPOSE_BADGE_DELAY_MS);
-      const t0 = performance.now();
       try {
-        const sourceRecipe = interactiveRecipe
-          ?? await resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
-        if (cancelled) return;
-        if (!sourceRecipe) {
-          console.warn(`[warpaint-viewer] no recipe for ${composeKey}`);
-          if (!firstPaintLoggedRef.current) setError('The initial warpaint recipe is missing.');
-          return;
-        }
-        const recipe = applyTextureOverrides(sourceRecipe, activeTextureOverrides);
         // compose() loads precisely the textures selected by this seed. Do not
         // block the first visible paint on every possible sticker alternative.
         if (!firstPaintLoggedRef.current) advanceBoot(70, 'Composing initial warpaint…');
@@ -335,8 +359,7 @@ export function useComposedPaint({
         if (!interactive) cacheResult(composeKey, result, comp);
         lastResultRef.current = result;
         lastComposeKeyRef.current = composeKey;
-        const dt = performance.now() - t0;
-        if (import.meta.env.DEV) console.log(`[perf] compose ${composeKey} in ${dt.toFixed(1)}ms`);
+        lastRequestKeyRef.current = requestKey;
         if (!firstPaintLoggedRef.current) {
           firstPaintLoggedRef.current = true;
           advanceBoot(100, 'Ready');
@@ -362,12 +385,12 @@ export function useComposedPaint({
         void (async () => {
           const variant = likelyVariant();
           if (!variant || cancelled || compositorRef.current !== comp) return;
-          const key = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${variant.team}|${variant.wear}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|definition:${definitionGeneration}`;
-          if (composeCacheRef.current.has(key)) return;
           await waitForIdle();
           if (cancelled || compositorRef.current !== comp || !allowSpeculativeCompose()) return;
           const variantRecipe = await resolveRecipe(selectedKit, state.weaponKey, variant.team, variant.wear);
           if (!variantRecipe || cancelled) return;
+          const key = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${variant.team}|${variant.wear}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|recipe:${recipeFingerprint(variantRecipe)}|interactive:0`;
+          if (composeCacheRef.current.has(key)) return;
           await comp.preload(variantRecipe);
           if (cancelled || compositorRef.current !== comp || !allowSpeculativeCompose()) return;
           await waitForIdle();

@@ -21,4 +21,13 @@ test('curated group names', () => {
   assert.equal(implementation.formatGroupNameForDisplay('Pump Wires (though the wear texture always zeroes this out)'), 'Pump Wires');
   assert.equal(implementation.formatGroupNameForDisplay('Barrel Between Rearmost and Foremost Barrel Bracket'), 'Barrel Between Rearmost and Foremost…');
   assert.ok(implementation.formatGroupNameForDisplay(fullFlamethrowerName).length <= 42);
+
+  const rocketLayouts = implementation.compatibleGroupTextures(
+    'textures/models/weapons/c_models/c_rocketlauncher/p_rocketlauncher_groups_04.webp',
+  );
+  assert.deepEqual(rocketLayouts.map((entry) => entry.label), [
+    'Layout 1', 'Layout 2', 'Layout 3', 'Layout 4', 'Layout 5',
+  ]);
+  assert.equal(rocketLayouts[2]?.ref, 'models/weapons/c_models/c_rocketlauncher/p_rocketlauncher_groups03');
+  assert.deepEqual(implementation.compatibleGroupTextures('models/not-in-reference/p_groups'), []);
 });

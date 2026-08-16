@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Eye, Trash2 } from 'lucide-react';
-import { formatGroupNameForDisplay } from '../../editor/groupNames';
+import { Select } from '@base-ui/react/select';
+import { Check, ChevronDown, Eye, Trash2 } from 'lucide-react';
+import { formatGroupNameForDisplay, type CompatibleGroupTexture } from '../../editor/groupNames';
 import { rawGroupIdForBucket } from '../../editor/groupSampling';
 import './VisualWarpaintEditorPanel.css';
 
@@ -26,6 +27,9 @@ export interface VisualWarpaintEditorPanelProps {
   readonly onToggleGroup: (groupId: number) => void;
   readonly onClearSelection: () => void;
   readonly onPreviewGroup?: (groupId: number | null) => void;
+  readonly groupTextureChoices?: readonly CompatibleGroupTexture[];
+  readonly activeGroupTextureRef?: string;
+  readonly onGroupTextureChange?: (ref: string) => void;
   /** Retained for the workbench contract; assignment is implicit while Edit is open. */
   readonly inspectOnClick: boolean;
   readonly onInspectOnClickChange: (active: boolean) => void;
@@ -62,6 +66,9 @@ export function VisualWarpaintEditorPanel({
   onToggleGroup,
   onClearSelection,
   onPreviewGroup,
+  groupTextureChoices,
+  activeGroupTextureRef,
+  onGroupTextureChange,
   showLayerMap,
   onShowLayerMapChange,
   activeLayerIndex,
@@ -75,6 +82,8 @@ export function VisualWarpaintEditorPanel({
   const areaCount = selectedGroupIds.length;
   const layerLabel = activeLayerLabel ?? `Layer ${(activeLayerIndex ?? 0) + 1}`;
   const activeLayerColor = activeLayerIndex !== undefined ? layerColors?.[activeLayerIndex] : undefined;
+  const selectedGroupTexture = groupTextureChoices?.find((choice) => choice.ref === activeGroupTextureRef);
+  const groupTextureName = (ref: string) => ref.split('/').at(-1) ?? ref;
 
   const availableParts = Object.entries(groupLabels ?? {})
     .map(([groupId, name]) => ({ groupId: Number(groupId), name }))
@@ -162,6 +171,49 @@ export function VisualWarpaintEditorPanel({
         <span className="visual-warpaint-editor-head-count">{areaCount} of {availableParts.length}</span>
         {headerSlot}
         <div className="visual-warpaint-editor-head-spacer" />
+        {(groupTextureChoices?.length ?? 0) > 1 && (
+          <div className="visual-warpaint-editor-layout">
+            <span>Group layout</span>
+            <Select.Root
+              value={activeGroupTextureRef}
+              onValueChange={(value) => onGroupTextureChange?.(value as string)}
+            >
+              <Select.Trigger
+                className="ui-select-trigger visual-warpaint-editor-layout-trigger"
+                aria-label="Weapon group layout"
+                title={activeGroupTextureRef}
+                disabled={!onGroupTextureChange}
+              >
+                <Select.Value>
+                  {() => selectedGroupTexture ? (
+                    <span className="visual-warpaint-editor-layout-option">
+                      <span>{selectedGroupTexture.label}</span>
+                      <span>( {groupTextureName(selectedGroupTexture.ref)} )</span>
+                    </span>
+                  ) : 'Select layout'}
+                </Select.Value>
+                <Select.Icon className="ui-select-icon"><ChevronDown size={12} /></Select.Icon>
+              </Select.Trigger>
+              <Select.Portal>
+                <Select.Positioner className="ui-select-positioner" sideOffset={4} alignItemWithTrigger={false}>
+                  <Select.Popup className="ui-select-popup visual-warpaint-editor-layout-popup">
+                    {groupTextureChoices?.map((choice) => (
+                      <Select.Item key={choice.ref} value={choice.ref} className="ui-select-item">
+                        <Select.ItemText>
+                          <span className="visual-warpaint-editor-layout-option">
+                            <span>{choice.label}</span>
+                            <span>( {groupTextureName(choice.ref)} )</span>
+                          </span>
+                        </Select.ItemText>
+                        <Select.ItemIndicator className="ui-select-indicator"><Check size={12} /></Select.ItemIndicator>
+                      </Select.Item>
+                    ))}
+                  </Select.Popup>
+                </Select.Positioner>
+              </Select.Portal>
+            </Select.Root>
+          </div>
+        )}
         <button
           type="button"
           className="visual-warpaint-editor-layer-map-toggle"

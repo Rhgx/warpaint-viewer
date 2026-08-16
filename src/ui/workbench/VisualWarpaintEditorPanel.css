@@ -51,6 +51,56 @@
 
 .visual-warpaint-editor-head-spacer { flex: 1; }
 
+.visual-warpaint-editor-layout {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.visual-warpaint-editor-layout-trigger {
+  width: 225px;
+  min-width: 0;
+  min-height: var(--control-h);
+  padding-block: 0;
+  font-size: 10.5px;
+}
+
+.visual-warpaint-editor-layout-trigger:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.visual-warpaint-editor-layout-option {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.visual-warpaint-editor-layout-option > span:first-child { flex: none; }
+
+.visual-warpaint-editor-layout-option > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+}
+
+.visual-warpaint-editor-layout-popup {
+  width: min(250px, var(--available-width));
+  min-width: 0;
+}
+
+.visual-warpaint-editor-layout-popup .ui-select-item[data-highlighted] .visual-warpaint-editor-layout-option > span:last-child {
+  color: color-mix(in srgb, currentColor 72%, transparent);
+}
+
 .visual-warpaint-editor-layer-map-toggle,
 .visual-warpaint-editor-clear {
   display: inline-flex;
