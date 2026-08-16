@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { test } from 'vitest';
 import { resolveRecipe } from '../../../src/compositor/resolve';
 import { advancePaintkitStream, createPaintkitRandomState, resolveRange } from '../../../src/compositor/rng';
@@ -11,8 +13,14 @@ import {
 } from '../../../src/editor/mutations';
 import { serializeProtoDefKitMessages } from '../../../src/editor/jsonExport';
 import { normalizeProtoDefFragments } from '../../../src/protodefs/jsonFragments';
-import { discoverTextureTransformTargets } from '../../../src/editor/transformTargets';
+import { discoverBaseTextureTransformTarget, discoverTextureTransformTargets } from '../../../src/editor/transformTargets';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
+import {
+  decodeProtoDefs,
+  extractKitMessages,
+  getKitWeaponSlots,
+  resolveKitRecipeWithProvenance,
+} from '../../../src/protodefs/decoder';
 
 const stagePath = ['operation', 'operation_node', '0', 'stage', 'texture_lookup'] as const;
 
@@ -62,6 +70,71 @@ function weaponVariables(messages: ProtoDefKitMessages, weapon: 'rocketlauncher'
   const item = record(messages.definition[weapon]);
   return record(item.data).variable as Record<string, unknown>[];
 }
+
+test('discovers the unmasked base texture as its own transform layer', () => {
+  const messages: ProtoDefKitMessages = {
+    operation: {
+      header: { variables: [
+        { name: 'texture_layer_1', value: 'patterns/test/base' },
+        { name: 'texture_layer_1_rotate', value: '0 360', inherit: true },
+      ] },
+      operation_node: [{ stage: { combine_lerp: { operation_node: [
+        { stage: { texture_lookup: {
+          texture: { variable: 'texture_layer_1' },
+          rotation: { variable: 'texture_layer_1_rotate' },
+        } } },
+        { stage: { texture_lookup: { texture: { string: 'patterns/overlay' } } } },
+      ] } } }],
+    },
+    definition: { header: {}, rocketlauncher: { data: { variable: [
+      { variable: 'texture_layer_1_rotate', string: '85 95' },
+    ] } } },
+  };
+  const fieldPath = [
+    'operation', 'operation_node', '0', 'stage', 'combine_lerp', 'operation_node', '0',
+    'stage', 'texture_lookup', 'texture',
+  ];
+  const discovered = discoverBaseTextureTransformTarget(messages, [{
+    fieldPath,
+    provenance: {
+      variableName: 'texture_layer_1',
+      effectiveValue: 'patterns/workshop/crate_pattern',
+      sourcePath: ['operation', 'header', 'variables', '0'],
+      editableSourcePath: ['operation', 'header', 'variables', '0'],
+      scope: 'global',
+      canOverride: false,
+    },
+  }]);
+  assert.ok(discovered);
+  assert.equal(discovered.label, 'Crate Pattern');
+  assert.equal(discovered.textureRef, 'patterns/workshop/crate_pattern');
+  assert.deepEqual(discovered.transform.target.stagePath, fieldPath.slice(0, -1));
+});
+
+test('Storage War exposes its crate pattern base in Transform', () => {
+  const root = path.resolve(import.meta.dirname, '..', '..', '..');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'manifest.json'), 'utf8')) as {
+    paintkits: Array<{ id: number }>;
+  };
+  const decoded = decodeProtoDefs(
+    new Uint8Array(fs.readFileSync(path.join(root, 'public', 'data', 'protodefs-full.bin'))),
+    {
+      weaponsByItemDef: JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'item-defs.json'), 'utf8')),
+      builtInIds: manifest.paintkits.map((paint) => paint.id),
+    },
+  );
+  const messages = extractKitMessages(decoded, 441);
+  const slot = getKitWeaponSlots(decoded, 441).find((entry) => entry.weaponKey === 'c_rocketlauncher');
+  assert.ok(messages && slot);
+  const recipe = resolveKitRecipeWithProvenance(decoded, 441, slot.weaponKey, 'red', 0);
+  assert.ok(recipe);
+  const base = discoverBaseTextureTransformTarget(messages, recipe.provenance);
+  assert.ok(base);
+  assert.equal(base.label, 'Crate Pattern');
+  assert.match(base.textureRef, /crate_pattern$/);
+  assert.deepEqual([base.transform.rotation.min, base.transform.rotation.max], [85, 95]);
+  assert.deepEqual([base.transform.scaleUv.min, base.transform.scaleUv.max], [2, 2.5]);
+});
 
 test('texture transform scope, normalization, history and JSON round trip', () => {
   const original = fixture();

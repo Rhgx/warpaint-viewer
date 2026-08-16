@@ -37,11 +37,14 @@ import { customKitDefindex, isCustomKitId } from './protodefs/types';
 import type { CustomDefinitionsState, ProtoDefKitWeaponSlot, ProtoDefRecipeWithProvenance } from './protodefs/types';
 import { useProtoDefEditorSession } from './editor/useProtoDefEditorSession';
 import { discoverGroupSelectTargets, discoverGroupTextureTarget } from './editor/groupTargets';
-import { discoverTextureTransformTargets, type TextureTransformRangeFieldState } from './editor/transformTargets';
+import {
+  discoverBaseTextureTransformTarget,
+  discoverTextureTransformTargets,
+  type TextureTransformRangeFieldState,
+} from './editor/transformTargets';
 import {
   collectResolvedLayerIsolationNodes,
   preferredLayerOccurrenceIndex,
-  preferredNamedTextureOccurrenceIndex,
 } from './editor/transformIsolation';
 import { discoverWeaponMaterialTargets } from './editor/materialTargets';
 import type { TextureTransformRangeField, TextureTransformTarget } from './editor/mutations';
@@ -143,15 +146,24 @@ const TRANSFORM_FIELD_TO_RECIPE: Record<keyof TextureTransformFields, 'rotation'
 
 function previewTextureTransformRange(
   node: RecipeNode,
-  target: RecipeNode,
+  target: RecipeNode | null,
+  matchingTextureRef: string | null,
   field: keyof TextureTransformFields,
   value: SeedRangeValue,
 ): RecipeNode {
-  if (node === target && node.type === 'texture_lookup') {
+  const matchesTexture = node.type === 'texture_lookup' && matchingTextureRef !== null
+    && protoTextureReference(node.texture) === protoTextureReference(matchingTextureRef);
+  if (node.type === 'texture_lookup' && (node === target || matchesTexture)) {
     return { ...node, [TRANSFORM_FIELD_TO_RECIPE[field]]: [value.min, value.max] };
   }
   if (!('nodes' in node)) return node;
-  const nodes = node.nodes.map((child) => previewTextureTransformRange(child, target, field, value));
+  const nodes = node.nodes.map((child) => previewTextureTransformRange(
+    child,
+    target,
+    matchingTextureRef,
+    field,
+    value,
+  ));
   return nodes.every((child, index) => child === node.nodes[index]) ? node : { ...node, nodes };
 }
 
@@ -209,6 +221,17 @@ function collectRecipeLayerNodes(node: RecipeNode, output: (RecipeNode | undefin
     output.push(preceding?.type === 'texture_lookup' ? preceding : undefined);
   });
   return output;
+}
+
+function findRecipeTextureNode(node: RecipeNode, textureRef: string): RecipeNode | null {
+  let result: RecipeNode | null = node.type === 'texture_lookup'
+    && protoTextureReference(node.texture) === protoTextureReference(textureRef)
+    ? node
+    : null;
+  if ('nodes' in node) {
+    for (const child of node.nodes) result = findRecipeTextureNode(child, textureRef) ?? result;
+  }
+  return result;
 }
 
 function collectResolvedLayerTextureNodes(
@@ -462,6 +485,7 @@ function MainApp() {
   const layerThumbnailCacheRef = useRef(new Map<string, Promise<RgbaImageDataLike | null>>());
   const layerThumbnailGenerationRef = useRef('');
   const [activeEditorSelector, setActiveEditorSelector] = useState(0);
+  const [weaponBaseLayerActive, setWeaponBaseLayerActive] = useState(false);
   const [editorTool, setEditorTool] = useState<'paint' | 'sticker'>('paint');
   // Parts/Transform sub-view of paint mode. Lives beside editorTool rather
   // than nested under it, since it only matters while editorTool === 'paint'.
@@ -604,6 +628,22 @@ function MainApp() {
     () => editorOriginal ? discoverTextureTransformTargets(editorOriginal) : null,
     [editorOriginal],
   );
+  const baseTextureTransform = useMemo(
+    () => editorCurrent ? discoverBaseTextureTransformTarget(editorCurrent, stickerRecipe?.provenance) : null,
+    [editorCurrent, stickerRecipe],
+  );
+  const sharedBaseTextureTransform = useMemo(
+    () => editorCurrent ? discoverBaseTextureTransformTarget(editorCurrent) : null,
+    [editorCurrent],
+  );
+  const originalBaseTextureTransform = useMemo(
+    () => editorOriginal ? discoverBaseTextureTransformTarget(editorOriginal, stickerRecipe?.provenance) : null,
+    [editorOriginal, stickerRecipe],
+  );
+  const originalSharedBaseTextureTransform = useMemo(
+    () => editorOriginal ? discoverBaseTextureTransformTarget(editorOriginal) : null,
+    [editorOriginal],
+  );
   const editableGroupTargets = useMemo(() => (
     groupDiscovery?.targets.filter((target, index, targets) => (
       target.canToggle && targets.findIndex((candidate) => candidate.canToggle && candidate.sourceKey === target.sourceKey) === index
@@ -622,39 +662,42 @@ function MainApp() {
   // occurrence that matches the finished paint; group assignment retains the
   // first authored selector target because both share the same source slots.
   const activeGroupVisualIndex = groupDiscovery
-    ? state.weaponKey === 'paintkit_tool' && activeGroupTarget?.label.trim().toLowerCase() === 'albedo'
-      ? preferredNamedTextureOccurrenceIndex(
-        groupDiscovery.targets,
-        transformDiscovery?.targets ?? [],
-        activeGroupTarget,
-        'albedo',
-      )
-      : preferredLayerOccurrenceIndex(groupDiscovery.targets, activeGroupTarget)
+    ? preferredLayerOccurrenceIndex(groupDiscovery.targets, activeGroupTarget)
     : -1;
-  const activeTransformTargetInfo = activeGroupVisualIndex >= 0
-    ? (transformScope === 'all' ? sharedTransformDiscovery : transformDiscovery)?.targets[activeGroupVisualIndex] ?? null
-    : null;
-  const originalTransformTargetInfo = activeGroupVisualIndex >= 0
-    ? (transformScope === 'all' ? originalSharedTransformDiscovery : originalTransformDiscovery)?.targets[activeGroupVisualIndex] ?? null
-    : null;
+  const activeTransformTargetInfo = weaponBaseLayerActive
+    ? (transformScope === 'all' ? sharedBaseTextureTransform : baseTextureTransform)?.transform ?? null
+    : activeGroupVisualIndex >= 0
+      ? (transformScope === 'all' ? sharedTransformDiscovery : transformDiscovery)?.targets[activeGroupVisualIndex] ?? null
+      : null;
+  const originalTransformTargetInfo = weaponBaseLayerActive
+    ? (transformScope === 'all' ? originalSharedBaseTextureTransform : originalBaseTextureTransform)?.transform ?? null
+    : activeGroupVisualIndex >= 0
+      ? (transformScope === 'all' ? originalSharedTransformDiscovery : originalTransformDiscovery)?.targets[activeGroupVisualIndex] ?? null
+      : null;
   // The RecipeNode counterpart of activeTransformTargetInfo, used to composite
   // preview tiles (which need the authored subtree, not just its field values).
   const recipeLayerNodes = useMemo(
     () => stickerRecipe ? collectRecipeLayerNodes(stickerRecipe.tree) : [],
     [stickerRecipe],
   );
-  const activeTransformLayerNode = activeGroupVisualIndex >= 0
-    ? recipeLayerNodes[activeGroupVisualIndex] ?? null
-    : null;
+  const activeTransformLayerNode = weaponBaseLayerActive && baseTextureTransform && stickerRecipe
+    ? findRecipeTextureNode(stickerRecipe.tree, baseTextureTransform.textureRef)
+    : activeGroupVisualIndex >= 0
+      ? recipeLayerNodes[activeGroupVisualIndex] ?? null
+      : null;
   const transformPreviewRecipe = useMemo(() => {
-    if (!stickerRecipe || !activeTransformLayerNode || !transformDraft) return stickerRecipe?.tree ?? null;
+    if (!stickerRecipe || !transformDraft
+      || (!activeTransformLayerNode && !(weaponBaseLayerActive && baseTextureTransform))) {
+      return stickerRecipe?.tree ?? null;
+    }
     return previewTextureTransformRange(
       stickerRecipe.tree,
       activeTransformLayerNode,
+      weaponBaseLayerActive ? baseTextureTransform?.textureRef ?? null : null,
       transformDraft.key,
       transformDraft.value,
     );
-  }, [activeTransformLayerNode, stickerRecipe, transformDraft]);
+  }, [activeTransformLayerNode, baseTextureTransform, stickerRecipe, transformDraft, weaponBaseLayerActive]);
   const resolvedGroupSelects = useMemo(() => {
     const recipe = editorRecipes.find((entry) => entry.wearIndex === state.wearIndex)?.recipe
       ?? editorRecipes[0]?.recipe;
@@ -687,13 +730,41 @@ function MainApp() {
   useEffect(() => {
     setRequestedGroupTextureRef(null);
     setGroupImage(null);
+    setWeaponBaseLayerActive(false);
     groupImageCacheRef.current.clear();
     autoAlbedoAssignmentKeysRef.current.clear();
   }, [editableKitId, state.weaponKey]);
+  const activeGroupBuckets = useMemo(
+    () => groupImage ? groupBucketsInImage(groupImage) : [],
+    [groupImage],
+  );
+  const groupAssignmentTargets = useMemo(() => editableGroupTargets.map((target, index) => {
+    const matchingOperationIndexes = groupDiscovery?.targets.flatMap((candidate, operationIndex) => (
+      candidate.sourceKey === target.sourceKey ? [operationIndex] : []
+    )) ?? [];
+    const resolvedMatches = matchingOperationIndexes.flatMap((operationIndex) => (
+      resolvedGroupSelects[operationIndex] ? [resolvedGroupSelects[operationIndex]] : []
+    ));
+    const resolved = resolvedMatches.at(-1);
+    const selectedGroupIds = target.hasInheritedVariableValues ? resolved?.select : target.selectedGroupIds;
+    return {
+      label: editorSelectors[index]?.label ?? target.label,
+      groupsRef: resolved?.groups ?? target.groupsRef,
+      textureRef: resolved?.textureRef ?? target.textureRef,
+      selectedGroupIds: selectedGroupIds ?? [],
+      target: {
+        ...target.target,
+        ...(target.hasInheritedVariableValues && resolved
+          ? { effectiveSelectValues: resolved.select }
+          : {}),
+      },
+      canAssign: !target.hasInheritedVariableValues || Boolean(resolved),
+    };
+  }), [editableGroupTargets, editorSelectors, groupDiscovery, resolvedGroupSelects]);
   // The operation can inherit its starting selector values from the selected
   // weapon or wear. Show the values the model is actually using until an edit
   // intentionally locks those slots into the draft operation.
-  const activeSelectedRawGroupIds = useMemo(() => (
+  const explicitActiveSelectedRawGroupIds = useMemo(() => (
     activeGroupTarget?.hasInheritedVariableValues
       ? activeResolvedGroupSelect?.select
       : activeGroupTarget?.selectedGroupIds
@@ -701,6 +772,13 @@ function MainApp() {
     activeGroupTarget,
     activeResolvedGroupSelect,
   ]);
+  const activeSelectedRawGroupIds = useMemo(() => {
+    if (!weaponBaseLayerActive) return explicitActiveSelectedRawGroupIds;
+    const assigned = new Set(groupAssignmentTargets.flatMap((target) => target.selectedGroupIds));
+    return activeGroupBuckets
+      .map(rawGroupIdForBucket)
+      .filter((groupId): groupId is number => groupId !== null && !assigned.has(groupId));
+  }, [activeGroupBuckets, explicitActiveSelectedRawGroupIds, groupAssignmentTargets, weaponBaseLayerActive]);
   const activeSelectedGroupBuckets = useMemo(() => activeSelectedRawGroupIds
     .map(groupByteToCompositorBucket)
     .filter((bucket): bucket is number => bucket !== null && bucket > 0)
@@ -774,10 +852,6 @@ function MainApp() {
     transformUvIsolationOverlayUrlRef.current = null;
     if (priorUrl) URL.revokeObjectURL(priorUrl);
   }, []);
-  const activeGroupBuckets = useMemo(
-    () => groupImage ? groupBucketsInImage(groupImage) : [],
-    [groupImage],
-  );
   const activeGroupLabels = useMemo(() => {
     if (!displayedGroupRef) return {};
     const labels: Record<number, string> = {};
@@ -790,37 +864,6 @@ function MainApp() {
     }
     return labels;
   }, [activeGroupBuckets, displayedGroupRef]);
-  const groupAssignmentTargets = useMemo(() => editableGroupTargets.map((target, index) => {
-    const matchingOperationIndexes = groupDiscovery?.targets.flatMap((candidate, operationIndex) => (
-      candidate.sourceKey === target.sourceKey ? [operationIndex] : []
-    )) ?? [];
-    const resolvedMatches = matchingOperationIndexes.flatMap((operationIndex) => (
-      resolvedGroupSelects[operationIndex] ? [resolvedGroupSelects[operationIndex]] : []
-    ));
-    const resolved = resolvedMatches.at(-1);
-    const selectedGroupIds = target.hasInheritedVariableValues ? resolved?.select : target.selectedGroupIds;
-    return {
-      label: editorSelectors[index]?.label ?? target.label,
-      groupsRef: resolved?.groups ?? target.groupsRef,
-      // The texture is the paint artwork immediately preceding this selector,
-      // not its grayscale groups map. Keep it attached to the eventual editor
-      // assignment target so layer cues can contrast against what users see.
-      // A logical selector can be authored more than once in a recipe. The
-      // later occurrence is the visible paint pass; earlier occurrences often
-      // initialise every layer with the same albedo and made all thumbnails
-      // look identical. A compound pass falls back to its final texture leaf.
-      textureRef: resolved?.textureRef ?? target.textureRef,
-      selectedGroupIds: selectedGroupIds ?? [],
-      target: {
-        ...target.target,
-        ...(target.hasInheritedVariableValues && resolved
-          ? { effectiveSelectValues: resolved.select }
-          : {}),
-      },
-      canAssign: !target.hasInheritedVariableValues || Boolean(resolved),
-    };
-  }), [editableGroupTargets, editorSelectors, groupDiscovery, resolvedGroupSelects]);
-
   useEffect(() => {
     if (!displayedGroupRef || !groupImage || editableKitId === null) return;
     const assignmentKey = `${editableKitId}:${state.weaponKey}:${normalizeGroupTextureReference(displayedGroupRef)}`;
@@ -853,8 +896,14 @@ function MainApp() {
         .filter((bucket): bucket is number => bucket !== null && bucket > 0)
         .forEach((bucket) => { map[bucket] = layerIndex; });
     });
+    if (baseTextureTransform) {
+      const baseLayerIndex = groupAssignmentTargets.length;
+      for (const bucket of activeGroupBuckets) {
+        if (map[bucket] === undefined) map[bucket] = baseLayerIndex;
+      }
+    }
     return map;
-  }, [groupAssignmentTargets]);
+  }, [activeGroupBuckets, baseTextureTransform, groupAssignmentTargets]);
   const activeGroupAssignmentTarget = groupAssignmentTargets[activeEditorSelector]
     ?? groupAssignmentTargets[0]
     ?? null;
@@ -864,7 +913,9 @@ function MainApp() {
   // Keep the focused part cue in the same stable color as this layer's
   // all-layer map entry. This remains useful even when the map itself is
   // hidden: switching layers is enough to establish the cue's color.
-  const activeEditorLayerIndex = activeGroupAssignmentTarget === null
+  const activeEditorLayerIndex = weaponBaseLayerActive
+    ? groupAssignmentTargets.length
+    : activeGroupAssignmentTarget === null
     ? 0
     : Math.max(0, groupAssignmentTargets.indexOf(activeGroupAssignmentTarget));
 
@@ -878,31 +929,57 @@ function MainApp() {
   // Aligned with editorSelectors/groupAssignmentTargets (one entry per visible
   // layer), unlike transformDiscovery.targets which is aligned with the raw,
   // undeduplicated groupDiscovery.targets.
-  const layerHasTransformEdits = useMemo(() => editableGroupTargets.map((target) => {
-    const operationIndex = groupDiscovery
-      ? preferredLayerOccurrenceIndex(groupDiscovery.targets, target)
-      : -1;
-    const info = operationIndex >= 0 ? transformDiscovery?.targets[operationIndex] : null;
-    if (!info) return false;
-    return !transformFieldIsDefault(info.rotation, [0, 0])
-      || !transformFieldIsDefault(info.scaleUv, [1, 1])
-      || !transformFieldIsDefault(info.translateU, [0, 0])
-      || !transformFieldIsDefault(info.translateV, [0, 0])
-      || info.flipU.allowed
-      || info.flipV.allowed;
-  }), [editableGroupTargets, groupDiscovery, transformDiscovery]);
+  const layerHasTransformEdits = useMemo(() => {
+    const layers = editableGroupTargets.map((target) => {
+      const operationIndex = groupDiscovery
+        ? preferredLayerOccurrenceIndex(groupDiscovery.targets, target)
+        : -1;
+      const info = operationIndex >= 0 ? transformDiscovery?.targets[operationIndex] : null;
+      if (!info) return false;
+      return !transformFieldIsDefault(info.rotation, [0, 0])
+        || !transformFieldIsDefault(info.scaleUv, [1, 1])
+        || !transformFieldIsDefault(info.translateU, [0, 0])
+        || !transformFieldIsDefault(info.translateV, [0, 0])
+        || info.flipU.allowed
+        || info.flipV.allowed;
+    });
+    const base = baseTextureTransform?.transform;
+    if (base) layers.push(
+      !transformFieldIsDefault(base.rotation, [0, 0])
+      || !transformFieldIsDefault(base.scaleUv, [1, 1])
+      || !transformFieldIsDefault(base.translateU, [0, 0])
+      || !transformFieldIsDefault(base.translateV, [0, 0])
+      || base.flipU.allowed
+      || base.flipV.allowed,
+    );
+    return layers;
+  }, [baseTextureTransform, editableGroupTargets, groupDiscovery, transformDiscovery]);
+
+  const layerTransformLocked = useMemo(() => {
+    const layers = editableGroupTargets.map((target) => {
+      const operationIndex = groupDiscovery
+        ? preferredLayerOccurrenceIndex(groupDiscovery.targets, target)
+        : -1;
+      const info = operationIndex >= 0 ? transformDiscovery?.targets[operationIndex] : null;
+      return target.label.trim().toLowerCase() === 'albedo'
+        || !info
+        || info.blockers.length > 0;
+    });
+    if (baseTextureTransform) layers.push(baseTextureTransform.transform.blockers.length > 0);
+    return layers;
+  }, [baseTextureTransform, editableGroupTargets, groupDiscovery, transformDiscovery]);
 
   // Open on the selected weapon whenever this layer actually resolves one of
   // its transform fields from a weapon-local source. Otherwise show the shared
   // value. The user can still change scope afterward because scope itself is
   // deliberately not a dependency of this synchronization.
   useEffect(() => {
-    const weaponInfo = activeGroupVisualIndex >= 0
-      ? transformDiscovery?.targets[activeGroupVisualIndex]
-      : null;
-    const sharedInfo = activeGroupVisualIndex >= 0
-      ? sharedTransformDiscovery?.targets[activeGroupVisualIndex]
-      : null;
+    const weaponInfo = weaponBaseLayerActive
+      ? baseTextureTransform?.transform
+      : activeGroupVisualIndex >= 0 ? transformDiscovery?.targets[activeGroupVisualIndex] : null;
+    const sharedInfo = weaponBaseLayerActive
+      ? sharedBaseTextureTransform?.transform
+      : activeGroupVisualIndex >= 0 ? sharedTransformDiscovery?.targets[activeGroupVisualIndex] : null;
     const differsFromShared = Boolean(weaponInfo && sharedInfo && (
       !transformRangeStatesEqual(weaponInfo.rotation, sharedInfo.rotation)
       || !transformRangeStatesEqual(weaponInfo.scaleUv, sharedInfo.scaleUv)
@@ -919,6 +996,9 @@ function MainApp() {
     sharedTransformDiscovery,
     state.weaponKey,
     transformDiscovery,
+    baseTextureTransform,
+    sharedBaseTextureTransform,
+    weaponBaseLayerActive,
   ]);
 
   // A selected imported paint can be restored before its definition source
@@ -1067,13 +1147,16 @@ function MainApp() {
   const currentStickerTextureChoices = useMemo(() => {
     const choices = new Map(allStickerTextureChoices.map((choice) => [choice.ref, choice]));
     const generatedReferences = Object.keys(data?.manifest.textures ?? {});
+    const generatedReferencesByProtoRef = new Map(
+      generatedReferences.map((reference) => [protoTextureReference(reference), reference]),
+    );
     const referenced = stickerTargets.flatMap((target) => target.stickers.flatMap((sticker) => {
       const value = sticker.base.resolvedValue ?? sticker.base.authoredValue;
       if (!value) return [];
       try {
         const ref = protoTextureReference(value);
         if (!choices.has(ref)) {
-          const generated = generatedReferences.find((candidate) => protoTextureReference(candidate) === ref);
+          const generated = generatedReferencesByProtoRef.get(ref);
           choices.set(ref, {
             ref,
             label: textureChoiceLabel(value),
@@ -1090,18 +1173,29 @@ function MainApp() {
     [state.seed, transformPreviewRecipe],
   );
   const activeTransformIsolationNode = useMemo(() => {
-    if (!resolvedStickerRecipe || activeGroupVisualIndex < 0) return null;
     const mapReference = (reference: string) => activeTextureOverrides[reference] ?? reference;
+    if (weaponBaseLayerActive) {
+      if (!activeTransformLayerNode) return null;
+      return mapResolvedTextureReferences(resolveSeededRecipe(activeTransformLayerNode, state.seed), mapReference);
+    }
+    if (!resolvedStickerRecipe || activeGroupVisualIndex < 0) return null;
     const resolved = mapResolvedTextureReferences(resolvedStickerRecipe, mapReference);
     return collectResolvedLayerIsolationNodes(resolved)[activeGroupVisualIndex] ?? null;
-  }, [activeGroupVisualIndex, activeTextureOverrides, resolvedStickerRecipe]);
+  }, [activeGroupVisualIndex, activeTextureOverrides, activeTransformLayerNode, resolvedStickerRecipe, state.seed, weaponBaseLayerActive]);
   const activeSeedTransform = useMemo(() => {
-    if (!resolvedStickerRecipe || activeGroupVisualIndex < 0) return null;
+    if (weaponBaseLayerActive) {
+      if (!activeTransformLayerNode) return null;
+      const resolvedBase = resolveSeededRecipe(activeTransformLayerNode, state.seed);
+      return resolvedBase.type === 'texture_lookup' ? resolvedBase : null;
+    }
+    if (!resolvedStickerRecipe) return null;
+    if (activeGroupVisualIndex < 0) return null;
     return collectResolvedLayerTextureNodes(resolvedStickerRecipe)[activeGroupVisualIndex] ?? null;
-  }, [activeGroupVisualIndex, resolvedStickerRecipe]);
+  }, [activeGroupVisualIndex, activeTransformLayerNode, resolvedStickerRecipe, state.seed, weaponBaseLayerActive]);
 
   useEffect(() => {
-    if (paintSubView !== 'transform' || editableKitId === null || activeGroupVisualIndex < 0 || !activeTransformTargetInfo) {
+    if (paintSubView !== 'transform' || editableKitId === null
+      || (!weaponBaseLayerActive && activeGroupVisualIndex < 0) || !activeTransformTargetInfo) {
       setTransformDivergence({});
       return;
     }
@@ -1122,7 +1216,9 @@ function MainApp() {
       void Promise.all([...new Set(weaponSlots.map((slot) => slot.weaponKey))].map(async (weaponKey) => {
         const recipe = await resolver(editableKitId, weaponKey, state.team, state.wearIndex);
         if (!recipe || !editorCurrent) return null;
-        const info = discoverTextureTransformTargets(editorCurrent, recipe.provenance).targets[activeGroupVisualIndex];
+        const info = weaponBaseLayerActive
+          ? discoverBaseTextureTransformTarget(editorCurrent, recipe.provenance)?.transform
+          : discoverTextureTransformTargets(editorCurrent, recipe.provenance).targets[activeGroupVisualIndex];
         if (!info) return null;
         const values: Record<keyof TextureTransformFields, SeedRangeValue> = {
           rotation: transformRangeFieldValue(info.rotation, TRANSFORM_FIELD_DEFAULTS.rotation),
@@ -1158,6 +1254,7 @@ function MainApp() {
     state.team,
     state.wearIndex,
     weaponSlots,
+    weaponBaseLayerActive,
     definitions.editGeneration,
     stockEditGeneration,
   ]);
@@ -1643,9 +1740,15 @@ function MainApp() {
   // Selection edits recreate the assignment target objects, but preserve this
   // layer order and each texture reference. The chooser is deterministic, so
   // re-evaluation after an assignment cannot reshuffle layer colours.
-  const layerColorTextureRefs = useMemo(
+  const editableLayerTextureRefs = useMemo(
     () => groupAssignmentTargets.map((target) => target.textureRef),
     [groupAssignmentTargets],
+  );
+  const layerColorTextureRefs = useMemo(
+    () => baseTextureTransform
+      ? [...editableLayerTextureRefs, baseTextureTransform.textureRef]
+      : editableLayerTextureRefs,
+    [baseTextureTransform, editableLayerTextureRefs],
   );
 
   useEffect(() => {
@@ -2006,17 +2109,18 @@ function MainApp() {
     const compositor = compositorRef.current;
     const viewer = viewerRef.current;
     const groupPixels = groupImage?.data;
-    const release = () => {
+    const clearIsolation = () => {
       const prior = isolatedTransformResultRef.current;
       isolatedTransformResultRef.current = null;
       viewer?.clearTransformIsolation();
       if (prior && compositor) compositor.releaseResult(prior);
     };
     if (!engineReady || paintSubView !== 'transform' || !transformIsolateLayer
-      || !activeTransformIsolationNode || !compositor || !viewer || !data || !groupImage
+      || !activeTransformIsolationNode || !compositor || !viewer || !data
+      || !groupImage
       || !(groupPixels instanceof Uint8Array || groupPixels instanceof Uint8ClampedArray)
       || activeSelectedGroupBuckets.length === 0) {
-      release();
+      clearIsolation();
       return;
     }
     const weapon = data.manifest.weapons.find((entry) => entry.key === state.weaponKey);
@@ -2042,19 +2146,21 @@ function MainApp() {
         compositor.releaseResult(result);
         return;
       }
-      release();
+      const prior = isolatedTransformResultRef.current;
       isolatedTransformResultRef.current = result;
-      viewer.setTransformIsolation(
-        result.texture,
-        groupPixels,
-        groupImage.width,
-        groupImage.height,
-        activeSelectedGroupBuckets,
-      );
+      if (groupImage && (groupPixels instanceof Uint8Array || groupPixels instanceof Uint8ClampedArray)) {
+        viewer.setTransformIsolation(
+          result.texture,
+          groupPixels,
+          groupImage.width,
+          groupImage.height,
+          activeSelectedGroupBuckets,
+        );
+      }
+      if (prior && prior !== result) compositor.releaseResult(prior);
     }).catch(() => undefined);
     return () => {
       cancelled = true;
-      release();
     };
   }, [
     activeTransformIsolationNode,
@@ -2067,7 +2173,15 @@ function MainApp() {
     transformGestureActive,
     transformDraft,
     transformIsolateLayer,
+    weaponBaseLayerActive,
   ]);
+
+  useEffect(() => () => {
+    viewerRef.current?.clearTransformIsolation();
+    const prior = isolatedTransformResultRef.current;
+    isolatedTransformResultRef.current = null;
+    if (prior) compositorRef.current?.releaseResult(prior);
+  }, [compositorRef, viewerRef]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -2212,6 +2326,21 @@ function MainApp() {
   }, [editableKitId, editorStatus, groupDiscovery, editableGroupTargets.length, activeGroupEditTarget, groupImageError, groupImage]);
 
   const toggleEditorGroup = useCallback((bucket: number) => {
+    if (weaponBaseLayerActive) {
+      const owner = groupAssignmentTargets.find((target) => target.selectedGroupIds.some(
+        (groupId) => groupByteToCompositorBucket(groupId) === bucket,
+      ));
+      if (!owner?.canAssign) return;
+      const ownedIds = owner.selectedGroupIds.filter(
+        (groupId) => groupByteToCompositorBucket(groupId) === bucket,
+      );
+      if (ownedIds.length === 0 || !clearSessionGroups(owner.target, ownedIds)) return;
+      const part = formatGroupNameForDisplay(activeGroupLabels[bucket] ?? 'Part');
+      setEditorSample(null);
+      setPanelPreviewGroup(null);
+      setEditorAssignmentNotice(`${part} moved to ${baseTextureTransform?.label ?? 'the base texture'}.`);
+      return;
+    }
     if (!activeGroupEditTarget || !activeGroupAssignmentTarget) return;
     const selectedRawIds = activeSelectedRawGroupIds.filter(
       (groupId) => groupByteToCompositorBucket(groupId) === bucket,
@@ -2240,16 +2369,16 @@ function MainApp() {
       setPanelPreviewGroup(null);
       setEditorAssignmentNotice(moveNotice);
     }
-  }, [activeGroupAssignmentTarget, activeGroupEditTarget, activeGroupLabels, activeSelectedRawGroupIds, assignSessionGroups, groupAssignmentTargets]);
+  }, [activeGroupAssignmentTarget, activeGroupEditTarget, activeGroupLabels, activeSelectedRawGroupIds, assignSessionGroups, baseTextureTransform?.label, clearSessionGroups, groupAssignmentTargets, weaponBaseLayerActive]);
 
   const clearEditorGroups = useCallback(() => {
-    if (!activeGroupEditTarget) return;
+    if (weaponBaseLayerActive || !activeGroupEditTarget) return;
     if (clearSessionGroups(activeGroupEditTarget, activeSelectedRawGroupIds)) {
       setEditorSample(null);
       setPanelPreviewGroup(null);
       setEditorAssignmentNotice(null);
     }
-  }, [activeGroupEditTarget, activeSelectedRawGroupIds, clearSessionGroups]);
+  }, [activeGroupEditTarget, activeSelectedRawGroupIds, clearSessionGroups, weaponBaseLayerActive]);
 
   const sampleEditorSurface = useCallback((clientX: number, clientY: number) => {
     if (!groupAssignActive || !groupImage) return null;
@@ -3008,7 +3137,9 @@ function MainApp() {
     },
   } : undefined;
 
-  const transformDisabled = editorStatus !== 'ready' || !activeTransformTargetInfo || activeTransformTargetInfo.blockers.length > 0;
+  const albedoTransformLocked = !weaponBaseLayerActive && activeGroupTarget?.label.trim().toLowerCase() === 'albedo';
+  const transformDisabled = editorStatus !== 'ready' || albedoTransformLocked
+    || !activeTransformTargetInfo || activeTransformTargetInfo.blockers.length > 0;
   const activeTransformTarget = activeTransformTargetInfo?.target ?? null;
   const commitTransformField = (key: keyof TextureTransformFields, value: SeedRangeValue) => {
     if (!activeTransformTarget || transformDisabled) return;
@@ -3075,9 +3206,11 @@ function MainApp() {
     );
   };
   const transformEditorProps: TextureTransformPanelProps | undefined = editorSelectors.length > 0 ? {
-    layerLabel: editorSelectors[activeEditorLayerIndex]?.label ?? 'Paint layer',
+    layerLabel: weaponBaseLayerActive
+      ? baseTextureTransform?.label ?? 'Base texture'
+      : editorSelectors[activeEditorLayerIndex]?.label ?? 'Paint layer',
     layerIndex: activeEditorLayerIndex,
-    layerCount: editorSelectors.length,
+    layerCount: editorSelectors.length + (baseTextureTransform ? 1 : 0),
     fields: transformFields,
     currentSeedValues: activeSeedTransform ? {
       rotation: activeSeedTransform.rotationDeg,
@@ -3380,23 +3513,34 @@ function MainApp() {
                   unavailableReason: editorUnavailableReason,
                   sample: editorSample,
                   selectedGroupIds: activeSelectedGroupBuckets,
-                  selectionContextId: String(activeEditorSelector),
+                  selectionContextId: weaponBaseLayerActive ? 'weapon-base' : String(activeEditorSelector),
                   groupLabels: activeGroupLabels,
                   notice: editorAssignmentNotice,
                   activeLayerIndex: activeEditorLayerIndex,
-                  activeLayerLabel: editorSelectors[activeEditorLayerIndex]?.label,
+                  activeLayerLabel: weaponBaseLayerActive ? baseTextureTransform?.label : editorSelectors[activeEditorLayerIndex]?.label,
                   groupLayerIndex: groupBucketLayerIndex,
                   layerColors: editorLayerCssColors,
                   layerSwatchColors: editorLayerSwatchCssColors,
-                  layerThumbnails: layerColorTextureRefs.map((textureRef) => (
+                  layerThumbnails: editableLayerTextureRefs.map((textureRef) => (
                     textureRef ? layerTexturePreviewUrls[textureRef] ?? null : null
                   )),
+                  baseLayer: baseTextureTransform ? {
+                    label: baseTextureTransform.label,
+                    thumbnail: layerTexturePreviewUrls[baseTextureTransform.textureRef] ?? null,
+                    active: weaponBaseLayerActive,
+                    onSelect: () => {
+                      setPanelPreviewGroup(null);
+                      setEditorAssignmentNotice(null);
+                      setWeaponBaseLayerActive(true);
+                    },
+                  } : undefined,
                   showLayerMap,
                   onShowLayerMapChange: setShowLayerMap,
                   inspectOnClick: groupAssignActive,
                   onInspectOnClickChange: () => undefined,
                   onToggleGroup: toggleEditorGroup,
                   onClearSelection: clearEditorGroups,
+                  clearSelectionDisabled: weaponBaseLayerActive,
                   onPreviewGroup: setPanelPreviewGroup,
                   groupTextureChoices,
                   activeGroupTextureRef: activeGroupTextureValue,
@@ -3432,10 +3576,11 @@ function MainApp() {
                     ? (editorPackageExportError ?? (editorSessionError ? 'That area could not be changed.' : editorPreviewError))
                     : null,
                   selectors: editorSelectors,
-                  activeSelectorId: String(activeEditorSelector),
+                  activeSelectorId: weaponBaseLayerActive ? 'weapon-base' : String(activeEditorSelector),
                   onActiveSelectorChange: (id) => {
                     setPanelPreviewGroup(null);
                     setEditorAssignmentNotice(null);
+                    setWeaponBaseLayerActive(false);
                     setActiveEditorSelector(Number(id));
                   },
                   onUndo: undoEditorSynced,
@@ -3447,6 +3592,7 @@ function MainApp() {
                   paintSubView,
                   onPaintSubViewChange: setPaintSubView,
                   layerHasTransformEdits,
+                  layerTransformLocked,
                 }}
                 sourcePackage={sourcePackage}
                 resolvePackageTexture={resolvePackageTexture}

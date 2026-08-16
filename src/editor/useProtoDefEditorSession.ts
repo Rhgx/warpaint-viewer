@@ -386,6 +386,7 @@ export function useProtoDefEditorSession({
     }
   }, [commitEdit]);
 
+
   const setStickerQuad = useCallback((target: StickerTarget, quad: StickerQuad): boolean => {
     const prior = currentRef.current;
     if (!prior) {

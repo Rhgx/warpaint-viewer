@@ -35,26 +35,6 @@ export function preferredLayerOccurrenceIndex(
   return result;
 }
 
-/** Prefer an editable occurrence backed by a specifically named source texture. */
-export function preferredNamedTextureOccurrenceIndex(
-  targets: readonly { readonly sourceKey: string; readonly textureRef?: string }[],
-  transformTargets: readonly ({ readonly textureRef?: string; readonly blockers: readonly unknown[] } | null)[],
-  active: { readonly sourceKey: string } | null,
-  textureName: string,
-): number {
-  if (!active) return -1;
-  const needle = textureName.trim().toLowerCase();
-  let result = -1;
-  targets.forEach((target, index) => {
-    const transform = transformTargets[index];
-    const textureRef = transform?.textureRef ?? target.textureRef;
-    if (target.sourceKey === active.sourceKey
-      && transform?.blockers.length === 0
-      && textureRef?.toLowerCase().includes(needle)) result = index;
-  });
-  return result >= 0 ? result : preferredLayerOccurrenceIndex(targets, active);
-}
-
 /** Active texture and its adjacent select mask, aligned with the editor's layer traversal. */
 export function collectResolvedLayerIsolationNodes(
   node: ResolvedNode,

@@ -59,6 +59,12 @@ export interface TextureTransformDiscovery {
   targets: (TextureTransformTargetInfo | null)[];
 }
 
+export interface BaseTextureTransformTarget {
+  readonly label: string;
+  readonly textureRef: string;
+  readonly transform: TextureTransformTargetInfo;
+}
+
 function literalFieldValue(field: VarFieldMsg): string | undefined {
   for (const key of ['string', 'float', 'double', 'uint32', 'uint64', 'sint32', 'sint64', 'bool'] as const) {
     if (field[key] !== undefined) return String(field[key]);
@@ -365,6 +371,59 @@ function walk(
     }
     if (stage.apply_sticker) walk(stage.apply_sticker.operation_node, [...nodePath, 'stage', 'apply_sticker', 'operation_node'], visit);
   }
+}
+
+function textureLabel(textureRef: string): string {
+  const base = textureRef.replace(/\\/g, '/').split('/').at(-1)?.replace(/^p_/i, '') ?? 'Base texture';
+  const words = base.split(/[_\-\s]+/).filter(Boolean);
+  if (words.length > 1 && /^\d{6,}$/.test(words[0])) words.shift();
+  return words.map((word) => (
+    /^\d+$/.test(word) ? word : word[0].toUpperCase() + word.slice(1)
+  )).join(' ');
+}
+
+/** Discover the unmasked texture_layer_1 stage that forms the recipe's base coat. */
+export function discoverBaseTextureTransformTarget(
+  messages: ProtoDefKitMessages,
+  provenance?: readonly ProtoDefValueTrace[],
+): BaseTextureTransformTarget | null {
+  const variables = collectVariables(messages);
+  const weaponOverridePath = findWeaponOverrideCollectionPath(provenance);
+  const matches: BaseTextureTransformTarget[] = [];
+  const visit = (nodes: Many<OperationNodeMsg>, path: readonly string[]): void => {
+    const entries = many(nodes);
+    const isArray = Array.isArray(nodes);
+    entries.forEach((node, index) => {
+      const nodePath = isArray ? [...path, String(index)] : path;
+      const stage = node.stage;
+      if (!stage) return;
+      const textureLookup = stage.texture_lookup;
+      const texture = textureLookup?.texture;
+      if (textureLookup && texture?.variable === 'texture_layer_1') {
+        const fieldPath = [...nodePath, 'stage', 'texture_lookup', 'texture'];
+        const marker = fieldPath.join('\0');
+        const effectiveRef = provenance?.find((entry) => entry.fieldPath.join('\0') === marker)
+          ?.provenance.effectiveValue
+          ?? textureRefOf(textureLookup, variables);
+        if (effectiveRef) matches.push({
+          label: textureLabel(effectiveRef),
+          textureRef: effectiveRef,
+          transform: buildTarget(messages, node, nodePath, variables, provenance, weaponOverridePath),
+        });
+      }
+      for (const [key, combine] of [
+        ['combine_multiply', stage.combine_multiply],
+        ['combine_add', stage.combine_add],
+        ['combine_lerp', stage.combine_lerp],
+      ] as const) {
+        if (combine) visit(combine.operation_node, [...nodePath, 'stage', key, 'operation_node']);
+      }
+      if (stage.apply_sticker) visit(stage.apply_sticker.operation_node, [...nodePath, 'stage', 'apply_sticker', 'operation_node']);
+    });
+  };
+  const operation = messages.operation as { operation_node?: Many<OperationNodeMsg> };
+  visit(operation.operation_node, ['operation', 'operation_node']);
+  return matches.findLast((match) => match.transform.blockers.length === 0) ?? matches.at(-1) ?? null;
 }
 
 /**

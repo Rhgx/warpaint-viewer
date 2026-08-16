@@ -703,19 +703,6 @@ export class Viewer {
       return;
     }
 
-    this.teardownTransformIsolationPass();
-    if (!this.transformIsolationBaseState) {
-      this.transformIsolationBaseState = {
-        opacity: this.material.opacity,
-        transparent: this.material.transparent,
-        depthWrite: this.material.depthWrite,
-      };
-    }
-    this.transformIsolationContextOpacity.value = TRANSFORM_ISOLATION_CONTEXT_OPACITY;
-    this.material.transparent = true;
-    this.material.depthWrite = true;
-    this.material.needsUpdate = true;
-
     const selectedBuckets = new Set(buckets);
     const maskData = new Uint8Array(width * height * 4);
     for (let sourceOffset = 0, targetOffset = 0; targetOffset < maskData.length; sourceOffset += 4, targetOffset += 4) {
@@ -736,10 +723,31 @@ export class Viewer {
     mask.wrapT = THREE.ClampToEdgeWrapping;
     mask.needsUpdate = true;
 
+    this.applyTransformIsolation(texture, mask);
+  }
+
+  private applyTransformIsolation(texture: THREE.Texture, mask: THREE.DataTexture): void {
+    this.teardownTransformIsolationPass();
+    if (!this.transformIsolationBaseState) {
+      this.transformIsolationBaseState = {
+        opacity: this.material.opacity,
+        transparent: this.material.transparent,
+        depthWrite: this.material.depthWrite,
+      };
+    }
+    this.transformIsolationContextOpacity.value = TRANSFORM_ISOLATION_CONTEXT_OPACITY;
+    this.material.transparent = true;
+    this.material.depthWrite = true;
+    this.material.needsUpdate = true;
+    this.transformIsolationMaskTexture = mask;
+
     const material = this.material.clone();
     material.map = texture;
-    material.alphaMap = mask;
-    material.alphaTest = 0.5;
+    // Sample the editor mask with the model's raw UVs. Three's alphaMap path
+    // can inherit a different UV transform/channel from the weapon material,
+    // which makes paintkit_tool treat a partial group mask as full-surface.
+    material.alphaMap = null;
+    material.alphaTest = 0;
     material.opacity = 1;
     material.transparent = false;
     material.depthWrite = true;
@@ -750,18 +758,24 @@ export class Viewer {
     material.onBeforeCompile = (shader, renderer) => {
       compileTf2Material(shader, renderer);
       shader.uniforms.uTf2IsolationContextOpacity = { value: 1 };
-      shader.fragmentShader = shader.fragmentShader.replace(
-        'if ( uTf2AlphaTestRef > 0.0 && diffuseColor.a < uTf2AlphaTestRef ) discard;',
-        `if ( uTf2AlphaTestRef > 0.0 && diffuseColor.a < uTf2AlphaTestRef ) discard;
-#ifdef USE_ALPHAMAP
-  if ( texture2D( alphaMap, vAlphaMapUv ).g < 0.5 ) discard;
-#endif`,
-      );
+      shader.uniforms.uTf2IsolationMask = { value: mask };
+      shader.vertexShader = shader.vertexShader
+        .replace('void main() {', 'varying vec2 vTf2IsolationUv;\nvoid main() {')
+        .replace('void main() {', 'void main() {\n  vTf2IsolationUv = uv;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          'void main() {',
+          'uniform sampler2D uTf2IsolationMask;\nvarying vec2 vTf2IsolationUv;\nvoid main() {',
+        )
+        .replace(
+          'if ( uTf2AlphaTestRef > 0.0 && diffuseColor.a < uTf2AlphaTestRef ) discard;',
+          `if ( uTf2AlphaTestRef > 0.0 && diffuseColor.a < uTf2AlphaTestRef ) discard;
+  if ( texture2D( uTf2IsolationMask, vTf2IsolationUv ).r < 0.5 ) discard;`,
+        );
     };
     material.customProgramCacheKey = () => `${TF2_VERTEXLIT_CACHE_KEY}:transform-isolation`;
     material.needsUpdate = true;
 
-    this.transformIsolationMaskTexture = mask;
     this.transformIsolationMaterial = material;
     this.rebuildTransformIsolationMeshes();
     this.invalidate();

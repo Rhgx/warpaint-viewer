@@ -39,7 +39,10 @@ type Bound = 'min' | 'max';
 type DragBound = Bound | 'pending';
 
 const GESTURE_DEBOUNCE_MS = 450;
-const LIVE_PREVIEW_MIN_INTERVAL_MS = 1000 / 30;
+// A base-texture preview requires a GPU composition. Sampling pointer motion
+// faster than one preview can finish starves the latest-only queue, so keep the
+// control responsive locally while requesting composed frames at 10 FPS.
+const LIVE_PREVIEW_MIN_INTERVAL_MS = 1000 / 10;
 const CLOSE_THUMBS_PX = 10;
 const DIRECTION_LOCK_PX = 2;
 const STEP_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']);

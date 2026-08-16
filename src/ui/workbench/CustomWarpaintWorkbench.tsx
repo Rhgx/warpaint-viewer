@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Download,
   Files,
+  Lock,
   Maximize2,
   Minimize2,
   PackageOpen,
@@ -125,6 +126,8 @@ export function CustomWarpaintWorkbench({
     onPaintSubViewChange?: (view: 'parts' | 'transform') => void;
     /** Per-layer marker, aligned with `selectors`, for a non-default transform range. */
     layerHasTransformEdits?: readonly boolean[];
+    /** Per-layer marker, aligned with `selectors`, for transforms that are intentionally unavailable. */
+    layerTransformLocked?: readonly boolean[];
     dirty: boolean;
     canDownload: boolean;
     exporting: boolean;
@@ -670,6 +673,7 @@ export function CustomWarpaintWorkbench({
                       ? Object.values(editor.groupLayerIndex).filter((layerIndex) => layerIndex === index).length
                       : 0;
                     const hasTransformEdits = editor.layerHasTransformEdits?.[index] ?? false;
+                    const transformLocked = editor.layerTransformLocked?.[index] ?? false;
                     return (
                       <button
                         type="button"
@@ -692,10 +696,47 @@ export function CustomWarpaintWorkbench({
                             <RefreshCw size={11} aria-hidden="true" />
                           </span>
                         )}
+                        {transformLocked && (
+                          <span className="custom-workbench-edit-layer-lock" title="This layer's transforms are locked">
+                            <Lock size={11} aria-hidden="true" />
+                          </span>
+                        )}
                         <span className="custom-workbench-edit-layer-count">{count}</span>
                       </button>
                     );
-                  }) : editor.sticker?.targets.map((target, index) => {
+                  }).concat(editor.baseLayer ? [(
+                    <button
+                      type="button"
+                      key="weapon-base-texture"
+                      className="custom-workbench-edit-layer-row"
+                      role="option"
+                      aria-selected={editor.baseLayer.active}
+                      onClick={editor.baseLayer.onSelect}
+                    >
+                      <span className="custom-workbench-edit-layer-thumb" aria-hidden="true">
+                        {editor.baseLayer.thumbnail ? <img src={editor.baseLayer.thumbnail} alt="" draggable={false} /> : null}
+                        <span
+                          className="custom-workbench-edit-layer-swatch"
+                          style={(editor.layerSwatchColors?.[editor.selectors.length]
+                            ?? editor.layerColors?.[editor.selectors.length])
+                            ? { background: editor.layerSwatchColors?.[editor.selectors.length]
+                              ?? editor.layerColors?.[editor.selectors.length] }
+                            : undefined}
+                        />
+                      </span>
+                      <span className="custom-workbench-edit-layer-label">{editor.baseLayer.label}</span>
+                      {(editor.layerHasTransformEdits?.[editor.selectors.length] ?? false) && (
+                        <span className="custom-workbench-edit-layer-vary" title="This layer has non-default transform ranges">
+                          <RefreshCw size={11} aria-hidden="true" />
+                        </span>
+                      )}
+                      {(editor.layerTransformLocked?.[editor.selectors.length] ?? false) && (
+                        <span className="custom-workbench-edit-layer-lock" title="This layer's transforms are locked">
+                          <Lock size={11} aria-hidden="true" />
+                        </span>
+                      )}
+                    </button>
+                  )] : []) : editor.sticker?.targets.map((target, index) => {
                     const active = editor.sticker?.activeTargetId === target.id;
                     return (
                       <button

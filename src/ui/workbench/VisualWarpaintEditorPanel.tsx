@@ -26,6 +26,7 @@ export interface VisualWarpaintEditorPanelProps {
   readonly groupLabels?: Readonly<Record<number, string>>;
   readonly onToggleGroup: (groupId: number) => void;
   readonly onClearSelection: () => void;
+  readonly clearSelectionDisabled?: boolean;
   readonly onPreviewGroup?: (groupId: number | null) => void;
   readonly groupTextureChoices?: readonly CompatibleGroupTexture[];
   readonly activeGroupTextureRef?: string;
@@ -48,6 +49,13 @@ export interface VisualWarpaintEditorPanelProps {
   readonly layerSwatchColors?: readonly string[];
   /** Small source-texture previews for the layer list in the edit context column. */
   readonly layerThumbnails?: readonly (string | null)[];
+  /** The recipe's unmasked base texture, available in the Transform view. */
+  readonly baseLayer?: Readonly<{
+    readonly label: string;
+    readonly thumbnail: string | null;
+    readonly active: boolean;
+    readonly onSelect: () => void;
+  }>;
   /**
    * The Parts/Transform switch, supplied by the workbench. It sits in this
    * head so the sub-views share one header row instead of stacking a second
@@ -65,6 +73,7 @@ export function VisualWarpaintEditorPanel({
   groupLabels,
   onToggleGroup,
   onClearSelection,
+  clearSelectionDisabled,
   onPreviewGroup,
   groupTextureChoices,
   activeGroupTextureRef,
@@ -228,7 +237,7 @@ export function VisualWarpaintEditorPanel({
           ref={clearButtonRef}
           type="button"
           className="visual-warpaint-editor-clear"
-          disabled={areaCount === 0}
+          disabled={areaCount === 0 || clearSelectionDisabled}
           data-confirm={confirmClear ? '' : undefined}
           onClick={clearAreas}
           onBlur={() => setConfirmClear(false)}

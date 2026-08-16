@@ -664,6 +664,15 @@
   color: var(--accent);
 }
 
+.custom-workbench-edit-layer-lock {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  place-items: center;
+  color: var(--text-dim);
+}
+
 .custom-workbench-edit-materials-note {
   margin: 10px;
   color: var(--text-dim);

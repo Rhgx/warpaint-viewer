@@ -4,7 +4,6 @@ import type { ResolvedNode, ResolvedSelect, ResolvedTexture } from '../../../src
 import {
   collectResolvedLayerIsolationNodes,
   preferredLayerOccurrenceIndex,
-  preferredNamedTextureOccurrenceIndex,
 } from '../../../src/editor/transformIsolation';
 
 function texture(texture: string, rotationDeg: number): ResolvedTexture {
@@ -106,16 +105,4 @@ test('transform isolation previews the final colour occurrence of a reused autho
 
   assert.equal(preferredLayerOccurrenceIndex(targets, targets[0]), 2);
   assert.equal(preferredLayerOccurrenceIndex(targets, null), -1);
-  assert.equal(preferredNamedTextureOccurrenceIndex(
-    [
-      { sourceKey: 'shared', textureRef: 'textures/models/items/paintkit_tool/p_paintkit_tool_albedo' },
-      { sourceKey: 'shared', textureRef: 'textures/patterns/custom' },
-    ],
-    [
-      { textureRef: 'textures/models/items/paintkit_tool/p_paintkit_tool_albedo', blockers: [] },
-      { textureRef: 'textures/patterns/custom', blockers: [] },
-    ],
-    { sourceKey: 'shared' },
-    'albedo',
-  ), 0);
 });
