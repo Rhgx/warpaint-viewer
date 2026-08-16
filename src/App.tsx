@@ -965,7 +965,9 @@ function MainApp() {
         || !info
         || info.blockers.length > 0;
     });
-    if (baseTextureTransform) layers.push(baseTextureTransform.transform.blockers.length > 0);
+    if (baseTextureTransform) layers.push(
+      baseTextureTransform.transformLocked || baseTextureTransform.transform.blockers.length > 0,
+    );
     return layers;
   }, [baseTextureTransform, editableGroupTargets, groupDiscovery, transformDiscovery]);
 
@@ -3137,7 +3139,9 @@ function MainApp() {
     },
   } : undefined;
 
-  const albedoTransformLocked = !weaponBaseLayerActive && activeGroupTarget?.label.trim().toLowerCase() === 'albedo';
+  const albedoTransformLocked = weaponBaseLayerActive
+    ? baseTextureTransform?.transformLocked ?? false
+    : activeGroupTarget?.label.trim().toLowerCase() === 'albedo';
   const transformDisabled = editorStatus !== 'ready' || albedoTransformLocked
     || !activeTransformTargetInfo || activeTransformTargetInfo.blockers.length > 0;
   const activeTransformTarget = activeTransformTargetInfo?.target ?? null;

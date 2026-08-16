@@ -63,6 +63,8 @@ export interface BaseTextureTransformTarget {
   readonly label: string;
   readonly textureRef: string;
   readonly transform: TextureTransformTargetInfo;
+  /** Weapon albedo is visible for assignment context but its placement is authored by the model. */
+  readonly transformLocked: boolean;
 }
 
 function literalFieldValue(field: VarFieldMsg): string | undefined {
@@ -265,6 +267,12 @@ function textureRefOf(stage: TextureStageMsg, variables: ReadonlyMap<string, Var
   return matches?.length === 1 ? matches[0].value : undefined;
 }
 
+function textureFieldRef(field: VarFieldMsg, variables: ReadonlyMap<string, VarDefMsg[]>): string | undefined {
+  if (!field.variable) return field.string;
+  const matches = variables.get(field.variable);
+  return matches?.length === 1 ? matches[0].value : field.string;
+}
+
 function blockedTarget(reason: TextureTransformTargetBlocker): TextureTransformTargetInfo {
   const emptyRange: TextureTransformRangeFieldState = { mode: 'fixed', min: 0, max: 0, isVariable: false, inheritable: false, blockers: [] };
   const emptyFlip: TextureTransformFlipFieldState = { allowed: false, isVariable: false, inheritable: false, blockers: [] };
@@ -382,14 +390,15 @@ function textureLabel(textureRef: string): string {
   )).join(' ');
 }
 
-/** Discover the unmasked texture_layer_1 stage that forms the recipe's base coat. */
+/** Discover the unmasked texture stage that forms the recipe's base coat. */
 export function discoverBaseTextureTransformTarget(
   messages: ProtoDefKitMessages,
   provenance?: readonly ProtoDefValueTrace[],
 ): BaseTextureTransformTarget | null {
   const variables = collectVariables(messages);
   const weaponOverridePath = findWeaponOverrideCollectionPath(provenance);
-  const matches: BaseTextureTransformTarget[] = [];
+  const layerOneMatches: BaseTextureTransformTarget[] = [];
+  const fallbackMatches: BaseTextureTransformTarget[] = [];
   const visit = (nodes: Many<OperationNodeMsg>, path: readonly string[]): void => {
     const entries = many(nodes);
     const isArray = Array.isArray(nodes);
@@ -398,17 +407,34 @@ export function discoverBaseTextureTransformTarget(
       const stage = node.stage;
       if (!stage) return;
       const textureLookup = stage.texture_lookup;
-      const texture = textureLookup?.texture;
-      if (textureLookup && texture?.variable === 'texture_layer_1') {
-        const fieldPath = [...nodePath, 'stage', 'texture_lookup', 'texture'];
-        const marker = fieldPath.join('\0');
-        const effectiveRef = provenance?.find((entry) => entry.fieldPath.join('\0') === marker)
-          ?.provenance.effectiveValue
-          ?? textureRefOf(textureLookup, variables);
-        if (effectiveRef) matches.push({
+      if (textureLookup) {
+        const fields = [
+          ['texture', textureLookup.texture],
+          ['texture_red', textureLookup.texture_red],
+          ['texture_blue', textureLookup.texture_blue],
+        ] as const;
+        const traced = fields.flatMap(([fieldName, field]) => {
+          if (!field) return [];
+          const fieldPath = [...nodePath, 'stage', 'texture_lookup', fieldName];
+          const trace = provenance?.find((entry) => entry.fieldPath.join('\0') === fieldPath.join('\0'));
+          return [{ field, trace }];
+        });
+        const layerOne = traced.find(({ field, trace }) => (
+          trace !== undefined && (field.variable === 'texture_layer_1' || field.variable === 'texture_layer_1_blue')
+        )) ?? traced.find(({ field }) => field.variable === 'texture_layer_1')
+          ?? traced.find(({ field }) => field.variable === 'texture_layer_1_blue');
+        const fallback = traced.find(({ field, trace }) => (
+          trace !== undefined && (field.variable === 'weapon_albedo' || field.variable === 'custom_painted')
+        )) ?? traced.find(({ field }) => field.variable === 'custom_painted')
+          ?? traced.find(({ field }) => field.variable === 'weapon_albedo');
+        const candidate = layerOne ?? fallback;
+        const effectiveRef = candidate?.trace?.provenance.effectiveValue
+          ?? (candidate ? textureFieldRef(candidate.field, variables) : undefined);
+        if (candidate && effectiveRef) (layerOne ? layerOneMatches : fallbackMatches).push({
           label: textureLabel(effectiveRef),
           textureRef: effectiveRef,
           transform: buildTarget(messages, node, nodePath, variables, provenance, weaponOverridePath),
+          transformLocked: candidate.field.variable === 'weapon_albedo',
         });
       }
       for (const [key, combine] of [
@@ -423,6 +449,7 @@ export function discoverBaseTextureTransformTarget(
   };
   const operation = messages.operation as { operation_node?: Many<OperationNodeMsg> };
   visit(operation.operation_node, ['operation', 'operation_node']);
+  const matches = layerOneMatches.length > 0 ? layerOneMatches : fallbackMatches;
   return matches.findLast((match) => match.transform.blockers.length === 0) ?? matches.at(-1) ?? null;
 }
 

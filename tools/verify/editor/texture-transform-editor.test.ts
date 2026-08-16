@@ -108,6 +108,7 @@ test('discovers the unmasked base texture as its own transform layer', () => {
   assert.ok(discovered);
   assert.equal(discovered.label, 'Crate Pattern');
   assert.equal(discovered.textureRef, 'patterns/workshop/crate_pattern');
+  assert.equal(discovered.transformLocked, false);
   assert.deepEqual(discovered.transform.target.stagePath, fieldPath.slice(0, -1));
 });
 
@@ -134,6 +135,63 @@ test('Storage War exposes its crate pattern base in Transform', () => {
   assert.match(base.textureRef, /crate_pattern$/);
   assert.deepEqual([base.transform.rotation.min, base.transform.rotation.max], [85, 95]);
   assert.deepEqual([base.transform.scaleUv.min, base.transform.scaleUv.max], [2, 2.5]);
+});
+
+test('every shipped paint exposes its effective unmasked base layer', () => {
+  const root = path.resolve(import.meta.dirname, '..', '..', '..');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'manifest.json'), 'utf8')) as {
+    paintkits: Array<{ id: number; name: string }>;
+  };
+  const decoded = decodeProtoDefs(
+    new Uint8Array(fs.readFileSync(path.join(root, 'public', 'data', 'protodefs-full.bin'))),
+    {
+      weaponsByItemDef: JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'item-defs.json'), 'utf8')),
+      builtInIds: manifest.paintkits.map((paint) => paint.id),
+    },
+  );
+  const missing: string[] = [];
+  let auditedRecipes = 0;
+  for (const paint of manifest.paintkits) {
+    const messages = extractKitMessages(decoded, paint.id);
+    if (!messages) continue;
+    for (const slot of getKitWeaponSlots(decoded, paint.id)) {
+      for (const team of ['red', 'blu'] as const) {
+        auditedRecipes += 1;
+        const recipe = resolveKitRecipeWithProvenance(decoded, paint.id, slot.weaponKey, team, 0);
+        if (!discoverBaseTextureTransformTarget(messages, recipe?.provenance)) {
+          missing.push(`${paint.id}:${paint.name}/${slot.weaponKey}/${team}`);
+        }
+      }
+    }
+  }
+  assert.ok(auditedRecipes >= 14_000, 'the audit should cover every team variant of the shipped editable recipes');
+  assert.deepEqual(missing, []);
+}, 15_000);
+
+test('team-texture and weapon-albedo bases use the intended transform policy', () => {
+  const root = path.resolve(import.meta.dirname, '..', '..', '..');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'manifest.json'), 'utf8')) as {
+    paintkits: Array<{ id: number }>;
+  };
+  const decoded = decodeProtoDefs(
+    new Uint8Array(fs.readFileSync(path.join(root, 'public', 'data', 'protodefs-full.bin'))),
+    {
+      weaponsByItemDef: JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'item-defs.json'), 'utf8')),
+      builtInIds: manifest.paintkits.map((paint) => paint.id),
+    },
+  );
+  const baseFor = (kitId: number) => {
+    const messages = extractKitMessages(decoded, kitId);
+    const slot = getKitWeaponSlots(decoded, kitId)[0];
+    assert.ok(messages && slot);
+    const recipe = resolveKitRecipeWithProvenance(decoded, kitId, slot.weaponKey, 'red', 0);
+    const base = discoverBaseTextureTransformTarget(messages, recipe?.provenance);
+    assert.ok(base);
+    return base;
+  };
+  assert.equal(baseFor(442).transformLocked, false, 'Die\'n Dasher layer 1 is editable');
+  assert.equal(baseFor(423).transformLocked, true, 'Gobi Glazed weapon albedo stays locked');
+  assert.equal(baseFor(390).transformLocked, false, 'Dragon Slayer custom paint base is editable');
 });
 
 test('texture transform scope, normalization, history and JSON round trip', () => {
