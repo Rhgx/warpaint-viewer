@@ -54,6 +54,12 @@ export interface ReloadProtoDefEditorSessionOptions {
   discardEdits?: boolean;
 }
 
+export interface GroupTextureDefaultAssignment {
+  readonly active: SelectGroupAssignmentTarget;
+  readonly candidates: readonly SelectGroupAssignmentTarget[];
+  readonly groupIds: readonly number[];
+}
+
 export interface ProtoDefEditorSession {
   status: 'idle' | 'loading' | 'ready' | 'error';
   kitId: number | null;
@@ -83,8 +89,12 @@ export interface ProtoDefEditorSession {
   ) => readonly Omit<SelectGroupAssignmentResult, 'messages'>[] | null;
   /** Clears several selected ids from one layer in one atomic editor action. */
   clearSelectGroups: (target: SelectGroupTarget, groupIds: readonly number[]) => boolean;
-  /** Changes the active weapon's inherited stock group-map layout. */
-  setGroupTexture: (target: GroupTextureTarget, textureRef: string) => boolean;
+  /** Changes the group-map layout and applies optional defaults in one undo step. */
+  setGroupTexture: (
+    target: GroupTextureTarget,
+    textureRef: string,
+    defaultAssignment?: GroupTextureDefaultAssignment,
+  ) => boolean;
   /** Moves, scales, or rotates one sticker as a single undoable quad edit. */
   setStickerDestQuad: (target: StickerTarget, quad: StickerQuad) => boolean;
   addSticker: (target: StickerStructureTarget, quad: StickerQuad, baseReference: string) => boolean;
@@ -346,14 +356,29 @@ export function useProtoDefEditorSession({
     }
   }, [commitEdit]);
 
-  const setGroupTexture = useCallback((target: GroupTextureTarget, textureRef: string): boolean => {
+  const setGroupTexture = useCallback((
+    target: GroupTextureTarget,
+    textureRef: string,
+    defaultAssignment?: GroupTextureDefaultAssignment,
+  ): boolean => {
     const prior = currentRef.current;
     if (!prior) {
       setError('Load an imported definition before editing it.');
       return false;
     }
     try {
-      commitEdit(prior, snapshot(setGroupTextureReference(prior, target, textureRef)));
+      let next = setGroupTextureReference(prior, target, textureRef);
+      if (defaultAssignment) {
+        for (const groupId of defaultAssignment.groupIds) {
+          next = assignSelectGroupExclusively(
+            next,
+            defaultAssignment.active,
+            defaultAssignment.candidates,
+            groupId,
+          ).messages;
+        }
+      }
+      commitEdit(prior, snapshot(next));
       return true;
     } catch (cause) {
       setError(errorMessage(cause));

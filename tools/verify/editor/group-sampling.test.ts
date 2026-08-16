@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import {
+  groupBucketsInImage,
   groupByteToCompositorBucket,
   groupTexelAtUv,
   rawGroupIdForBucket,
@@ -43,6 +44,10 @@ function check(label: string, condition: boolean, detail = ''): void {
       && rawGroupIdForBucket(15) === 240
       && rawGroupIdForBucket(16) === 255
       && rawGroupIdForBucket(0) === null,
+  );
+  check(
+    'present selector buckets are discovered without the background',
+    JSON.stringify(groupBucketsInImage(image)) === JSON.stringify([1, 2, 16]),
   );
   assert.equal(failures, 0);
 });

@@ -12,6 +12,58 @@ interface GroupNameReference {
 
 const GROUP_NAME_REFERENCE = reference as GroupNameReference;
 
+// The community weapon guide does not cover the War Paint preview item. These
+// names describe its stable texture-atlas regions and three visible paint cans.
+const PAINTKIT_TOOL_GROUP_NAMES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  'models/items/paintkit_tool/p_paintkit_tool_groups_two': {
+    16: 'Upper Display', 32: 'Lower Display', 192: 'Canvas Back Cross Brace', 208: 'Paint Can Bodies',
+    224: 'Left Paint Can Cap', 240: 'Center Paint Can Cap', 255: 'Right Paint Can Cap',
+  },
+  'models/items/paintkit_tool/p_paintkit_tool_groups_three': {
+    16: 'Upper Display', 32: 'Center Display', 48: 'Lower Display', 192: 'Canvas Back Cross Brace',
+    208: 'Paint Can Bodies', 224: 'Left Paint Can Cap', 240: 'Center Paint Can Cap', 255: 'Right Paint Can Cap',
+  },
+  'models/items/paintkit_tool/p_paintkit_tool_groups_three_large': {
+    16: 'Large Upper Display', 32: 'Center Display', 48: 'Lower Display', 192: 'Canvas Back Cross Brace',
+    208: 'Paint Can Bodies', 224: 'Left Paint Can Cap', 240: 'Center Paint Can Cap', 255: 'Right Paint Can Cap',
+  },
+  'models/items/paintkit_tool/p_paintkit_tool_groups_four': {
+    16: 'Bottom Display', 48: 'Top Display', 80: 'Middle Display', 255: 'Display Dividers',
+    32: 'Left Paint Can Cap', 64: 'Center Paint Can Cap', 96: 'Right Paint Can Cap', 128: 'Paint Can Bodies', 192: 'Canvas Back Cross Brace',
+  },
+  'models/items/paintkit_tool/p_paintkit_tool_groups_four_02': {
+    255: 'Top Display', 16: 'Upper-Middle Display', 48: 'Lower-Middle Display', 80: 'Bottom Display',
+    32: 'Left Paint Can Cap', 64: 'Center Paint Can Cap', 96: 'Right Paint Can Cap', 128: 'Paint Can Bodies', 192: 'Canvas Back Cross Brace',
+    208: 'Canvas Back Panel', 144: 'Left Paint Can Label', 160: 'Center Paint Can Label', 176: 'Right Paint Can Label',
+  },
+  'models/items/paintkit_tool/p_paintkit_tool_groups_four_equal': {
+    16: 'Top Display', 48: 'Upper-Middle Display', 80: 'Lower-Middle Display', 255: 'Bottom Display',
+    32: 'Left Paint Can Cap', 64: 'Center Paint Can Cap', 96: 'Right Paint Can Cap', 128: 'Paint Can Bodies', 192: 'Canvas Back Cross Brace',
+    208: 'Canvas Back Panel', 144: 'Left Paint Can Label', 160: 'Center Paint Can Label', 176: 'Right Paint Can Label',
+  },
+  'models/items/paintkit_tool/p_paintkit_tool_groups_left': {
+    48: 'Left Display Upper', 80: 'Left Display Center', 112: 'Left Display Lower',
+    16: 'Right Display', 32: 'Left Paint Can Cap', 64: 'Center Paint Can Cap', 96: 'Right Paint Can Cap',
+    128: 'Paint Can Bodies', 192: 'Canvas Back Cross Brace', 208: 'Canvas Back Panel', 255: 'Display Divider',
+    144: 'Left Paint Can Label', 160: 'Center Paint Can Label', 176: 'Right Paint Can Label',
+  },
+};
+
+function additionalGroupName(groupsRef: string, rawGroupId: number): string | null {
+  return PAINTKIT_TOOL_GROUP_NAMES[normalizeGroupTextureReference(groupsRef)]?.[String(rawGroupId)] ?? null;
+}
+
+/** Conventional Albedo assignments used by the stock War Paint preview item. */
+export function preferredAlbedoGroupIds(groupsRef: string): readonly number[] {
+  const normalized = normalizeGroupTextureReference(groupsRef);
+  const groups = PAINTKIT_TOOL_GROUP_NAMES[normalized];
+  if (!groups) return [];
+  const defaults = normalized.endsWith('/p_paintkit_tool_groups_four')
+    ? [144, 160, 176, 192, 255]
+    : [144, 160, 176, 192];
+  return defaults.filter((groupId) => groups[String(groupId)] !== undefined);
+}
+
 /**
  * The reference guide deliberately names every small element covered by a
  * group. That is invaluable documentation, but it makes a poor chip label.
@@ -72,6 +124,8 @@ export function normalizeGroupTextureReference(value: string): string {
  */
 export function lookupGroupNameForBucket(groupsRef: string, bucket: number): string | null {
   if (!Number.isInteger(bucket) || bucket < 1 || bucket > 16) return null;
+  const supplemental = additionalGroupName(groupsRef, bucket === 16 ? 255 : bucket * 16);
+  if (supplemental) return supplemental;
   const texture = GROUP_NAME_REFERENCE.textures[normalizeGroupTextureReference(groupsRef)];
   if (!texture) return null;
   const names = new Set(Object.entries(texture.groups)
@@ -87,13 +141,17 @@ export function lookupGroupNameForBucket(groupsRef: string, bucket: number): str
  */
 export function lookupGroupName(groupsRef: string, rawGroupId: number): string | null {
   if (!Number.isInteger(rawGroupId) || rawGroupId < 1 || rawGroupId > 255) return null;
+  const supplemental = additionalGroupName(groupsRef, rawGroupId);
+  if (supplemental) return supplemental;
   const texture = GROUP_NAME_REFERENCE.textures[normalizeGroupTextureReference(groupsRef)];
   return texture?.groups[String(rawGroupId)] ?? null;
 }
 
 /** The named weapon represented by a reference texture, when the guide has it. */
 export function lookupGroupNameWeapon(groupsRef: string): string | null {
-  return GROUP_NAME_REFERENCE.textures[normalizeGroupTextureReference(groupsRef)]?.weapon ?? null;
+  const normalized = normalizeGroupTextureReference(groupsRef);
+  if (PAINTKIT_TOOL_GROUP_NAMES[normalized]) return 'War Paint';
+  return GROUP_NAME_REFERENCE.textures[normalized]?.weapon ?? null;
 }
 
 export interface CompatibleGroupTexture {
@@ -110,7 +168,14 @@ function groupTextureLayoutNumber(ref: string): number | null {
 
 /** Return every curated stock group-map layout for the same weapon. */
 export function compatibleGroupTextures(groupsRef: string): CompatibleGroupTexture[] {
-  const current = GROUP_NAME_REFERENCE.textures[normalizeGroupTextureReference(groupsRef)];
+  const normalized = normalizeGroupTextureReference(groupsRef);
+  if (PAINTKIT_TOOL_GROUP_NAMES[normalized]) {
+    return Object.keys(PAINTKIT_TOOL_GROUP_NAMES).map((ref, index) => ({
+      ref,
+      label: `Layout ${index + 1}`,
+    }));
+  }
+  const current = GROUP_NAME_REFERENCE.textures[normalized];
   if (!current) return [];
   return Object.entries(GROUP_NAME_REFERENCE.textures)
     .filter(([, entry]) => entry.weapon === current.weapon)

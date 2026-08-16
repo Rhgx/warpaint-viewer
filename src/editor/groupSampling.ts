@@ -46,6 +46,19 @@ export function rawGroupIdForBucket(bucket: number): number | null {
   return bucket === 16 ? 255 : bucket * 16;
 }
 
+/** Return the visible compositor buckets that are actually present in a group texture. */
+export function groupBucketsInImage(image: RgbaImageDataLike): number[] {
+  if (!isValidImage(image)) return [];
+  const counts = new Uint32Array(17);
+  for (let offset = 0; offset < image.width * image.height * 4; offset += 4) {
+    const bucket = groupByteToCompositorBucket(Number(image.data[offset]));
+    if (bucket !== null && bucket >= 1 && bucket <= 16) counts[bucket] += 1;
+  }
+  const minimumPixels = Math.max(1, Math.floor(image.width * image.height * 0.0005));
+  return Array.from({ length: 16 }, (_, index) => index + 1)
+    .filter((bucket) => counts[bucket] >= minimumPixels);
+}
+
 /** Samples the raw red-channel group byte at an unflipped, V-down UV point. */
 export function sampleGroupRedAtUv(image: RgbaImageDataLike, u: number, v: number): number | null {
   const texel = groupTexelAtUv(image, u, v);

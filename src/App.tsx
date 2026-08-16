@@ -38,7 +38,11 @@ import type { CustomDefinitionsState, ProtoDefKitWeaponSlot, ProtoDefRecipeWithP
 import { useProtoDefEditorSession } from './editor/useProtoDefEditorSession';
 import { discoverGroupSelectTargets, discoverGroupTextureTarget } from './editor/groupTargets';
 import { discoverTextureTransformTargets, type TextureTransformRangeFieldState } from './editor/transformTargets';
-import { collectResolvedLayerIsolationNodes, preferredLayerOccurrenceIndex } from './editor/transformIsolation';
+import {
+  collectResolvedLayerIsolationNodes,
+  preferredLayerOccurrenceIndex,
+  preferredNamedTextureOccurrenceIndex,
+} from './editor/transformIsolation';
 import { discoverWeaponMaterialTargets } from './editor/materialTargets';
 import type { TextureTransformRangeField, TextureTransformTarget } from './editor/mutations';
 import type { TextureTransformFields, TextureTransformPanelProps } from './ui/workbench/TextureTransformPanel';
@@ -46,6 +50,7 @@ import type { SeedRangeValue } from './ui/workbench/SeedRangeField';
 import type { SeedRangeDivergence } from './ui/workbench/SeedRangeField';
 import type { MaterialOverridesPanelProps, MaterialWeaponRow } from './ui/workbench/MaterialOverridesPanel';
 import {
+  groupBucketsInImage,
   groupByteToCompositorBucket,
   rawGroupIdForBucket,
   sampleGroupAtUv,
@@ -57,6 +62,7 @@ import {
   formatGroupNameForDisplay,
   lookupGroupNameForBucket,
   normalizeGroupTextureReference,
+  preferredAlbedoGroupIds,
 } from './editor/groupNames';
 import { chooseEditorLayerColors, EDITOR_LAYER_MAP_COLORS, linearLayerColorToCss } from './editor/layerMap';
 import { discoverStickerPlacementTargets } from './editor/stickerTargets';
@@ -443,6 +449,7 @@ function MainApp() {
   const [groupImageError, setGroupImageError] = useState<string | null>(null);
   const [requestedGroupTextureRef, setRequestedGroupTextureRef] = useState<string | null>(null);
   const groupImageCacheRef = useRef(new Map<string, Promise<RgbaImageDataLike>>());
+  const autoAlbedoAssignmentKeysRef = useRef(new Set<string>());
   const [editorPreviewError, setEditorPreviewError] = useState<string | null>(null);
   const [editorPackageExportError, setEditorPackageExportError] = useState<string | null>(null);
   const [editorPackageExporting, setEditorPackageExporting] = useState(false);
@@ -615,7 +622,14 @@ function MainApp() {
   // occurrence that matches the finished paint; group assignment retains the
   // first authored selector target because both share the same source slots.
   const activeGroupVisualIndex = groupDiscovery
-    ? preferredLayerOccurrenceIndex(groupDiscovery.targets, activeGroupTarget)
+    ? state.weaponKey === 'paintkit_tool' && activeGroupTarget?.label.trim().toLowerCase() === 'albedo'
+      ? preferredNamedTextureOccurrenceIndex(
+        groupDiscovery.targets,
+        transformDiscovery?.targets ?? [],
+        activeGroupTarget,
+        'albedo',
+      )
+      : preferredLayerOccurrenceIndex(groupDiscovery.targets, activeGroupTarget)
     : -1;
   const activeTransformTargetInfo = activeGroupVisualIndex >= 0
     ? (transformScope === 'all' ? sharedTransformDiscovery : transformDiscovery)?.targets[activeGroupVisualIndex] ?? null
@@ -674,6 +688,7 @@ function MainApp() {
     setRequestedGroupTextureRef(null);
     setGroupImage(null);
     groupImageCacheRef.current.clear();
+    autoAlbedoAssignmentKeysRef.current.clear();
   }, [editableKitId, state.weaponKey]);
   // The operation can inherit its starting selector values from the selected
   // weapon or wear. Show the values the model is actually using until an edit
@@ -759,6 +774,10 @@ function MainApp() {
     transformUvIsolationOverlayUrlRef.current = null;
     if (priorUrl) URL.revokeObjectURL(priorUrl);
   }, []);
+  const activeGroupBuckets = useMemo(
+    () => groupImage ? groupBucketsInImage(groupImage) : [],
+    [groupImage],
+  );
   const activeGroupLabels = useMemo(() => {
     if (!displayedGroupRef) return {};
     const labels: Record<number, string> = {};
@@ -766,8 +785,11 @@ function MainApp() {
       const name = lookupGroupNameForBucket(displayedGroupRef, bucket);
       if (name) labels[bucket] = name;
     }
+    for (const bucket of activeGroupBuckets) {
+      if (!labels[bucket]) labels[bucket] = 'Part';
+    }
     return labels;
-  }, [displayedGroupRef]);
+  }, [activeGroupBuckets, displayedGroupRef]);
   const groupAssignmentTargets = useMemo(() => editableGroupTargets.map((target, index) => {
     const matchingOperationIndexes = groupDiscovery?.targets.flatMap((candidate, operationIndex) => (
       candidate.sourceKey === target.sourceKey ? [operationIndex] : []
@@ -798,6 +820,28 @@ function MainApp() {
       canAssign: !target.hasInheritedVariableValues || Boolean(resolved),
     };
   }), [editableGroupTargets, editorSelectors, groupDiscovery, resolvedGroupSelects]);
+
+  useEffect(() => {
+    if (!displayedGroupRef || !groupImage || editableKitId === null) return;
+    const assignmentKey = `${editableKitId}:${state.weaponKey}:${normalizeGroupTextureReference(displayedGroupRef)}`;
+    if (autoAlbedoAssignmentKeysRef.current.has(assignmentKey)) return;
+    const presentRawIds = new Set(activeGroupBuckets
+      .map(rawGroupIdForBucket)
+      .filter((groupId): groupId is number => groupId !== null));
+    const unassignedDefaults = preferredAlbedoGroupIds(displayedGroupRef).filter((groupId) => (
+      presentRawIds.has(groupId)
+      &&
+      !groupAssignmentTargets.some((target) => target.selectedGroupIds.includes(groupId))
+    ));
+    if (unassignedDefaults.length === 0) return;
+    const albedoTarget = groupAssignmentTargets.find((target) => (
+      target.canAssign && target.label.trim().toLowerCase() === 'albedo'
+    ));
+    if (!albedoTarget) return;
+    if (assignSessionGroups(albedoTarget, groupAssignmentTargets, unassignedDefaults)) {
+      autoAlbedoAssignmentKeysRef.current.add(assignmentKey);
+    }
+  }, [activeGroupBuckets, assignSessionGroups, displayedGroupRef, editableKitId, groupAssignmentTargets, groupImage, state.weaponKey]);
   // The parts board needs to know which layer every assigned part belongs to,
   // not just the active one, so it can render each chip's true state (in this
   // layer / in another layer / unassigned) rather than only a binary toggle.
@@ -3359,7 +3403,20 @@ function MainApp() {
                   onGroupTextureChange: groupTextureTarget ? (ref) => {
                     const normalizedRef = normalizeGroupTextureReference(ref);
                     setRequestedGroupTextureRef(normalizedRef);
-                    if (setSessionGroupTexture(groupTextureTarget, ref)) {
+                    const defaultIds = preferredAlbedoGroupIds(ref).filter((groupId) => (
+                      !groupAssignmentTargets.some((target) => target.selectedGroupIds.includes(groupId))
+                    ));
+                    const albedoTarget = defaultIds.length > 0
+                      ? groupAssignmentTargets.find((target) => (
+                        target.canAssign && target.label.trim().toLowerCase() === 'albedo'
+                      ))
+                      : undefined;
+                    const defaultAssignment = albedoTarget ? {
+                      active: albedoTarget,
+                      candidates: groupAssignmentTargets,
+                      groupIds: defaultIds,
+                    } : undefined;
+                    if (setSessionGroupTexture(groupTextureTarget, ref, defaultAssignment)) {
                       setEditorSample(null);
                       setPanelPreviewGroup(null);
                     } else {
