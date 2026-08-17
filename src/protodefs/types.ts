@@ -38,6 +38,8 @@ export interface ProtoDefKit {
   /** Weapon keys this kit paints, restricted to weapons the viewer can render. */
   weapons: string[];
   hasTeamTextures: boolean;
+  /** The prefab requests team colors, but the definition explicitly disables team textures. */
+  teamTextureMismatch: boolean;
   /**
    * True when any item definition template carries more than one per-wear
    * definition. This is a cheap proxy for the build pipeline's rule (which

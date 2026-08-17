@@ -26,6 +26,7 @@ export interface VarFieldMsg {
 export interface HeaderMsg {
   defindex: number;
   name?: string;
+  tags?: Many<string>;
   variables?: Many<VarDefMsg>;
 }
 

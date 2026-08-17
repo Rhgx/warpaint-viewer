@@ -251,6 +251,14 @@ export function useCustomDefinitions({
           `${unsupported.toLocaleString()} ${unsupported === 1 ? 'definition paints' : 'definitions paint'} a weapon this viewer has no model for.`,
         ));
       }
+      const teamTextureMismatches = index.kits.filter((kit) => kit.teamTextureMismatch);
+      for (const kit of teamTextureMismatches) {
+        notes.push(diagnostic(
+          'warning',
+          `${kit.name} uses a team-color prefab, but has_team_textures is disabled.`,
+          'Set has_team_textures to true to enable RED and BLU textures.',
+        ));
+      }
       if (!provider.package) {
         notes.push(diagnostic(
           'info',

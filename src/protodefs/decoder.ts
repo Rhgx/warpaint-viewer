@@ -661,6 +661,10 @@ interface RawDecoded {
   countsByType: Record<number, number>;
 }
 
+function definitionUsesTeamColorPrefab(def: PaintkitDefinitionMsg): boolean {
+  return many(def.header.tags).some((tag) => /(?:^|_)team_color(?:_|$)/.test(tag));
+}
+
 function decodeBaseContainer(bytes: Uint8Array): RawDecoded {
   const root = loadRoot();
   const { byType } = parseContainer(bytes);
@@ -716,6 +720,7 @@ function assembleDecoded(raw: RawDecoded, options: ProtoDefOpenOptions): Decoded
       name: def.header.name || `paintkit_${defindex}`,
       weapons,
       hasTeamTextures: !!def.has_team_textures,
+      teamTextureMismatch: !def.has_team_textures && definitionUsesTeamColorPrefab(def),
       perWear,
       isNew,
       unsupportedItemDefs: [...new Set(unsupportedItemDefs)],
