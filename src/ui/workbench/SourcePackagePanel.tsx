@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
-  AlertTriangle,
   LoaderCircle,
-  OctagonAlert,
   PackageOpen,
   Trash2,
   Upload,
 } from 'lucide-react';
+import { DiagnosticsList } from './DiagnosticItem';
 import type {
   SourceDiagnostic,
   SourcePackageFormat,
@@ -76,12 +75,6 @@ function ImportPicker({
  */
 export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
   const { status, summary, diagnostics, onRemove } = state;
-  // Successful normalization and archive-safety observations are useful to
-  // developers, but give users nothing to act on. Keep them in package state
-  // while reserving the visible diagnostics area for problems.
-  const visibleDiagnostics = diagnostics.filter(
-    (diagnostic) => diagnostic.level !== 'info',
-  );
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   useEffect(() => {
@@ -198,25 +191,7 @@ export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
         </div>
       )}
 
-      {visibleDiagnostics.length > 0 && (
-        <ul className="source-package-diagnostics">
-          {visibleDiagnostics.map((diagnostic) => (
-            // Shape carries the severity alongside the color, so the two levels
-            // stay apart for anyone the yellow/red split does not reach.
-            <li key={diagnostic.id} data-level={diagnostic.level}>
-              {diagnostic.level === 'error' ? (
-                <OctagonAlert size={11} />
-              ) : (
-                <AlertTriangle size={11} />
-              )}
-              <span>
-                {diagnostic.message}
-                {diagnostic.detail && <code>{diagnostic.detail}</code>}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <DiagnosticsList diagnostics={diagnostics} />
     </div>
   );
 }

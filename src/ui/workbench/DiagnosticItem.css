@@ -1,0 +1,121 @@
+/* Import diagnostics shared by the Package and Definitions tabs. */
+.diagnostics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.diagnostics:not(:empty) { margin-top: 8px; }
+
+.diagnostic {
+  --diagnostic-tone: var(--text-dim);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 7px;
+  padding: 7px 8px 8px 9px;
+  border: 1px solid color-mix(in srgb, var(--diagnostic-tone) 38%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--diagnostic-tone) 9%, var(--panel));
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.diagnostic[data-level='error'] { --diagnostic-tone: var(--fail); }
+.diagnostic[data-level='warning'] { --diagnostic-tone: var(--warn); }
+.diagnostic[data-level='info'] { --diagnostic-tone: var(--accent); }
+
+.diagnostic-icon {
+  grid-column: 1;
+  margin-top: 1px;
+  color: var(--diagnostic-tone);
+}
+.diagnostic-message {
+  grid-column: 2;
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.diagnostic-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.diagnostic-meta {
+  grid-column: 2;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.diagnostic-code {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--diagnostic-tone) 16%, transparent);
+  color: color-mix(in srgb, var(--diagnostic-tone) 80%, var(--text));
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.diagnostic-source {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diagnostic-location {
+  flex: none;
+  color: var(--text-dim);
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.diagnostic-technical { grid-column: 2; margin-top: 1px; }
+.diagnostic-technical summary {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px 1px 3px;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.diagnostic-technical summary::-webkit-details-marker { display: none; }
+.diagnostic-technical summary:hover { background: var(--panel-2); color: var(--text); }
+.diagnostic-technical summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.diagnostic-technical summary svg { flex: none; transition: transform 140ms ease; }
+.diagnostic-technical[open] summary svg { transform: rotate(90deg); }
+.diagnostic-technical pre {
+  max-height: 160px;
+  margin: 4px 0 0;
+  overflow: auto;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font: 10px/1.5 ui-monospace, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diagnostic-technical summary svg { transition: none; }
+}

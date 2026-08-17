@@ -2,8 +2,10 @@
    and diagnostics, or an empty state when nothing is mounted yet. Fills the
    tab panel and scrolls if the diagnostics list runs long. */
 .source-package {
+  display: flex;
   flex: 1;
   min-height: 0;
+  flex-direction: column;
   overflow: auto;
   padding: 10px 12px;
   background: var(--accent-soft);
@@ -11,9 +13,10 @@
   font-size: 9.5px;
 }
 .source-package[data-status='empty'] { background: none; }
+/* Leave room for diagnostics after a failed import. */
 .source-package-empty {
   display: flex;
-  height: 100%;
+  flex: 1 0 auto;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -136,29 +139,12 @@
 .source-package-chip b { color: var(--text); font-variant-numeric: tabular-nums; }
 .source-package-chip[data-empty] { font-style: italic; opacity: 0.7; }
 
-.source-package-diagnostics {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.source-package-row + .source-package-diagnostics,
-.source-package-details + .source-package-diagnostics { margin-top: 5px; }
-.source-package-diagnostics li {
-  display: flex;
-  align-items: flex-start;
-  gap: 5px;
-  line-height: 1.45;
-}
-.source-package-diagnostics li svg { flex: none; margin-top: 2px; }
-.source-package-diagnostics li[data-level='error'] { color: var(--fail); font-weight: 600; }
-.source-package-diagnostics li[data-level='warning'] { color: var(--warn); }
-.source-package-diagnostics code {
-  margin-left: 4px;
-  font-family: ui-monospace, monospace;
-  overflow-wrap: anywhere;
+/* Give diagnostics their natural height and reduce the empty-state pitch. */
+.source-package .diagnostics { flex: none; }
+.source-package:has(.diagnostics:not(:empty)) .source-package-empty {
+  flex: none;
+  gap: 7px;
+  padding: 6px 16px 2px;
 }
 
 /* Drop target. The whole workbench accepts package files: the drawer is short,

@@ -23,6 +23,7 @@ import type {
   ProtoDefSource,
 } from '../protodefs/types';
 import { classifyProtoDefFragment } from '../protodefs/jsonFragments';
+import { appErrorDiagnostic, ERROR_CODES } from '../errors';
 import { serializeProtoDefKitMessages } from '../editor/jsonExport';
 import { applyImplicitStickerSpecs } from '../protodefs/implicitStickerSpecs';
 
@@ -90,8 +91,11 @@ function diagnostic(level: SourceDiagnostic['level'], message: string, detail?: 
 }
 
 function errorDiagnostic(cause: unknown): SourceDiagnostic {
-  const error = cause instanceof Error ? cause : new Error(String(cause));
-  return { id: `defs:import:${Date.now()}`, level: 'error', message: error.message };
+  return appErrorDiagnostic(cause, {
+    code: ERROR_CODES.definitionImportFailed,
+    message: 'The definitions could not be imported.',
+    idPrefix: 'defs:import',
+  });
 }
 
 function toCatalogKit(kit: ProtoDefKit): PaintkitEntry {

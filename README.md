@@ -114,6 +114,10 @@ Developer harnesses:
 - `node tools/verify/vmt-parity.mjs` compares the browser VMT parser against
   the stock materials produced by the extraction pipeline.
 
+Application errors use stable `WV-AREA-NNNN` codes with separate user-facing
+and technical messages. See [Error codes](docs/error-codes.md) for the API,
+allocation rules, and current registry.
+
 ## Credits
 
 Team Fortress 2 and its weapon models, war-paint artwork, textures, effects, names, and other game assets are the property of Valve Corporation.

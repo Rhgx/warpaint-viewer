@@ -19,6 +19,7 @@
 // is rejected with a specific error rather than passed through.
 
 import type { ProtoDefJsonFragment } from './types';
+import { AppError, ERROR_CODES } from '../errors';
 
 export type ProtoDefFragmentKind = 'operation' | 'definition';
 
@@ -111,17 +112,71 @@ function coerceEnumStrings(value: unknown): unknown {
   return value;
 }
 
+function jsonErrorLocation(message: string, text: string) {
+  const positionMatch = message.match(/position\s+(\d+)/i);
+  const position = positionMatch ? Number(positionMatch[1]) : undefined;
+  const coordinatesMatch = message.match(/line\s+(\d+)\s+column\s+(\d+)/i);
+  if (coordinatesMatch) {
+    return {
+      line: Number(coordinatesMatch[1]),
+      column: Number(coordinatesMatch[2]),
+      ...(position === undefined ? {} : { position }),
+    };
+  }
+  if (position === undefined) return undefined;
+  const before = text.slice(0, Math.min(position, text.length));
+  const lastNewline = before.lastIndexOf('\n');
+  return {
+    line: before.split('\n').length,
+    column: before.length - lastNewline,
+    position,
+  };
+}
+
 function parseFragmentJson(name: string, jsonText: string): Record<string, unknown> {
   let value: unknown;
   try {
     value = JSON.parse(jsonText);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    throw new Error(`"${name}" is not valid JSON once its placeholder defindex tokens are filled in: ${message}`);
+    const context = `File: ${name}\nParser: ${message}`;
+    const location = jsonErrorLocation(message, jsonText);
+    const sourceLocation = location && { line: location.line, column: location.column };
+    if (/unterminated string/i.test(message)) {
+      throw new AppError(
+        ERROR_CODES.definitionJsonUnterminatedString,
+        'Missing closing quotation mark.',
+        {
+          technicalDetail: `${context}\nThe reported position may only be where parsing stopped; the actual mistake can be earlier in the file.`,
+          path: name,
+          location: sourceLocation,
+          cause,
+        },
+      );
+    }
+    const stoppedAtEnd = location?.position === undefined
+      ? /unexpected end|end of data/i.test(message)
+      : location.position >= jsonText.length - 1;
+    if (stoppedAtEnd && /unexpected end|end of data|expected .+ after/i.test(message)) {
+      throw new AppError(
+        ERROR_CODES.definitionJsonIncomplete,
+        'Incomplete JSON.',
+        { technicalDetail: context, path: name, location: sourceLocation, cause },
+      );
+    }
+    throw new AppError(
+      ERROR_CODES.definitionJsonSyntax,
+      'This file contains invalid JSON. Check the reported area for a missing comma, quotation mark, bracket, or brace.',
+      { technicalDetail: context, path: name, location: sourceLocation, cause },
+    );
   }
   if (!isPlainObject(value)) {
     const got = value === null ? 'null' : Array.isArray(value) ? 'an array' : typeof value;
-    throw new Error(`"${name}" must decode to a single JSON object (a proto_defs fragment), got ${got}.`);
+    throw new AppError(
+      ERROR_CODES.definitionJsonNotObject,
+      `This file must contain one JSON object, but it contains ${got}.`,
+      { technicalDetail: `Expected one proto_defs JSON object in ${name}; received ${got}.`, path: name },
+    );
   }
   return coerceEnumStrings(value) as Record<string, unknown>;
 }
@@ -143,7 +198,11 @@ function classifyShape(value: Record<string, unknown>): ProtoDefFragmentKind | n
 
 function checkSize(name: string, text: string): void {
   if (text.length > MAX_FRAGMENT_BYTES) {
-    throw new Error(`"${name}" is ${text.length.toLocaleString()} bytes, over the ${(MAX_FRAGMENT_BYTES / (1024 * 1024)).toFixed(0)} MB limit for a proto_defs JSON fragment.`);
+    throw new AppError(
+      ERROR_CODES.definitionJsonTooLarge,
+      'This definition file is too large to import. Definition JSON files must be 8 MB or smaller.',
+      { technicalDetail: `${name} is ${text.length.toLocaleString()} bytes; the limit is ${MAX_FRAGMENT_BYTES.toLocaleString()} bytes.`, path: name },
+    );
   }
 }
 
@@ -204,7 +263,11 @@ export function normalizeProtoDefFragments(fragments: ProtoDefJsonFragment[]): N
     const value = parseFragmentJson(name, substitutePlaceholders(text, ids));
     const kind = classifyShape(value);
     if (!kind) {
-      throw new Error(`"${name}" is neither an operation fragment (no top-level operation_node) nor a definition fragment (no weapon slot carrying item_definition_template).`);
+      throw new AppError(
+        ERROR_CODES.definitionUnknownFragment,
+        'This file does not look like a war paint operation or definition file. Make sure both exported definition JSON files were selected.',
+        { technicalDetail: `${name} has neither a top-level operation_node nor a weapon slot carrying item_definition_template.`, path: name },
+      );
     }
     return { name, kind, value };
   });

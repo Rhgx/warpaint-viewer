@@ -8,18 +8,22 @@
   min-height: 0;
   flex-direction: column;
 }
+/* Keep diagnostics reachable in the short drawer. */
 .definitions-panel[data-status='empty'],
 .definitions-panel[data-status='importing'] {
-  align-items: center;
-  justify-content: center;
+  justify-content: safe center;
+  overflow: auto;
 }
 
 .definitions-empty {
   display: flex;
+  flex: 1 0 auto;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   max-width: 340px;
+  margin: 0 auto;
   padding: 20px 16px;
   text-align: center;
   color: var(--text-dim);
@@ -30,7 +34,9 @@
 
 .definitions-status {
   display: flex;
+  flex: 1 0 auto;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   color: var(--text-dim);
   font-size: 11px;
@@ -59,6 +65,23 @@
   color: var(--text-dim);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* This panel supplies the shared list's gutter and loaded-state height. */
+.definitions-panel > .diagnostics:not(:empty) {
+  flex: none;
+  margin: 10px 12px 12px;
+}
+.definitions-panel[data-status='loaded'] > .diagnostics:not(:empty) {
+  max-height: 45%;
+  overflow: auto;
+  margin-bottom: 0;
+}
+/* Give a failed import priority over the empty-state pitch. */
+.definitions-panel:has(.diagnostics:not(:empty)) .definitions-empty {
+  flex: none;
+  gap: 7px;
+  padding: 12px 16px 2px;
 }
 
 .definitions-toolbar {

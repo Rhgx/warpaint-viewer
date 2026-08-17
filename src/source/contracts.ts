@@ -37,13 +37,27 @@ export interface SourcePackage {
 
 export type SourceDiagnosticLevel = 'error' | 'warning' | 'info';
 
-/** Suitable for direct display by the package-import UI. */
+export interface SourceDiagnosticLocation {
+  line: number;
+  column: number;
+}
+
+/**
+ * Suitable for direct display by import UIs. Error fields and stability rules
+ * are documented in docs/error-codes.md.
+ */
 export interface SourceDiagnostic {
   id: string;
   level: SourceDiagnosticLevel;
   message: string;
+  /** Stable identifier suitable for bug reports and support searches. */
+  code?: string;
   /** The archive name or entry path associated with this message, if singular. */
   detail?: string;
+  /** One-based source coordinates reported by a parser. */
+  location?: SourceDiagnosticLocation;
+  /** Raw parser/decoder context hidden behind an expandable UI disclosure. */
+  technicalDetail?: string;
 }
 
 /** Machine-readable failure for validation and lazy reads. */

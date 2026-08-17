@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle,
   LoaderCircle,
-  OctagonAlert,
   PackageSearch,
   ScrollText,
   Search,
@@ -15,8 +13,8 @@ import type {
 } from '../../protodefs/types';
 import { PROTO_DEFS_ACCEPT } from '../../protodefs/types';
 import { TextField } from '../common/controls';
-import './SourcePackagePanel.css';
 import './DefinitionsPanel.css';
+import { DiagnosticsList } from './DiagnosticItem';
 
 function plural(count: number, noun: string): string {
   return `${count.toLocaleString()} ${noun}${count === 1 ? '' : 's'}`;
@@ -140,11 +138,6 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
     return () => window.clearTimeout(timer);
   }, [confirmRemove]);
 
-  // Successful decodes are developer-facing noise; only problems belong in the
-  // visible list, matching the package panel's diagnostics filter.
-  const visibleDiagnostics = diagnostics.filter(
-    (diagnostic) => diagnostic.level !== 'info',
-  );
   const query = filter.trim().toLowerCase();
   const filteredKits = useMemo(
     () =>
@@ -176,25 +169,7 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
     </div>
   );
 
-  const diagnosticsList = visibleDiagnostics.length > 0 && (
-    <ul className="source-package-diagnostics">
-      {visibleDiagnostics.map((diagnostic) => (
-        // Errors take the octagon and warnings the triangle, matching the
-        // package panel's list.
-        <li key={diagnostic.id} data-level={diagnostic.level}>
-          {diagnostic.level === 'error' ? (
-            <OctagonAlert size={11} />
-          ) : (
-            <AlertTriangle size={11} />
-          )}
-          <span>
-            {diagnostic.message}
-            {diagnostic.detail && <code>{diagnostic.detail}</code>}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
+  const diagnosticsList = <DiagnosticsList diagnostics={diagnostics} />;
 
   if (status !== 'loaded') {
     return (

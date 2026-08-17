@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SourcePackage, SourcePackageOpenResult, SourcePackageState, SourcePackageSummary } from '../source/contracts';
 import { isSupportedTexturePath, sourcePathExtension } from '../source/paths';
 import { SourceTextureProvider } from '../source/provider';
+import { AppError, appErrorDiagnostic, ERROR_CODES } from '../errors';
 
 type StaticPackageSummary = Omit<
   SourcePackageSummary,
@@ -14,9 +15,11 @@ type StaticPackageSummary = Omit<
 const staticSummaryCache = new WeakMap<SourcePackage, StaticPackageSummary>();
 
 function importDiagnostic(cause: unknown) {
-  const error = cause instanceof Error ? cause : new Error(String(cause));
-  const detail = 'path' in error && typeof error.path === 'string' ? error.path : undefined;
-  return { id: `import:${Date.now()}`, level: 'error' as const, message: error.message, detail };
+  return appErrorDiagnostic(cause, {
+    code: ERROR_CODES.packageImportFailed,
+    message: 'The package could not be imported.',
+    idPrefix: 'package:import',
+  });
 }
 
 function summaryFor(pkg: SourcePackage, provider: SourceTextureProvider): SourcePackageSummary {
@@ -90,10 +93,20 @@ export function useSourcePackage(
       try {
         const zips = files.filter((file) => file.name.toLowerCase().endsWith('.zip'));
         const vpks = files.filter((file) => file.name.toLowerCase().endsWith('.vpk'));
-        if (zips.length && vpks.length) throw new Error('Select either one ZIP package or one VPK file set, not both.');
+        if (zips.length && vpks.length) {
+          throw new AppError(
+            ERROR_CODES.packageMixedFormats,
+            'Choose either a ZIP package or a VPK file set, not both.',
+          );
+        }
         let opened: SourcePackageOpenResult;
         if (zips.length) {
-          if (zips.length !== 1 || files.length !== 1) throw new Error('Select exactly one .zip package.');
+          if (zips.length !== 1 || files.length !== 1) {
+            throw new AppError(
+              ERROR_CODES.packageZipSelection,
+              'Choose exactly one ZIP package.',
+            );
+          }
           // Archive parsers are intentionally loaded only after a user picks a
           // package. @zip.js is sizeable and no normal viewing path needs it.
           const { openZipSourcePackage } = await import('../source/zip');
@@ -102,7 +115,10 @@ export function useSourcePackage(
           const { openVpkSourcePackage } = await import('../source/vpk');
           opened = await openVpkSourcePackage(vpks);
         } else {
-          throw new Error('Select a .zip package or a complete .vpk file set.');
+          throw new AppError(
+            ERROR_CODES.packageUnsupportedSelection,
+            'Choose a ZIP package or a complete VPK file set.',
+          );
         }
         if (operation !== importOperationRef.current) { opened.package.dispose(); return; }
         provider.mount(opened.package, opened.diagnostics);
