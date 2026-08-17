@@ -135,12 +135,18 @@ export function WarpaintList({
   onSelect,
   collectionIcons,
   paintIcons,
+  visibilityTrackedKitIds = [],
+  onVisibleKitIdsChange,
 }: {
   paintkits: PaintkitEntry[];
   selectedId: number | null;
   onSelect: (id: number) => void;
   collectionIcons: Record<string, string>;
   paintIcons: Record<number, string>;
+  /** Restricts visibility observation to entries with deferred work. */
+  visibilityTrackedKitIds?: readonly number[];
+  /** Reports catalog entries intersecting the scroll viewport for deferred work. */
+  onVisibleKitIdsChange?: (ids: readonly number[]) => void;
 }) {
   const [filter, setFilter] = useState('');
   const [reversed, setReversed] = useState(() => {
@@ -227,6 +233,43 @@ export function WarpaintList({
         - (collectionOrder.get(b[0]) ?? Number.MAX_SAFE_INTEGER),
     );
   }, [paintkits, q, isFiltering, activeCollection, collections]);
+
+  useEffect(() => {
+    if (!onVisibleKitIdsChange) return;
+    if (visibilityTrackedKitIds.length === 0) {
+      onVisibleKitIdsChange([]);
+      return;
+    }
+    const container = containerRef.current;
+    const viewport = container?.querySelector<HTMLElement>('.ui-scroll-viewport');
+    if (!container || !viewport || typeof IntersectionObserver === 'undefined') {
+      // Older browsers still get the prior eager behavior rather than losing
+      // generated icons entirely when IntersectionObserver is unavailable.
+      onVisibleKitIdsChange(visibilityTrackedKitIds);
+      return;
+    }
+
+    const tracked = new Set(visibilityTrackedKitIds);
+    const visible = new Set<number>();
+    const publish = () => {
+      onVisibleKitIdsChange([...visible].sort((a, b) => a - b));
+    };
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const id = Number((entry.target as HTMLElement).dataset.kitId);
+        if (!Number.isFinite(id)) continue;
+        if (entry.isIntersecting && entry.intersectionRatio > 0) visible.add(id);
+        else visible.delete(id);
+      }
+      publish();
+    }, { root: viewport });
+
+    for (const node of container.querySelectorAll<HTMLElement>('[data-kit-id]')) {
+      const id = Number(node.dataset.kitId);
+      if (tracked.has(id)) observer.observe(node);
+    }
+    return () => observer.disconnect();
+  }, [groups, onVisibleKitIdsChange, view, visibilityTrackedKitIds]);
 
   // Flat, filtered kit order used for keyboard navigation; matches the order
   // the groups render in, independent of grid vs. list layout.

@@ -57,6 +57,7 @@ const DEFINITIONS_OPTIONS = [
 
 const DEFINITIONS_PLUGIN_URL = 'https://github.com/ficool2/custom_items_games/releases/latest';
 const WARPAINT_SERVER_PLUGIN_URL = 'https://github.com/Mince1844/tf2warpaints';
+const PAINT_PICKER_INITIAL_RESULTS = 40;
 
 /**
  * Two-option choices read better as one visible pair than as a dropdown that
@@ -110,10 +111,25 @@ function PaintPicker({
 }) {
   const [query, setQuery] = useState('');
   const trimmed = query.trim().toLowerCase();
-  const matches = trimmed
-    ? kits.filter((kit) => kit.name.toLowerCase().includes(trimmed))
-    : kits;
+  const matches = useMemo(
+    () => (trimmed
+      ? kits.filter((kit) => kit.name.toLowerCase().includes(trimmed))
+      : kits),
+    [kits, trimmed],
+  );
   const selected = kits.find((kit) => String(kit.defindex) === value);
+  const visibleMatches = useMemo(() => {
+    if (matches.length <= PAINT_PICKER_INITIAL_RESULTS) return matches;
+    const firstMatches = matches.slice(0, PAINT_PICKER_INITIAL_RESULTS);
+    // Keep the current choice visible when the picker is reopened after a
+    // selection that falls outside the first page. Searching still exposes
+    // every kit, while this prevents the selected label from disappearing.
+    if (selected && !firstMatches.some((kit) => kit.defindex === selected.defindex)) {
+      return [selected, ...firstMatches.slice(0, PAINT_PICKER_INITIAL_RESULTS - 1)];
+    }
+    return firstMatches;
+  }, [matches, selected]);
+  const hasMoreMatches = visibleMatches.length < matches.length;
 
   return (
     <div className="export-picker">
@@ -129,7 +145,7 @@ function PaintPicker({
         {matches.length === 0 ? (
           <p className="export-picker-empty">No war paint matches “{query.trim()}”.</p>
         ) : (
-          matches.map((kit) => (
+          visibleMatches.map((kit) => (
             <button
               key={kit.defindex}
               type="button"
@@ -142,6 +158,11 @@ function PaintPicker({
               {kit.name}
             </button>
           ))
+        )}
+        {hasMoreMatches && (
+          <p className="export-picker-hint">
+            Showing {visibleMatches.length} of {matches.length}. Search to find another paint.
+          </p>
         )}
       </div>
     </div>

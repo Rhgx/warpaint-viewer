@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Download,
@@ -39,6 +39,38 @@ function shortName(ref: string): string {
     .replace(/[_-]+/g, ' ');
 }
 
+/**
+ * Asset grids can contain dozens of source textures. Keep the image element
+ * in the card so the preview keeps its layout, but do not assign a source
+ * until the card is close to the viewport. Native lazy loading remains as a
+ * browser-level backstop once the source is assigned.
+ */
+function useNearViewport() {
+  const elementRef = useRef<HTMLImageElement>(null);
+  const [nearViewport, setNearViewport] = useState(false);
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+    if (!('IntersectionObserver' in window)) {
+      setNearViewport(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        setNearViewport(true);
+        observer.disconnect();
+      },
+      { rootMargin: '240px' },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return { elementRef, nearViewport };
+}
+
 function TexturePreview({
   refPath,
   fallbackUrl,
@@ -50,8 +82,10 @@ function TexturePreview({
   resolvePackageTexture?: (ref: string) => Promise<string>;
   packageGeneration: number;
 }) {
+  const { elementRef, nearViewport } = useNearViewport();
   const [src, setSrc] = useState(fallbackUrl);
   useEffect(() => {
+    if (!nearViewport) return;
     let cancelled = false;
     setSrc(fallbackUrl);
     if (!refPath || !resolvePackageTexture)
@@ -66,8 +100,8 @@ function TexturePreview({
     return () => {
       cancelled = true;
     };
-  }, [refPath, fallbackUrl, resolvePackageTexture, packageGeneration]);
-  return <img src={src} alt="" />;
+  }, [nearViewport, refPath, fallbackUrl, resolvePackageTexture, packageGeneration]);
+  return <img ref={elementRef} src={nearViewport ? src : undefined} loading="lazy" alt="" />;
 }
 
 export function AssetFilesPanel({

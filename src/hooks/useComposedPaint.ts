@@ -13,8 +13,19 @@ const IDLE_TIMEOUT_MS = 2_000;
 const IDLE_FALLBACK_DELAY_MS = 250;
 const INTERACTIVE_COMPOSE_MAX_DIMENSION = 256;
 
+/**
+ * Recipes are resolved from immutable definition data. Cache the serialized
+ * fingerprint by object identity so repeated consumers of the same resolved
+ * tree do not pay for JSON serialization and hashing again. The value itself
+ * remains structural, so separately allocated but equivalent recipe trees
+ * continue to produce the same cache key.
+ */
+const recipeFingerprintCache = new WeakMap<object, string>();
+
 /** Stable, compact identity for a resolved recipe used by the GPU-result LRU. */
 export function recipeFingerprint(recipe: RecipeNode): string {
+  const cached = recipeFingerprintCache.get(recipe);
+  if (cached) return cached;
   const text = JSON.stringify(recipe);
   let first = 0x811c9dc5;
   let second = 0x9e3779b9;
@@ -24,7 +35,9 @@ export function recipeFingerprint(recipe: RecipeNode): string {
     second = Math.imul(second ^ code, 0x85ebca6b);
     second ^= second >>> 13;
   }
-  return `${text.length}:${(first >>> 0).toString(16)}:${(second >>> 0).toString(16)}`;
+  const fingerprint = `${text.length}:${(first >>> 0).toString(16)}:${(second >>> 0).toString(16)}`;
+  recipeFingerprintCache.set(recipe, fingerprint);
+  return fingerprint;
 }
 
 interface IdleDeadlineLike {
@@ -62,25 +75,67 @@ function allowSpeculativeCompose(): boolean {
     && nav.hardwareConcurrency > 4;
 }
 
-export function applyTextureOverrides(node: RecipeNode, textures: Record<string, string>): RecipeNode {
+function applyTextureOverridesInTree(node: RecipeNode, textures: Record<string, string>): RecipeNode {
   switch (node.type) {
-    case 'texture_lookup':
-      return textures[node.texture] ? { ...node, texture: textures[node.texture] } : node;
-    case 'select':
-      return textures[node.groups] ? { ...node, groups: textures[node.groups] } : node;
-    case 'apply_sticker':
-      return {
-        ...node,
-        stickers: node.stickers.map((sticker) => ({
-          ...sticker,
-          base: textures[sticker.base] ?? sticker.base,
-          spec: sticker.spec ? textures[sticker.spec] ?? sticker.spec : undefined,
-        })),
-        nodes: node.nodes.map((child) => applyTextureOverrides(child, textures)),
-      };
-    default:
-      return { ...node, nodes: node.nodes.map((child) => applyTextureOverrides(child, textures)) };
+    case 'texture_lookup': {
+      const replacement = textures[node.texture];
+      return replacement && replacement !== node.texture
+        ? { ...node, texture: replacement }
+        : node;
+    }
+    case 'select': {
+      const replacement = textures[node.groups];
+      return replacement && replacement !== node.groups
+        ? { ...node, groups: replacement }
+        : node;
+    }
+    case 'apply_sticker': {
+      let stickersChanged = false;
+      const stickers = new Array(node.stickers.length);
+      for (let index = 0; index < node.stickers.length; index += 1) {
+        const sticker = node.stickers[index];
+        const base = textures[sticker.base];
+        const spec = sticker.spec ? textures[sticker.spec] : undefined;
+        if ((base !== undefined && base !== sticker.base) || (spec !== undefined && spec !== sticker.spec)) {
+          stickersChanged = true;
+          stickers[index] = {
+            ...sticker,
+            base: base !== undefined ? base : sticker.base,
+            spec: sticker.spec && spec !== undefined ? spec : sticker.spec,
+          };
+        } else {
+          stickers[index] = sticker;
+        }
+      }
+      let childrenChanged = false;
+      const nodes = new Array<RecipeNode>(node.nodes.length);
+      for (let index = 0; index < node.nodes.length; index += 1) {
+        const child = node.nodes[index];
+        const next = applyTextureOverridesInTree(child, textures);
+        if (next !== child) childrenChanged = true;
+        nodes[index] = next;
+      }
+      return stickersChanged || childrenChanged
+        ? { ...node, stickers: stickersChanged ? stickers : node.stickers, nodes: childrenChanged ? nodes : node.nodes }
+        : node;
+    }
+    default: {
+      let childrenChanged = false;
+      const nodes = new Array<RecipeNode>(node.nodes.length);
+      for (let index = 0; index < node.nodes.length; index += 1) {
+        const child = node.nodes[index];
+        const next = applyTextureOverridesInTree(child, textures);
+        if (next !== child) childrenChanged = true;
+        nodes[index] = next;
+      }
+      return childrenChanged ? { ...node, nodes } : node;
+    }
   }
+}
+
+export function applyTextureOverrides(node: RecipeNode, textures: Record<string, string>): RecipeNode {
+  if (Object.keys(textures).length === 0) return node;
+  return applyTextureOverridesInTree(node, textures);
 }
 
 interface UseComposedPaintOptions {

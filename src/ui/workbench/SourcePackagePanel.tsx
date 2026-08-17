@@ -15,6 +15,7 @@ import type {
 export type { SourcePackageFormat } from '../../source/contracts';
 export type SourcePackageDiagnostic = SourceDiagnostic;
 import type { SourcePackageState, SourcePackageSummary } from '../../source/contracts';
+import './SourcePackagePanel.css';
 
 export const SOURCE_PACKAGE_ACCEPT = '.zip,.vpk';
 

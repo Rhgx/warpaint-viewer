@@ -2412,8 +2412,9 @@ export class Viewer {
     }
   }
 
-  // Geometry cache: switching weapons back and forth never refetches a GLB.
+  // Geometry cache: recent weapon swaps reuse their parsed GLB buffers.
   private currentGeoCached = false;
+  private currentModelUrl: string | null = null;
   private loadToken = 0;
 
   private setMeshGeometries(parts: ModelPart[], fromCache: boolean, initialView?: ViewAnglePreset) {
@@ -2464,12 +2465,14 @@ export class Viewer {
     this.resetStickerUvTopology();
     this.meshIsLens = [];
     this.currentGeoCached = false;
+    this.currentModelUrl = null;
     this.invalidate();
   }
 
   // Load a weapon GLB. Concurrent calls resolve in call order via a token so a
   // stale load never wins; missing models leave the stage empty.
   async loadModel(url: string | null, initialView?: ViewAnglePreset): Promise<void> {
+    if (url && url === this.currentModelUrl && this.meshes.length > 0) return;
     const token = ++this.loadToken;
     if (!url) {
       this.clearModel();
@@ -2479,6 +2482,7 @@ export class Viewer {
       const geometries = await this.modelLoader.load(url);
       if (token !== this.loadToken || this.disposed) return;
       this.setMeshGeometries(geometries, true, initialView);
+      this.currentModelUrl = url;
     } catch (err) {
       if (token !== this.loadToken || this.disposed) return;
       console.warn('[warpaint-viewer] model load failed:', err);

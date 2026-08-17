@@ -214,6 +214,12 @@
   color: var(--text-dim);
   font-size: 10px;
 }
+.export-picker-hint {
+  margin: 2px 5px 4px;
+  color: var(--text-dim);
+  font-size: 9px;
+  text-align: center;
+}
 
 /* Messages. A caution is something to decide about before exporting; a result
    describes the pack that was just built. They used to render identically. */

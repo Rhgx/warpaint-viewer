@@ -4,7 +4,12 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import * as implementation from '../../../src/editor/groupNames';
 
-test('curated group names', () => {
+test('curated group names', async () => {
+  assert.equal(
+    implementation.lookupGroupName('models/workshop/weapons/c_models/c_amputator/p_amputator_groups', 16),
+    null,
+  );
+  await implementation.loadGroupNameReference();
   const amputator = 'models/workshop/weapons/c_models/c_amputator/p_amputator_groups';
   assert.equal(implementation.lookupGroupName(amputator, 16), 'Knuckle Guard');
   assert.equal(implementation.lookupGroupName(`materials\\${amputator}.vtf`, 255), 'Blade');

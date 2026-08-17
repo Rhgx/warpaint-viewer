@@ -96,7 +96,7 @@ export class TextureCache {
   private resolve: TextureResolver;
   private budget: number;
   private totalBytes = 0;
-  private pinned = new Set<string>();
+  private pinned = new Map<string, number>();
   private metadata: Record<string, TextureMetadata>;
   private metadataResolver: ((ref: string) => Partial<TextureMetadata> | undefined) | undefined;
   private maxAnisotropy: number;
@@ -119,9 +119,14 @@ export class TextureCache {
 
   // Pin a set of cache keys for the duration of a compose; returns unpin.
   pin(keys: string[]): () => void {
-    for (const k of keys) this.pinned.add(k);
+    for (const k of keys) this.pinned.set(k, (this.pinned.get(k) ?? 0) + 1);
     return () => {
-      for (const k of keys) this.pinned.delete(k);
+      for (const k of keys) {
+        const count = this.pinned.get(k) ?? 0;
+        if (count <= 1) this.pinned.delete(k);
+        else this.pinned.set(k, count - 1);
+      }
+      this.evictIfNeeded();
     };
   }
 

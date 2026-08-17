@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   DragEvent as ReactDragEvent,
   PointerEvent as ReactPointerEvent,
+  ComponentProps,
 } from 'react';
 import { Tabs } from '@base-ui/react/tabs';
 import {
@@ -27,36 +28,57 @@ import {
 } from 'lucide-react';
 import type { TextureMetadata } from '../../data/types';
 import type { CustomDefinitionsState } from '../../protodefs/types';
-import { SourcePackagePanel } from './SourcePackagePanel';
 import type { SourcePackageState } from '../../source/contracts';
 import type { WarpaintAssetOverrides, WarpaintAssetState, WearRecipe, WorkbenchTab } from '../../workbench/types';
 import { collectSlots } from '../../workbench/assetSlots';
 import type { AssetSlot } from '../../workbench/assetSlots';
+import { revokeReleasedAssetUrls, revokeTextureUrl } from '../../workbench/assetUrls';
 import { loadImage, mergeAlpha, readTexture } from '../../workbench/textureImport';
-import { DefinitionsPanel } from './DefinitionsPanel';
-import { ExportPanel } from './ExportPanel';
 import type { ExportDefinitionsContext, ExportItem } from './ExportPanel';
 import type { EditorDownloadFormat } from '../../editor/definitionExport';
-import { AssetFilesPanel } from './AssetFilesPanel';
-import {
-  VisualWarpaintEditorPanel,
-  type VisualWarpaintEditorPanelProps,
-} from './VisualWarpaintEditorPanel';
-import {
-  StickerPlacementEditor,
-  type StickerPlacementEditorProps,
-} from './StickerPlacementEditor';
-import {
-  TextureTransformPanel,
-  type TextureTransformPanelProps,
-} from './TextureTransformPanel';
-import {
-  MaterialOverridesPanel,
-  type MaterialOverridesPanelProps,
-} from './MaterialOverridesPanel';
 import './CustomWarpaintWorkbench.css';
-import './SourcePackagePanel.css';
-import './DefinitionsPanel.css';
+
+// Tabs.Panel mounts its children only after they become active. Keeping the
+// panel imports lazy therefore makes the first Files visit independent from
+// the editor/export/source-detail code, while preserving each tab's state once
+// it has been visited.
+const AssetFilesPanel = lazy(() =>
+  import('./AssetFilesPanel').then(({ AssetFilesPanel: panel }) => ({ default: panel })),
+);
+const ExportPanel = lazy(() =>
+  import('./ExportPanel').then(({ ExportPanel: panel }) => ({ default: panel })),
+);
+const SourcePackagePanel = lazy(() =>
+  import('./SourcePackagePanel').then(({ SourcePackagePanel: panel }) => ({ default: panel })),
+);
+const DefinitionsPanel = lazy(() =>
+  import('./DefinitionsPanel').then(({ DefinitionsPanel: panel }) => ({ default: panel })),
+);
+const VisualWarpaintEditorPanel = lazy(() =>
+  import('./VisualWarpaintEditorPanel').then(({ VisualWarpaintEditorPanel: panel }) => ({ default: panel })),
+);
+const StickerPlacementEditor = lazy(() =>
+  import('./StickerPlacementEditor').then(({ StickerPlacementEditor: panel }) => ({ default: panel })),
+);
+const TextureTransformPanel = lazy(() =>
+  import('./TextureTransformPanel').then(({ TextureTransformPanel: panel }) => ({ default: panel })),
+);
+const MaterialOverridesPanel = lazy(() =>
+  import('./MaterialOverridesPanel').then(({ MaterialOverridesPanel: panel }) => ({ default: panel })),
+);
+
+type VisualWarpaintEditorPanelProps = ComponentProps<typeof VisualWarpaintEditorPanel>;
+type StickerPlacementEditorProps = ComponentProps<typeof StickerPlacementEditor>;
+type TextureTransformPanelProps = ComponentProps<typeof TextureTransformPanel>;
+type MaterialOverridesPanelProps = ComponentProps<typeof MaterialOverridesPanel>;
+
+function WorkbenchPanelFallback() {
+  return (
+    <div className="custom-workbench-empty" aria-busy="true">
+      Loading workbench panel...
+    </div>
+  );
+}
 const MIN_PANEL_HEIGHT = 190;
 const RESET_CONFIRM_MS = 3000;
 
@@ -247,10 +269,12 @@ export function CustomWarpaintWorkbench({
   }, [dropHint]);
 
   const commit = (next: Record<string, WarpaintAssetState>) => {
+    const previous = assetsRef.current;
     assetsRef.current = next;
     setAssets(next);
     revisionRef.current += 1;
     onChange({ revision: revisionRef.current, assets: next });
+    revokeReleasedAssetUrls(previous, next);
   };
 
   const setSlotError = (ref: string, message: string) => {
@@ -269,12 +293,17 @@ export function CustomWarpaintWorkbench({
     const output = asset.alpha
       ? await mergeAlpha(asset.color.dataUrl, asset.alpha.dataUrl)
       : asset.color.dataUrl;
-    const image = await loadImage(output);
-    return {
-      ...asset,
-      output,
-      size: { width: image.naturalWidth, height: image.naturalHeight },
-    };
+    try {
+      const image = await loadImage(output);
+      return {
+        ...asset,
+        output,
+        size: { width: image.naturalWidth, height: image.naturalHeight },
+      };
+    } catch (cause) {
+      if (output !== asset.color.dataUrl) revokeTextureUrl(output);
+      throw cause;
+    }
   };
 
   const updateFile = async (
@@ -285,8 +314,11 @@ export function CustomWarpaintWorkbench({
     if (!file) return;
     setSlotError(slot.ref, '');
     setBusy((current) => ({ ...current, [slot.ref]: true }));
+    let importedSource: string | undefined;
+    let committed = false;
     try {
       const read = await readTexture(file, alphaOnly);
+      importedSource = read.dataUrl;
       const current = assetsRef.current[slot.ref] ?? {};
       const nextAsset: WarpaintAssetState = alphaOnly
         ? {
@@ -299,7 +331,9 @@ export function CustomWarpaintWorkbench({
             alpha: read.hasEmbeddedAlpha ? undefined : current.alpha,
           };
       commit({ ...assetsRef.current, [slot.ref]: await rebuild(nextAsset) });
+      committed = true;
     } catch (cause) {
+      if (!committed) revokeTextureUrl(importedSource);
       setSlotError(
         slot.ref,
         cause instanceof Error
@@ -601,29 +635,32 @@ export function CustomWarpaintWorkbench({
         )}
 
         <Tabs.Panel value="files" className="custom-workbench-panel">
-          <AssetFilesPanel
-            slots={slots}
-            assets={assets}
-            errors={errors}
-            busy={busy}
-            loading={loading}
-            textureMetadata={textureMetadata}
-            resolveTexture={resolveTexture}
-            resolvePackageTexture={resolvePackageTexture}
-            packageGeneration={packageGeneration ?? 0}
-            sourceMounted={sourcePackage.status === 'mounted'}
-            confirmReset={confirmReset}
-            onConfirmReset={() => setConfirmReset(true)}
-            onResetAll={resetAll}
-            onExport={() => onTabChange('export')}
-            onUpdateFile={(slot, file, alphaOnly) =>
-              void updateFile(slot, file, alphaOnly)
-            }
-            onRemoveAlpha={(ref) => void removeAlpha(ref)}
-            onResetSlot={resetSlot}
-          />
+          <Suspense fallback={<WorkbenchPanelFallback />}>
+            <AssetFilesPanel
+              slots={slots}
+              assets={assets}
+              errors={errors}
+              busy={busy}
+              loading={loading}
+              textureMetadata={textureMetadata}
+              resolveTexture={resolveTexture}
+              resolvePackageTexture={resolvePackageTexture}
+              packageGeneration={packageGeneration ?? 0}
+              sourceMounted={sourcePackage.status === 'mounted'}
+              confirmReset={confirmReset}
+              onConfirmReset={() => setConfirmReset(true)}
+              onResetAll={resetAll}
+              onExport={() => onTabChange('export')}
+              onUpdateFile={(slot, file, alphaOnly) =>
+                void updateFile(slot, file, alphaOnly)
+              }
+              onRemoveAlpha={(ref) => void removeAlpha(ref)}
+              onResetSlot={resetSlot}
+            />
+          </Suspense>
         </Tabs.Panel>
         <Tabs.Panel value="editor" className="custom-workbench-panel custom-workbench-editor-panel">
+          <Suspense fallback={<WorkbenchPanelFallback />}>
           {editor ? (
             <div className="custom-workbench-edit-body">
               <div className="custom-workbench-edit-context">
@@ -988,6 +1025,7 @@ export function CustomWarpaintWorkbench({
               onClearSelection={() => undefined}
             />
           )}
+          </Suspense>
         </Tabs.Panel>
         {/* Not Tabs.Panel: base-ui only activates a panel that has a matching
             trigger inside Tabs.List, and these are reached from the source chips
@@ -995,28 +1033,34 @@ export function CustomWarpaintWorkbench({
             so the drawer still shows exactly one surface at a time. */}
         {tab === 'package' && (
           <div className="custom-workbench-panel" role="region" aria-label="Mounted archive">
-            <SourcePackagePanel state={sourcePackage} />
+            <Suspense fallback={<WorkbenchPanelFallback />}>
+              <SourcePackagePanel state={sourcePackage} />
+            </Suspense>
           </div>
         )}
 
         {tab === 'definitions' && (
           <div className="custom-workbench-panel" role="region" aria-label="Imported definitions">
-            <DefinitionsPanel state={definitions} />
+            <Suspense fallback={<WorkbenchPanelFallback />}>
+              <DefinitionsPanel state={definitions} />
+            </Suspense>
           </div>
         )}
 
         <Tabs.Panel value="export" className="custom-workbench-panel">
-          <ExportPanel
-            items={exportItems}
-            loading={loading}
-            textureMetadata={textureMetadata}
-            paintName={paintName}
-            weaponName={weaponName}
-            gameBuild={gameBuild}
-            snapshotDate={snapshotDate}
-            definitions={exportDefinitions}
-            onGoToTab={onTabChange}
-          />
+          <Suspense fallback={<WorkbenchPanelFallback />}>
+            <ExportPanel
+              items={exportItems}
+              loading={loading}
+              textureMetadata={textureMetadata}
+              paintName={paintName}
+              weaponName={weaponName}
+              gameBuild={gameBuild}
+              snapshotDate={snapshotDate}
+              definitions={exportDefinitions}
+              onGoToTab={onTabChange}
+            />
+          </Suspense>
         </Tabs.Panel>
       </Tabs.Root>
     </section>

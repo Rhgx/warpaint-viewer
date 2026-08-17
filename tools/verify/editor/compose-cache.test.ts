@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import type { RecipeNode } from '../../../src/compositor/types';
-import { recipeFingerprint } from '../../../src/hooks/useComposedPaint';
+import { applyTextureOverrides, recipeFingerprint } from '../../../src/hooks/useComposedPaint';
 
 const recipe = (groups: string): RecipeNode => ({
   type: 'combine_lerp',
@@ -17,4 +17,22 @@ test('recipe cache identity is stable across equivalent editor revisions', () =>
   const equivalent = structuredClone(original);
   assert.equal(recipeFingerprint(original), recipeFingerprint(equivalent));
   assert.notEqual(recipeFingerprint(original), recipeFingerprint(recipe('models/rocket_groups_05')));
+});
+
+test('texture override traversal keeps untouched branches and empty recipes by identity', () => {
+  const untouched: RecipeNode = { type: 'texture_lookup', texture: 'patterns/untouched' };
+  const changed: RecipeNode = { type: 'texture_lookup', texture: 'patterns/paint' };
+  const root: RecipeNode = {
+    type: 'combine_lerp',
+    nodes: [untouched, changed, { type: 'select', groups: 'models/groups', select: [1] }],
+  };
+
+  assert.equal(applyTextureOverrides(root, {}), root);
+  const next = applyTextureOverrides(root, { 'patterns/paint': 'blob:paint' });
+  assert.notEqual(next, root);
+  assert.equal(next.type, 'combine_lerp');
+  if (next.type !== 'combine_lerp') return;
+  assert.equal(next.nodes[0], untouched);
+  assert.notEqual(next.nodes[1], changed);
+  assert.equal(next.nodes[2], root.nodes[2]);
 });

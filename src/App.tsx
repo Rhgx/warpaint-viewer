@@ -20,6 +20,7 @@ import { StageToolbar } from './ui/stage/StageToolbar';
 import { PanelEdgeToggle } from './ui/common/PanelEdgeToggle';
 import { DefinitionsPrompt } from './ui/workbench/DefinitionsPrompt';
 import type { WarpaintAssetOverrides, WearRecipe, WorkbenchTab } from './workbench/types';
+import { revokeAssetOverrideCache } from './workbench/assetUrls';
 import { BootLoader } from './ui/boot/BootLoader';
 import { DEFAULT_VIEWER_FOV, TF2_ITEM_PANEL_FOV, VIEW_ANGLES, weaponIconView } from './viewer/presets';
 import { PAINTKIT_ICON_LIGHTING_ID } from './viewer/lighting';
@@ -63,6 +64,7 @@ import { loadRgbaImageData, loadRgbaThumbnail, rgbaThumbnailDataUrl } from './ed
 import {
   compatibleGroupTextures,
   formatGroupNameForDisplay,
+  loadGroupNameReference,
   lookupGroupNameForBucket,
   normalizeGroupTextureReference,
   preferredAlbedoGroupIds,
@@ -354,9 +356,15 @@ function MainApp() {
   const [workbenchHeight, setWorkbenchHeight] = useState(0);
   // The drawer is keyed to remount per paint/weapon, so its tab lives out here.
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>('files');
+  const [groupNameReferenceGeneration, setGroupNameReferenceGeneration] = useState(0);
   const [editorRequestedKitId, setEditorRequestedKitId] = useState<number | null>(null);
   const [editorRecipes, setEditorRecipes] = useState<WearRecipe[]>([]);
   const [editorLoading, setEditorLoading] = useState(false);
+  const editorRecipesRef = useRef<WearRecipe[]>([]);
+  const editorRecipeScopeRef = useRef('');
+  const editorRecipeVariantRef = useRef('');
+  const editorRecipeCompleteRef = useRef(false);
+  const [visibleCatalogKitIds, setVisibleCatalogKitIds] = useState<readonly number[]>([]);
   const [assetOverrideCache, setAssetOverrideCache] = useState<Record<string, WarpaintAssetOverrides>>({});
   const [catalogVisible, setCatalogVisible] = useState(true);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -382,9 +390,33 @@ function MainApp() {
 
   const { data, boot, advanceBoot } = useBootData({ state, setState, selectedKitId, setSelectedKitId, setError });
 
+  const reportVisibleCatalogKitIds = useCallback((ids: readonly number[]) => {
+    setVisibleCatalogKitIds((current) => (
+      current.length === ids.length && current.every((id, index) => id === ids[index])
+        ? current
+        : [...ids]
+    ));
+  }, []);
+
+  useEffect(() => {
+    if (!workbenchOpen || workbenchTab !== 'editor' || groupNameReferenceGeneration > 0) return;
+    let cancelled = false;
+    void loadGroupNameReference().then(() => {
+      if (!cancelled) setGroupNameReferenceGeneration((generation) => generation + 1);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [groupNameReferenceGeneration, workbenchOpen, workbenchTab]);
+
+  const clearAssetOverrideCache = useCallback(() => {
+    setAssetOverrideCache((cache) => {
+      revokeAssetOverrideCache(cache);
+      return {};
+    });
+  }, []);
+
   const { provider: sourceProvider, sourcePackage, packageGeneration, suggestedPaintkitId, removePackage } = useSourcePackage(
     data?.resolveTexture ?? ((ref) => ref),
-    () => setAssetOverrideCache({}),
+    clearAssetOverrideCache,
     (ref) => !!data?.manifest.textures?.[ref] || isStockMaterialCubemap(ref),
   );
   const getAssetUrl = useCallback((rel: string) => data?.getAssetUrl(rel) ?? null, [data]);
@@ -534,6 +566,7 @@ function MainApp() {
   const [stickerSurfaceAspect, setStickerSurfaceAspect] = useState(1.6);
   const [stickerDraftQuad, setStickerDraftQuad] = useState<StickerPlacementQuad | null>(null);
   const stickerDraftRef = useRef<StickerPlacementQuad | null>(null);
+  const stickerDraftRenderRafRef = useRef(0);
   const stickerBaseSurfaceResultRef = useRef<ComposeResult | null>(null);
   const groupStickerResourcesRef = useRef<{
     key: string;
@@ -565,15 +598,29 @@ function MainApp() {
     base: StickerPlacementQuad;
     latest: StickerPlacementQuad;
   } | null>(null);
+  const updateStickerDraft = useCallback((quad: StickerPlacementQuad | null) => {
+    stickerDraftRef.current = quad;
+    if (quad === null) {
+      window.cancelAnimationFrame(stickerDraftRenderRafRef.current);
+      stickerDraftRenderRafRef.current = 0;
+      setStickerDraftQuad(null);
+      return;
+    }
+    if (stickerDraftRenderRafRef.current) return;
+    stickerDraftRenderRafRef.current = window.requestAnimationFrame(() => {
+      stickerDraftRenderRafRef.current = 0;
+      setStickerDraftQuad(stickerDraftRef.current);
+    });
+  }, []);
+  useEffect(() => () => window.cancelAnimationFrame(stickerDraftRenderRafRef.current), []);
   const discardStickerDraft = useCallback(() => {
     // Draft coordinates exist only while a direct-manipulation gesture is in
     // flight. History actions replace the authored proto snapshot, so a stale
     // draft must never continue to win over the restored destination.
     stickerGestureRef.current = null;
     stickerGizmoGestureRef.current = null;
-    stickerDraftRef.current = null;
-    setStickerDraftQuad(null);
-  }, []);
+    updateStickerDraft(null);
+  }, [updateStickerDraft]);
   const undoEditorSynced = useCallback(() => {
     discardStickerDraft();
     undoEditor();
@@ -711,8 +758,14 @@ function MainApp() {
   const activeGroupTextureValue = requestedGroupTextureRef ?? resolvedGroupTextureValue;
   const displayedGroupRef = requestedGroupTextureRef ?? activeGroupRef;
   const groupTextureChoices = useMemo(
-    () => displayedGroupRef ? compatibleGroupTextures(displayedGroupRef) : [],
-    [displayedGroupRef],
+    () => {
+      if (!displayedGroupRef) return [];
+      const hasBuiltInNames = normalizeGroupTextureReference(displayedGroupRef).startsWith('models/items/paintkit_tool/');
+      return groupNameReferenceGeneration > 0 || hasBuiltInNames
+        ? compatibleGroupTextures(displayedGroupRef)
+        : [];
+    },
+    [displayedGroupRef, groupNameReferenceGeneration],
   );
   const activeWeaponVariablePath = weaponSlots.find((slot) => slot.weaponKey === state.weaponKey)?.path;
   const groupTextureTarget = useMemo(() => discoverGroupTextureTarget(
@@ -855,15 +908,18 @@ function MainApp() {
   const activeGroupLabels = useMemo(() => {
     if (!displayedGroupRef) return {};
     const labels: Record<number, string> = {};
+    const hasBuiltInNames = normalizeGroupTextureReference(displayedGroupRef).startsWith('models/items/paintkit_tool/');
     for (let bucket = 1; bucket <= 16; bucket += 1) {
-      const name = lookupGroupNameForBucket(displayedGroupRef, bucket);
+      const name = groupNameReferenceGeneration > 0 || hasBuiltInNames
+        ? lookupGroupNameForBucket(displayedGroupRef, bucket)
+        : null;
       if (name) labels[bucket] = name;
     }
     for (const bucket of activeGroupBuckets) {
       if (!labels[bucket]) labels[bucket] = 'Part';
     }
     return labels;
-  }, [activeGroupBuckets, displayedGroupRef]);
+  }, [activeGroupBuckets, displayedGroupRef, groupNameReferenceGeneration]);
   useEffect(() => {
     if (!displayedGroupRef || !groupImage || editableKitId === null) return;
     const assignmentKey = `${editableKitId}:${state.weaponKey}:${normalizeGroupTextureReference(displayedGroupRef)}`;
@@ -1039,7 +1095,10 @@ function MainApp() {
     transformDraftRef.current = null;
     setTransformDraft(null);
   }, [editorDefinitionGeneration]);
-  const selectedAssetKey = selectedKit && state.weaponKey ? `${selectedKit.id}|${state.weaponKey}` : '';
+  const selectedMaterialOverrideId = selectedKit?.materialOverrides?.[state.weaponKey] ?? '';
+  const selectedAssetKey = selectedKit && state.weaponKey
+    ? `${state.weaponKey}|material:${selectedMaterialOverrideId || 'stock'}|package:${packageGeneration}`
+    : '';
   // Artwork refs are shared by a paintkit even when its weapon recipe changes.
   // Keep one edit set per paintkit so imported textures follow weapon changes;
   // recipe-specific refs that do not exist on the next weapon are simply unused.
@@ -1427,9 +1486,8 @@ function MainApp() {
   }, [pendingAddedStickerRef, stickerTargets]);
 
   useEffect(() => {
-    setStickerDraftQuad(null);
-    stickerDraftRef.current = null;
-  }, [activeStickerTarget, editableKitId, state.weaponKey]);
+    updateStickerDraft(null);
+  }, [activeStickerTarget, editableKitId, state.weaponKey, updateStickerDraft]);
 
   useEffect(() => {
     viewerRef.current?.resetStickerGizmoAnchor();
@@ -2407,11 +2465,6 @@ function MainApp() {
     return sampled;
   }, [groupAssignActive, groupImage]);
 
-  const updateStickerDraft = useCallback((quad: StickerPlacementQuad | null) => {
-    stickerDraftRef.current = quad;
-    setStickerDraftQuad(quad);
-  }, []);
-
   const beginStickerInteraction = useCallback(() => {
     if (authoredStickerQuad) stickerDraftRef.current = authoredStickerQuad;
   }, [authoredStickerQuad]);
@@ -2721,27 +2774,58 @@ function MainApp() {
     void resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
   }, [data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex]);
 
-  // The editor and exporter list every input the paint can use, not just the
-  // ones the current wear or team happens to reach. Team-aware operation
-  // stages resolve texture_red and texture_blue to different refs; collecting
-  // only the selected team produced packs whose definition referenced BLU
-  // artwork that was never included. Bundles are cached, so the extra
-  // team/wear resolutions cost no extra network requests.
+  // Files and Export list every input the paint can use, not just the ones the
+  // current wear or team happens to reach. Team-aware operation stages resolve
+  // texture_red and texture_blue to different refs; collecting only the
+  // selected team produced packs whose definition referenced BLU artwork that
+  // was never included. Package and Definitions do not consume recipes at all,
+  // while Edit only needs the active team/wear recipe for group assignments.
   useEffect(() => {
-    // Keep this editor-only fan-out off the normal viewer path. Once mounted,
-    // the workbench remains alive while its drawer is closed, so continue
-    // keeping its recipes current after the user's first open.
+    // Keep this workbench-only fan-out off the normal viewer path and pause it
+    // while the mounted drawer is closed. Reopening or changing surface
+    // refreshes only the recipes that surface consumes.
     if (!workbenchMounted || !data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) {
+      editorRecipesRef.current = [];
+      editorRecipeScopeRef.current = '';
+      editorRecipeVariantRef.current = '';
+      editorRecipeCompleteRef.current = false;
       setEditorRecipes([]);
       setEditorLoading(false);
       return;
     }
+    if (!workbenchOpen) {
+      setEditorLoading(false);
+      return;
+    }
+    const recipeScope = `${selectedKit.id}|${state.weaponKey}|definition:${editorDefinitionGeneration}|package:${packageGeneration}`;
+    const recipeVariant = `${state.team}|${state.wearIndex}`;
+    if (workbenchTab === 'package' || workbenchTab === 'definitions') {
+      if (editorRecipeScopeRef.current !== recipeScope) {
+        editorRecipesRef.current = [];
+        editorRecipeScopeRef.current = '';
+        editorRecipeVariantRef.current = '';
+        editorRecipeCompleteRef.current = false;
+        setEditorRecipes([]);
+      }
+      setEditorLoading(false);
+      return;
+    }
     let cancelled = false;
+    const completeRecipeMatrix = workbenchTab === 'files' || workbenchTab === 'export';
+    const cachedRecipesCoverSurface = editorRecipeScopeRef.current === recipeScope
+      && editorRecipesRef.current.length > 0
+      && (editorRecipeCompleteRef.current || (!completeRecipeMatrix && editorRecipeVariantRef.current === recipeVariant));
+    if (cachedRecipesCoverSurface) {
+      setEditorLoading(false);
+      return;
+    }
     setEditorLoading(true);
-    const wearIndexes = selectedKit.perWear
+    const wearIndexes = completeRecipeMatrix && selectedKit.perWear
       ? data.manifest.wearLevels.map((_, index) => index)
       : [state.wearIndex];
-    const teams = selectedKit.hasTeamTextures ? (['red', 'blu'] as const) : [state.team];
+    const teams = completeRecipeMatrix && selectedKit.hasTeamTextures
+      ? (['red', 'blu'] as const)
+      : [state.team];
     void Promise.all(
       teams.flatMap((team) =>
         wearIndexes.map((wearIndex) => resolveRecipe(selectedKit, state.weaponKey, team, wearIndex)
@@ -2749,12 +2833,17 @@ function MainApp() {
       ),
     ).then((loaded) => {
       if (cancelled) return;
-      setEditorRecipes(loaded.flatMap(({ wearIndex, recipe }) => recipe ? [{ wearIndex, recipe }] : []));
+      const recipes = loaded.flatMap(({ wearIndex, recipe }) => recipe ? [{ wearIndex, recipe }] : []);
+      editorRecipesRef.current = recipes;
+      editorRecipeScopeRef.current = recipeScope;
+      editorRecipeVariantRef.current = recipeVariant;
+      editorRecipeCompleteRef.current = completeRecipeMatrix;
+      setEditorRecipes(recipes);
     }).finally(() => {
       if (!cancelled) setEditorLoading(false);
     });
     return () => { cancelled = true; };
-  }, [workbenchMounted, data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex, editorDefinitionGeneration]);
+  }, [workbenchMounted, workbenchOpen, workbenchTab, data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex, editorDefinitionGeneration, packageGeneration]);
 
   // Load the model when the weapon changes.
   useEffect(() => {
@@ -2765,7 +2854,7 @@ function MainApp() {
     if (!weapon || !selectedAssetKey) return;
     setLoadedAssetKey('');
     advanceBoot(48, 'Loading initial weapon…');
-    const overrideId = selectedKit?.materialOverrides?.[state.weaponKey];
+    const overrideId = selectedMaterialOverrideId || undefined;
     const builtInMaterial = (overrideId && data.manifest.materials?.[overrideId]) || weapon.material;
     // A mounted package may ship its own VMT for this weapon, which the game
     // would load in place of the stock material. Its parameters replace the
@@ -2795,7 +2884,7 @@ function MainApp() {
       if (!cancelled) setError(`Failed to load weapon assets: ${String(e)}`);
     });
     return () => { cancelled = true; };
-  }, [engineReady, data, selectedKit, selectedAssetKey, state.weaponKey, packageGeneration, advanceBoot, sourceProvider]);
+  }, [engineReady, data, selectedAssetKey, state.weaponKey, packageGeneration, advanceBoot, sourceProvider, selectedMaterialOverrideId]);
 
   // Archive replacement changes the answer for existing Source paths, so
   // release old source uploads and composite targets before the generation-keyed
@@ -2996,6 +3085,10 @@ function MainApp() {
   });
 
   const paintToolForIcons = data?.manifest.weapons.find((weapon) => weapon.key === 'paintkit_tool');
+  const customCatalogKitIds = useMemo(
+    () => definitions.catalogKits.map((kit) => kit.id),
+    [definitions.catalogKits],
+  );
   const resolveCustomIconTexture = useCallback(
     (ref: string) => sourceProvider.resolve(ref),
     [sourceProvider],
@@ -3010,6 +3103,7 @@ function MainApp() {
     compositorRef,
     getRecipe: definitions.getRecipe,
     resolveTexture: resolveCustomIconTexture,
+    visibleKitIds: visibleCatalogKitIds,
   });
 
   // Some weapons are painted by kits that use material overrides, yet no stock
@@ -3280,6 +3374,8 @@ function MainApp() {
           onSelect={onSelectKit}
           collectionIcons={collectionIcons}
           paintIcons={paintIcons}
+          visibilityTrackedKitIds={customCatalogKitIds}
+          onVisibleKitIdsChange={reportVisibleCatalogKitIds}
         />
       </aside>
       <main className="stage">
@@ -3394,7 +3490,7 @@ function MainApp() {
             <Suspense fallback={<div className="custom-workbench-loading">Loading custom files…</div>}>
               <CustomWarpaintWorkbench
                 key={`${selectedKitId ?? 'empty'}|${state.weaponKey}`}
-                recipes={editorRecipes}
+                recipes={workbenchTab === 'package' || workbenchTab === 'definitions' ? [] : editorRecipes}
                 definitions={definitionsState}
                 tab={workbenchTab}
                 onTabChange={(nextTab) => {
@@ -3610,7 +3706,7 @@ function MainApp() {
                 }}
                 onResetAll={() => {
                   removePackage();
-                  setAssetOverrideCache({});
+                  clearAssetOverrideCache();
                 }}
                 // A height of 0 means "back to the default clamp", which is what
                 // double-clicking the drawer's resize handle asks for.

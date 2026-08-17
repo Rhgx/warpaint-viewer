@@ -17,6 +17,7 @@ export interface DataSource {
 }
 
 const DATA_ROOT = `${import.meta.env.BASE_URL}data`;
+const RECIPE_BUNDLE_CACHE_LIMIT = 8;
 
 function joinData(rel: string): string {
   if (rel.startsWith('data:') || rel.startsWith('http')) return rel;
@@ -51,7 +52,11 @@ class RealDataSource implements DataSource {
 
   private fetchBundle(kitId: number): Promise<RecipeBundle | null> {
     const cached = this.bundleCache.get(kitId);
-    if (cached) return cached;
+    if (cached) {
+      this.bundleCache.delete(kitId);
+      this.bundleCache.set(kitId, cached);
+      return cached;
+    }
 
     const p = (async () => {
       try {
@@ -63,6 +68,11 @@ class RealDataSource implements DataSource {
       }
     })();
     this.bundleCache.set(kitId, p);
+    while (this.bundleCache.size > RECIPE_BUNDLE_CACHE_LIMIT) {
+      const oldestKitId = this.bundleCache.keys().next().value;
+      if (oldestKitId === undefined) break;
+      this.bundleCache.delete(oldestKitId);
+    }
     return p;
   }
 

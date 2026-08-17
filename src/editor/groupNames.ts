@@ -1,5 +1,3 @@
-import reference from './groupNames.generated.json';
-
 interface GroupNameEntry {
   readonly weapon: string;
   readonly groups: Readonly<Record<string, string>>;
@@ -10,7 +8,22 @@ interface GroupNameReference {
   readonly textures: Readonly<Record<string, GroupNameEntry>>;
 }
 
-const GROUP_NAME_REFERENCE = reference as GroupNameReference;
+let groupNameReference: GroupNameReference | null = null;
+let groupNameReferencePromise: Promise<void> | null = null;
+
+/** Load the larger curated stock-weapon reference only when the editor needs it. */
+export function loadGroupNameReference(): Promise<void> {
+  if (groupNameReference) return Promise.resolve();
+  if (!groupNameReferencePromise) {
+    groupNameReferencePromise = import('./groupNames.generated.json').then(({ default: reference }) => {
+      groupNameReference = reference as GroupNameReference;
+    }).catch((cause) => {
+      groupNameReferencePromise = null;
+      throw cause;
+    });
+  }
+  return groupNameReferencePromise;
+}
 
 // The community weapon guide does not cover the War Paint preview item. These
 // names describe its stable texture-atlas regions and three visible paint cans.
@@ -126,7 +139,7 @@ export function lookupGroupNameForBucket(groupsRef: string, bucket: number): str
   if (!Number.isInteger(bucket) || bucket < 1 || bucket > 16) return null;
   const supplemental = additionalGroupName(groupsRef, bucket === 16 ? 255 : bucket * 16);
   if (supplemental) return supplemental;
-  const texture = GROUP_NAME_REFERENCE.textures[normalizeGroupTextureReference(groupsRef)];
+  const texture = groupNameReference?.textures[normalizeGroupTextureReference(groupsRef)];
   if (!texture) return null;
   const names = new Set(Object.entries(texture.groups)
     .filter(([rawId]) => Math.round(Number(rawId) / 16) === bucket)
@@ -143,7 +156,7 @@ export function lookupGroupName(groupsRef: string, rawGroupId: number): string |
   if (!Number.isInteger(rawGroupId) || rawGroupId < 1 || rawGroupId > 255) return null;
   const supplemental = additionalGroupName(groupsRef, rawGroupId);
   if (supplemental) return supplemental;
-  const texture = GROUP_NAME_REFERENCE.textures[normalizeGroupTextureReference(groupsRef)];
+  const texture = groupNameReference?.textures[normalizeGroupTextureReference(groupsRef)];
   return texture?.groups[String(rawGroupId)] ?? null;
 }
 
@@ -151,7 +164,7 @@ export function lookupGroupName(groupsRef: string, rawGroupId: number): string |
 export function lookupGroupNameWeapon(groupsRef: string): string | null {
   const normalized = normalizeGroupTextureReference(groupsRef);
   if (PAINTKIT_TOOL_GROUP_NAMES[normalized]) return 'War Paint';
-  return GROUP_NAME_REFERENCE.textures[normalized]?.weapon ?? null;
+  return groupNameReference?.textures[normalized]?.weapon ?? null;
 }
 
 export interface CompatibleGroupTexture {
@@ -175,9 +188,9 @@ export function compatibleGroupTextures(groupsRef: string): CompatibleGroupTextu
       label: `Layout ${index + 1}`,
     }));
   }
-  const current = GROUP_NAME_REFERENCE.textures[normalized];
+  const current = groupNameReference?.textures[normalized];
   if (!current) return [];
-  return Object.entries(GROUP_NAME_REFERENCE.textures)
+  return Object.entries(groupNameReference?.textures ?? {})
     .filter(([, entry]) => entry.weapon === current.weapon)
     .map(([ref]) => ({ ref, number: groupTextureLayoutNumber(ref) }))
     .sort((left, right) => {
@@ -192,4 +205,7 @@ export function compatibleGroupTextures(groupsRef: string): CompatibleGroupTextu
     }));
 }
 
-export const groupNameReferenceSource = GROUP_NAME_REFERENCE.source;
+export const groupNameReferenceSource = {
+  title: 'War Paint Texture Groups Reference for War Paint Authors',
+  url: 'https://steamcommunity.com/sharedfiles/filedetails/?id=3035470027',
+} as const;

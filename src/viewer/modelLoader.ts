@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
+const MODEL_CACHE_LIMIT = 8;
+
 export interface ModelPart {
   geometry: THREE.BufferGeometry;
   materialName: string;
@@ -16,7 +18,10 @@ export class ModelLoader {
 
   load(url: string): Promise<ModelPart[]> {
     let pending = this.#cache.get(url);
-    if (!pending) {
+    if (pending) {
+      this.#cache.delete(url);
+      this.#cache.set(url, pending);
+    } else {
       pending = this.#loader.loadAsync(url).then((gltf) => {
         const parts: ModelPart[] = [];
         gltf.scene.traverse((object) => {
@@ -31,10 +36,20 @@ export class ModelLoader {
         if (!parts.length) throw new Error('no mesh in GLB');
         return parts;
       }).catch((error) => {
-        this.#cache.delete(url);
+        if (this.#cache.get(url) === pending) this.#cache.delete(url);
         throw error;
       });
       this.#cache.set(url, pending);
+      while (this.#cache.size > MODEL_CACHE_LIMIT) {
+        const oldestUrl = this.#cache.keys().next().value;
+        if (oldestUrl === undefined) break;
+        const oldestPending = this.#cache.get(oldestUrl);
+        this.#cache.delete(oldestUrl);
+        if (!oldestPending) continue;
+        oldestPending.then((parts) => {
+          for (const part of parts) part.geometry.dispose();
+        }).catch(() => undefined);
+      }
     }
     return pending;
   }
