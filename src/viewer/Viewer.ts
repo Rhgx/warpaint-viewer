@@ -210,21 +210,23 @@ export class Viewer {
   private pickNdc = new THREE.Vector2();
   private paintableMeshes: THREE.Mesh[] = [];
   private lensMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0x111820,
-    roughness: 0.08,
+    color: 0xffffff,
+    roughness: 0.12,
     metalness: 0,
-    transmission: 0.92,
-    thickness: 0.18,
-    ior: 1.33,
-    transparent: true,
-    opacity: 0.72,
+    transmission: 1,
+    thickness: 0.08,
+    ior: 1.15,
+    normalScale: new THREE.Vector2(0.15, 0.15),
     side: THREE.DoubleSide,
     envMapIntensity: 1,
   });
+  private lensNormalTexture: THREE.Texture | null = null;
   private meshes: THREE.Mesh[] = [];
   private envMap: THREE.CubeTexture;
   private defaultEnvMap: THREE.CubeTexture;
   private customEnvMap: THREE.CubeTexture | null = null;
+  private backplateTexture: THREE.Texture | null = null;
+  private backplateLoadToken = 0;
   private envReady: Promise<void>;
   private modelLoader = new ModelLoader();
   private texLoader = new THREE.TextureLoader();
@@ -389,6 +391,7 @@ export class Viewer {
 
     this.envMap = makeEnvCube(0x9fb8d6, 0x40382c);
     this.defaultEnvMap = this.envMap;
+    this.lensMaterial.envMap = this.envMap;
     this.material = new THREE.MeshPhongMaterial({
       color: 0xffffff,
       shininess: 30,
@@ -399,6 +402,20 @@ export class Viewer {
     });
     this.installTf2Shader();
 
+    this.texLoader.loadAsync('/data/textures/models/workshop/weapons/c_models/c_bazaar_sniper/c_bazaar_sniper_lens.webp').then((texture) => {
+      if (this.disposed) { texture.dispose(); return; }
+      texture.colorSpace = THREE.NoColorSpace;
+      texture.flipY = false;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      this.lensNormalTexture = texture;
+      this.lensMaterial.normalMap = texture;
+      this.lensMaterial.needsUpdate = true;
+      this.invalidate();
+    }).catch(() => {
+      console.warn('[warpaint-viewer] Bazaar Bargain lens normal map unavailable; using smooth refraction');
+    });
+
     this.envReady = new Promise<void>((resolve) => {
       loadEditorEnvCube((texture) => {
         if (this.disposed) { texture.dispose(); resolve(); return; }
@@ -407,6 +424,8 @@ export class Viewer {
         this.defaultEnvMap = texture;
         this.material.envMap = texture;
         this.material.needsUpdate = true;
+        this.lensMaterial.envMap = texture;
+        this.lensMaterial.needsUpdate = true;
         this.invalidate();
         resolve();
       }, () => {
@@ -442,10 +461,23 @@ export class Viewer {
     const w = this.canvas.clientWidth || 1;
     const h = this.canvas.clientHeight || 1;
     this.renderer.setSize(w, h, false);
+    this.updateBackplateTransform();
     this.syncDisplayAspect();
     this.updateInspectFraming();
     this.invalidate();
   };
+
+  private updateBackplateTransform() {
+    const texture = this.backplateTexture;
+    if (!texture || !(texture.image instanceof HTMLImageElement)) return;
+    const imageAspect = texture.image.naturalWidth / Math.max(1, texture.image.naturalHeight);
+    const canvasAspect = (this.canvas.clientWidth || 1) / (this.canvas.clientHeight || 1);
+    const visibleWidth = Math.min(1, canvasAspect / imageAspect);
+    const visibleHeight = Math.min(1, imageAspect / canvasAspect);
+    texture.repeat.set(visibleWidth, visibleHeight);
+    texture.offset.set((1 - visibleWidth) * 0.5, (1 - visibleHeight) * 0.5);
+    texture.updateMatrix();
+  }
 
   private onStickerGizmoPointerMove = (event: PointerEvent) => {
     if (this.disposed || !this.stickerGizmoQuad) {
@@ -668,7 +700,30 @@ export class Viewer {
     const host = this.canvas.parentElement;
     host?.classList.toggle('has-backplate', Boolean(preset.backplate));
     host?.style.setProperty('--backplate-image', preset.backplate ? `url("${preset.backplate}")` : 'none');
-    this.scene.background = preset.backplate ? null : new THREE.Color(preset.background);
+    const backplateToken = ++this.backplateLoadToken;
+    this.backplateTexture?.dispose();
+    this.backplateTexture = null;
+    this.scene.background = new THREE.Color(preset.background);
+    if (preset.backplate) {
+      this.texLoader.loadAsync(preset.backplate).then((texture) => {
+        if (this.disposed || backplateToken !== this.backplateLoadToken) {
+          texture.dispose();
+          return;
+        }
+        texture.colorSpace = THREE.SRGBColorSpace;
+        this.backplateTexture = texture;
+        this.updateBackplateTransform();
+        this.scene.background = texture;
+        this.scene.backgroundIntensity = 0.78;
+        this.invalidate();
+      }).catch(() => {
+        if (backplateToken === this.backplateLoadToken) {
+          console.warn(`[warpaint-viewer] Lighting backplate unavailable: ${preset.backplate}`);
+        }
+      });
+    } else {
+      this.scene.backgroundIntensity = 1;
+    }
     this.invalidate();
   }
 
@@ -2640,6 +2695,9 @@ export class Viewer {
     this.sheenAssets = null;
     this.material.dispose();
     this.lensMaterial.dispose();
+    this.lensNormalTexture?.dispose();
+    this.backplateLoadToken++;
+    this.backplateTexture?.dispose();
     this.materialLoadToken++;
     this.normalTexture?.dispose();
     this.exponentTexture?.dispose();
