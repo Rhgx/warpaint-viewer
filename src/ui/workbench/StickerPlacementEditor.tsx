@@ -41,6 +41,7 @@ export interface StickerSelectionTarget {
   readonly id: string;
   readonly label: string;
   readonly placement: StickerPlacement;
+  readonly artworkSrc: string | null;
 }
 
 export interface StickerPlacementEditorProps {
@@ -228,8 +229,6 @@ export function StickerPlacementEditor({
     ? Math.min(snapStep, 1)
     : adaptiveSnapStep(viewport.zoom);
   const surfaceAspect = Number.isFinite(textureAspect) ? Math.min(10, Math.max(0.1, textureAspect)) : 1.6;
-  const activeSelectionIndex = selectionTargets.findIndex((target) => target.id === activeSelectionId);
-
   const placementStyle = (targetPlacement: StickerPlacement, zIndex: number): CSSProperties => ({
     left: `${targetPlacement.x * 100}%`,
     top: `${targetPlacement.y * 100}%`,
@@ -910,11 +909,23 @@ export function StickerPlacementEditor({
               })}
             />
             <span className="sticker-placement-editor-grid" aria-hidden="true" />
+            {selectionTargets.map((target, index) => (
+              target.id !== activeSelectionId && target.artworkSrc ? (
+                <div
+                  key={target.id}
+                  className="sticker-placement-editor-passive-item"
+                  style={placementStyle(target.placement, 4 + index)}
+                  aria-hidden="true"
+                >
+                  <img src={target.artworkSrc} alt="" draggable={false} />
+                </div>
+              ) : null
+            ))}
             {stickerSrc || groupPreview ? (
               <div
                 className="sticker-placement-editor-item"
                 style={{
-                  ...placementStyle(placementValue, 4 + Math.max(activeSelectionIndex, 0)),
+                  ...placementStyle(placementValue, 4 + selectionTargets.length),
                   '--sticker-control-scale': Math.min(1.25, 1 / viewport.zoom),
                 } as CSSProperties}
                 onPointerDown={beginMove}

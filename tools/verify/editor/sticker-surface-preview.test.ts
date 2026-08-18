@@ -180,6 +180,16 @@ test('sticker surface preview source contract', () => {
     'group stickers use a live UV renderer instead of their opening-position thumbnail',
   );
   assert.match(
+    placementEditorSource,
+    /selectionTargets\.map\(\(target, index\) =>[\s\S]*?target\.id !== activeSelectionId && target\.artworkSrc[\s\S]*?sticker-placement-editor-passive-item/,
+    'deselected stickers remain visible on the UV surface',
+  );
+  assert.match(
+    appSource,
+    /artworkSrc: groupStickerArtwork\[target\.id\]\?\.url[\s\S]*?\?\? stickerTargetArtwork\[target\.id\]/,
+    'selection targets carry both composed group artwork and ordinary sticker artwork',
+  );
+  assert.match(
     appSource,
     /renderStickerArtwork: !selectedStickerUsesComposedArtwork/,
     'the isolated group thumbnail is not rendered as a frozen UV sticker',

@@ -3545,6 +3545,9 @@ function MainApp() {
                           id: target.id,
                           label: stickerTargetLabel(target.stickers[0]?.base.resolvedValue, index),
                           placement: read.placement,
+                          artworkSrc: groupStickerArtwork[target.id]?.url
+                            ?? stickerTargetArtwork[target.id]
+                            ?? null,
                         }];
                       }),
                       activeSelectionId: selectedStickerTarget?.id,
