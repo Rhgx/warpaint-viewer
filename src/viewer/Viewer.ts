@@ -198,6 +198,7 @@ export class Viewer {
   private controls: InspectControls;
   private cameraModeListeners = new Set<(mode: CameraMode) => void>();
   private lightGroup = new THREE.Group();
+  private activeLightingPresetId = 'inspect';
   private modelGroup = new THREE.Group(); // rotated/panned by InspectControls
   private centerGroup = new THREE.Group(); // offsets the mesh so its center sits at the origin
   private material: THREE.MeshPhongMaterial;
@@ -535,9 +536,16 @@ export class Viewer {
       this.emissiveElapsed = (this.emissiveElapsed + dt) % period;
       this.emissiveMaterial.uniforms.uEmissiveTime.value = this.emissiveElapsed;
     }
-    // Panning is a framing operation, not physical movement through the map.
-    // Move the light rig with the model's translation, but not its rotation.
-    this.lightGroup.position.copy(this.modelGroup.position);
+    // Inspect lights are authored in camera-local panel space, so follow the
+    // active camera through zoom and advanced-camera movement. Other presets
+    // retain the existing map behavior: follow model pan, never rotation.
+    if (this.activeLightingPresetId === 'inspect') {
+      this.lightGroup.position.copy(this.camera.position);
+      this.lightGroup.quaternion.copy(this.camera.quaternion);
+    } else {
+      this.lightGroup.position.copy(this.modelGroup.position);
+      this.lightGroup.quaternion.identity();
+    }
     this.updateSheenAnimation(dt);
     if (this.activeUnusual) {
       // Particles simulate in world space; re-anchor the control points to
@@ -636,6 +644,9 @@ export class Viewer {
 
   setLighting(presetId: string) {
     const preset = getPreset(presetId);
+    this.activeLightingPresetId = preset.id;
+    this.lightGroup.position.set(0, 0, 0);
+    this.lightGroup.quaternion.identity();
     // Map-lighting transforms are relative to the inspect composition, not to
     // whichever direction the free-fly camera happens to face when selected.
     const lightingCamera = this.camera.clone();
@@ -2207,7 +2218,7 @@ export class Viewer {
         )
         .replace(
           '#include <opaque_fragment>',
-          '#include <opaque_fragment>\ngl_FragColor.a = uTf2IsolationContextOpacity;',
+          '#include <opaque_fragment>\ngl_FragColor.a *= uTf2IsolationContextOpacity;',
         );
     };
     this.material.customProgramCacheKey = () => TF2_VERTEXLIT_CACHE_KEY;

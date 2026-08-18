@@ -75,6 +75,22 @@ function sourceVectorToCameraWorld(
   return camera ? cameraLocal.applyQuaternion(camera.quaternion) : cameraLocal;
 }
 
+const INSPECTION_PANEL_ANGLES: SourceVector = [0, 0, 0];
+
+function inspectionPanelPosition(source: SourceVector): THREE.Vector3 {
+  return sourceVectorToCameraWorld(
+    new THREE.Vector3(...source),
+    INSPECTION_PANEL_ANGLES,
+  );
+}
+
+function inspectionPanelDirection(source: SourceVector): THREE.Vector3 {
+  return sourceVectorToCameraWorld(
+    new THREE.Vector3(...source),
+    INSPECTION_PANEL_ANGLES,
+  ).normalize();
+}
+
 function sourceNormalBasis(captureAngles: SourceVector, camera?: THREE.PerspectiveCamera): THREE.Matrix3 {
   const x = sourceVectorToCameraWorld(new THREE.Vector3(1, 0, 0), captureAngles, camera);
   const y = sourceVectorToCameraWorld(new THREE.Vector3(0, 1, 0), captureAngles, camera);
@@ -136,16 +152,36 @@ function sourceCompiledLocalLight(
 
 function inspectionLights(): THREE.Light[] {
   // Resource/UI/econ/InspectionPanel.res from tf2_misc_dir.vpk.
-  const key = directional(0xffffff, 1, new THREE.Vector3(0, -1, 0));
+  // LightDesc_t directional vectors are incident surface-to-light directions;
+  // keep that sign instead of using directional(), whose map-light ray helper
+  // intentionally points from the light toward the surface.
+  const key = new THREE.DirectionalLight(0xffffff, 1);
+  key.position.copy(inspectionPanelDirection([0, 0, -1])).multiplyScalar(10_000);
+  key.target.position.set(0, 0, 0);
 
-  const spot = new THREE.SpotLight(0xffffff, 1 / 4.5, 1000, Math.PI / 2, 0.36, 0);
+  // CPotteryWheelPanel passes these resource values directly to InitSpot;
+  // LightDesc_t subsequently calls cos() on the raw values (radians), so the
+  // effective thresholds are cos(90) and cos(1), not 90 and 1 degrees.
+  const spotOuterCone = Math.acos(Math.cos(90));
+  const spotInnerCone = Math.acos(Math.cos(1));
+  const spot = new THREE.SpotLight(
+    0xffffff,
+    1 / 4.5,
+    0,
+    spotOuterCone,
+    1 - spotInnerCone / spotOuterCone,
+    0,
+  );
   spot.color.setRGB(1, 0.9, 0.9);
-  spot.position.set(0, 100, 0);
-  spot.target.position.set(0, 50, 100);
+  // Source's maxDistance is a hard cutoff. Three's nonzero distance adds a
+  // smooth polynomial fade, so keep the visible inspection geometry on the
+  // Source constant-attenuation path instead of introducing that fade.
+  spot.position.copy(inspectionPanelPosition([0, 0, 100]));
+  spot.target.position.copy(spot.position).add(inspectionPanelDirection([1, 0, -0.5]));
 
-  const point = new THREE.PointLight(0xffffff, 1 / 15, 1000, 0);
+  const point = new THREE.PointLight(0xffffff, 1 / 15, 0, 0);
   point.color.setRGB(0.7, 0.8, 1);
-  point.position.set(50, -200, 15);
+  point.position.copy(inspectionPanelPosition([15, -50, -200]));
   return [key, spot, point];
 }
 
@@ -202,6 +238,7 @@ export const LIGHTING_PRESETS: LightingPreset[] = [
     label: 'Inspect',
     background: 0x1c1f24,
     exposure: 1,
+    spotFalloff: 25,
     // CPotteryWheelPanel::CreateDefaultLights uses 0.4 on every cube face.
     ambientCube: cube([0.4, 0.4, 0.4]),
     build: inspectionLights,

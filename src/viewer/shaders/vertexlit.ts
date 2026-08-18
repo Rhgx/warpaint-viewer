@@ -295,6 +295,8 @@ export function installTf2VertexLit(shader: THREE.WebGLProgramParametersWithUnif
   shader.fragmentShader = shader.fragmentShader.replace(
     'return smoothstep( coneCosine, penumbraCosine, angleCosine );',
     `if ( uTf2SpotFalloff > 0.0 ) {
+      // Source LightDesc_t uses the normalized linear cone term, then applies
+      // its angular falloff exponent. Three's smoothstep is not equivalent.
       float tf2Cone = saturate( ( angleCosine - coneCosine ) / max( penumbraCosine - coneCosine, 1e-6 ) );
       return pow( tf2Cone, uTf2SpotFalloff );
     }
