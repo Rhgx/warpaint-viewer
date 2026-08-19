@@ -23,6 +23,8 @@ const INERTIA_CUTOFF = 0.02; // rad/s below which inertia stops
 const ZOOM_STEP = 1.15; // per wheel notch
 const ZOOM_SMOOTHING = 12; // 1/s, exponential approach rate
 export const INSPECT_MIN_DISTANCE_FACTOR = 0.35;
+/** Default zoom-out ceiling, as a multiple of the model's framed distance. */
+export const INSPECT_MAX_DISTANCE_FACTOR = 4;
 const PAN_LIMIT_FACTOR = 1.2; // max pan offset as a multiple of model radius
 const ADVANCED_SPEED_FACTOR = 2.7;
 const ADVANCED_BOOST_MULTIPLIER = 2.5;
@@ -123,6 +125,7 @@ export class InspectControls {
   private advancedStartYaw = 0;
   private advancedStartPitch = 0;
   private advancedMaxDistance = 1;
+  private maxDistanceFactor = INSPECT_MAX_DISTANCE_FACTOR;
   private pressedKeys = new Set<string>();
   private advancedPrecisionActive = false;
   private altPressed = false;
@@ -302,7 +305,24 @@ export class InspectControls {
   }
 
   private minDist() { return this.radius * INSPECT_MIN_DISTANCE_FACTOR; }
-  private maxDist() { return this.baseDist * 4; }
+  private maxDist() { return this.baseDist * this.maxDistanceFactor; }
+
+  /**
+   * Raise or restore the zoom-out ceiling. Editors that place objects outside
+   * the model's own framing need to see further out than plain inspection ever
+   * does; lowering it again eases an out-of-range camera back in through the
+   * usual zoom smoothing rather than snapping on the next wheel notch.
+   */
+  setMaxDistanceFactor(factor: number) {
+    const next = Math.max(1, factor);
+    if (next === this.maxDistanceFactor) return;
+    this.maxDistanceFactor = next;
+    const max = this.maxDist();
+    if (this.targetDist > max) {
+      this.targetDist = max;
+      this.onChange?.();
+    }
+  }
 
   // Sets the camera's fixed viewing ray (normalized), or restores the default
   // 3/4 inspect angle when null, then resets rotation/pan/zoom so the angle

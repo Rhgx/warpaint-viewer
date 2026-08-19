@@ -1,7 +1,15 @@
 import * as THREE from 'three';
 import { getPreset } from './lighting';
+import {
+  CUSTOM_LIGHTING_ID,
+  CUSTOM_LIGHT_POSITION_LIMIT,
+  createDefaultCustomLightingRig,
+  validateCustomLightingRig,
+  type CustomLightingRig,
+} from './customLighting';
+import { LightEditor } from './lightEditor';
 import { loadEditorEnvCube, makeEnvCube } from './env';
-import { InspectControls } from './inspectControls';
+import { InspectControls, INSPECT_MAX_DISTANCE_FACTOR } from './inspectControls';
 import type { CameraMode } from './inspectControls';
 import { getSheen } from './presets';
 import type { ViewAnglePreset } from './presets';
@@ -199,6 +207,13 @@ export class Viewer {
   private cameraModeListeners = new Set<(mode: CameraMode) => void>();
   private lightGroup = new THREE.Group();
   private activeLightingPresetId = 'inspect';
+  private customLightRoot = new THREE.Group();
+  private customLightingRig: CustomLightingRig = createDefaultCustomLightingRig();
+  private materialRimLight = 0;
+  private lightEditor: LightEditor;
+  private lightingEditorActive = false;
+  private customLightingListeners = new Set<(rig: CustomLightingRig) => void>();
+  private lightSelectionListeners = new Set<(id: string | null) => void>();
   private modelGroup = new THREE.Group(); // rotated/panned by InspectControls
   private centerGroup = new THREE.Group(); // offsets the mesh so its center sits at the origin
   private material: THREE.MeshPhongMaterial;
@@ -378,8 +393,9 @@ export class Viewer {
     // coordinate space. Reserve only its true handle hits at the native
     // inspect-control layer; React owns the transform gesture itself.
     this.controls.setPointerDownExclusion((event) => (
-      this.stickerGizmoQuad !== null
-      && this.hitTestStickerGizmo(event.clientX, event.clientY) !== null
+      (this.stickerGizmoQuad !== null
+        && this.hitTestStickerGizmo(event.clientX, event.clientY) !== null)
+      || this.lightEditor?.shouldExcludeCameraPointer(event) === true
     ));
     this.canvas.addEventListener('pointermove', this.onStickerGizmoPointerMove);
     this.canvas.addEventListener('pointerdown', this.onStickerGizmoPointerDown);
@@ -388,6 +404,22 @@ export class Viewer {
     // this small cursor state in sync without competing with the gesture.
     window.addEventListener('pointerup', this.onStickerGizmoPointerUp);
     window.addEventListener('pointercancel', this.onStickerGizmoPointerUp);
+
+    this.lightEditor = new LightEditor({
+      canvas,
+      root: this.customLightRoot,
+      getCamera: () => this.projectionMode === 'orthographic' ? this.orthoCamera : this.camera,
+      getFrame: () => this.framedDims ? { dimensions: this.framedDims } : null,
+      invalidate: () => this.invalidate(),
+      onChange: (rig) => {
+        this.customLightingRig = rig;
+        for (const listener of this.customLightingListeners) listener(rig);
+      },
+      onSelectionChange: (id) => {
+        for (const listener of this.lightSelectionListeners) listener(id);
+      },
+    });
+    this.lightEditor.setRig(this.customLightingRig);
 
     this.envMap = makeEnvCube(0x9fb8d6, 0x40382c);
     this.defaultEnvMap = this.envMap;
@@ -576,8 +608,18 @@ export class Viewer {
       this.lightGroup.quaternion.copy(this.camera.quaternion);
     } else {
       this.lightGroup.position.copy(this.modelGroup.position);
-      this.lightGroup.quaternion.identity();
+      // While the rig is being edited, carry it through the model's rotation so
+      // a drag orbits the whole set instead of spinning the weapon under fixed
+      // lights; that is the only way to get around the rig and see where a
+      // light actually sits. Outside the editor the rig snaps back to its
+      // authored world orientation and the model turns under it as before.
+      if (this.activeLightingPresetId === CUSTOM_LIGHTING_ID && this.lightingEditorActive) {
+        this.lightGroup.quaternion.copy(this.modelGroup.quaternion);
+      } else {
+        this.lightGroup.quaternion.identity();
+      }
     }
+    this.lightEditor.update();
     this.updateSheenAnimation(dt);
     if (this.activeUnusual) {
       // Particles simulate in world space; re-anchor the control points to
@@ -646,6 +688,43 @@ export class Viewer {
     this.controls.setEditorSelectionActive(active);
   }
 
+  setLightingEditorState(state: { readonly enabled: boolean; readonly selectedLightId: string | null }): void {
+    this.lightingEditorActive = state.enabled;
+    this.lightEditor.setEditorMode(state.enabled);
+    this.lightEditor.setSelectedLight(state.selectedLightId);
+    // Light sources are authored out to CUSTOM_LIGHT_POSITION_LIMIT model
+    // widths, well past the inspect view's normal zoom-out ceiling, so a light
+    // dragged out there would otherwise be off screen and out of reach. Widen
+    // the ceiling while the editor is open and restore it on the way out.
+    this.controls.setMaxDistanceFactor(
+      state.enabled ? CUSTOM_LIGHT_POSITION_LIMIT + 2 : INSPECT_MAX_DISTANCE_FACTOR,
+    );
+    // Entering or leaving the editor re-anchors the rig, so the frame it is
+    // currently showing is already stale.
+    this.invalidate();
+  }
+
+  setCustomLighting(value: unknown): void {
+    const enteringCustomLighting = this.activeLightingPresetId !== CUSTOM_LIGHTING_ID;
+    this.customLightingRig = validateCustomLightingRig(value);
+    this.lightEditor.setRig(this.customLightingRig);
+    this.activeLightingPresetId = CUSTOM_LIGHTING_ID;
+    if (enteringCustomLighting) this.applyCustomLighting();
+    else this.applyCustomLightingSettings();
+  }
+
+  onCustomLightingChange(listener: (rig: CustomLightingRig) => void): () => void {
+    this.customLightingListeners.add(listener);
+    listener(this.customLightingRig);
+    return () => this.customLightingListeners.delete(listener);
+  }
+
+  onLightSelectionChange(listener: (id: string | null) => void): () => void {
+    this.lightSelectionListeners.add(listener);
+    listener(this.lightEditor.getSelectedLightId());
+    return () => this.lightSelectionListeners.delete(listener);
+  }
+
   /**
    * Sticker placement owns empty-canvas primary drags. Middle drag remains an
    * intentional inspect orbit and right drag continues to pan the model.
@@ -675,8 +754,14 @@ export class Viewer {
   }
 
   setLighting(presetId: string) {
+    if (presetId === CUSTOM_LIGHTING_ID) {
+      this.activeLightingPresetId = CUSTOM_LIGHTING_ID;
+      this.applyCustomLighting();
+      return;
+    }
     const preset = getPreset(presetId);
     this.activeLightingPresetId = preset.id;
+    this.syncMaterialRimLight();
     this.lightGroup.position.set(0, 0, 0);
     this.lightGroup.quaternion.identity();
     // Map-lighting transforms are relative to the inspect composition, not to
@@ -725,6 +810,42 @@ export class Viewer {
       this.scene.backgroundIntensity = 1;
     }
     this.invalidate();
+  }
+
+  private applyCustomLighting(): void {
+    this.lightGroup.position.set(0, 0, 0);
+    this.lightGroup.quaternion.identity();
+    this.lightGroup.clear();
+    this.lightEditor.setFrame(this.framedDims ? { dimensions: this.framedDims } : null);
+    this.lightGroup.add(this.customLightRoot);
+    this.applyCustomLightingSettings();
+    const host = this.canvas.parentElement;
+    host?.classList.remove('has-backplate');
+    host?.style.removeProperty('--backplate-image');
+    this.backplateLoadToken++;
+    this.backplateTexture?.dispose();
+    this.backplateTexture = null;
+    this.scene.background = new THREE.Color(0x1c1f24);
+    this.scene.backgroundIntensity = 1;
+    this.invalidate();
+  }
+
+  private applyCustomLightingSettings(): void {
+    this.syncMaterialRimLight();
+    this.renderer.toneMappingExposure = this.customLightingRig.exposure;
+    this.tf2Uniforms.uTf2SpotFalloff.value = 0;
+    for (const color of this.tf2Uniforms.uTf2AmbientCube.value) {
+      color.setScalar(this.customLightingRig.ambient);
+    }
+    this.tf2Uniforms.uTf2AmbientBasis.value.identity();
+    this.invalidate();
+  }
+
+  private syncMaterialRimLight(): void {
+    const enabled = this.activeLightingPresetId === CUSTOM_LIGHTING_ID
+      ? this.customLightingRig.cameraRimLight
+      : this.activeLightingPresetId === 'inspect';
+    this.tf2Uniforms.uTf2RimLight.value = enabled ? this.materialRimLight : 0;
   }
 
   // The compositor result is stored as sRGB, matching Source's output target.
@@ -2241,6 +2362,7 @@ export class Viewer {
     const prevBackground = this.scene.background;
     const raw = new Uint8Array(width * height * 4);
     try {
+      this.lightEditor.setCaptureMode(true);
       this.scene.background = null;
       setParticlePointScale(height);
       this.renderer.setRenderTarget(target);
@@ -2254,6 +2376,7 @@ export class Viewer {
     } finally {
       this.renderer.setRenderTarget(prevTarget);
       this.scene.background = prevBackground;
+      this.lightEditor.setCaptureMode(false);
       setParticlePointScale(h * this.renderer.getPixelRatio());
       target.dispose();
     }
@@ -2288,6 +2411,8 @@ export class Viewer {
     if (this.disposed) return;
     const u = this.tf2Uniforms;
     configureTf2Material(mat, this.material, u);
+    this.materialRimLight = u.uTf2RimLight.value;
+    this.syncMaterialRimLight();
     this.invalidate();
 
     const token = ++this.materialLoadToken;
@@ -2571,6 +2696,7 @@ export class Viewer {
     this.framedScale = framingScale;
     this.framedCenter.copy(center);
     this.framedBounds.copy(box);
+    this.lightEditor.setFrame({ dimensions: dims });
     let dist = this.computeFramingDistance(dims, radius) * framingScale;
     let authoredPan: THREE.Vector2 | null = null;
     this.controls.setInteractionLocked(Boolean(initialView?.lockedCamera));
@@ -2671,7 +2797,10 @@ export class Viewer {
     this.canvas.parentElement?.classList.remove('has-backplate');
     this.canvas.parentElement?.style.removeProperty('--backplate-image');
     this.controls.dispose();
+    this.lightEditor.dispose();
     this.cameraModeListeners.clear();
+    this.customLightingListeners.clear();
+    this.lightSelectionListeners.clear();
     if (this.activeUnusual) {
       this.scene.remove(this.activeUnusual.object);
       this.activeUnusual.dispose();
