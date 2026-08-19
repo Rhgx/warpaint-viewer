@@ -1,0 +1,633 @@
+/* ---------- shared lighting fields ---------- */
+/* Used by both the stage lights panel and the inspector rig summary, so the
+   same value reads the same in either place. Every continuous value is a drag
+   track with an exact readout beside it: the track is for "make it brighter
+   until it looks right", the readout is for typing a number you already know. */
+.lighting-scalar,
+.lighting-vector,
+.lighting-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+}
+.lighting-scalar-label {
+  flex: none;
+  width: 50px;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The shared slider is sized for the inspector column; here it just fills
+   whatever is left between the label and the readout. */
+.lighting-scalar-track {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+.lighting-scalar-track > * {
+  flex: 1;
+  min-width: 0;
+}
+.lighting-scalar-track .ui-slider-control {
+  width: 100%;
+}
+.lighting-scalar-note {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lighting-readout {
+  box-sizing: border-box;
+  flex: none;
+  width: 44px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  transition: var(--transition-fast);
+}
+.lighting-readout:hover {
+  border-color: var(--border-strong);
+}
+.lighting-readout:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* The axis letter and its value are one control, bordered together, so a
+   vector reads as three fields instead of six loose boxes. The letter colors
+   are the viewport gizmo's arrow colors, so a number here and an arrow out
+   there are visibly the same axis. */
+.lighting-axis {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  gap: 2px;
+  padding-left: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  transition: var(--transition-fast);
+}
+.lighting-axis:hover {
+  border-color: var(--border-strong);
+}
+.lighting-axis:focus-within {
+  border-color: var(--accent);
+}
+.lighting-axis-letter {
+  flex: none;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+.lighting-axis[data-axis='x'] .lighting-axis-letter {
+  color: var(--red);
+}
+.lighting-axis[data-axis='y'] .lighting-axis-letter {
+  color: var(--pass);
+}
+.lighting-axis[data-axis='z'] .lighting-axis-letter {
+  color: var(--blu);
+}
+.lighting-axis .lighting-readout {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  height: 18px;
+  padding: 0 3px;
+  border: none;
+  background: none;
+}
+
+.lighting-color-swatch {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  cursor: pointer;
+}
+.lighting-color-hex {
+  width: 66px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-align: left;
+}
+
+.lighting-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgb(0 0 0 / 30%);
+  border-radius: 50%;
+}
+.lighting-dot[data-off] {
+  opacity: 0.28;
+}
+
+/* ---------- stage lights panel ---------- */
+/* Docked under the stage toolbar, over the render it edits. Mounted only while
+   the Custom preset is selected; open/closed doubles as the viewport edit mode,
+   so there is one concept to learn instead of a panel plus a separate toggle. */
+.lighting-panel {
+  position: absolute;
+  z-index: 3;
+  top: 56px;
+  right: 10px;
+  display: none;
+  flex-direction: column;
+  width: 248px;
+  max-height: calc(100% - 76px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(8px);
+  color: var(--text);
+  font-size: 11px;
+}
+.lighting-panel[data-open] {
+  display: flex;
+}
+.lighting-panel-head {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  padding: 4px 4px 4px 9px;
+  border-bottom: 1px solid var(--border);
+}
+.lighting-panel-title {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.lighting-panel-count {
+  margin-right: auto;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.lighting-head-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.lighting-head-button:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.lighting-head-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lighting-head-button:disabled:hover {
+  color: inherit;
+  background: transparent;
+}
+/* Reset replaces the whole rig, so the first click only arms it. */
+.lighting-head-button[data-armed] {
+  background: var(--panel-2);
+  color: var(--fail);
+}
+.lighting-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px;
+  overflow-y: auto;
+}
+
+.lighting-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lighting-list-row {
+  display: flex;
+  align-items: center;
+  /* Transparent by default so selecting a row cannot shift the list. */
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-fast);
+}
+/* Same selected treatment as the inspector chips, so one rig reads the same
+   in both places. */
+.lighting-list-row[data-selected] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.lighting-list-select {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 6px;
+  height: 24px;
+  padding: 0 4px 0 6px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.lighting-list-select[data-off] {
+  color: var(--text-dim);
+}
+.lighting-list-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lighting-list-type {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 3px;
+  color: var(--text-dim);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.lighting-list-type svg {
+  flex: none;
+  opacity: 0.85;
+}
+.lighting-icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.lighting-icon-button:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.lighting-empty {
+  margin: 0;
+  padding: 8px 6px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  text-align: center;
+}
+
+.lighting-add {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lighting-add-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.lighting-add-button:hover:not(:disabled) {
+  border-style: solid;
+  background: var(--panel-2);
+  color: var(--text);
+}
+.lighting-add-button[aria-expanded='true'] {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.lighting-add-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+/* Templates are shown, not hidden behind a select, so picking a starter role
+   is one click and the six options are legible at a glance. */
+.lighting-add-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.lighting-add-group {
+  color: var(--text-dim);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+.lighting-add-grid + .lighting-add-group {
+  margin-top: 3px;
+}
+.lighting-add-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+.lighting-add-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.lighting-add-option:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.lighting-props {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.lighting-name-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+.lighting-name-input:hover {
+  border-color: var(--border-strong);
+}
+.lighting-name-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+/* The shared select is sized for the inspector column. */
+.lighting-row .ui-select-trigger {
+  flex: 1;
+  min-width: 0;
+  min-height: 22px;
+  padding: 2px 7px;
+  font-size: 11px;
+}
+.lighting-range-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.lighting-range-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.lighting-hint {
+  margin: 2px 0 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.lighting-props-actions {
+  display: flex;
+  gap: 5px;
+  padding-top: 2px;
+}
+.lighting-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.lighting-action-button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--panel-2);
+  color: var(--text);
+}
+.lighting-action-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.lighting-delete-button:hover:not(:disabled) {
+  border-color: var(--fail);
+  color: var(--fail);
+}
+
+/* ---------- inspector rig summary ---------- */
+/* The settings column keeps the rig-wide values and a chip per light, so the
+   rig stays readable and selectable without the per-light editor pushing
+   Sheen, Effect and the whole Camera section off screen. */
+.lighting-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lighting-summary .lighting-scalar-label {
+  width: 56px;
+}
+.lighting-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.lighting-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  height: 22px;
+  padding: 0 7px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.lighting-chip:hover {
+  border-color: var(--border-strong);
+}
+.lighting-chip[data-selected] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.lighting-chip[data-off] .lighting-chip-name {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.lighting-chip svg {
+  flex: none;
+  opacity: 0.85;
+}
+.lighting-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lighting-chips-empty {
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.lighting-summary-edit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.lighting-summary-edit:hover {
+  border-color: var(--border-strong);
+}
+.lighting-summary-edit[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.lighting-summary-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 22px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.lighting-summary-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.lighting-summary-toggle-label svg {
+  flex: none;
+  opacity: 0.85;
+}
+
+.lighting-readout:focus-visible,
+.lighting-name-input:focus-visible,
+.lighting-list-select:focus-visible,
+.lighting-icon-button:focus-visible,
+.lighting-head-button:focus-visible,
+.lighting-add-button:focus-visible,
+.lighting-add-option:focus-visible,
+.lighting-action-button:focus-visible,
+.lighting-range-toggle:focus-visible,
+.lighting-color-swatch:focus-visible,
+.lighting-chip:focus-visible,
+.lighting-summary-edit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (max-width: 860px) {
+  .lighting-panel {
+    top: 52px;
+    right: 8px;
+    width: min(248px, calc(100vw - 16px));
+    max-height: calc(100% - 68px);
+  }
+}

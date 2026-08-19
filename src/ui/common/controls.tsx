@@ -297,6 +297,7 @@ export function SwatchSelectField({
 export function SliderField({
   value,
   onChange,
+  onCommit,
   min,
   max,
   step,
@@ -304,6 +305,7 @@ export function SliderField({
 }: {
   value: number;
   onChange: (v: number) => void;
+  onCommit?: (v: number) => void;
   min: number;
   max: number;
   step: number;
@@ -313,6 +315,7 @@ export function SliderField({
     <Slider.Root
       value={value}
       onValueChange={(v) => onChange(Array.isArray(v) ? v[0] : v)}
+      onValueCommitted={onCommit ? (v) => onCommit(Array.isArray(v) ? v[0] : v) : undefined}
       min={min}
       max={max}
       step={step}
@@ -462,9 +465,17 @@ export function TeamToggle({
   );
 }
 
-export function SwitchField({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+export function SwitchField({
+  checked,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  ariaLabel?: string;
+}) {
   return (
-    <Switch.Root className="ui-switch" checked={checked} onCheckedChange={onChange}>
+    <Switch.Root className="ui-switch" checked={checked} onCheckedChange={onChange} aria-label={ariaLabel}>
       <Switch.Thumb className="ui-switch-thumb" />
     </Switch.Root>
   );

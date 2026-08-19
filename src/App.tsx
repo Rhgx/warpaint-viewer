@@ -17,6 +17,8 @@ import { WarpaintList } from './ui/catalog/WarpaintList';
 import { Inspector } from './ui/stage/Inspector';
 import type { ControlsState } from './viewer/controls';
 import { StageToolbar } from './ui/stage/StageToolbar';
+import { LightingPanel } from './ui/stage/LightingPanel';
+import { deleteLightFromRig, duplicateLightInRig } from './ui/stage/lightingRig';
 import { PanelEdgeToggle } from './ui/common/PanelEdgeToggle';
 import { DefinitionsPrompt } from './ui/workbench/DefinitionsPrompt';
 import type { WarpaintAssetOverrides, WearRecipe, WorkbenchTab } from './workbench/types';
@@ -24,6 +26,11 @@ import { revokeAssetOverrideCache } from './workbench/assetUrls';
 import { BootLoader } from './ui/boot/BootLoader';
 import { DEFAULT_VIEWER_FOV, TF2_ITEM_PANEL_FOV, VIEW_ANGLES, weaponIconView } from './viewer/presets';
 import { PAINTKIT_ICON_LIGHTING_ID } from './viewer/lighting';
+import {
+  loadCustomLighting,
+  saveCustomLighting,
+} from './viewer/controls';
+import { CUSTOM_LIGHTING_ID, MAX_CUSTOM_LIGHTS, type CustomLightingRig } from './viewer/customLighting';
 import { useBootData, randomSeed } from './hooks/useBootData';
 import { applyTextureOverrides, useComposedPaint } from './hooks/useComposedPaint';
 import { useSourcePackage } from './hooks/useSourcePackage';
@@ -37,6 +44,7 @@ import { collectTextureRefs, exportPathFor, resolvePackageTextures } from './exp
 import { customKitDefindex, isCustomKitId } from './protodefs/types';
 import type { CustomDefinitionsState, ProtoDefKitWeaponSlot, ProtoDefRecipeWithProvenance } from './protodefs/types';
 import { useProtoDefEditorSession } from './editor/useProtoDefEditorSession';
+import { SnapshotHistory } from './editor/history';
 import { discoverGroupSelectTargets, discoverGroupTextureTarget } from './editor/groupTargets';
 import {
   discoverBaseTextureTransformTarget,
@@ -370,6 +378,10 @@ function MainApp() {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [hintDismissed, setHintDismissed] = useState(false);
   const [cameraMode, setCameraMode] = useState<'inspect' | 'advanced'>('inspect');
+  const [lightingPanelOpen, setLightingPanelOpen] = useState(false);
+  const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
+  const selectedLightIdRef = useRef(selectedLightId);
+  selectedLightIdRef.current = selectedLightId;
   const [viewAngleId, setViewAngleId] = useState('default');
   const viewAngleIdRef = useRef(viewAngleId);
   viewAngleIdRef.current = viewAngleId;
@@ -386,7 +398,125 @@ function MainApp() {
     fov: DEFAULT_VIEWER_FOV,
     projection: 'perspective',
     screenshotScale: 2,
+    customLighting: loadCustomLighting(),
   }));
+  const customLightingRef = useRef(state.customLighting);
+  customLightingRef.current = state.customLighting;
+  const lightingHistoryRef = useRef(new SnapshotHistory<CustomLightingRig>());
+  const lightingPreviewBaselineRef = useRef<CustomLightingRig | null>(null);
+  const [lightingHistoryRevision, setLightingHistoryRevision] = useState(0);
+
+  const customLightingEqual = useCallback((left: CustomLightingRig, right: CustomLightingRig) => (
+    JSON.stringify(left) === JSON.stringify(right)
+  ), []);
+
+  const applyCustomLighting = useCallback((customLighting: CustomLightingRig) => {
+    const current = customLightingRef.current;
+    const baseline = lightingPreviewBaselineRef.current;
+    lightingPreviewBaselineRef.current = null;
+    if (customLightingEqual(current, customLighting)) {
+      if (baseline && !customLightingEqual(baseline, current)) {
+        lightingHistoryRef.current.record(baseline);
+        setLightingHistoryRevision((revision) => revision + 1);
+      }
+      return;
+    }
+    lightingHistoryRef.current.record(baseline ?? current);
+    customLightingRef.current = customLighting;
+    setState((value) => ({ ...value, customLighting }));
+    setLightingHistoryRevision((revision) => revision + 1);
+  }, [customLightingEqual]);
+
+  const previewCustomLighting = useCallback((customLighting: CustomLightingRig) => {
+    const current = customLightingRef.current;
+    if (customLightingEqual(current, customLighting)) return;
+    lightingPreviewBaselineRef.current ??= current;
+    customLightingRef.current = customLighting;
+    setState((value) => ({ ...value, customLighting }));
+  }, [customLightingEqual]);
+
+  const undoLighting = useCallback(() => {
+    lightingPreviewBaselineRef.current = null;
+    const previous = lightingHistoryRef.current.undo(customLightingRef.current);
+    if (!previous) return;
+    customLightingRef.current = previous;
+    setState((value) => ({ ...value, customLighting: previous }));
+    setLightingHistoryRevision((revision) => revision + 1);
+  }, []);
+
+  const redoLighting = useCallback(() => {
+    lightingPreviewBaselineRef.current = null;
+    const next = lightingHistoryRef.current.redo(customLightingRef.current);
+    if (!next) return;
+    customLightingRef.current = next;
+    setState((value) => ({ ...value, customLighting: next }));
+    setLightingHistoryRevision((revision) => revision + 1);
+  }, []);
+
+  const deleteSelectedLight = useCallback(() => {
+    const id = selectedLightIdRef.current;
+    if (!id) return;
+    const result = deleteLightFromRig(customLightingRef.current, id);
+    if (!result) return;
+    applyCustomLighting(result.rig);
+    setSelectedLightId(result.selectedLightId);
+  }, [applyCustomLighting]);
+
+  const duplicateSelectedLight = useCallback(() => {
+    const id = selectedLightIdRef.current;
+    if (!id) return;
+    const result = duplicateLightInRig(customLightingRef.current, id);
+    if (!result) return;
+    applyCustomLighting(result.rig);
+    setSelectedLightId(result.selectedLightId);
+  }, [applyCustomLighting]);
+
+  const toggleSelectedLight = useCallback(() => {
+    const id = selectedLightIdRef.current;
+    if (!id) return;
+    const rig = customLightingRef.current;
+    if (!rig.lights.some((light) => light.id === id)) return;
+    applyCustomLighting({
+      ...rig,
+      lights: rig.lights.map((light) => light.id === id ? { ...light, enabled: !light.enabled } : light),
+    });
+  }, [applyCustomLighting]);
+
+  const lightingCanUndo = lightingHistoryRef.current.canUndo;
+  const lightingCanRedo = lightingHistoryRef.current.canRedo;
+  void lightingHistoryRevision;
+
+  useEffect(() => {
+    if (!lightingPanelOpen || state.preset !== CUSTOM_LIGHTING_ID) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat) return;
+      if (shortcutTargetsEditableContent(event.target)) return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      const key = event.key.toLowerCase();
+      const command = event.ctrlKey || event.metaKey;
+      if ((key === 'delete' || key === 'backspace') && !command && !event.altKey && !event.shiftKey) {
+        if (!selectedLightIdRef.current) return;
+        event.preventDefault();
+        deleteSelectedLight();
+      } else if (key === 'd' && command && !event.altKey && !event.shiftKey) {
+        if (!selectedLightIdRef.current || customLightingRef.current.lights.length >= MAX_CUSTOM_LIGHTS) return;
+        event.preventDefault();
+        duplicateSelectedLight();
+      } else if (key === 'h' && !command && !event.altKey && !event.shiftKey) {
+        if (!selectedLightIdRef.current) return;
+        event.preventDefault();
+        toggleSelectedLight();
+      } else if (key === 'z' && command && !event.shiftKey && lightingHistoryRef.current.canUndo) {
+        event.preventDefault();
+        undoLighting();
+      } else if (command && (key === 'y' || (key === 'z' && event.shiftKey)) && lightingHistoryRef.current.canRedo) {
+        event.preventDefault();
+        redoLighting();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [deleteSelectedLight, duplicateSelectedLight, lightingPanelOpen, redoLighting, state.preset, toggleSelectedLight, undoLighting]);
 
   const { data, boot, advanceBoot } = useBootData({ state, setState, selectedKitId, setSelectedKitId, setError });
 
@@ -1992,7 +2122,7 @@ function MainApp() {
   };
 
   useEffect(() => {
-    if (!editorTabActive) return;
+    if (!editorTabActive || (lightingPanelOpen && state.preset === CUSTOM_LIGHTING_ID)) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || !(event.ctrlKey || event.metaKey)) return;
       if (shortcutTargetsEditableContent(event.target)) return;
@@ -2011,7 +2141,7 @@ function MainApp() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [editorTabActive]);
+  }, [editorTabActive, lightingPanelOpen, state.preset]);
 
   // Paint-area selection deliberately uses Shift + click. Keep free-fly out
   // of this focused workflow and make the modifier state visible through the
@@ -2708,6 +2838,8 @@ function MainApp() {
     let viewer: Viewer | null = null;
     let compositor: Compositor | null = null;
     let unsubscribeCameraMode: (() => void) | null = null;
+    let unsubscribeCustomLighting: (() => void) | null = null;
+    let unsubscribeLightSelection: (() => void) | null = null;
     (async () => {
       advanceBoot(22, 'Starting renderer…');
       const [{ Viewer: ViewerCls }, { Compositor: CompositorCls }] = await Promise.all([
@@ -2724,7 +2856,15 @@ function MainApp() {
       });
       viewerRef.current = viewer;
       compositorRef.current = compositor;
+      // Seed the viewer-side editor from the persisted rig before subscribing
+      // to viewport edits, otherwise its constructor defaults would overwrite
+      // the local rig on the first listener callback.
+      viewer.setCustomLighting(customLightingRef.current);
       unsubscribeCameraMode = viewer.onCameraModeChange(setCameraMode);
+      unsubscribeCustomLighting = viewer.onCustomLightingChange((customLighting) => {
+        applyCustomLighting(customLighting);
+      });
+      unsubscribeLightSelection = viewer.onLightSelectionChange(setSelectedLightId);
       // Dev-only escape hatch for debugging the viewer from the console.
       if (import.meta.env.DEV) (window as unknown as { __viewer?: Viewer }).__viewer = viewer;
       setEngineReady(true);
@@ -2742,11 +2882,13 @@ function MainApp() {
       disposeCache();
       compositor?.dispose();
       unsubscribeCameraMode?.();
+      unsubscribeCustomLighting?.();
+      unsubscribeLightSelection?.();
       viewer?.dispose();
       viewerRef.current = null;
       compositorRef.current = null;
     };
-  }, [data, advanceBoot, disposeCache, sourceProvider]);
+  }, [data, advanceBoot, applyCustomLighting, disposeCache, sourceProvider]);
 
   // Custom files only live in memory. Let the browser warn before a refresh,
   // tab close, or navigation would discard any cached edit set.
@@ -2897,16 +3039,62 @@ function MainApp() {
     resetComposeKey();
   }, [packageGeneration, definitions.generation, disposeCache, resetComposeKey]);
 
-  // Lighting.
+  // Lighting. Custom rigs stay in app state as plain serializable data; the
+  // viewer owns the Three.js lights and updates them imperatively.
   useEffect(() => {
-    if (engineReady) {
+    if (!engineReady) return;
+    if (state.preset === CUSTOM_LIGHTING_ID) {
+      viewerRef.current?.setCustomLighting(state.customLighting);
+    } else {
       viewerRef.current?.setLighting(
         state.weaponKey === 'paintkit_tool' && state.preset === 'inspect'
           ? PAINTKIT_ICON_LIGHTING_ID
           : state.preset,
       );
     }
-  }, [engineReady, state.preset, state.weaponKey]);
+  }, [engineReady, state.customLighting, state.preset, state.weaponKey]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => saveCustomLighting(state.customLighting), 150);
+    return () => window.clearTimeout(timeout);
+  }, [state.customLighting]);
+
+  useEffect(() => () => saveCustomLighting(customLightingRef.current), []);
+
+  useEffect(() => {
+    const selectedStillExists = selectedLightId !== null
+      && state.customLighting.lights.some((light) => light.id === selectedLightId);
+    if (!selectedStillExists) setSelectedLightId(state.customLighting.lights[0]?.id ?? null);
+  }, [selectedLightId, state.customLighting]);
+
+  // The stage panel being open *is* the viewport edit mode: helpers and the
+  // move gizmo appear with it, so there is no second toggle to remember. It
+  // opens with the preset and closes when the preset is switched away.
+  useEffect(() => {
+    setLightingPanelOpen(state.preset === CUSTOM_LIGHTING_ID);
+  }, [state.preset]);
+
+  useEffect(() => {
+    if (!engineReady) return;
+    viewerRef.current?.setLightingEditorState({
+      enabled: lightingPanelOpen && state.preset === CUSTOM_LIGHTING_ID,
+      selectedLightId,
+    });
+  }, [engineReady, lightingPanelOpen, selectedLightId, state.preset]);
+
+  // Picking a light from the inspector jumps straight into editing it. Below
+  // 860px the inspector is a slide-over covering the stage, so it steps aside
+  // rather than hiding the panel it just opened.
+  const selectLight = useCallback((id: string) => {
+    setSelectedLightId(id);
+    setLightingPanelOpen(true);
+    setMobilePanel('none');
+  }, []);
+
+  const toggleLightingPanel = useCallback(() => {
+    if (!lightingPanelOpen) setMobilePanel('none');
+    setLightingPanelOpen(!lightingPanelOpen);
+  }, [lightingPanelOpen]);
 
   // Killstreak sheen.
   useEffect(() => {
@@ -3452,6 +3640,21 @@ function MainApp() {
             onCopyImage={onCopyImage}
             onResetView={() => viewerRef.current?.resetView()}
           />
+          {state.preset === CUSTOM_LIGHTING_ID && (
+            <LightingPanel
+              rig={state.customLighting}
+              open={lightingPanelOpen}
+              selectedLightId={selectedLightId}
+              onChange={applyCustomLighting}
+              onPreviewChange={previewCustomLighting}
+              canUndo={lightingCanUndo}
+              canRedo={lightingCanRedo}
+              onUndo={undoLighting}
+              onRedo={redoLighting}
+              onClose={() => setLightingPanelOpen(false)}
+              onSelectedLightIdChange={setSelectedLightId}
+            />
+          )}
           <div className={`canvas-hint${hintDismissed && !editorInteractionActive && !stickerEditorPreparing ? ' dismissed' : ''}`}>
             {stickerEditorPreparing
               ? 'Preparing sticker editor…'
@@ -3735,6 +3938,12 @@ function MainApp() {
           onUndoSeed={undoSeed}
           canUndoSeed={canUndoSeed}
           onViewAngle={onViewAngle}
+          lightingPanelOpen={lightingPanelOpen}
+          selectedLightId={selectedLightId}
+          onToggleLightingPanel={toggleLightingPanel}
+          onSelectLight={selectLight}
+          onCustomLightingChange={applyCustomLighting}
+          onCustomLightingPreviewChange={previewCustomLighting}
         />
       </aside>
       <nav className="mobile-tabstrip" aria-label="Panels">
