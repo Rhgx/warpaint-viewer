@@ -4,7 +4,7 @@ import './ControlsHelpModal.css';
 
 type ControlsHelpModalProps = {
   open: boolean;
-  editingMode?: 'paint' | 'sticker' | null;
+  editingMode?: 'paint' | 'sticker' | 'lighting' | null;
   onClose: () => void;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
 };
@@ -103,7 +103,30 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
         </header>
 
         <div className="controls-help-body" data-mode={editingMode ?? 'camera'}>
-          {editingMode === 'sticker' ? (
+          {editingMode === 'lighting' ? (
+            <>
+              <section className="controls-help-section" aria-labelledby="lighting-pointer-heading">
+                <h3 id="lighting-pointer-heading">Light editing</h3>
+                <ControlRow keys={<Key>Click marker</Key>}>Select a light</ControlRow>
+                <ControlRow keys={<Key>Drag axis</Key>}>Move selected light</ControlRow>
+                <ControlRow keys={<Key>Drag aim</Key>}>Aim a spot or sun light</ControlRow>
+              </section>
+              <section className="controls-help-section" aria-labelledby="lighting-keyboard-heading">
+                <h3 id="lighting-keyboard-heading">Selected light</h3>
+                <ControlRow keys={<><Key>Ctrl</Key><Key>D</Key></>}>Duplicate</ControlRow>
+                <ControlRow keys={<><Key>Del</Key><Key>Backspace</Key></>}>Delete</ControlRow>
+                <ControlRow keys={<Key>H</Key>}>Turn on or off</ControlRow>
+                <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo</ControlRow>
+                <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo</ControlRow>
+              </section>
+              <section className="controls-help-section" aria-labelledby="lighting-camera-heading">
+                <h3 id="lighting-camera-heading">Camera</h3>
+                <ControlRow keys={<Key>Drag</Key>}>Rotate rig and weapon</ControlRow>
+                <ControlRow keys={<><Key>Right drag</Key><Key>Middle drag</Key></>}>Move weapon</ControlRow>
+                <ControlRow keys={<Key>Scroll</Key>}>Zoom</ControlRow>
+              </section>
+            </>
+          ) : editingMode === 'sticker' ? (
             <>
               <section className="controls-help-section" aria-labelledby="sticker-weapon-heading">
                 <h3 id="sticker-weapon-heading">On the weapon</h3>

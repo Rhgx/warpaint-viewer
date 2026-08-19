@@ -3631,7 +3631,9 @@ function MainApp() {
           </div>
           <StageToolbar
             workbenchOpen={workbenchOpen}
-            editingMode={editorTabActive ? editorTool : null}
+            editingMode={lightingPanelOpen && state.preset === CUSTOM_LIGHTING_ID
+              ? 'lighting'
+              : editorTabActive ? editorTool : null}
             onToggleWorkbench={() => {
               setWorkbenchMounted(true);
               setWorkbenchOpen((open) => !open);
