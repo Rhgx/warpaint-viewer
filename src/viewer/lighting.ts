@@ -272,6 +272,7 @@ export const LIGHTING_PRESETS: LightingPreset[] = [
 ];
 
 export const PAINTKIT_ICON_LIGHTING_ID = 'paintkit-icon';
+export const LEGACY_PAINTKIT_ICON_LIGHTING_ID = 'paintkit-icon-legacy';
 
 const paintkitIconLighting: LightingPreset = {
   id: PAINTKIT_ICON_LIGHTING_ID,
@@ -305,6 +306,9 @@ const paintkitIconLighting: LightingPreset = {
 };
 
 export function getPreset(id: string): LightingPreset {
+  if (id === LEGACY_PAINTKIT_ICON_LIGHTING_ID) {
+    return { ...paintkitIconLighting, id: LEGACY_PAINTKIT_ICON_LIGHTING_ID };
+  }
   if (id === PAINTKIT_ICON_LIGHTING_ID) return paintkitIconLighting;
   return LIGHTING_PRESETS.find((preset) => preset.id === id) ?? LIGHTING_PRESETS[0];
 }

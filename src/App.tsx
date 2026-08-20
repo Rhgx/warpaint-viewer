@@ -25,7 +25,7 @@ import type { WarpaintAssetOverrides, WearRecipe, WorkbenchTab } from './workben
 import { revokeAssetOverrideCache } from './workbench/assetUrls';
 import { BootLoader } from './ui/boot/BootLoader';
 import { DEFAULT_VIEWER_FOV, TF2_ITEM_PANEL_FOV, VIEW_ANGLES, weaponIconView } from './viewer/presets';
-import { PAINTKIT_ICON_LIGHTING_ID } from './viewer/lighting';
+import { LEGACY_PAINTKIT_ICON_LIGHTING_ID, PAINTKIT_ICON_LIGHTING_ID } from './viewer/lighting';
 import {
   loadCustomLighting,
   saveCustomLighting,
@@ -3072,8 +3072,12 @@ function MainApp() {
       viewerRef.current?.setCustomLighting(state.customLighting);
     } else {
       viewerRef.current?.setLighting(
-        state.weaponKey === 'paintkit_tool' && state.preset === 'inspect'
-          ? PAINTKIT_ICON_LIGHTING_ID
+        state.weaponKey === 'paintkit_tool'
+          ? state.preset === 'inspect'
+            ? PAINTKIT_ICON_LIGHTING_ID
+            : state.preset === 'inspect-legacy'
+              ? LEGACY_PAINTKIT_ICON_LIGHTING_ID
+              : state.preset
           : state.preset,
       );
     }

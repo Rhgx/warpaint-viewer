@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getPreset } from './lighting';
+import { getPreset, LEGACY_PAINTKIT_ICON_LIGHTING_ID } from './lighting';
 import {
   CUSTOM_LIGHTING_ID,
   CUSTOM_LIGHT_POSITION_LIMIT,
@@ -253,6 +253,7 @@ export class Viewer {
   private materialLoadToken = 0;
   private tf2Uniforms = createTf2Uniforms();
   private transformIsolationContextOpacity = { value: 1 };
+  private legacyInspectOpacity = { value: 0 };
   private raf = 0;
   private lastTime = 0;
   private disposed = false;
@@ -761,6 +762,8 @@ export class Viewer {
     }
     const preset = getPreset(presetId);
     this.activeLightingPresetId = preset.id;
+    this.legacyInspectOpacity.value = preset.id === 'inspect-legacy'
+      || preset.id === LEGACY_PAINTKIT_ICON_LIGHTING_ID ? 1 : 0;
     this.syncMaterialRimLight();
     this.lightGroup.position.set(0, 0, 0);
     this.lightGroup.quaternion.identity();
@@ -813,6 +816,7 @@ export class Viewer {
   }
 
   private applyCustomLighting(): void {
+    this.legacyInspectOpacity.value = 0;
     this.lightGroup.position.set(0, 0, 0);
     this.lightGroup.quaternion.identity();
     this.lightGroup.clear();
@@ -844,7 +848,9 @@ export class Viewer {
   private syncMaterialRimLight(): void {
     const enabled = this.activeLightingPresetId === CUSTOM_LIGHTING_ID
       ? this.customLightingRig.cameraRimLight
-      : this.activeLightingPresetId === 'inspect' || this.activeLightingPresetId === 'inspect-legacy';
+      : this.activeLightingPresetId === 'inspect'
+        || this.activeLightingPresetId === 'inspect-legacy'
+        || this.activeLightingPresetId === LEGACY_PAINTKIT_ICON_LIGHTING_ID;
     this.tf2Uniforms.uTf2RimLight.value = enabled ? this.materialRimLight : 0;
   }
 
@@ -2388,15 +2394,19 @@ export class Viewer {
     this.material.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, this.tf2Uniforms);
       shader.uniforms.uTf2IsolationContextOpacity = this.transformIsolationContextOpacity;
+      shader.uniforms.uTf2LegacyInspectOpacity = this.legacyInspectOpacity;
       installTf2VertexLit(shader);
       shader.fragmentShader = shader.fragmentShader
         .replace(
           'void main() {',
-          'uniform float uTf2IsolationContextOpacity;\nvoid main() {',
+          'uniform float uTf2IsolationContextOpacity;\nuniform float uTf2LegacyInspectOpacity;\nvoid main() {',
         )
         .replace(
           '#include <opaque_fragment>',
-          '#include <opaque_fragment>\ngl_FragColor.a *= uTf2IsolationContextOpacity;',
+          `#include <opaque_fragment>
+gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
+  ? uTf2IsolationContextOpacity
+  : gl_FragColor.a * uTf2IsolationContextOpacity;`,
         );
     };
     this.material.customProgramCacheKey = () => TF2_VERTEXLIT_CACHE_KEY;
