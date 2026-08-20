@@ -36,3 +36,18 @@ test('texture override traversal keeps untouched branches and empty recipes by i
   assert.notEqual(next.nodes[1], changed);
   assert.equal(next.nodes[2], root.nodes[2]);
 });
+
+test('a supplied _s override adds specular to stickers whose recipe omits it', () => {
+  const root: RecipeNode = {
+    type: 'apply_sticker',
+    stickers: [{ base: 'patterns/stickers/pig' }],
+    nodes: [{ type: 'texture_lookup', texture: 'patterns/base' }],
+  };
+
+  const next = applyTextureOverrides(root, {
+    'patterns/stickers/pig_s': 'blob:pig-specular',
+  });
+  assert.equal(next.type, 'apply_sticker');
+  if (next.type !== 'apply_sticker') return;
+  assert.equal(next.stickers[0]?.spec, 'blob:pig-specular');
+});

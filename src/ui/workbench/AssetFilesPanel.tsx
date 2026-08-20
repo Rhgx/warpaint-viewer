@@ -10,6 +10,7 @@ import {
   LoaderCircle,
   RotateCcw,
   Search,
+  Sparkles,
   Sticker,
   X,
 } from 'lucide-react';
@@ -22,7 +23,7 @@ const KIND_LABEL: Record<AssetSlot['kind'], string> = {
   texture: 'Texture',
   mask: 'Region mask',
   sticker: 'Sticker',
-  'sticker-mask': 'Sticker mask',
+  'sticker-mask': 'Sticker specular',
 };
 
 const GROUP_LABEL: Record<SlotGroup, string> = {
@@ -113,6 +114,7 @@ export function AssetFilesPanel({
   textureMetadata,
   resolveTexture,
   resolvePackageTexture,
+  hasPackageTexture,
   packageGeneration,
   sourceMounted,
   confirmReset,
@@ -131,6 +133,7 @@ export function AssetFilesPanel({
   textureMetadata?: Record<string, TextureMetadata>;
   resolveTexture: (ref: string) => string;
   resolvePackageTexture?: (ref: string) => Promise<string>;
+  hasPackageTexture?: (ref: string) => boolean;
   packageGeneration: number;
   sourceMounted: boolean;
   confirmReset: boolean;
@@ -148,7 +151,8 @@ export function AssetFilesPanel({
     (slot) =>
       !query ||
       shortName(slot.ref).toLowerCase().includes(query) ||
-      slot.ref.toLowerCase().includes(query),
+      slot.ref.toLowerCase().includes(query) ||
+      Boolean(slot.specularRef?.toLowerCase().includes(query)),
   );
   const groups = (['artwork', 'mask', 'support'] as SlotGroup[])
     .map((group) => ({
@@ -178,7 +182,7 @@ export function AssetFilesPanel({
         <div className="custom-workbench-summary">
           <span>
             {replacedCount
-              ? `${replacedCount} of ${slots.length} replaced`
+              ? `${replacedCount} replacement${replacedCount === 1 ? '' : 's'}`
               : `${slots.length} inputs`}
           </span>
           {replacedCount > 0 && (
@@ -222,7 +226,11 @@ export function AssetFilesPanel({
               </div>
               <div className="custom-asset-grid">
                 {items.map((slot) => {
+                  const specularRef = slot.specularRef;
                   const asset = assets[slot.ref];
+                  const specularAsset = specularRef ? assets[specularRef] : undefined;
+                  const specularOriginal = specularRef ? textureMetadata?.[specularRef] : undefined;
+                  const specularInPackage = Boolean(specularRef && hasPackageTexture?.(specularRef));
                   const original = textureMetadata?.[slot.ref];
                   const showOriginal = comparing[slot.ref] && asset?.output;
                   const mismatch =
@@ -231,7 +239,7 @@ export function AssetFilesPanel({
                     (asset.size.width !== original.width ||
                       asset.size.height !== original.height);
                   return (
-                    <article className="custom-asset-card" key={slot.ref} data-replaced={asset ? '' : undefined}>
+                    <article className="custom-asset-card" key={slot.ref} data-replaced={asset || specularAsset ? '' : undefined}>
                       <div className="custom-asset-preview">
                         <TexturePreview
                           refPath={showOriginal ? slot.ref : (asset?.output ?? slot.ref)}
@@ -255,7 +263,7 @@ export function AssetFilesPanel({
                             {showOriginal ? <EyeOff size={12} /> : <Eye size={12} />}
                           </button>
                         )}
-                        {busy[slot.ref] && (
+                        {(busy[slot.ref] || (specularRef && busy[specularRef])) && (
                           <div className="custom-asset-busy">
                             <LoaderCircle className="custom-workbench-spinner" size={18} />
                           </div>
@@ -302,6 +310,35 @@ export function AssetFilesPanel({
                             </span>
                           )}
                           {errors[slot.ref] && <span className="custom-asset-error" role="alert">{errors[slot.ref]}</span>}
+                          {specularRef && (
+                            specularAsset?.color ? (
+                              <span className="custom-asset-file" title={specularAsset.color.fileName}>
+                                Specular: {specularAsset.color.fileName}
+                                <button
+                                  type="button"
+                                  className="custom-asset-file-remove"
+                                  title="Remove the specular map"
+                                  aria-label={`Remove the specular map for ${shortName(slot.ref)}`}
+                                  onClick={() => onResetSlot(specularRef)}
+                                >
+                                  <X size={10} />
+                                </button>
+                              </span>
+                            ) : specularInPackage ? (
+                              <span className="custom-asset-file" title={specularRef}>
+                                <Sparkles size={10} /> Specular detected in archive
+                              </span>
+                            ) : specularOriginal ? (
+                              <span className="custom-asset-hint">
+                                Specular: Original {specularOriginal.width} x {specularOriginal.height}
+                              </span>
+                            ) : (
+                              <span className="custom-asset-hint">No specular map</span>
+                            )
+                          )}
+                          {specularRef && errors[specularRef] && (
+                            <span className="custom-asset-error" role="alert">{errors[specularRef]}</span>
+                          )}
                         </div>
                         <div className="custom-asset-actions">
                           <label className="custom-file-button" title="Import a PNG, JPG, WebP, TGA or VTF texture">
@@ -330,6 +367,22 @@ export function AssetFilesPanel({
                                   const file = event.target.files?.[0];
                                   event.target.value = '';
                                   onUpdateFile(slot, file, true);
+                                }}
+                              />
+                            </label>
+                          )}
+                          {specularRef && (
+                            <label className="custom-file-button custom-file-button-secondary" title="Import this sticker's phong/specular mask">
+                              <Sparkles size={12} />
+                              <span>{specularAsset?.color ? 'Replace spec' : 'Specular'}</span>
+                              <input
+                                type="file"
+                                accept=".png,.jpg,.jpeg,.webp,.tga,.vtf"
+                                aria-label={`Import a specular map for ${shortName(slot.ref)}`}
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0];
+                                  event.target.value = '';
+                                  onUpdateFile({ ref: specularRef, kind: 'sticker-mask', group: 'mask' }, file, false);
                                 }}
                               />
                             </label>

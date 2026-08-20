@@ -7,14 +7,28 @@ export interface AssetSlot {
   ref: string;
   kind: 'texture' | 'mask' | 'sticker' | 'sticker-mask';
   group: SlotGroup;
+  /** Optional phong mask shown and edited as a companion of this sticker. */
+  specularRef?: string;
+}
+
+/** Source convention for the optional phong/specular companion to a sticker. */
+export function stickerSpecularRef(baseRef: string): string {
+  const extensionIndex = baseRef.lastIndexOf('.');
+  const slashIndex = Math.max(baseRef.lastIndexOf('/'), baseRef.lastIndexOf('\\'));
+  return extensionIndex > slashIndex
+    ? `${baseRef.slice(0, extensionIndex)}_s${baseRef.slice(extensionIndex)}`
+    : `${baseRef}_s`;
 }
 
 export function collectSlots(recipes: WearRecipe[]): AssetSlot[] {
   if (recipes.length === 0) return [];
   type Draft = Omit<AssetSlot, 'group'>;
   const slots = new Map<string, Draft>();
-  const add = (ref: string | undefined, kind: AssetSlot['kind']) => {
-    if (ref && !slots.has(ref)) slots.set(ref, { ref, kind });
+  const add = (ref: string | undefined, kind: AssetSlot['kind'], specularRef?: string) => {
+    if (!ref) return;
+    const existing = slots.get(ref);
+    if (!existing) slots.set(ref, { ref, kind, ...(specularRef ? { specularRef } : {}) });
+    else if (specularRef && !existing.specularRef) slots.set(ref, { ...existing, specularRef });
   };
   const visit = (current: RecipeNode) => {
     switch (current.type) {
@@ -26,8 +40,7 @@ export function collectSlots(recipes: WearRecipe[]): AssetSlot[] {
         break;
       case 'apply_sticker':
         for (const sticker of current.stickers ?? []) {
-          add(sticker.base, 'sticker');
-          add(sticker.spec, 'sticker-mask');
+          add(sticker.base, 'sticker', sticker.spec ?? stickerSpecularRef(sticker.base));
         }
         current.nodes.forEach(visit);
         break;

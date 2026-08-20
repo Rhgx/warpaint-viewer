@@ -7,6 +7,7 @@ import type { PaintkitEntry } from '../data/types';
 import type { ControlsState } from '../viewer/controls';
 import type { WarpaintAssetOverrides } from '../workbench/types';
 import { isCustomKitId } from '../protodefs/types';
+import { stickerSpecularRef } from '../workbench/assetSlots';
 
 const COMPOSE_BADGE_DELAY_MS = 250;
 const IDLE_TIMEOUT_MS = 2_000;
@@ -95,13 +96,14 @@ function applyTextureOverridesInTree(node: RecipeNode, textures: Record<string, 
       for (let index = 0; index < node.stickers.length; index += 1) {
         const sticker = node.stickers[index];
         const base = textures[sticker.base];
-        const spec = sticker.spec ? textures[sticker.spec] : undefined;
+        const inferredSpec = sticker.spec ?? stickerSpecularRef(sticker.base);
+        const spec = textures[inferredSpec];
         if ((base !== undefined && base !== sticker.base) || (spec !== undefined && spec !== sticker.spec)) {
           stickersChanged = true;
           stickers[index] = {
             ...sticker,
             base: base !== undefined ? base : sticker.base,
-            spec: sticker.spec && spec !== undefined ? spec : sticker.spec,
+            spec: spec !== undefined ? spec : sticker.spec,
           };
         } else {
           stickers[index] = sticker;

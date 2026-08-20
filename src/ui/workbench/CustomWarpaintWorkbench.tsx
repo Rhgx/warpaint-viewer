@@ -88,6 +88,7 @@ export function CustomWarpaintWorkbench({
   textureMetadata,
   sourcePackage,
   resolvePackageTexture,
+  hasPackageTexture,
   packageGeneration,
   definitions,
   loading,
@@ -170,6 +171,8 @@ export function CustomWarpaintWorkbench({
   sourcePackage: SourcePackageState;
   /** Async Source package resolver used only for the non-destructive preview. */
   resolvePackageTexture?: (ref: string) => Promise<string>;
+  /** Synchronous package membership check used for optional companion files. */
+  hasPackageTexture?: (ref: string) => boolean;
   packageGeneration?: number;
   definitions: CustomDefinitionsState;
   loading: boolean;
@@ -467,9 +470,13 @@ export function CustomWarpaintWorkbench({
     () =>
       slots.flatMap((slot) => {
         const asset = assets[slot.ref];
-        return asset?.output
-          ? [{ ref: slot.ref, kind: slot.kind, output: asset.output, size: asset.size }]
-          : [];
+        const specular = slot.specularRef ? assets[slot.specularRef] : undefined;
+        const items: ExportItem[] = [];
+        if (asset?.output) items.push({ ref: slot.ref, kind: slot.kind, output: asset.output, size: asset.size });
+        if (slot.specularRef && specular?.output) {
+          items.push({ ref: slot.specularRef, kind: 'sticker-mask', output: specular.output, size: specular.size });
+        }
+        return items;
       }),
     [slots, assets],
   );
@@ -645,6 +652,7 @@ export function CustomWarpaintWorkbench({
               textureMetadata={textureMetadata}
               resolveTexture={resolveTexture}
               resolvePackageTexture={resolvePackageTexture}
+              hasPackageTexture={hasPackageTexture}
               packageGeneration={packageGeneration ?? 0}
               sourceMounted={sourcePackage.status === 'mounted'}
               confirmReset={confirmReset}

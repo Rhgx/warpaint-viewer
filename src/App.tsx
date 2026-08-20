@@ -100,6 +100,7 @@ import {
 } from './editor/stickerArtwork';
 import { constrainStickerQuadToTexture, type StickerPlacementQuad } from './editor/viewerStickerPlacement';
 import type { StickerTransformTool } from './ui/workbench/StickerPlacementEditor';
+import { collectSlots, stickerSpecularRef } from './workbench/assetSlots';
 import type { EditorDownloadFormat } from './editor/definitionExport';
 
 // Selftest page is code-split: it never loads in normal use.
@@ -1272,12 +1273,28 @@ function MainApp() {
     }));
   }, [editorDirty, paintkits, suggestedKitId, suggestionToken]);
   const resolvePackageTexture = useCallback((ref: string) => sourceProvider.resolvePreview(ref), [sourceProvider]);
-  const activeTextureOverrides = useMemo(
+  const manualTextureOverrides = useMemo(
     () => Object.fromEntries(
       Object.entries(assetOverrides.assets).flatMap(([ref, asset]) => asset.output ? [[ref, asset.output]] : []),
     ),
     [assetOverrides],
   );
+  const [packageStickerSpecularOverrides, setPackageStickerSpecularOverrides] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const refs = new Set<string>();
+    for (const slot of collectSlots(editorRecipes)) {
+      if (slot.specularRef && sourceProvider.packagePathFor(slot.specularRef)) refs.add(slot.specularRef);
+    }
+    void Promise.all([...refs].map(async (ref) => [ref, await sourceProvider.resolve(ref)] as const))
+      .then((entries) => { if (!cancelled) setPackageStickerSpecularOverrides(Object.fromEntries(entries)); })
+      .catch(() => { if (!cancelled) setPackageStickerSpecularOverrides({}); });
+    return () => { cancelled = true; };
+  }, [editorRecipes, packageGeneration, sourceProvider]);
+  const activeTextureOverrides = useMemo(() => ({
+    ...packageStickerSpecularOverrides,
+    ...manualTextureOverrides,
+  }), [manualTextureOverrides, packageStickerSpecularOverrides]);
   const mountedSourcePackage = sourceProvider.package;
   const mountedMaterialPaths = useMemo(
     () => mountedSourcePackage ? indexPackageMaterialPaths(mountedSourcePackage) : null,
@@ -1481,7 +1498,13 @@ function MainApp() {
     if (selectedStickerIndex < 0) return [];
     return matchedStickerStageGroups[selectedStickerIndex] ?? [];
   }, [matchedStickerStageGroups, selectedStickerIndex]);
-  const selectedStickerSpecularRef = selectedResolvedStickerStages[0]?.spec ?? null;
+  const selectedStickerSpecularRef = (() => {
+    const sticker = selectedResolvedStickerStages[0];
+    if (!sticker) return null;
+    if (sticker.spec) return sticker.spec;
+    const inferred = stickerSpecularRef(sticker.base);
+    return activeTextureOverrides[inferred] || sourceProvider.packagePathFor(inferred) ? inferred : null;
+  })();
   const selectedGroupStickerContext = useMemo(() => {
     if (!selectedStickerUsesComposedArtwork || selectedResolvedStickerStages.length === 0 || !resolvedStickerRecipe) return null;
     const context = resolvedGroupStickerContext(resolvedStickerRecipe, selectedResolvedStickerStages);
@@ -3199,7 +3222,13 @@ function MainApp() {
     // count is right the moment the tab opens.
     const pkg = sourceProvider.package;
     const refs = collectTextureRefs(editorRecipes.map((entry) => entry.recipe));
-    const supplied = pkg ? resolvePackageTextures(refs, (ref: string) => sourceProvider.packagePathFor(ref)) : [];
+    const packageSpecularRefs = pkg
+      ? collectSlots(editorRecipes).flatMap((slot) => (
+          slot.specularRef && sourceProvider.packagePathFor(slot.specularRef) ? [slot.specularRef] : []
+        ))
+      : [];
+    const packageRefs = [...new Set([...refs, ...packageSpecularRefs])];
+    const supplied = pkg ? resolvePackageTextures(packageRefs, (ref: string) => sourceProvider.packagePathFor(ref)) : [];
     const unresolvedTextureRefs = refs.filter((ref) => {
       if (!sourceTextureIdentity(ref).startsWith('materials/patterns/')) return false;
       if (sourceProvider.packagePathFor(ref)) return false;
@@ -3217,7 +3246,7 @@ function MainApp() {
         // Files the user replaced by hand win over the package's copy, matching
         // what the viewer is rendering.
         const replaced = new Set(
-          Object.keys(activeTextureOverrides).map((ref) => `${sourceTextureIdentity(ref)}.vtf`),
+          Object.keys(manualTextureOverrides).map((ref) => `${sourceTextureIdentity(ref)}.vtf`),
         );
         return collectPackageFiles(
           supplied.map(({ ref, path }) => ({ path, writeAs: exportPathFor(ref) })),
@@ -3242,7 +3271,7 @@ function MainApp() {
     // its own identity across both, so without it this would keep answering for
     // whatever archive was mounted first.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, selectedKit, exportImportedKit, sourceProvider, packageGeneration, editorRecipes, activeTextureOverrides]);
+  }, [data, selectedKit, exportImportedKit, sourceProvider, packageGeneration, editorRecipes, manualTextureOverrides]);
 
   const randomizeSeed = useCallback(() => patch({ seed: randomSeed() }), [patch]);
 
@@ -3904,6 +3933,7 @@ function MainApp() {
                 }}
                 sourcePackage={sourcePackage}
                 resolvePackageTexture={resolvePackageTexture}
+                hasPackageTexture={(ref) => Boolean(sourceProvider.packagePathFor(ref))}
                 packageGeneration={packageGeneration}
                 loading={editorLoading}
                 open={workbenchOpen}
