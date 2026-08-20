@@ -710,7 +710,41 @@ export function CustomWarpaintWorkbench({
                     <p className="custom-workbench-edit-materials-note">
                       Material overrides apply to the whole paint, so this list is not used in Materials.
                     </p>
-                  ) : editor.mode === 'paint' ? editor.selectors.map((selector, index) => {
+                  ) : editor.mode === 'paint' ? (<>
+                    {editor.baseLayer && (
+                      <button
+                        type="button"
+                        key="weapon-base-texture"
+                        className="custom-workbench-edit-layer-row"
+                        role="option"
+                        aria-selected={editor.baseLayer.active}
+                        onClick={editor.baseLayer.onSelect}
+                      >
+                        <span className="custom-workbench-edit-layer-thumb" aria-hidden="true">
+                          {editor.baseLayer.thumbnail ? <img src={editor.baseLayer.thumbnail} alt="" draggable={false} /> : null}
+                          <span
+                            className="custom-workbench-edit-layer-swatch"
+                            style={(editor.layerSwatchColors?.[editor.selectors.length]
+                              ?? editor.layerColors?.[editor.selectors.length])
+                              ? { background: editor.layerSwatchColors?.[editor.selectors.length]
+                                ?? editor.layerColors?.[editor.selectors.length] }
+                              : undefined}
+                          />
+                        </span>
+                        <span className="custom-workbench-edit-layer-label">{editor.baseLayer.label}</span>
+                        {(editor.layerHasTransformEdits?.[editor.selectors.length] ?? false) && (
+                          <span className="custom-workbench-edit-layer-vary" title="This layer has non-default transform ranges">
+                            <RefreshCw size={11} aria-hidden="true" />
+                          </span>
+                        )}
+                        {(editor.layerTransformLocked?.[editor.selectors.length] ?? false) && (
+                          <span className="custom-workbench-edit-layer-lock" title="This layer's transforms are locked">
+                            <Lock size={11} aria-hidden="true" />
+                          </span>
+                        )}
+                      </button>
+                    )}
+                    {editor.selectors.map((selector, index) => {
                     const active = editor.activeSelectorId === selector.id;
                     const swatchColor = editor.layerSwatchColors?.[index] ?? editor.layerColors?.[index];
                     const thumbnail = editor.layerThumbnails?.[index];
@@ -749,39 +783,8 @@ export function CustomWarpaintWorkbench({
                         <span className="custom-workbench-edit-layer-count">{count}</span>
                       </button>
                     );
-                  }).concat(editor.baseLayer ? [(
-                    <button
-                      type="button"
-                      key="weapon-base-texture"
-                      className="custom-workbench-edit-layer-row"
-                      role="option"
-                      aria-selected={editor.baseLayer.active}
-                      onClick={editor.baseLayer.onSelect}
-                    >
-                      <span className="custom-workbench-edit-layer-thumb" aria-hidden="true">
-                        {editor.baseLayer.thumbnail ? <img src={editor.baseLayer.thumbnail} alt="" draggable={false} /> : null}
-                        <span
-                          className="custom-workbench-edit-layer-swatch"
-                          style={(editor.layerSwatchColors?.[editor.selectors.length]
-                            ?? editor.layerColors?.[editor.selectors.length])
-                            ? { background: editor.layerSwatchColors?.[editor.selectors.length]
-                              ?? editor.layerColors?.[editor.selectors.length] }
-                            : undefined}
-                        />
-                      </span>
-                      <span className="custom-workbench-edit-layer-label">{editor.baseLayer.label}</span>
-                      {(editor.layerHasTransformEdits?.[editor.selectors.length] ?? false) && (
-                        <span className="custom-workbench-edit-layer-vary" title="This layer has non-default transform ranges">
-                          <RefreshCw size={11} aria-hidden="true" />
-                        </span>
-                      )}
-                      {(editor.layerTransformLocked?.[editor.selectors.length] ?? false) && (
-                        <span className="custom-workbench-edit-layer-lock" title="This layer's transforms are locked">
-                          <Lock size={11} aria-hidden="true" />
-                        </span>
-                      )}
-                    </button>
-                  )] : []) : editor.sticker?.targets.map((target, index) => {
+                    })}
+                  </>) : editor.sticker?.targets.map((target, index) => {
                     const active = editor.sticker?.activeTargetId === target.id;
                     return (
                       <button

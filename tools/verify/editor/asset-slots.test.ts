@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { collectSlots, stickerSpecularRef } from '../../../src/workbench/assetSlots';
+import {
+  collectPackageStickerSpecularOverrides,
+  collectSlots,
+  stickerSpecularRef,
+} from '../../../src/workbench/assetSlots';
 
 test('sticker slots expose an inferred _s specular input', () => {
   assert.equal(stickerSpecularRef('patterns/stickers/pig.vtf'), 'patterns/stickers/pig_s.vtf');
@@ -36,4 +40,31 @@ test('an explicitly authored sticker specular remains the editable input', () =>
       && slot.specularRef === 'patterns/stickers/custom_phong'
   )));
   assert.ok(!slots.some((slot) => slot.ref === 'patterns/stickers/custom_phong'));
+});
+
+test('package specular discovery retains refs without resolving texture data', () => {
+  const recipes = [{
+    wearIndex: 0,
+    recipe: {
+      type: 'apply_sticker' as const,
+      stickers: [
+        { base: 'patterns/stickers/pig' },
+        { base: 'patterns/stickers/absent' },
+      ],
+      nodes: [{ type: 'texture_lookup' as const, texture: 'patterns/base' }],
+    },
+  }];
+  const membershipChecks: string[] = [];
+  const overrides = collectPackageStickerSpecularOverrides(recipes, (ref) => {
+    membershipChecks.push(ref);
+    return ref === 'patterns/stickers/pig_s';
+  });
+
+  assert.deepEqual(membershipChecks, [
+    'patterns/stickers/pig_s',
+    'patterns/stickers/absent_s',
+  ]);
+  assert.deepEqual(overrides, {
+    'patterns/stickers/pig_s': 'patterns/stickers/pig_s',
+  });
 });

@@ -67,3 +67,19 @@ export function collectSlots(recipes: WearRecipe[]): AssetSlot[] {
       return { ...slot, group };
     });
 }
+
+/**
+ * Marks inferred package companions as available without reading or decoding
+ * them. Values intentionally retain the canonical ref so normal compositor
+ * resolution stays lazy and seed-selective.
+ */
+export function collectPackageStickerSpecularOverrides(
+  recipes: WearRecipe[],
+  hasTexture: (ref: string) => boolean,
+): Record<string, string> {
+  return Object.fromEntries(collectSlots(recipes).flatMap((slot) => (
+    slot.specularRef && hasTexture(slot.specularRef)
+      ? [[slot.specularRef, slot.specularRef]]
+      : []
+  )));
+}

@@ -100,7 +100,11 @@ import {
 } from './editor/stickerArtwork';
 import { constrainStickerQuadToTexture, type StickerPlacementQuad } from './editor/viewerStickerPlacement';
 import type { StickerTransformTool } from './ui/workbench/StickerPlacementEditor';
-import { collectSlots, stickerSpecularRef } from './workbench/assetSlots';
+import {
+  collectPackageStickerSpecularOverrides,
+  collectSlots,
+  stickerSpecularRef,
+} from './workbench/assetSlots';
 import type { EditorDownloadFormat } from './editor/definitionExport';
 
 // Selftest page is code-split: it never loads in normal use.
@@ -1279,23 +1283,21 @@ function MainApp() {
     ),
     [assetOverrides],
   );
-  const [packageStickerSpecularOverrides, setPackageStickerSpecularOverrides] = useState<Record<string, string>>({});
-  useEffect(() => {
-    let cancelled = false;
-    const refs = new Set<string>();
-    for (const slot of collectSlots(editorRecipes)) {
-      if (slot.specularRef && sourceProvider.packagePathFor(slot.specularRef)) refs.add(slot.specularRef);
-    }
-    void Promise.all([...refs].map(async (ref) => [ref, await sourceProvider.resolve(ref)] as const))
-      .then((entries) => { if (!cancelled) setPackageStickerSpecularOverrides(Object.fromEntries(entries)); })
-      .catch(() => { if (!cancelled) setPackageStickerSpecularOverrides({}); });
-    return () => { cancelled = true; };
-  }, [editorRecipes, packageGeneration, sourceProvider]);
+  const mountedSourcePackage = sourceProvider.package;
+  const packageStickerSpecularOverrides = useMemo(
+    () => collectPackageStickerSpecularOverrides(
+      editorRecipes,
+      (ref) => Boolean(sourceProvider.packagePathFor(ref)),
+    ),
+    // SourceTextureProvider keeps a stable identity while its mounted package
+    // changes internally, so generation is the required invalidation token.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [editorRecipes, packageGeneration, sourceProvider],
+  );
   const activeTextureOverrides = useMemo(() => ({
     ...packageStickerSpecularOverrides,
     ...manualTextureOverrides,
   }), [manualTextureOverrides, packageStickerSpecularOverrides]);
-  const mountedSourcePackage = sourceProvider.package;
   const mountedMaterialPaths = useMemo(
     () => mountedSourcePackage ? indexPackageMaterialPaths(mountedSourcePackage) : null,
     [mountedSourcePackage],
@@ -1503,7 +1505,7 @@ function MainApp() {
     if (!sticker) return null;
     if (sticker.spec) return sticker.spec;
     const inferred = stickerSpecularRef(sticker.base);
-    return activeTextureOverrides[inferred] || sourceProvider.packagePathFor(inferred) ? inferred : null;
+    return packageStickerSpecularOverrides[inferred] || manualTextureOverrides[inferred] ? inferred : null;
   })();
   const selectedGroupStickerContext = useMemo(() => {
     if (!selectedStickerUsesComposedArtwork || selectedResolvedStickerStages.length === 0 || !resolvedStickerRecipe) return null;
@@ -1587,13 +1589,13 @@ function MainApp() {
     setStickerSpecularUrl(null);
     if (selectedStickerUsesComposedArtwork || !selectedStickerSpecularRef) return;
     let cancelled = false;
-    const override = activeTextureOverrides[selectedStickerSpecularRef];
+    const override = manualTextureOverrides[selectedStickerSpecularRef];
     void (override ? Promise.resolve(override) : sourceProvider.resolvePreview(selectedStickerSpecularRef))
       .then((url) => { if (!cancelled) setStickerSpecularUrl(url); })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [
-    activeTextureOverrides,
+    manualTextureOverrides,
     packageGeneration,
     selectedStickerSpecularRef,
     selectedStickerUsesComposedArtwork,
@@ -3639,7 +3641,7 @@ function MainApp() {
                   {isCustomKitId(selectedKit.id)
                     ? weaponName
                     : `${selectedKit.collection ?? 'Uncategorized'} - ${weaponName}`}
-                  {Object.keys(activeTextureOverrides).length ? ' - Custom files' : ''}
+                  {Object.keys(manualTextureOverrides).length ? ' - Custom files' : ''}
                 </div>
               </div>
             )}
