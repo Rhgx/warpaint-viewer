@@ -185,6 +185,20 @@ function inspectionLights(): THREE.Light[] {
   return [key, spot, point];
 }
 
+function legacyInspectionLights(): THREE.Light[] {
+  const key = directional(0xffffff, 1, new THREE.Vector3(0, -1, 0));
+
+  const spot = new THREE.SpotLight(0xffffff, 1 / 4.5, 1000, Math.PI / 2, 0.36, 0);
+  spot.color.setRGB(1, 0.9, 0.9);
+  spot.position.set(0, 100, 0);
+  spot.target.position.set(0, 50, 100);
+
+  const point = new THREE.PointLight(0xffffff, 1 / 15, 1000, 0);
+  point.color.setRGB(0.7, 0.8, 1);
+  point.position.set(50, -200, 15);
+  return [key, spot, point];
+}
+
 function fogBackground(color: readonly number[] | null): number {
   if (!color) return 0x1c1f24;
   return (color[0] << 16) | (color[1] << 8) | color[2];
@@ -242,6 +256,14 @@ export const LIGHTING_PRESETS: LightingPreset[] = [
     // CPotteryWheelPanel::CreateDefaultLights uses 0.4 on every cube face.
     ambientCube: cube([0.4, 0.4, 0.4]),
     build: inspectionLights,
+  },
+  {
+    id: 'inspect-legacy',
+    label: 'Inspect (Legacy)',
+    background: 0x1c1f24,
+    exposure: 1,
+    ambientCube: cube([0.4, 0.4, 0.4]),
+    build: legacyInspectionLights,
   },
   mapPreset('daylight'),
   mapPreset('overcast'),

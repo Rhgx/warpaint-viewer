@@ -41,3 +41,22 @@ test('inspect lighting matches InspectionPanel.res in camera-local space', () =>
   assertVector(point.position, new THREE.Vector3(50, -200, -15), 'point source-panel position');
   assert.equal(point.distance, 0, 'point avoids Three smooth range cutoff');
 });
+
+test('legacy inspect lighting preserves the pre-correction rig', () => {
+  const preset = getPreset('inspect-legacy');
+  const lights = preset.build(new THREE.PerspectiveCamera());
+  const [key, spot, point] = lights;
+  if (!(key instanceof THREE.DirectionalLight)) throw new Error('legacy inspect key light is not directional');
+  if (!(spot instanceof THREE.SpotLight)) throw new Error('legacy inspect spot light is not a spotlight');
+  if (!(point instanceof THREE.PointLight)) throw new Error('legacy inspect point light is not a point light');
+
+  assertVector(key.position, new THREE.Vector3(0, 10_000, 0), 'legacy directional position');
+  assertVector(spot.position, new THREE.Vector3(0, 100, 0), 'legacy spot position');
+  assertVector(spot.target.position, new THREE.Vector3(0, 50, 100), 'legacy spot target');
+  assert.equal(spot.distance, 1000);
+  assert.equal(spot.angle, Math.PI / 2);
+  assert.equal(spot.penumbra, 0.36);
+  assertVector(point.position, new THREE.Vector3(50, -200, 15), 'legacy point position');
+  assert.equal(point.distance, 1000);
+  assert.equal(preset.spotFalloff, undefined);
+});

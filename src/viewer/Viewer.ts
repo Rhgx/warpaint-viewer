@@ -844,7 +844,7 @@ export class Viewer {
   private syncMaterialRimLight(): void {
     const enabled = this.activeLightingPresetId === CUSTOM_LIGHTING_ID
       ? this.customLightingRig.cameraRimLight
-      : this.activeLightingPresetId === 'inspect';
+      : this.activeLightingPresetId === 'inspect' || this.activeLightingPresetId === 'inspect-legacy';
     this.tf2Uniforms.uTf2RimLight.value = enabled ? this.materialRimLight : 0;
   }
 
