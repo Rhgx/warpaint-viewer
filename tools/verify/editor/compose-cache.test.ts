@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import type { RecipeNode } from '../../../src/compositor/types';
-import { applyTextureOverrides, recipeFingerprint } from '../../../src/hooks/useComposedPaint';
+import {
+  applyTextureOverrides,
+  recipeFingerprint,
+  textureOverridesFingerprint,
+} from '../../../src/hooks/useComposedPaint';
 
 const recipe = (groups: string): RecipeNode => ({
   type: 'combine_lerp',
@@ -17,6 +21,17 @@ test('recipe cache identity is stable across equivalent editor revisions', () =>
   const equivalent = structuredClone(original);
   assert.equal(recipeFingerprint(original), recipeFingerprint(equivalent));
   assert.notEqual(recipeFingerprint(original), recipeFingerprint(recipe('models/rocket_groups_05')));
+});
+
+test('request identity changes when a package texture override becomes available', () => {
+  assert.equal(
+    textureOverridesFingerprint({ base: 'blob:base', spec: 'blob:spec' }),
+    textureOverridesFingerprint({ spec: 'blob:spec', base: 'blob:base' }),
+  );
+  assert.notEqual(
+    textureOverridesFingerprint({ base: 'blob:base' }),
+    textureOverridesFingerprint({ base: 'blob:base', spec: 'patterns/sticker_s' }),
+  );
 });
 
 test('texture override traversal keeps untouched branches and empty recipes by identity', () => {

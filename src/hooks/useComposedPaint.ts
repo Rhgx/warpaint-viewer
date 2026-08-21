@@ -41,6 +41,11 @@ export function recipeFingerprint(recipe: RecipeNode): string {
   return fingerprint;
 }
 
+/** Stable identity for texture inputs that can become available after a package mount. */
+export function textureOverridesFingerprint(textures: Record<string, string>): string {
+  return JSON.stringify(Object.entries(textures).sort(([left], [right]) => left.localeCompare(right)));
+}
+
 interface IdleDeadlineLike {
   didTimeout: boolean;
   timeRemaining(): number;
@@ -252,7 +257,8 @@ export function useComposedPaint({
       height: Math.max(1, Math.round(fullDimensions.height * interactiveScale)),
     };
 
-    const requestKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|definition:${definitionGeneration}|interactive:${interactive ? interactiveKey : '0'}`;
+    const overrideFingerprint = textureOverridesFingerprint(activeTextureOverrides);
+    const requestKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|definition:${definitionGeneration}|overrides:${overrideFingerprint}|interactive:${interactive ? interactiveKey : '0'}`;
     if (requestKey === lastRequestKeyRef.current) {
       // The consumer can become active after the texture was already accepted
       // (for example, opening Transform from Parts). Replay the retained GPU
