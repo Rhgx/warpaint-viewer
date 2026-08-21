@@ -57,21 +57,31 @@ test('custom lighting preserves the camera rim preference', () => {
   assert.equal(validateCustomLightingRig({}).cameraRimLight, false);
 });
 
+test('custom lighting defaults to the inspect rig', () => {
+  const rig = createDefaultCustomLightingRig();
+  assert.equal(rig.ambient, 0.4);
+  assert.equal(rig.exposure, 1);
+  assert.equal(rig.cameraRimLight, true);
+  assert.deepEqual(rig.lights.map((light) => light.type), ['directional', 'spot', 'point']);
+  assert.deepEqual(rig.lights.map((light) => light.color), ['#ffffff', '#fff3f3', '#dae7ff']);
+  assert.deepEqual(rig.lights.map((light) => light.intensity), [1, 1 / 4.5, 1 / 15]);
+});
+
 test('custom lighting builds typed Three.js lights in authored order', () => {
   const rig = createDefaultCustomLightingRig();
   const runtimes = buildCustomLights(rig, { dimensions: [2, 4, 3] });
   assert.equal(runtimes.length, 3);
-  assert.ok(runtimes[0].light instanceof THREE.SpotLight);
-  assert.ok(runtimes[1].light instanceof THREE.PointLight);
-  assert.ok(runtimes[2].light instanceof THREE.SpotLight);
-  assert.ok(runtimes[0].target instanceof THREE.Object3D);
-  assert.equal(runtimes[1].target, null);
-  assert.equal(runtimes[0].light.intensity, rig.lights[0].intensity * 16);
+  assert.ok(runtimes[0].light instanceof THREE.DirectionalLight);
+  assert.ok(runtimes[1].light instanceof THREE.SpotLight);
+  assert.ok(runtimes[2].light instanceof THREE.PointLight);
+  assert.ok(runtimes[1].target instanceof THREE.Object3D);
+  assert.equal(runtimes[2].target, null);
+  assert.equal(runtimes[0].light.intensity, rig.lights[0].intensity);
   assert.equal(runtimes[1].light.intensity, rig.lights[1].intensity * 16);
 });
 
 test('custom lighting updates an existing runtime without replacing its Three.js light', () => {
-  const initial = createDefaultCustomLightingRig().lights[1];
+  const initial = createDefaultCustomLightingRig().lights[2];
   if (initial.type !== 'point') throw new Error('expected a point light');
   const runtime = buildCustomLights({
     version: 1,

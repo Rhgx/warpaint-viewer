@@ -106,7 +106,7 @@ export function updateCustomLightRuntime(
   }
 }
 
-const DEFAULT_AMBIENT = 0.18;
+const DEFAULT_AMBIENT = 0.4;
 const DEFAULT_EXPOSURE = 1;
 const DEFAULT_POSITION: FrameVector = [0, 0, 0];
 const DEFAULT_DIRECTION: FrameVector = [0, 0, 1];
@@ -236,19 +236,21 @@ export function createDefaultCustomLightingRig(): CustomLightingRig {
     version: CUSTOM_LIGHTING_VERSION,
     ambient: DEFAULT_AMBIENT,
     exposure: DEFAULT_EXPOSURE,
-    cameraRimLight: false,
+    cameraRimLight: true,
     lights: [
       {
-        id: 'key', name: 'Key light', type: 'spot', enabled: true, color: '#fff1df', intensity: 2.4,
-        position: [1.2, 1.8, 2.4], target: [0, 0, 0], range: null, angleDegrees: 48, softness: 0.35,
+        id: 'key', name: 'Key light', type: 'directional', enabled: true, color: '#ffffff', intensity: 1,
+        direction: [0, 1, 0],
       },
       {
-        id: 'fill', name: 'Fill light', type: 'point', enabled: true, color: '#c6d8ff', intensity: 0.9,
-        position: [-1.8, 0.2, 1.1], range: null,
+        id: 'spot', name: 'Spot light', type: 'spot', enabled: true, color: '#fff3f3', intensity: 1 / 4.5,
+        position: [0, 1, 0], target: [0, 0, -2], range: null,
+        angleDegrees: THREE.MathUtils.radToDeg(Math.acos(Math.cos(90))),
+        softness: 1 - Math.acos(Math.cos(1)) / Math.acos(Math.cos(90)),
       },
       {
-        id: 'rim', name: 'Rim light', type: 'spot', enabled: true, color: '#bcd4ff', intensity: 2,
-        position: [-1.1, 1.4, -2], target: [0, 0, 0], range: null, angleDegrees: 42, softness: 0.4,
+        id: 'point', name: 'Point light', type: 'point', enabled: true, color: '#dae7ff', intensity: 1 / 15,
+        position: [0.5, -2, -0.15], range: null,
       },
     ],
   };
