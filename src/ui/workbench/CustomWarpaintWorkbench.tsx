@@ -139,6 +139,11 @@ export function CustomWarpaintWorkbench({
       onAddTarget: (baseReference: string) => void;
       onRemoveTarget: () => void;
       onMoveTarget: (direction: -1 | 1) => void;
+      /** Temporary 3D model-part picker state for sticker placement. */
+      modelPartPickingActive?: boolean;
+      hiddenModelPartCount?: number;
+      onModelPartPickingChange?: (active: boolean) => void;
+      onRestoreHiddenModelParts?: () => void;
     };
     /** Gates the Materials mode button; absent means nothing to override yet. */
     materials?: MaterialOverridesPanelProps;

@@ -678,6 +678,8 @@ function MainApp() {
   // other.
   const [stickerTransformTool, setStickerTransformTool] = useState<StickerTransformTool>('move');
   const [stickerAspectLocked, setStickerAspectLocked] = useState(true);
+  const [modelPartPickingActive, setModelPartPickingActive] = useState(false);
+  const [hiddenModelPartCount, setHiddenModelPartCount] = useState(0);
   const [activeStickerTarget, setActiveStickerTarget] = useState(0);
   const [pendingAddedStickerRef, setPendingAddedStickerRef] = useState<string | null>(null);
   const stickerRecipeKey = editableKitId !== null && state.weaponKey
@@ -732,6 +734,13 @@ function MainApp() {
     preserveAspect: boolean;
     base: StickerPlacementQuad;
     latest: StickerPlacementQuad;
+  } | null>(null);
+  const modelPartPointerRef = useRef<{
+    pointerId: number;
+    captureTarget: HTMLDivElement;
+    x: number;
+    y: number;
+    moved: boolean;
   } | null>(null);
   const updateStickerDraft = useCallback((quad: StickerPlacementQuad | null) => {
     stickerDraftRef.current = quad;
@@ -2125,10 +2134,12 @@ function MainApp() {
   // loading or unavailable. Selection input remains stricter: it only starts
   // once the editor has a usable target and image.
   const editorTabActive = workbenchOpen && workbenchTab === 'editor';
+  const stickerEditingActive = editorTabActive && editorTool === 'sticker';
   const groupAssignActive = editorEnabled && editorTabActive && editorTool === 'paint' && paintSubView === 'parts';
   const stickerEditorPreparing = editorTabActive && editorTool === 'sticker'
     && stickerTargetEditable && !stickerEditorReady;
   const stickerPlacementActive = editorTabActive && editorTool === 'sticker' && stickerEditorReady;
+  const stickerPartPickingActive = stickerEditingActive && modelPartPickingActive;
   const editorInteractionActive = groupAssignActive || stickerPlacementActive;
 
   // Keep one global listener for the editor tab while reading current actions
@@ -2145,6 +2156,37 @@ function MainApp() {
     canUndo: editorCanUndo,
     canRedo: editorCanRedo,
   };
+
+  const clearModelPartPickingInteraction = useCallback(() => {
+    const gesture = modelPartPointerRef.current;
+    if (gesture?.captureTarget.hasPointerCapture(gesture.pointerId)) {
+      gesture.captureTarget.releasePointerCapture(gesture.pointerId);
+    }
+    modelPartPointerRef.current = null;
+    viewerRef.current?.clearModelPartHover();
+  }, []);
+
+  const resetModelPartPicking = useCallback(() => {
+    viewerRef.current?.restoreHiddenModelParts();
+    clearModelPartPickingInteraction();
+    setModelPartPickingActive(false);
+    setHiddenModelPartCount(0);
+  }, [clearModelPartPickingInteraction]);
+
+  useEffect(() => {
+    // Hidden parts must not leak into another model or editor session.
+    if (stickerEditingActive && engineReady) return;
+    resetModelPartPicking();
+  }, [engineReady, resetModelPartPicking, stickerEditingActive]);
+
+  useEffect(() => {
+    resetModelPartPicking();
+  }, [resetModelPartPicking, selectedAssetKey, state.weaponKey]);
+
+  useEffect(() => {
+    if (stickerPartPickingActive) return;
+    clearModelPartPickingInteraction();
+  }, [clearModelPartPickingInteraction, stickerPartPickingActive]);
 
   useEffect(() => {
     if (!editorTabActive || (lightingPanelOpen && state.preset === CUSTOM_LIGHTING_ID)) return;
@@ -2493,8 +2535,8 @@ function MainApp() {
           specularUrl: stickerSpecularUrl,
         });
       }
-      if (!stickerPlacementActive) viewer.setStickerGizmo(null);
-    } else if (stickerPlacementActive && authoredStickerQuad) {
+      if (!stickerPlacementActive || modelPartPickingActive) viewer.setStickerGizmo(null);
+    } else if (stickerPlacementActive && authoredStickerQuad && !modelPartPickingActive) {
       viewer.setStickerEditorBaseMap(null);
       viewer.clearStickerPreview();
       viewer.setStickerGizmo(authoredStickerQuad, stickerTransformTool);
@@ -2513,6 +2555,7 @@ function MainApp() {
     stickerDraftQuad,
     selectedStickerUsesComposedArtwork,
     stickerPlacementActive,
+    modelPartPickingActive,
     stickerSpecularUrl,
     stickerSurfaceComposeKey,
     effectiveStickerTextureUrl,
@@ -2681,7 +2724,42 @@ function MainApp() {
     }
   }, [authoredStickerQuad, selectedStickerTarget, setSessionStickerQuad, updateStickerDraft]);
 
+  const setModelPartPicking = useCallback((active: boolean) => {
+    if (!stickerEditingActive) return;
+    setModelPartPickingActive(active);
+    // Entering the picker is a mode change worth re-explaining; leaving it
+    // should not resurrect a hint the user already dismissed.
+    if (active) setHintDismissed(false);
+  }, [stickerEditingActive]);
+
+  const restoreHiddenModelParts = useCallback(() => {
+    viewerRef.current?.restoreHiddenModelParts();
+    setHiddenModelPartCount(0);
+  }, []);
+
   const beginEditorPointer = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (stickerPartPickingActive && event.button === 0 && event.target === canvasRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.nativeEvent.stopImmediatePropagation();
+      groupPointerRef.current = null;
+      stickerGestureRef.current = null;
+      stickerGizmoGestureRef.current = null;
+      updateStickerDraft(null);
+      setEditorSample(null);
+      setHintDismissed(true);
+      const pick = viewerRef.current?.pickModelPartAt(event.clientX, event.clientY) ?? null;
+      viewerRef.current?.setModelPartHover(pick);
+      modelPartPointerRef.current = {
+        pointerId: event.pointerId,
+        captureTarget: event.currentTarget,
+        x: event.clientX,
+        y: event.clientY,
+        moved: false,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
     if (stickerPlacementActive && event.button === 0 && event.target === canvasRef.current
       && authoredStickerQuad) {
       const viewer = viewerRef.current;
@@ -2725,9 +2803,23 @@ function MainApp() {
     }
     if (!groupAssignActive || !event.shiftKey || event.button !== 0 || event.target !== canvasRef.current) return;
     groupPointerRef.current = { x: event.clientX, y: event.clientY, moved: false };
-  }, [authoredStickerQuad, beginStickerInteraction, groupAssignActive, previewStickerDraft, stickerAspectLocked, stickerPlacementActive, updateStickerDraft]);
+  }, [authoredStickerQuad, beginStickerInteraction, groupAssignActive, previewStickerDraft, stickerAspectLocked, stickerPartPickingActive, stickerPlacementActive, updateStickerDraft]);
 
   const previewEditorSurface = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const modelPartGesture = modelPartPointerRef.current;
+    if (modelPartGesture && modelPartGesture.pointerId === event.pointerId) {
+      if (Math.hypot(event.clientX - modelPartGesture.x, event.clientY - modelPartGesture.y) > 4) {
+        modelPartGesture.moved = true;
+      }
+      const pick = viewerRef.current?.pickModelPartAt(event.clientX, event.clientY) ?? null;
+      viewerRef.current?.setModelPartHover(pick);
+      return;
+    }
+    if (stickerPartPickingActive && event.target === canvasRef.current) {
+      const pick = viewerRef.current?.pickModelPartAt(event.clientX, event.clientY) ?? null;
+      viewerRef.current?.setModelPartHover(pick);
+      return;
+    }
     const gizmoGesture = stickerGizmoGestureRef.current;
     if (gizmoGesture && gizmoGesture.pointerId === event.pointerId) {
       const result = viewerRef.current?.updateStickerGizmoDrag(
@@ -2776,9 +2868,26 @@ function MainApp() {
     const start = groupPointerRef.current;
     if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) start.moved = true;
     sampleEditorSurface(event.clientX, event.clientY);
-  }, [groupAssignActive, previewStickerDraft, sampleEditorSurface, updateStickerDraft]);
+  }, [groupAssignActive, previewStickerDraft, sampleEditorSurface, stickerPartPickingActive, updateStickerDraft]);
 
   const finishEditorPointer = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const modelPartGesture = modelPartPointerRef.current;
+    if (modelPartGesture && modelPartGesture.pointerId === event.pointerId) {
+      const moved = modelPartGesture.moved
+        || Math.hypot(event.clientX - modelPartGesture.x, event.clientY - modelPartGesture.y) > 4;
+      const viewer = viewerRef.current;
+      modelPartPointerRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const pick = viewer?.pickModelPartAt(event.clientX, event.clientY) ?? null;
+      const count = !moved && event.button === 0 && pick ? viewer?.toggleModelPart(pick) : null;
+      if (count !== null && count !== undefined) setHiddenModelPartCount(count);
+      viewer?.setModelPartHover(stickerPartPickingActive ? pick : null);
+      return;
+    }
     const gizmoGesture = stickerGizmoGestureRef.current;
     if (gizmoGesture && gizmoGesture.pointerId === event.pointerId) {
       stickerGizmoGestureRef.current = null;
@@ -2812,10 +2921,17 @@ function MainApp() {
     if (!groupAssignActive || !event.shiftKey || !start || start.moved || event.button !== 0 || event.target !== canvasRef.current) return;
     const sampled = sampleEditorSurface(event.clientX, event.clientY);
     if (sampled && sampled.bucket > 0) toggleEditorGroup(sampled.bucket);
-  }, [groupAssignActive, sampleEditorSurface, selectedStickerTarget, setSessionStickerQuad, toggleEditorGroup, updateStickerDraft]);
+  }, [groupAssignActive, sampleEditorSurface, selectedStickerTarget, setSessionStickerQuad, stickerPartPickingActive, toggleEditorGroup, updateStickerDraft]);
 
   const cancelEditorPointer = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     groupPointerRef.current = null;
+    if (modelPartPointerRef.current?.pointerId === event.pointerId) {
+      modelPartPointerRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      viewerRef.current?.clearModelPartHover();
+    }
     if (stickerGizmoGestureRef.current?.pointerId === event.pointerId) {
       stickerGizmoGestureRef.current = null;
       updateStickerDraft(null);
@@ -3620,12 +3736,14 @@ function MainApp() {
           className="canvas-wrap"
           data-prompt={promptedCandidate ? '' : undefined}
           data-editor-selecting={editorInteractionActive && editorSelectionHeld ? '' : undefined}
+          data-model-part-picking={stickerPartPickingActive ? '' : undefined}
           onPointerDownCapture={beginEditorPointer}
           onPointerMoveCapture={previewEditorSurface}
           onPointerUpCapture={finishEditorPointer}
           onPointerCancelCapture={cancelEditorPointer}
           onPointerLeave={() => {
             groupPointerRef.current = null;
+            if (!modelPartPointerRef.current) viewerRef.current?.clearModelPartHover();
             if (groupAssignActive) setEditorSample(null);
           }}
           onPointerDown={() => setHintDismissed(true)}
@@ -3692,8 +3810,10 @@ function MainApp() {
               onSelectedLightIdChange={setSelectedLightId}
             />
           )}
-          <div className={`canvas-hint${hintDismissed && !editorInteractionActive && !stickerEditorPreparing ? ' dismissed' : ''}`}>
-            {stickerEditorPreparing
+          <div className={`canvas-hint${hintDismissed && !editorInteractionActive && !stickerEditorPreparing && !stickerPartPickingActive ? ' dismissed' : ''}`}>
+            {stickerPartPickingActive
+              ? 'click a part to hide it, click its outline to bring it back; Esc leaves, middle rotates, right pans'
+              : stickerEditorPreparing
               ? 'Preparing sticker editor…'
               : stickerPlacementActive
               ? stickerTransformTool === 'move'
@@ -3843,6 +3963,10 @@ function MainApp() {
                       onActiveToolChange: setStickerTransformTool,
                       aspectLocked: stickerAspectLocked,
                       onAspectLockedChange: setStickerAspectLocked,
+                      modelPartPickingActive: stickerPartPickingActive,
+                      hiddenModelPartCount,
+                      onModelPartPickingChange: setModelPartPicking,
+                      onRestoreHiddenModelParts: restoreHiddenModelParts,
                       onInteractionStart: beginStickerInteraction,
                       onInteractionEnd: finishStickerInteraction,
                       onInteractionCancel: () => updateStickerDraft(null),

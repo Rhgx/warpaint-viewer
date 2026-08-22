@@ -44,7 +44,13 @@
   white-space: nowrap;
 }
 
-.sticker-placement-editor-heading-actions { gap: 6px; }
+.sticker-placement-editor-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
 
 .sticker-placement-editor-snap {
   min-height: 32px;
@@ -386,6 +392,60 @@
   transition: var(--transition-fast);
 }
 
+.sticker-placement-editor-parts-group {
+  display: contents;
+}
+
+.sticker-placement-editor-parts-tool,
+.sticker-placement-editor-parts-restore {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sticker-placement-editor-parts-tool[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  background: color-mix(in srgb, var(--accent) 17%, var(--panel-2));
+  color: var(--accent);
+}
+
+.sticker-placement-editor-parts-count {
+  min-width: 1.25em;
+  padding: 1px 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.sticker-placement-editor-parts-count.is-reserved,
+.sticker-placement-editor-parts-restore.is-reserved {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.sticker-placement-editor-parts-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .sticker-placement-editor-values-toggle:hover:not(:disabled) {
   border-color: var(--border-strong);
   color: var(--text);
@@ -588,6 +648,7 @@
   .sticker-placement-editor-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sticker-placement-editor-tools { align-self: start; flex-direction: column; }
   .sticker-placement-editor-tool-divider { width: 20px; height: 1px; margin-block: 1px; }
+  .sticker-placement-editor-parts-group { display: flex; align-items: center; gap: 5px; }
 }
 
 @media (forced-colors: active) {

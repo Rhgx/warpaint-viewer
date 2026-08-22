@@ -144,6 +144,14 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
                   <ControlRow keys={<Key>Wheel</Key>}>Zoom view</ControlRow>
                   <ControlRow keys={<Key>Middle double-click</Key>}>Reset view</ControlRow>
                 </div>
+                <div className="controls-help-group">
+                  <h4>Model parts (Parts tool)</h4>
+                  <ControlRow keys={<Key>Hover</Key>}>Preview the part under the pointer</ControlRow>
+                  <ControlRow keys={<Key>Click</Key>}>Hide that part</ControlRow>
+                  <ControlRow keys={<Key>Click outline</Key>}>Show a hidden part again</ControlRow>
+                  <ControlRow keys={<Key>Esc</Key>}>Leave the picker, keeping parts hidden</ControlRow>
+                  <ControlRow keys={<><Key>1</Key><Key>2</Key><Key>3</Key></>}>Leave for Move, Scale, or Turn</ControlRow>
+                </div>
               </section>
 
               <section className="controls-help-section" aria-labelledby="sticker-uv-heading">

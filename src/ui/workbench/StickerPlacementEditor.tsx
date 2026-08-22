@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { Braces, Copy, Expand, Link2, Magnet, Minus, MoreHorizontal, Move, Plus, RotateCw, Unlink2 } from 'lucide-react';
+import { Braces, Copy, Expand, Eye, EyeOff, Link2, Magnet, Minus, MoreHorizontal, Move, Plus, RotateCw, Unlink2 } from 'lucide-react';
 import {
   clampStickerPlacement,
   moveStickerPlacement,
@@ -32,6 +32,7 @@ import {
   type GroupStickerPreviewSources,
 } from './GroupStickerUvPreview';
 import { WeaponUvSurface } from './WeaponUvSurface';
+import { formatStickerValue } from './stickerValueFormat';
 import './StickerPlacementEditor.css';
 
 export type StickerPlacementChangeReason = 'move' | 'resize' | 'rotate' | 'nudge' | 'value' | 'fit';
@@ -91,6 +92,10 @@ export interface StickerPlacementEditorProps {
   readonly selectionTargets?: readonly StickerSelectionTarget[];
   readonly activeSelectionId?: string;
   readonly onSelectionChange?: (id: string) => void;
+  readonly modelPartPickingActive?: boolean;
+  readonly hiddenModelPartCount?: number;
+  readonly onModelPartPickingChange?: (active: boolean) => void;
+  readonly onRestoreHiddenModelParts?: () => void;
 }
 
 type PointerInteraction =
@@ -135,10 +140,6 @@ function adaptiveSnapStep(zoom: number): number {
     if (Math.abs(Math.log(step / target)) < Math.abs(Math.log(best / target))) best = step;
   }
   return best;
-}
-
-function rounded(value: number, digits = 2): string {
-  return value.toFixed(digits);
 }
 
 function pointerInSurface(event: Pick<React.MouseEvent<HTMLElement>, 'clientX' | 'clientY'>, surface: HTMLElement): StickerPoint {
@@ -197,6 +198,10 @@ export function StickerPlacementEditor({
   selectionTargets = [],
   activeSelectionId,
   onSelectionChange,
+  modelPartPickingActive = false,
+  hiddenModelPartCount = 0,
+  onModelPartPickingChange,
+  onRestoreHiddenModelParts,
 }: StickerPlacementEditorProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const interactionRef = useRef<PointerInteraction | null>(null);
@@ -222,6 +227,9 @@ export function StickerPlacementEditor({
   const quadKey = quadValue ? [quadValue.tl, quadValue.tr, quadValue.bl].flat().join('|') : '';
   const [cornerDraft, setCornerDraft] = useState({ tlX: '', tlY: '', trX: '', trY: '', blX: '', blY: '' });
   const unavailable = disabled || (!stickerSrc && !groupPreview);
+  const previousHiddenModelPartCountRef = useRef(hiddenModelPartCount);
+  const [modelPartStatus, setModelPartStatus] = useState('');
+  const partsControlsExpanded = modelPartPickingActive || hiddenModelPartCount > 0;
   const tool = activeTool ?? internalTool;
   const isAspectLocked = aspectLocked ?? internalAspectLocked;
   const isSnapEnabled = snapEnabled ?? internalSnapEnabled;
@@ -248,6 +256,15 @@ export function StickerPlacementEditor({
     ))[0]?.target;
 
   useEffect(() => {
+    const previousCount = previousHiddenModelPartCountRef.current;
+    previousHiddenModelPartCountRef.current = hiddenModelPartCount;
+    if (previousCount === hiddenModelPartCount) return;
+    setModelPartStatus(
+      `${hiddenModelPartCount} model ${hiddenModelPartCount === 1 ? 'part' : 'parts'} hidden`,
+    );
+  }, [hiddenModelPartCount]);
+
+  useEffect(() => {
     const surface = surfaceRef.current;
     if (!surface || typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(() => {
@@ -263,7 +280,13 @@ export function StickerPlacementEditor({
     return () => observer.disconnect();
   }, []);
 
+  const exitModelPartPicking = () => {
+    if (!modelPartPickingActive) return;
+    onModelPartPickingChange?.(false);
+  };
+
   const emit = (next: StickerPlacement, reason: StickerPlacementChangeReason, snap = false) => {
+    exitModelPartPicking();
     const limited = clampStickerPlacement(next);
     onPlacementChange(snap ? snapStickerPlacement(limited, safeSnapStep) : limited, reason);
   };
@@ -271,6 +294,7 @@ export function StickerPlacementEditor({
   const setTool = (nextTool: StickerTransformTool) => {
     setInternalTool(nextTool);
     onActiveToolChange?.(nextTool);
+    onModelPartPickingChange?.(false);
   };
 
   useEffect(() => {
@@ -279,15 +303,23 @@ export function StickerPlacementEditor({
       if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
       const target = event.target instanceof Element ? event.target : document.activeElement;
       if (target instanceof Element && target.closest('input, textarea, select, [contenteditable], [role="textbox"]')) return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      if (event.key === 'Escape') {
+        if (!modelPartPickingActive) return;
+        event.preventDefault();
+        onModelPartPickingChange?.(false);
+        return;
+      }
       const nextTool = ({ '1': 'move', '2': 'scale', '3': 'turn' } as const)[event.key as '1' | '2' | '3'];
       if (!nextTool) return;
       event.preventDefault();
       setInternalTool(nextTool);
       onActiveToolChange?.(nextTool);
+      onModelPartPickingChange?.(false);
     };
     window.addEventListener('keydown', onShortcut);
     return () => window.removeEventListener('keydown', onShortcut);
-  }, [onActiveToolChange, unavailable]);
+  }, [modelPartPickingActive, onActiveToolChange, onModelPartPickingChange, unavailable]);
 
   const setSnap = (enabled: boolean) => {
     setInternalSnapEnabled(enabled);
@@ -301,6 +333,7 @@ export function StickerPlacementEditor({
 
   const begin = (event: React.PointerEvent<HTMLElement>, interaction: PointerInteraction) => {
     if (unavailable || !surfaceRef.current) return;
+    exitModelPartPicking();
     pendingFrameRef.current = false;
     event.preventDefault();
     event.stopPropagation();
@@ -541,6 +574,7 @@ export function StickerPlacementEditor({
     }
     setCornerError(null);
     if (!onQuadChange) return;
+    exitModelPartPicking();
     noteTyping();
     onQuadChange(next);
   };
@@ -700,14 +734,14 @@ export function StickerPlacementEditor({
       <header className="sticker-placement-editor-heading">
         <span className="sticker-placement-editor-title">{label}</span>
         <div className="sticker-placement-editor-heading-actions">
-          <div className="sticker-placement-editor-tools" role="toolbar" aria-label="Sticker transform">
+          <div className="sticker-placement-editor-tools" role="toolbar" aria-label="Sticker placement tools">
             {TOOLS.map(({ id, label: toolLabel, Icon }, index) => (
               <button
                 key={id}
                 type="button"
                 className="sticker-placement-editor-tool"
                 aria-label={toolLabel}
-                aria-pressed={tool === id}
+                aria-pressed={!modelPartPickingActive && tool === id}
                 title={`${toolLabel} (${index + 1})${id === 'scale'
                   ? '. Hold Shift to temporarily invert the proportion lock.'
                   : id === 'turn'
@@ -731,7 +765,54 @@ export function StickerPlacementEditor({
             >
               {isAspectLocked ? <Link2 size={15} aria-hidden="true" /> : <Unlink2 size={15} aria-hidden="true" />}
             </button>
+            {onModelPartPickingChange && (
+              <>
+                <span className="sticker-placement-editor-tool-divider" aria-hidden="true" />
+                <span className="sticker-placement-editor-parts-group">
+                  <button
+                    type="button"
+                    className="sticker-placement-editor-tool sticker-placement-editor-parts-tool"
+                    aria-label={`${modelPartPickingActive ? 'Stop picking model parts' : 'Pick model parts to hide'}${hiddenModelPartCount > 0 ? ` (${hiddenModelPartCount} hidden)` : ''}`}
+                    aria-pressed={modelPartPickingActive}
+                    title={modelPartPickingActive
+                      ? 'Click a part to hide it, or click a hidden outline to show it again. Esc leaves the picker.'
+                      : 'Hide model parts that cover the surface you want to sticker'}
+                    disabled={unavailable}
+                    onClick={() => onModelPartPickingChange(!modelPartPickingActive)}
+                  >
+                    <EyeOff size={14} aria-hidden="true" />
+                    <span>Parts</span>
+                    <span
+                      className={`sticker-placement-editor-parts-count${partsControlsExpanded ? '' : ' is-reserved'}`}
+                      aria-hidden="true"
+                    >
+                      {hiddenModelPartCount}
+                    </span>
+                  </button>
+                  {onRestoreHiddenModelParts && (
+                    <button
+                      type="button"
+                      className={`sticker-placement-editor-tool sticker-placement-editor-parts-restore${partsControlsExpanded ? '' : ' is-reserved'}`}
+                      aria-label={`Show all hidden model parts (${hiddenModelPartCount})`}
+                      aria-hidden={!partsControlsExpanded}
+                      title="Show every hidden model part again"
+                      disabled={unavailable || hiddenModelPartCount === 0}
+                      tabIndex={partsControlsExpanded ? undefined : -1}
+                      onClick={onRestoreHiddenModelParts}
+                    >
+                      <Eye size={14} aria-hidden="true" />
+                      <span>Show all</span>
+                    </button>
+                  )}
+                </span>
+              </>
+            )}
           </div>
+          {onModelPartPickingChange && (
+            <output className="sticker-placement-editor-parts-status" aria-live="polite" aria-atomic="true">
+              {modelPartStatus}
+            </output>
+          )}
           <span className="sticker-placement-editor-separator" aria-hidden="true" />
           <label className="sticker-placement-editor-snap" title="Align edits to the grid. Hold Ctrl to snap just for one drag.">
             <input type="checkbox" checked={isSnapEnabled} onChange={(event) => setSnap(event.target.checked)} disabled={unavailable} />
@@ -780,7 +861,7 @@ export function StickerPlacementEditor({
               ['height', 'Height', 'Sticker height', 0.01, 0.02],
               ['rotation', 'Turn', 'Sticker rotation in degrees', 1, undefined],
             ] as const).map(([field, visibleLabel, ariaLabel, step, minimum]) => {
-              const display = rounded(placementValue[field], field === 'rotation' ? 0 : 2);
+              const display = formatStickerValue(placementValue[field]);
               // While a field is focused it shows exactly what was typed, so a
               // live commit cannot reformat the text under the caret.
               const shown = editingValue?.field === field ? editingValue.text : display;

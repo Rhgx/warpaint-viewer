@@ -36,6 +36,7 @@ import type { UnusualEffect } from './particles';
 import type { WeaponMaterial } from '../data/types';
 import { screenshotPixelsToBlob } from './capture';
 import { computeModelBounds, ModelLoader, type ModelPart } from './modelLoader';
+import { CullableGeometry } from './modelCulling';
 import { configureTf2Material, createTf2Uniforms } from './materialConfig';
 import { EDITOR_LAYER_MAP_COLORS } from '../editor/layerMap';
 import {
@@ -101,10 +102,48 @@ export const TRANSFORM_ISOLATION_CONTEXT_OPACITY = 0.2;
  */
 export const GROUP_LAYER_OVERLAY_COLORS = EDITOR_LAYER_MAP_COLORS;
 
+export interface ModelPartPick {
+  readonly meshIndex: number;
+  readonly componentIndex: number;
+}
+
 interface GroupLayerOverlayPass {
   texture: THREE.DataTexture;
   material: THREE.ShaderMaterial;
   meshes: THREE.Mesh[];
+}
+
+class ModelPartOutline extends THREE.LineSegments {
+  readonly pick: ModelPartPick;
+
+  constructor(
+    pick: ModelPartPick,
+    geometry: THREE.BufferGeometry,
+    material: THREE.LineBasicMaterial,
+  ) {
+    super(geometry, material);
+    this.pick = pick;
+  }
+}
+
+function modelPartLineMaterial(color: number, opacity: number): THREE.LineBasicMaterial {
+  return new THREE.LineBasicMaterial({
+    color,
+    opacity,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
+}
+
+function modelPartKey(meshIndex: number, componentIndex: number): string {
+  return `${meshIndex}:${componentIndex}`;
+}
+
+function modelPartPicksEqual(left: ModelPartPick | null, right: ModelPartPick | null): boolean {
+  return left?.meshIndex === right?.meshIndex
+    && left?.componentIndex === right?.componentIndex;
 }
 
 /** Controls the temporary UV-space sticker shown during an editor gesture. */
@@ -224,6 +263,24 @@ export class Viewer {
   private stickerGizmoRaycaster = new THREE.Raycaster();
   private pickNdc = new THREE.Vector2();
   private paintableMeshes: THREE.Mesh[] = [];
+  private cullableGeometries: CullableGeometry[] = [];
+  private modelPartOutlines = new Map<string, ModelPartOutline>();
+  private modelPartHover: ModelPartPick | null = null;
+  private modelPartHoverMesh: THREE.Mesh | null = null;
+  private modelPartOutlineMaterial = modelPartLineMaterial(0x8fb6ff, 0.42);
+  private modelPartOutlineHoverMaterial = modelPartLineMaterial(0xd9e7ff, 0.96);
+  private modelPartHoverMaterial = new THREE.MeshBasicMaterial({
+    color: 0x8fb6ff,
+    transparent: true,
+    opacity: 0.2,
+    depthTest: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
   private lensMaterial = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     roughness: 0.12,
@@ -1188,6 +1245,123 @@ export class Viewer {
     const hit = this.raycaster.intersectObjects(this.paintableMeshes, false)[0];
     if (!hit?.uv || !Number.isFinite(hit.uv.x) || !Number.isFinite(hit.uv.y)) return null;
     return { uv: [hit.uv.x, hit.uv.y], chartId: this.stickerGizmoChartForRaycastHit(hit) };
+  }
+
+  /** Pick the nearest visible surface or exposed hidden-part outline. */
+  pickModelPartAt(clientX: number, clientY: number): ModelPartPick | null {
+    if (this.disposed || this.meshes.length === 0 || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0
+      || clientX < rect.left || clientX > rect.right
+      || clientY < rect.top || clientY > rect.bottom) return null;
+
+    this.pickNdc.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    // Pointer input can arrive before the next render has refreshed the
+    // model/control matrices, so make the hit test use the current pose.
+    this.scene.updateMatrixWorld(true);
+    let camera: THREE.Camera = this.camera;
+    if (this.projectionMode === 'orthographic') {
+      this.syncOrthoCamera();
+      camera = this.orthoCamera;
+    }
+    camera.updateMatrixWorld();
+    this.raycaster.setFromCamera(this.pickNdc, camera);
+    // Line raycasts use world-space tolerance. Scale it to the framed model so
+    // the x-ray remains easy to hit without swallowing nearby surfaces.
+    this.raycaster.params.Line.threshold = Math.max(this.framedRadius * 0.014, 1e-4);
+    const outlines = [...this.modelPartOutlines.values()];
+    const outlineHit = this.raycaster.intersectObjects(outlines, false)[0];
+    const visibleHit = this.raycaster.intersectObjects(this.meshes, false)[0];
+    const outline = outlineHit?.object instanceof ModelPartOutline ? outlineHit.object : null;
+    // Keep the front-most hit authoritative; bias coplanar and near-equal hits
+    // toward visible geometry so stacked surfaces do not restore by accident.
+    const coplanarEpsilon = Math.max(this.framedRadius * 0.001, 1e-4);
+    if (outline && (!visibleHit || outlineHit.distance + coplanarEpsilon < visibleHit.distance)) {
+      return outline.pick;
+    }
+    if (visibleHit?.faceIndex === undefined || visibleHit?.faceIndex === null || !Number.isInteger(visibleHit.faceIndex)) return null;
+    const meshIndex = this.meshes.indexOf(visibleHit.object as THREE.Mesh);
+    const cullable = meshIndex >= 0 ? this.cullableGeometries[meshIndex] : undefined;
+    if (!cullable) return null;
+    const componentIndex = cullable.componentForVisibleFace(visibleHit.faceIndex);
+    if (componentIndex === null) return null;
+    return { meshIndex, componentIndex };
+  }
+
+  setModelPartHover(pick: ModelPartPick | null): void {
+    if (modelPartPicksEqual(this.modelPartHover, pick)) return;
+    this.clearModelPartHover();
+    if (!pick) return;
+
+    const cullable = this.cullableGeometries[pick.meshIndex];
+    if (!cullable || pick.componentIndex < 0 || pick.componentIndex >= cullable.componentCount) return;
+    const hidden = cullable.isComponentHidden(pick.componentIndex);
+    this.modelPartHover = pick;
+    if (hidden) {
+      const outline = this.modelPartOutlines.get(modelPartKey(pick.meshIndex, pick.componentIndex));
+      if (outline) outline.material = this.modelPartOutlineHoverMaterial;
+      this.invalidate();
+      return;
+    }
+
+    const componentGeometry = cullable.getComponentGeometry(pick.componentIndex);
+    if (!componentGeometry) {
+      this.invalidate();
+      return;
+    }
+    this.modelPartHoverMesh = new THREE.Mesh(componentGeometry, this.modelPartHoverMaterial);
+    this.modelPartHoverMesh.renderOrder = 3;
+    this.centerGroup.add(this.modelPartHoverMesh);
+    this.invalidate();
+  }
+
+  toggleModelPart(pick: ModelPartPick): number | null {
+    if (this.disposed) return null;
+    const cullable = this.cullableGeometries[pick.meshIndex];
+    if (!cullable) return null;
+    this.clearModelPartHover();
+    const hidden = cullable.isComponentHidden(pick.componentIndex);
+    const changed = hidden
+      ? cullable.restoreComponent(pick.componentIndex)
+      : cullable.hideComponent(pick.componentIndex);
+    if (!changed) return null;
+
+    if (hidden) this.removeModelPartOutline(pick.meshIndex, pick.componentIndex);
+    else this.addModelPartOutline(pick.meshIndex, pick.componentIndex);
+    this.resetStickerUvTopology();
+    this.stickerGizmoState = null;
+    if (!hidden) this.setModelPartHover(pick);
+    this.invalidate();
+    return this.cullableGeometries.reduce((count, geometry) => count + geometry.hiddenCount, 0);
+  }
+
+  clearModelPartHover(): void {
+    if (this.modelPartHover) {
+      const outline = this.modelPartOutlines.get(modelPartKey(
+        this.modelPartHover.meshIndex,
+        this.modelPartHover.componentIndex,
+      ));
+      if (outline) outline.material = this.modelPartOutlineMaterial;
+    }
+    this.modelPartHover = null;
+    if (this.modelPartHoverMesh) this.centerGroup.remove(this.modelPartHoverMesh);
+    this.modelPartHoverMesh = null;
+    this.invalidate();
+  }
+
+  restoreHiddenModelParts(): void {
+    if (this.disposed) return;
+    let restored = false;
+    for (const cullable of this.cullableGeometries) restored = cullable.restore() || restored;
+    if (!restored) return;
+    this.teardownModelPartOutlines();
+    this.clearModelPartHover();
+    this.resetStickerUvTopology();
+    this.stickerGizmoState = null;
+    this.invalidate();
   }
 
   /**
@@ -2290,6 +2464,43 @@ export class Viewer {
     this.groupHighlightMeshes = [];
   }
 
+  private addModelPartOutline(meshIndex: number, componentIndex: number): void {
+    const key = modelPartKey(meshIndex, componentIndex);
+    if (this.modelPartOutlines.has(key)) return;
+    const cullable = this.cullableGeometries[meshIndex];
+    const componentGeometry = cullable?.getComponentGeometry(componentIndex);
+    if (!componentGeometry) return;
+    const edges = new THREE.EdgesGeometry(componentGeometry, 18);
+    // The component geometry is cached and owned by CullableGeometry; the
+    // edge geometry owns the data used by this persistent outline pass.
+    if ((edges.getAttribute('position')?.count ?? 0) === 0) {
+      edges.dispose();
+      return;
+    }
+    const line = new ModelPartOutline({ meshIndex, componentIndex }, edges, this.modelPartOutlineMaterial);
+    line.renderOrder = 4;
+    line.frustumCulled = false;
+    this.centerGroup.add(line);
+    this.modelPartOutlines.set(key, line);
+  }
+
+  private removeModelPartOutline(meshIndex: number, componentIndex: number): void {
+    const key = modelPartKey(meshIndex, componentIndex);
+    const outline = this.modelPartOutlines.get(key);
+    if (!outline) return;
+    this.modelPartOutlines.delete(key);
+    this.centerGroup.remove(outline);
+    outline.geometry.dispose();
+  }
+
+  private teardownModelPartOutlines(): void {
+    for (const outline of this.modelPartOutlines.values()) {
+      this.centerGroup.remove(outline);
+      outline.geometry.dispose();
+    }
+    this.modelPartOutlines.clear();
+  }
+
   private rebuildGroupHighlightMeshes() {
     this.teardownGroupHighlightMeshes();
     if (!this.groupHighlightTexture || !this.groupHighlightMaterial) return;
@@ -2613,32 +2824,34 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     }
   }
 
-  // Geometry cache: recent weapon swaps reuse their parsed GLB buffers.
-  private currentGeoCached = false;
   private currentModelUrl: string | null = null;
   private loadToken = 0;
 
-  private setMeshGeometries(parts: ModelPart[], fromCache: boolean, initialView?: ViewAnglePreset) {
+  private setMeshGeometries(parts: ModelPart[], initialView?: ViewAnglePreset) {
     this.teardownSheenMeshes();
     this.teardownEmissiveMeshes();
     this.teardownGroupLayerOverlayMeshes();
     this.teardownGroupHighlightMeshes();
+    this.clearModelPartHover();
+    this.teardownModelPartOutlines();
     this.teardownTransformIsolationMeshes();
     this.teardownStickerPreviewMeshes();
     for (const mesh of this.meshes) {
       this.centerGroup.remove(mesh);
-      // Cached geometries are shared and disposed with the cache, not per swap.
-      if (!this.currentGeoCached) mesh.geometry.dispose();
     }
-    this.currentGeoCached = fromCache;
+    for (const cullable of this.cullableGeometries) cullable.dispose();
+    this.cullableGeometries = [];
     this.meshIsLens = parts.map(({ materialName }) => /(?:^|_)lens(?:$|_)/i.test(materialName));
-    this.meshes = parts.map(({ geometry }, i) => new THREE.Mesh(geometry, this.meshIsLens[i] ? this.lensMaterial : this.material));
+    this.cullableGeometries = parts.map(({ geometry }) => new CullableGeometry(geometry));
+    this.meshes = this.cullableGeometries.map(({ geometry }, i) => (
+      new THREE.Mesh(geometry, this.meshIsLens[i] ? this.lensMaterial : this.material)
+    ));
     // Lens submeshes use a separate, non-warpaint material. Letting editor
     // picking hit them would sample an unrelated point in the group map.
     this.paintableMeshes = this.meshes.filter((_, i) => !this.meshIsLens[i]);
     this.resetStickerUvTopology();
     this.centerGroup.add(...this.meshes);
-    this.frameCamera(parts.map((part) => part.geometry), initialView);
+    this.frameCamera(this.cullableGeometries.map(({ geometry }) => geometry), initialView);
     if (this.sheenId !== 'none' && this.sheenMaterial) this.rebuildSheenMeshes();
     if (this.emissiveEnabled) this.rebuildEmissiveMeshes();
     for (const pass of this.groupLayerOverlayPasses) this.rebuildGroupLayerOverlayMeshes(pass);
@@ -2656,16 +2869,18 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     // A group map belongs to the previous weapon/paint pairing. Do not retain
     // its GPU texture after a failed or explicit model clear.
     this.clearGroupHighlight();
+    this.clearModelPartHover();
+    this.teardownModelPartOutlines();
     this.clearTransformIsolation();
     for (const mesh of this.meshes) {
       this.centerGroup.remove(mesh);
-      if (!this.currentGeoCached) mesh.geometry.dispose();
     }
+    for (const cullable of this.cullableGeometries) cullable.dispose();
     this.meshes = [];
     this.paintableMeshes = [];
+    this.cullableGeometries = [];
     this.resetStickerUvTopology();
     this.meshIsLens = [];
-    this.currentGeoCached = false;
     this.currentModelUrl = null;
     this.invalidate();
   }
@@ -2682,7 +2897,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     try {
       const geometries = await this.modelLoader.load(url);
       if (token !== this.loadToken || this.disposed) return;
-      this.setMeshGeometries(geometries, true, initialView);
+      this.setMeshGeometries(geometries, initialView);
       this.currentModelUrl = url;
     } catch (err) {
       if (token !== this.loadToken || this.disposed) return;
@@ -2824,6 +3039,8 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     this.stickerPreviewMaterial = null;
     this.clearGroupLayerOverlay();
     this.clearGroupHighlight();
+    this.clearModelPartHover();
+    this.teardownModelPartOutlines();
     this.clearTransformIsolation();
     this.groupHighlightMaterial?.dispose();
     this.groupHighlightMaterial = null;
@@ -2834,6 +3051,9 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     this.sheenAssets = null;
     this.material.dispose();
     this.lensMaterial.dispose();
+    this.modelPartOutlineMaterial.dispose();
+    this.modelPartOutlineHoverMaterial.dispose();
+    this.modelPartHoverMaterial.dispose();
     this.lensNormalTexture?.dispose();
     this.backplateLoadToken++;
     this.backplateTexture?.dispose();
@@ -2847,7 +3067,8 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     for (const texture of this.emissiveTextures) texture.dispose();
     this.customEnvMap?.dispose();
     this.defaultEnvMap.dispose();
-    if (!this.currentGeoCached) for (const mesh of this.meshes) mesh.geometry.dispose();
+    for (const cullable of this.cullableGeometries) cullable.dispose();
+    this.cullableGeometries = [];
     this.modelLoader.dispose();
     this.renderer.dispose();
   }
