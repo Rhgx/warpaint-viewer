@@ -34,6 +34,13 @@ import {
   type SerializeProtoDefKitOptions,
 } from './jsonExport';
 import type { ProtoDefKitMessages } from '../protodefs/types';
+import type { VarDefMsg } from '../protodefs/messages';
+import {
+  graphToOperation,
+  validateOperationGraph,
+  type OperationGraph,
+} from './graph';
+import type { OperationMsg } from '../protodefs/messages';
 
 /** Fetches one imported kit by its catalog id. */
 export type ProtoDefEditorKitLoader = (kitId: number) => Promise<ProtoDefKitMessages | null>;
@@ -121,6 +128,14 @@ export interface ProtoDefEditorSession {
   setWeaponMaterial: (target: WeaponMaterialTarget, overridePath: string | null) => boolean;
   /** Applies several material overrides as one undoable editor action. */
   setWeaponMaterials: (updates: readonly WeaponMaterialUpdate[]) => boolean;
+  /** Replaces only the operation graph in one validated, undoable edit. */
+  replaceOperationGraph: (graph: OperationGraph) => boolean;
+  /**
+   * Writes one paint-kit header variable. These are the values operation
+   * stages bind to, so editing the declaration is how a bound parameter
+   * changes without detaching the binding.
+   */
+  setDefinitionVariable: (name: string, value: string) => boolean;
   undo: () => void;
   redo: () => void;
   reset: () => void;
@@ -154,6 +169,17 @@ function freezeDeep<T>(value: T, visited = new WeakSet<object>()): T {
   return Object.freeze(value);
 }
 
+/** The paint kit's declared variables, whatever Many<T> shape they were authored in. */
+function definitionHeaderVariables(definition: Record<string, unknown>): VarDefMsg[] {
+  const header = definition.header;
+  if (!header || typeof header !== 'object' || Array.isArray(header)) return [];
+  const variables = (header as { variables?: unknown }).variables;
+  const list = variables === undefined ? [] : Array.isArray(variables) ? variables : [variables];
+  return list.filter((entry): entry is VarDefMsg => (
+    Boolean(entry) && typeof entry === 'object' && typeof (entry as { name?: unknown }).name === 'string'
+  ));
+}
+
 function snapshot(messages: ProtoDefKitMessages): ProtoDefKitMessages {
   return freezeDeep(cloneMessages(messages));
 }
@@ -161,6 +187,16 @@ function snapshot(messages: ProtoDefKitMessages): ProtoDefKitMessages {
 function errorMessage(cause: unknown): string {
   if (cause instanceof EditorMutationAmbiguityError || cause instanceof Error) return cause.message;
   return String(cause);
+}
+
+function isOperationMessage(value: Record<string, unknown>): value is Record<string, unknown> & OperationMsg {
+  const header = value.header;
+  return Boolean(
+    header
+    && typeof header === 'object'
+    && !Array.isArray(header)
+    && typeof (header as { defindex?: unknown }).defindex === 'number',
+  );
 }
 
 /**
@@ -514,6 +550,68 @@ export function useProtoDefEditorSession({
     }
   }, [commitEdit]);
 
+  const replaceOperationGraph = useCallback((graph: OperationGraph): boolean => {
+    const prior = currentRef.current;
+    if (!prior) {
+      setError('Load an imported definition before editing it.');
+      return false;
+    }
+    const validation = validateOperationGraph(graph);
+    if (!validation.valid) {
+      setError(validation.diagnostics.map((diagnostic) => diagnostic.message).join(' '));
+      return false;
+    }
+    if (!isOperationMessage(prior.operation)) {
+      setError('The selected definition has an invalid operation message.');
+      return false;
+    }
+    try {
+      const operation = graphToOperation(graph);
+      const next = snapshot({
+        ...prior,
+        operation: {
+          ...prior.operation,
+          ...operation,
+          header: {
+            ...prior.operation.header,
+            ...operation.header,
+          },
+          operation_node: operation.operation_node,
+        },
+      });
+      commitEdit(prior, next);
+      return true;
+    } catch (cause) {
+      setError(errorMessage(cause));
+      return false;
+    }
+  }, [commitEdit]);
+
+  const setDefinitionVariable = useCallback((name: string, value: string): boolean => {
+    const prior = currentRef.current;
+    if (!prior) {
+      setError('Load an imported definition before editing it.');
+      return false;
+    }
+    const declared = definitionHeaderVariables(prior.definition);
+    const index = declared.findIndex((variable) => variable.name === name);
+    if (index < 0) {
+      setError(`Variable “${name}” is not declared by this paint kit.`);
+      return false;
+    }
+    if (declared[index]?.value === value) return false;
+    const replacement = declared.map((variable, position) => (
+      position === index ? { ...variable, value } : variable
+    ));
+    const definition = structuredClone(prior.definition) as Record<string, unknown>;
+    const header = definition.header as Record<string, unknown>;
+    // Preserve the authored Many<T> shape: a lone declaration stays a lone
+    // declaration so the serialized definition keeps byte-for-byte structure.
+    header.variables = Array.isArray(header.variables) ? replacement : replacement[0];
+    commitEdit(prior, snapshot({ ...prior, definition }));
+    return true;
+  }, [commitEdit]);
+
   const applyStickerStructureEdit = useCallback((edit: (prior: ProtoDefKitMessages) => ProtoDefKitMessages): boolean => {
     const prior = currentRef.current;
     if (!prior) {
@@ -642,6 +740,8 @@ export function useProtoDefEditorSession({
     setTransformFlip,
     setWeaponMaterial,
     setWeaponMaterials,
+    replaceOperationGraph,
+    setDefinitionVariable,
     undo,
     redo,
     reset,
