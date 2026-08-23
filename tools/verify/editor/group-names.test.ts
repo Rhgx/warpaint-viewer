@@ -90,5 +90,13 @@ test('curated group names', async () => {
     'Layout 1', 'Layout 2', 'Layout 3', 'Layout 4', 'Layout 5',
   ]);
   assert.equal(rocketLayouts[2]?.ref, 'models/weapons/c_models/c_rocketlauncher/p_rocketlauncher_groups03');
+  assert.equal(
+    implementation.lookupGroupName('models/weapons/c_models/c_knife/p_knife_groups02', 16),
+    'Grip Fore Left',
+  );
+  assert.equal(
+    implementation.lookupGroupName('models/weapons/c_models/c_smg/p_smg_groups_03', 32),
+    'Trigger',
+  );
   assert.deepEqual(implementation.compatibleGroupTextures('models/not-in-reference/p_groups'), []);
 });
