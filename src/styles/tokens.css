@@ -31,6 +31,13 @@
   --grade-elite: #eb4b4b;
   --grade-tint-strength: 45%;
 
+  /* The operation graph's connection vocabulary. A stage carries either a
+     painted surface or a mask, and the canvas and the controls reference have
+     to say so in the same two colors. */
+  --graph-type-texture: #3b82b7;
+  --graph-type-mask: #8c5aaa;
+  --graph-type-unknown: #7b858f;
+
   /* Shared control sizing so selects, buttons, inputs and number fields
      line up in the controls bar. */
   --control-h: 28px;
@@ -70,6 +77,9 @@
     --warn: #e0a83c;
     --fail: #e06060;
     --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35);
+    --graph-type-texture: #5aa7de;
+    --graph-type-mask: #b18ad4;
+    --graph-type-unknown: #97a1ac;
     /* Dark panels contrast fine with the raw grade colors, so let more of
        them show through. */
     --grade-tint-strength: 70%;

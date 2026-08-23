@@ -20,7 +20,8 @@
   transform-origin: top center;
   animation: controls-help-modal-in 190ms cubic-bezier(0.2, 0.85, 0.3, 1);
 }
-.controls-help-modal:has(.controls-help-body[data-mode='sticker']) {
+.controls-help-modal:has(.controls-help-body[data-mode='sticker']),
+.controls-help-modal:has(.controls-help-body[data-mode='graph']) {
   width: min(620px, 100%);
 }
 /* Rows arrive just behind the panel so the list reads as settling into place
@@ -91,14 +92,22 @@
 .controls-help-body {
   padding: 4px 16px 16px;
 }
-.controls-help-body[data-mode='sticker'] {
+.controls-help-body[data-mode='sticker'],
+.controls-help-body[data-mode='graph'] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 28px;
   padding-top: 12px;
 }
-.controls-help-body[data-mode='sticker'] .controls-help-section + .controls-help-section {
+.controls-help-body[data-mode='sticker'] .controls-help-section + .controls-help-section,
+.controls-help-body[data-mode='graph'] .controls-help-section + .controls-help-section {
   margin-top: 0;
+}
+/* Four short lists pair up rather than running the length of the dialog. */
+.controls-help-body[data-mode='graph'] .controls-help-section { align-content: start; }
+.controls-help-body[data-mode='graph'] .controls-help-row {
+  min-height: 32px;
+  padding-block: 2px;
 }
 .controls-help-history {
   grid-column: 1 / -1;
@@ -154,6 +163,65 @@
   align-items: center;
   justify-content: flex-end;
 }
+.controls-help-swatch {
+  display: inline-block;
+  width: 24px;
+  height: 3px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.controls-help-swatch[data-type='texture'] { background: var(--graph-type-texture); }
+.controls-help-swatch[data-type='mask'] { background: var(--graph-type-mask); }
+
+.controls-help-graph-control,
+.controls-help-graph-search,
+.controls-help-graph-trace {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  background: var(--panel);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.controls-help-graph-control {
+  gap: 4px;
+  padding: 0 7px;
+}
+
+.controls-help-graph-search {
+  min-width: 112px;
+  gap: 6px;
+  justify-content: flex-start;
+  padding: 0 7px;
+}
+
+.controls-help-graph-search small {
+  margin-left: auto;
+  color: var(--text-dim);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.controls-help-graph-trace { overflow: hidden; }
+.controls-help-graph-trace > span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border-left: 1px solid var(--border);
+}
+.controls-help-graph-trace > span:first-child { border-left: 0; }
+.controls-help-graph-trace > span[data-active='true'] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
 .controls-help-key {
   display: inline-flex;
   min-width: 20px;
@@ -186,6 +254,7 @@
 }
 @media (max-width: 620px) {
   .controls-help-body[data-mode='sticker'],
+  .controls-help-body[data-mode='graph'],
   .controls-help-history-row {
     grid-template-columns: 1fr;
   }

@@ -1,0 +1,934 @@
+.operation-graph-editor {
+  --graph-surface: var(--panel, #ffffff);
+  --graph-surface-2: var(--panel-2, #eaecef);
+  --graph-text: var(--text, #14161a);
+  --graph-text-dim: var(--text-dim, #5b6470);
+  --graph-border: var(--border, #d3d8dd);
+  --graph-border-strong: var(--border-strong, #9aa2ab);
+  --graph-accent: var(--accent, #2f6fdb);
+  --graph-danger: var(--fail, #bf3d3d);
+  --graph-warning: var(--warn, #a56d12);
+
+  /* Stage identity, used by the card stripe, glyph and eyebrow so a stage is
+     recognisable while zoomed too far out to read its name. */
+  --graph-kind-texture-lookup: #2d72b6;
+  --graph-kind-select: #8763a7;
+  --graph-kind-combine-add: #a75d28;
+  --graph-kind-combine-multiply: #8d5c2b;
+  --graph-kind-combine-lerp: #2f7c66;
+  --graph-kind-apply-sticker: #9b4c67;
+  --graph-kind-operation-template: #6b747e;
+  --graph-kind-invalid: var(--graph-danger);
+  --graph-kind-output: var(--graph-accent);
+
+  display: flex;
+  container-type: inline-size;
+  min-width: 0;
+  min-height: 260px;
+  height: 100%;
+  flex-direction: column;
+  background: var(--graph-surface);
+  color: var(--graph-text);
+  font-size: 11px;
+  outline: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .operation-graph-editor {
+    --graph-kind-texture-lookup: #5aa7de;
+    --graph-kind-select: #b18ad4;
+    --graph-kind-combine-add: #d99553;
+    --graph-kind-combine-multiply: #cc9152;
+    --graph-kind-combine-lerp: #4fbf9d;
+    --graph-kind-apply-sticker: #dd8098;
+    --graph-kind-operation-template: #97a1ac;
+  }
+}
+
+/* Toolbar ----------------------------------------------------------------- */
+
+.operation-graph-toolbar {
+  display: flex;
+  min-height: 38px;
+  flex: none;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 9px;
+  border-bottom: 1px solid var(--graph-border);
+  background: var(--graph-surface);
+}
+
+.operation-graph-toolbar-title {
+  display: flex;
+  min-width: max-content;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 11px;
+}
+
+.operation-graph-toolbar-title strong { font-weight: 700; }
+
+.operation-graph-count,
+.operation-graph-match-count {
+  color: var(--graph-text-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.operation-graph-invalid-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--graph-danger);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.operation-graph-search {
+  position: relative;
+  display: flex;
+  min-width: 176px;
+  max-width: 300px;
+  flex: 1 1 160px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 7px;
+  border: 1px solid var(--graph-border);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--graph-text-dim);
+  background: var(--graph-surface);
+}
+
+.operation-graph-search:focus-within {
+  border-color: var(--graph-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--graph-accent) 25%, transparent);
+}
+
+.operation-graph-search-input {
+  min-width: 0;
+  flex: 1;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  color: var(--graph-text);
+  background: transparent;
+  font: inherit;
+}
+
+.operation-graph-search-input::placeholder { color: var(--graph-text-dim); }
+.operation-graph-search-input::-webkit-search-cancel-button { display: none; }
+
+.operation-graph-search-clear,
+.operation-graph-search-step,
+.operation-graph-icon-button,
+.operation-graph-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  color: var(--graph-text-dim);
+  background: transparent;
+  cursor: pointer;
+}
+
+.operation-graph-search-clear,
+.operation-graph-search-step {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  padding: 0;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.operation-graph-toolbar-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  margin-left: auto;
+}
+
+/* A thin rule between groups reads faster than a wall of equal buttons. */
+.operation-graph-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 9px;
+  border-left: 1px solid var(--graph-border);
+}
+
+.operation-graph-toolbar-group:first-child { padding-left: 0; border-left: 0; }
+
+.operation-graph-toolbar-button {
+  min-height: 28px;
+  gap: 4px;
+  padding: 0 7px;
+  border-radius: var(--radius-sm, 4px);
+  font: inherit;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.operation-graph-toolbar-button:hover:not(:disabled),
+.operation-graph-search-clear:hover,
+.operation-graph-search-step:hover:not(:disabled),
+.operation-graph-icon-button:hover:not(:disabled) {
+  border-color: var(--graph-border);
+  color: var(--graph-text);
+  background: var(--graph-surface-2);
+}
+
+.operation-graph-toolbar-button.is-active {
+  border-color: color-mix(in srgb, var(--graph-accent) 55%, var(--graph-border));
+  color: var(--graph-accent);
+  background: color-mix(in srgb, var(--graph-accent) 12%, var(--graph-surface));
+}
+
+.operation-graph-toolbar-button:focus-visible,
+.operation-graph-search-clear:focus-visible,
+.operation-graph-search-step:focus-visible,
+.operation-graph-icon-button:focus-visible,
+.operation-graph-text-button:focus-visible,
+.operation-graph-export summary:focus-visible,
+.operation-graph-disclosure:focus-visible,
+.operation-graph-node:focus-visible,
+.operation-graph-add-popover button:focus-visible {
+  outline: 2px solid var(--graph-accent);
+  outline-offset: 1px;
+}
+
+.operation-graph-toolbar-button:disabled,
+.operation-graph-icon-button:disabled,
+.operation-graph-search-clear:disabled,
+.operation-graph-search-step:disabled {
+  cursor: not-allowed;
+  opacity: .4;
+}
+
+/* Three related choices read better as one segmented control than as three
+   independent toggles that can all be off. */
+.operation-graph-trace {
+  display: inline-flex;
+  overflow: hidden;
+  margin-right: 2px;
+  border: 1px solid var(--graph-border);
+  border-radius: var(--radius-sm, 4px);
+}
+
+.operation-graph-trace button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 0;
+  border-left: 1px solid var(--graph-border);
+  color: var(--graph-text-dim);
+  background: var(--graph-surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.operation-graph-trace button:first-child { border-left: 0; }
+.operation-graph-trace button:hover:not(:disabled) { color: var(--graph-text); background: var(--graph-surface-2); }
+
+.operation-graph-trace button[data-active='true'] {
+  color: var(--graph-accent);
+  background: color-mix(in srgb, var(--graph-accent) 14%, var(--graph-surface));
+}
+
+.operation-graph-trace button:disabled { cursor: not-allowed; opacity: .4; }
+.operation-graph-trace button:focus-visible { outline: 2px solid var(--graph-accent); outline-offset: -2px; }
+
+.operation-graph-add-menu { position: relative; }
+
+.operation-graph-add-button {
+  border-color: color-mix(in srgb, var(--graph-accent) 40%, var(--graph-border));
+  color: var(--graph-accent);
+  font-weight: 650;
+}
+
+.operation-graph-add-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 5px);
+  right: 0;
+  display: grid;
+  width: 232px;
+  padding: 4px;
+  border: 1px solid var(--graph-border-strong);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--graph-surface);
+  box-shadow: var(--shadow-pop, 0 9px 22px rgb(0 0 0 / 18%));
+}
+
+.operation-graph-add-popover button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 7px;
+  border: 0;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--graph-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.operation-graph-add-popover button:hover { background: var(--graph-surface-2); }
+.operation-graph-add-popover button > span:last-child { display: grid; gap: 1px; }
+.operation-graph-add-popover small { color: var(--graph-text-dim); font-size: 9px; }
+
+.operation-graph-add-glyph {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--graph-kind, var(--graph-border-strong)) 45%, transparent);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--graph-kind, var(--graph-text-dim));
+  background: color-mix(in srgb, var(--graph-kind, var(--graph-border)) 12%, transparent);
+}
+
+/* Canvas ------------------------------------------------------------------ */
+
+.operation-graph-canvas {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 auto;
+  background: color-mix(in srgb, var(--graph-surface-2) 40%, var(--graph-surface));
+}
+
+.operation-graph-canvas .react-flow {
+  --xy-background-color: transparent;
+  --xy-node-border-radius: var(--radius-md, 6px);
+  --xy-node-boxshadow-default: none;
+  --xy-edge-stroke-default: var(--graph-type-unknown);
+  --xy-edge-stroke-width-default: 1.5;
+  background: transparent;
+}
+
+.operation-graph-canvas .react-flow__pane:focus { outline: none; }
+.operation-graph-canvas .react-flow__node { outline: none; }
+.operation-graph-canvas .react-flow__node.selected { z-index: 900 !important; }
+
+.operation-graph-canvas .react-flow__controls {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--graph-border);
+  border-radius: var(--radius-sm, 4px);
+  box-shadow: 0 2px 8px color-mix(in srgb, #000 10%, transparent);
+}
+
+.operation-graph-canvas .react-flow__controls-button {
+  width: 25px;
+  height: 25px;
+  border-bottom-color: var(--graph-border);
+  color: var(--graph-text-dim);
+  background: var(--graph-surface);
+  fill: currentcolor;
+}
+
+.operation-graph-canvas .react-flow__controls-button:hover { color: var(--graph-text); background: var(--graph-surface-2); }
+
+.operation-graph-canvas .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid var(--graph-border);
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(in srgb, var(--graph-surface) 88%, transparent);
+}
+
+.operation-graph-canvas .react-flow__minimap-mask { fill: color-mix(in srgb, var(--graph-accent) 12%, transparent); stroke: var(--graph-accent); }
+.operation-graph-canvas .react-flow__attribution { display: none; }
+
+/* Node card --------------------------------------------------------------- */
+
+.operation-graph-node {
+  position: relative;
+  display: grid;
+  width: 246px;
+  overflow: visible;
+  padding-left: var(--graph-accent-bar, 4px);
+  border: 1px solid var(--graph-border-strong);
+  border-radius: var(--radius-md, 6px);
+  color: var(--graph-text);
+  background: var(--graph-surface);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 12%, transparent);
+  cursor: default;
+  transition: opacity 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+/* A card that follows the pointer says so before it is grabbed. The output
+   stage and a read-only graph stay put, and keep the plain arrow. */
+.operation-graph-canvas .react-flow__node.draggable .operation-graph-node { cursor: grab; }
+.operation-graph-canvas .react-flow__node.dragging .operation-graph-node { cursor: grabbing; }
+.operation-graph-canvas .react-flow__node.selectable:not(.draggable) .operation-graph-node { cursor: pointer; }
+
+/* Wiring is a different gesture from panning, so it reads differently
+   everywhere the pointer can land while a connection is in the air. */
+.operation-graph-canvas[data-connecting='true'] .react-flow__pane,
+.operation-graph-canvas[data-connecting='true'] .react-flow__node.draggable .operation-graph-node,
+.operation-graph-canvas[data-connecting='true'] .react-flow__node .operation-graph-node,
+.operation-graph-canvas[data-connecting='true'] .operation-graph-edge-hit { cursor: crosshair; }
+.operation-graph-canvas[data-connecting='true'] .react-flow__handle-connecting:not(.react-flow__handle-valid) { cursor: not-allowed; }
+
+/* The stage colour reads as a bar laid into the card's left edge, rounded on
+   the outside and flush on the inside, the way a chat embed marks its source.
+   Insetting by the border width keeps it flush with the card outline. */
+.operation-graph-node::before {
+  position: absolute;
+  z-index: 1;
+  top: -1px;
+  bottom: -1px;
+  left: -1px;
+  width: calc(var(--graph-accent-bar, 4px) + 1px);
+  border-radius: var(--radius-md, 6px) 0 0 var(--radius-md, 6px);
+  background: var(--graph-kind, var(--graph-border-strong));
+  content: '';
+  pointer-events: none;
+}
+
+.operation-graph-node-texture-lookup { --graph-kind: var(--graph-kind-texture-lookup); }
+.operation-graph-node-select { --graph-kind: var(--graph-kind-select); }
+.operation-graph-node-combine-add { --graph-kind: var(--graph-kind-combine-add); }
+.operation-graph-node-combine-multiply { --graph-kind: var(--graph-kind-combine-multiply); }
+.operation-graph-node-combine-lerp { --graph-kind: var(--graph-kind-combine-lerp); }
+.operation-graph-node-apply-sticker { --graph-kind: var(--graph-kind-apply-sticker); }
+.operation-graph-node-operation-template { --graph-kind: var(--graph-kind-operation-template); }
+.operation-graph-node-invalid { --graph-kind: var(--graph-kind-invalid); }
+.operation-graph-node-output { --graph-kind: var(--graph-kind-output); }
+
+.operation-graph-node:hover { border-color: color-mix(in srgb, var(--graph-kind, var(--graph-accent)) 55%, var(--graph-border-strong)); }
+.operation-graph-node[data-selected='true'] {
+  border-color: var(--graph-accent);
+  box-shadow: 0 0 0 1px var(--graph-accent), 0 8px 20px color-mix(in srgb, #000 22%, transparent);
+}
+.operation-graph-node[data-emphasis='dimmed'] { opacity: .26; }
+.operation-graph-node[data-search-match='false'] { opacity: .32; }
+.operation-graph-node[data-search-match='true'][data-emphasis='normal'] { border-color: color-mix(in srgb, var(--graph-warning) 75%, var(--graph-border-strong)); }
+.operation-graph-node[data-locked='true'] { background: color-mix(in srgb, var(--graph-surface-2) 45%, var(--graph-surface)); }
+
+.operation-graph-node-header {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--graph-border);
+  /* Matches the card's inner corner so the tint does not square off the top. */
+  border-top-right-radius: calc(var(--radius-md, 6px) - 1px);
+  background: color-mix(in srgb, var(--graph-kind, var(--graph-border)) 7%, transparent);
+}
+
+.operation-graph-node-glyph {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--graph-kind, var(--graph-text-dim));
+  background: color-mix(in srgb, var(--graph-kind, var(--graph-border)) 15%, transparent);
+}
+
+.operation-graph-node-heading {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+.operation-graph-node-heading strong {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operation-graph-node-kind {
+  color: var(--graph-kind, var(--graph-text-dim));
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.operation-graph-node-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 4px;
+  border: 1px solid color-mix(in srgb, var(--graph-danger) 45%, transparent);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--graph-danger);
+  background: color-mix(in srgb, var(--graph-danger) 10%, transparent);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ports ------------------------------------------------------------------- */
+
+.operation-graph-inputs {
+  display: grid;
+  gap: 0;
+  padding: 4px 8px 4px 6px;
+}
+
+.operation-graph-port-row {
+  position: relative;
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 7px;
+  padding: 1px 0 1px 2px;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.operation-graph-port-row:hover { background: color-mix(in srgb, var(--graph-surface-2) 60%, transparent); }
+
+.operation-graph-port-row .react-flow__handle {
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  width: 9px;
+  height: 9px;
+  flex: none;
+  transform: none;
+  border: 2px solid var(--graph-border-strong);
+  border-radius: 50%;
+  background: var(--graph-surface);
+  transition: transform 90ms ease, box-shadow 90ms ease;
+}
+
+/* An oversized transparent ring makes the 9px dot easy to grab without
+   making the row taller. */
+.operation-graph-port-row .react-flow__handle::after,
+.operation-graph-node > .operation-graph-output-handle::after {
+  position: absolute;
+  content: '';
+  inset: -7px;
+  border-radius: 50%;
+}
+
+.operation-graph-port-label {
+  min-width: 0;
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  color: var(--graph-text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operation-graph-port-source {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--graph-text);
+  direction: rtl;
+  font-size: 10px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operation-graph-port-state {
+  flex: 1;
+  color: var(--graph-text-dim);
+  font-size: 9px;
+  text-align: right;
+}
+
+/* Empty required inputs are the most common reason a graph will not
+   serialize, so they say so before validation has to. */
+.operation-graph-port-row[data-state='required'] .react-flow__handle { border-color: var(--graph-warning); }
+.operation-graph-port-row[data-state='required'] .operation-graph-port-state { color: var(--graph-warning); }
+.operation-graph-port-row[data-state='open'] { opacity: .72; }
+
+.operation-graph-handle.operation-graph-port-texture { border-color: var(--graph-type-texture); }
+.operation-graph-handle.operation-graph-port-mask { border-color: var(--graph-type-mask); }
+.operation-graph-handle.operation-graph-port-unknown,
+.operation-graph-handle.operation-graph-port-none { border-color: var(--graph-type-unknown); }
+
+.operation-graph-port-row[data-state='connected'] .operation-graph-port-texture { background: var(--graph-type-texture); }
+.operation-graph-port-row[data-state='connected'] .operation-graph-port-mask { background: var(--graph-type-mask); }
+.operation-graph-port-row[data-state='connected'] .operation-graph-port-unknown,
+.operation-graph-port-row[data-state='connected'] .operation-graph-port-none { background: var(--graph-type-unknown); }
+
+.operation-graph-node > .operation-graph-output-handle {
+  position: absolute;
+  top: 14px;
+  right: -6px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--graph-type-texture);
+  border-radius: 50%;
+  background: var(--graph-type-texture);
+  transform: none;
+}
+
+.operation-graph-node > .operation-graph-output-handle.operation-graph-port-mask { border-color: var(--graph-type-mask); background: var(--graph-type-mask); }
+.operation-graph-node > .operation-graph-output-handle.operation-graph-port-unknown { border-color: var(--graph-type-unknown); background: var(--graph-type-unknown); }
+
+/* While a connection is being dragged, React Flow marks every handle it is
+   willing to accept. Say so loudly: aiming is the whole interaction. */
+.operation-graph-canvas[data-connecting='true'] .react-flow__handle { opacity: .35; }
+.operation-graph-canvas[data-connecting='true'] .react-flow__handle-connecting,
+.operation-graph-canvas[data-connecting='true'] .react-flow__handle-valid {
+  opacity: 1;
+  transform: scale(1.5);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--graph-accent) 28%, transparent);
+}
+.operation-graph-canvas[data-connecting='true'] .react-flow__handle-connecting:not(.react-flow__handle-valid) {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--graph-danger) 28%, transparent);
+}
+.operation-graph-port-row .react-flow__handle:hover { transform: scale(1.35); }
+
+/* Summary and preview ----------------------------------------------------- */
+
+.operation-graph-node-summary {
+  display: grid;
+  gap: 3px;
+  padding: 5px 8px 6px;
+  border-top: 1px solid color-mix(in srgb, var(--graph-border) 70%, transparent);
+}
+
+.operation-graph-summary-row {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--graph-text-dim);
+  font-size: 9.5px;
+}
+
+.operation-graph-summary-row span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--graph-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operation-graph-node-preview {
+  display: block;
+  width: 100%;
+  max-height: 74px;
+  border: 1px solid var(--graph-border);
+  border-radius: 2px;
+  background: var(--graph-surface-2);
+  object-fit: contain;
+}
+
+/* On-node editing --------------------------------------------------------- */
+
+.operation-graph-node-fields {
+  display: grid;
+  border-top: 1px solid var(--graph-border);
+  background: color-mix(in srgb, var(--graph-surface-2) 30%, var(--graph-surface));
+  cursor: default;
+}
+
+.operation-graph-node-advanced { border-top: 1px solid var(--graph-border); }
+.operation-graph-node-advanced .operation-graph-node-fields { border-top: 1px solid color-mix(in srgb, var(--graph-border) 70%, transparent); }
+
+.operation-graph-disclosure {
+  display: flex;
+  width: 100%;
+  min-height: 24px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 0;
+  color: var(--graph-text-dim);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9.5px;
+  text-align: left;
+}
+
+.operation-graph-disclosure:hover { color: var(--graph-text); background: var(--graph-surface-2); }
+.operation-graph-disclosure > span { flex: 1; }
+.operation-graph-disclosure > small {
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--graph-surface-2);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.operation-graph-section-label {
+  color: var(--graph-text-dim);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.operation-graph-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 0;
+  padding: 6px 8px;
+  border-top: 1px solid color-mix(in srgb, var(--graph-border) 70%, transparent);
+  color: var(--graph-text-dim);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.operation-graph-diagnostics {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 6px 8px 6px 22px;
+  border-top: 1px solid color-mix(in srgb, var(--graph-border) 70%, transparent);
+  color: var(--graph-danger);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.operation-graph-diagnostics li[data-severity='warning'] { color: var(--graph-warning); }
+
+.operation-graph-reorder-list {
+  display: grid;
+  gap: 3px;
+  padding: 6px 8px;
+  border-top: 1px solid color-mix(in srgb, var(--graph-border) 70%, transparent);
+  cursor: default;
+}
+
+.operation-graph-reorder-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  color: var(--graph-text-dim);
+  font-size: 9.5px;
+}
+
+.operation-graph-reorder-row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.operation-graph-reorder-row > span:last-child { display: flex; flex: none; gap: 2px; }
+.operation-graph-reorder-row .operation-graph-icon-button { width: 20px; height: 20px; }
+
+/* Editing regions take input rather than dragging the card, so they keep the
+   arrow (or the caret) instead of inheriting the grab hand. */
+.operation-graph-node-fields,
+.operation-graph-node-advanced,
+.operation-graph-reorder-list,
+.operation-graph-node-actions,
+.operation-graph-diagnostics { cursor: default; }
+
+.operation-graph-node-actions {
+  display: flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-top: 1px solid color-mix(in srgb, var(--graph-border) 70%, transparent);
+}
+
+.operation-graph-node-actions:empty { display: none; }
+
+.operation-graph-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--graph-accent);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9.5px;
+}
+
+.operation-graph-text-button:hover { border-color: var(--graph-border); background: var(--graph-surface-2); }
+.operation-graph-icon-button { width: 22px; height: 22px; flex: none; padding: 0; border-radius: var(--radius-sm, 4px); }
+.operation-graph-node-actions .operation-graph-icon-button { margin-left: auto; }
+
+.operation-graph-export {
+  position: relative;
+  margin-left: auto;
+}
+
+.operation-graph-export summary {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--graph-accent);
+  cursor: pointer;
+  font-size: 9.5px;
+  list-style: none;
+}
+
+.operation-graph-export summary::-webkit-details-marker { display: none; }
+.operation-graph-export summary:hover,
+.operation-graph-export[open] summary { border-color: var(--graph-border); background: var(--graph-surface-2); }
+
+.operation-graph-export-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 3px);
+  right: 0;
+  display: grid;
+  width: 172px;
+  padding: 4px;
+  border: 1px solid var(--graph-border-strong);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--graph-surface);
+  box-shadow: var(--shadow-pop, 0 9px 22px rgb(0 0 0 / 18%));
+}
+
+.operation-graph-export-menu button {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--graph-text);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.operation-graph-export-menu button:hover { background: var(--graph-surface-2); }
+.operation-graph-export-menu button:focus-visible { outline: 2px solid var(--graph-accent); outline-offset: -2px; }
+.operation-graph-export-menu button > span { display: grid; gap: 1px; }
+.operation-graph-export-menu small { color: var(--graph-text-dim); font-size: 8.5px; }
+
+/* Connections ------------------------------------------------------------- */
+
+.operation-graph-canvas .react-flow__edge-path { transition: stroke-width 90ms ease; }
+.operation-graph-edge-hit { stroke: transparent; cursor: pointer; }
+.operation-graph-edge-dimmed { opacity: .14; }
+.operation-graph-edge-highlighted { opacity: 1; }
+
+.operation-graph-canvas .react-flow__edge.operation-graph-port-texture .react-flow__edge-path { stroke: var(--graph-type-texture); }
+.operation-graph-canvas .react-flow__edge.operation-graph-port-mask .react-flow__edge-path { stroke: var(--graph-type-mask); }
+.operation-graph-canvas .react-flow__edge.operation-graph-port-unknown .react-flow__edge-path,
+.operation-graph-canvas .react-flow__edge.operation-graph-port-none .react-flow__edge-path { stroke: var(--graph-type-unknown); }
+
+.operation-graph-canvas .react-flow__edge:hover .react-flow__edge-path { stroke-width: 3; }
+
+/* A traced connection fades its own line so the travelling dashes on top of
+   it carry the eye, and thickens where it meets the selected stage. */
+.operation-graph-canvas .react-flow__edge.operation-graph-edge-traced .react-flow__edge-path {
+  stroke-width: 2;
+  opacity: .5;
+}
+
+.operation-graph-canvas .react-flow__edge.operation-graph-edge-direct .react-flow__edge-path { stroke-width: 2.6; }
+
+.operation-graph-edge-flow {
+  stroke: var(--graph-type-unknown);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 2 13;
+  animation: operation-graph-flow 900ms linear infinite;
+  pointer-events: none;
+}
+
+.operation-graph-canvas .react-flow__edge.operation-graph-port-texture .operation-graph-edge-flow { stroke: var(--graph-type-texture); }
+.operation-graph-canvas .react-flow__edge.operation-graph-port-mask .operation-graph-edge-flow { stroke: var(--graph-type-mask); }
+.operation-graph-canvas .react-flow__edge.operation-graph-edge-direct .operation-graph-edge-flow { stroke-width: 3.6; }
+
+/* The dash period must match the pattern length or the loop visibly jumps. */
+@keyframes operation-graph-flow {
+  from { stroke-dashoffset: 15; }
+  to { stroke-dashoffset: 0; }
+}
+.operation-graph-canvas .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--graph-accent);
+  stroke-width: 3;
+}
+
+.operation-graph-edge-remove {
+  position: absolute;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--graph-border-strong);
+  border-radius: 50%;
+  color: var(--graph-text-dim);
+  background: var(--graph-surface);
+  box-shadow: 0 1px 4px color-mix(in srgb, #000 25%, transparent);
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.operation-graph-edge-remove:hover {
+  border-color: var(--graph-danger);
+  color: var(--graph-danger);
+  background: color-mix(in srgb, var(--graph-danger) 12%, var(--graph-surface));
+}
+
+.operation-graph-edge-remove:focus-visible { outline: 2px solid var(--graph-accent); outline-offset: 1px; }
+
+/* Footer ------------------------------------------------------------------ */
+
+.operation-graph-footer {
+  display: flex;
+  min-height: 24px;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 0 10px;
+  border-top: 1px solid var(--graph-border);
+  color: var(--graph-text-dim);
+  font-size: 9px;
+}
+
+@container (max-width: 900px) {
+  .operation-graph-toolbar { flex-wrap: wrap; }
+  .operation-graph-toolbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+}
+
+@container (max-width: 600px) {
+  .operation-graph-toolbar-title { display: none; }
+  .operation-graph-toolbar-button > span { display: none; }
+  .operation-graph-add-button > span { display: inline; }
+  .operation-graph-trace button > span { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .operation-graph-node,
+  .operation-graph-port-row .react-flow__handle,
+  .operation-graph-canvas .react-flow__edge-path { transition: none; }
+
+  /* Without motion the same path still has to read as traced, so the overlay
+     becomes a solid highlight rather than travelling dashes. */
+  .operation-graph-edge-flow {
+    stroke-dasharray: none;
+    stroke-width: 2;
+    animation: none;
+  }
+
+  .operation-graph-canvas .react-flow__edge.operation-graph-edge-traced .react-flow__edge-path { opacity: 1; }
+}
