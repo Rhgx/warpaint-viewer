@@ -32,6 +32,8 @@ export interface SerializedUrlState {
   hash: string;
 }
 
+// `view` predates the individual legacy fields. It is no longer parsed, but
+// remains owned so serializing a current link removes the obsolete payload.
 const LEGACY_PARAMS = ['view', 'kit', 'weapon', 'seed', 'wear', 'team', 'sheen', 'effect', 'light', 'proj', 'fov'] as const;
 
 export const URL_STATE_DEFAULTS = {
@@ -56,9 +58,11 @@ const FLAG_EFFECT = 1 << 4;
 const FLAG_LIGHT = 1 << 5;
 const FLAG_FOV = 1 << 6;
 
-// These positions are part of the public share-link schema. Append new ids;
-// never reorder or remove an existing entry.
-const WEAPON_IDS = [
+// Frozen compression dictionaries, not exhaustive validation lists. Known
+// values use a compact integer; anything added later is encoded inline as
+// UTF-8 by stableId(), so feature changes never require editing this codec.
+// Never reorder or remove entries because their positions are public schema.
+const WEAPON_DICTIONARY = [
   'c_amputator', 'c_atom_launcher', 'c_back_scratcher', 'c_battleaxe', 'c_bazaar_sniper',
   'c_blackbox', 'c_claidheamohmor', 'c_crusaders_crossbow', 'c_degreaser', 'c_demo_cannon',
   'c_demo_sultan_sword', 'c_detonator', 'c_flameball', 'c_flamethrower', 'c_gatling_gun',
@@ -70,9 +74,9 @@ const WEAPON_IDS = [
   'c_winger_pistol', 'c_wrench', 'paintkit_tool',
 ] as const;
 
-const SHEEN_IDS = ['none', 'team_shine', 'deadly_daffodil', 'manndarin', 'mean_green', 'agonizing_emerald', 'villainous_violet', 'hot_rod'] as const;
-const EFFECT_IDS = ['none', 'hot', 'isotope', 'cool', 'energy_orb', 'sparkle'] as const;
-const LIGHT_IDS = ['inspect', 'daylight', 'overcast', 'indoors', 'night', 'inspect-legacy'] as const;
+const SHEEN_DICTIONARY = ['none', 'team_shine', 'deadly_daffodil', 'manndarin', 'mean_green', 'agonizing_emerald', 'villainous_violet', 'hot_rod'] as const;
+const EFFECT_DICTIONARY = ['none', 'hot', 'isotope', 'cool', 'energy_orb', 'sparkle'] as const;
+const LIGHT_DICTIONARY = ['inspect', 'daylight', 'overcast', 'indoors', 'night', 'inspect-legacy'] as const;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -178,7 +182,8 @@ function fromBase64Url(value: string): Uint8Array {
 }
 
 export function encodeShareState(state: SerializableUrlState): string | null {
-  if (state.kitId == null || !state.weaponKey || !state.seed) return null;
+  if (state.kitId == null || !Number.isSafeInteger(state.kitId) || state.kitId < 0
+    || !state.weaponKey || !/^\d+$/.test(state.seed)) return null;
 
   let flags = 0;
   if (state.team !== URL_STATE_DEFAULTS.team) flags |= FLAG_BLU;
@@ -193,12 +198,12 @@ export function encodeShareState(state: SerializableUrlState): string | null {
   writer.uint(VERSION);
   writer.uint(flags);
   writer.uint(state.kitId);
-  writer.stableId(state.weaponKey, WEAPON_IDS);
+  writer.stableId(state.weaponKey, WEAPON_DICTIONARY);
   writer.uint64(BigInt(state.seed));
   if (flags & FLAG_WEAR) writer.uint(clamp(state.wearIndex, 0, 4));
-  if (flags & FLAG_SHEEN) writer.stableId(state.sheen, SHEEN_IDS);
-  if (flags & FLAG_EFFECT) writer.stableId(state.unusual, EFFECT_IDS);
-  if (flags & FLAG_LIGHT) writer.stableId(state.preset, LIGHT_IDS);
+  if (flags & FLAG_SHEEN) writer.stableId(state.sheen, SHEEN_DICTIONARY);
+  if (flags & FLAG_EFFECT) writer.stableId(state.unusual, EFFECT_DICTIONARY);
+  if (flags & FLAG_LIGHT) writer.stableId(state.preset, LIGHT_DICTIONARY);
   if (flags & FLAG_FOV) writer.uint(clamp(state.fov, FOV_MIN, FOV_MAX) - FOV_MIN);
   return toBase64Url(Uint8Array.from(writer.bytes));
 }
@@ -210,12 +215,12 @@ export function decodeShareState(payload: string): ParsedUrlState | null {
     const flags = reader.uint();
     if (flags & ~0x7f) return null;
     const kitId = reader.uint();
-    const weaponKey = reader.stableId(WEAPON_IDS);
+    const weaponKey = reader.stableId(WEAPON_DICTIONARY);
     const seed = reader.uint64().toString();
     const wearIndex = flags & FLAG_WEAR ? clamp(reader.uint(), 0, 4) : null;
-    const sheen = flags & FLAG_SHEEN ? reader.stableId(SHEEN_IDS) : null;
-    const unusual = flags & FLAG_EFFECT ? reader.stableId(EFFECT_IDS) : null;
-    const preset = flags & FLAG_LIGHT ? reader.stableId(LIGHT_IDS) : null;
+    const sheen = flags & FLAG_SHEEN ? reader.stableId(SHEEN_DICTIONARY) : null;
+    const unusual = flags & FLAG_EFFECT ? reader.stableId(EFFECT_DICTIONARY) : null;
+    const preset = flags & FLAG_LIGHT ? reader.stableId(LIGHT_DICTIONARY) : null;
     const fov = flags & FLAG_FOV ? clamp(reader.uint() + FOV_MIN, FOV_MIN, FOV_MAX) : null;
     if (!reader.done) return null;
 
