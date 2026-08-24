@@ -22,7 +22,7 @@ import { encodePNG } from '../lib/png.mjs';
 import { parseKV, kvGet } from '../lib/kv.mjs';
 import { parsePCF } from '../lib/pcf.mjs';
 import { extractAttachments, validateAgainstGLB } from './attachments.mjs';
-import { EFFECT_PCF_KEY, buildBundlesForEffect } from '../lib/unusual-pack.mjs';
+import { EFFECT_PCF_KEY, buildBundlesForEffect, transitiveClosure } from '../lib/unusual-pack.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..', '..');
@@ -189,7 +189,7 @@ function buildParticleFile(elements) {
   return { roots, systems, materials };
 }
 
-const UNUSUAL_PCFS = ['weapon_unusual_hot', 'weapon_unusual_isotope', 'weapon_unusual_cool', 'weapon_unusual_energyorb'];
+const UNUSUAL_PCFS = ['weapon_unusual_hot', 'weapon_unusual_isotope', 'weapon_unusual_cool', 'weapon_unusual_energyorb', 'item_fx'];
 
 // Weapon keys the effects get bundled for: every weapon the composited-texture
 // pipeline knows about (public/data/manifest.json's weapons[].key), same set the
@@ -211,7 +211,14 @@ function extractUnusuals(miscList) {
   for (const name of UNUSUAL_PCFS) {
     const buf = fs.readFileSync(path.join(STAGING, 'particles', `${name}.pcf`));
     const { elements } = parsePCF(buf);
-    const { roots, systems, materials } = buildParticleFile(elements);
+    let { roots, systems, materials } = buildParticleFile(elements);
+    // item_fx contains many unrelated effects. Ship only Community Sparkle and
+    // its child closure, as the dedicated weapon PCFs already do per bundle.
+    if (name === 'item_fx') {
+      systems = transitiveClosure(systems, 'community_sparkle');
+      roots = ['community_sparkle'];
+      materials = new Set(Object.values(systems).map((system) => system.attributes.material).filter(Boolean));
+    }
     for (const m of materials) allMaterials.add(m);
     unusuals[name] = { roots, systems };
     const totalOps = Object.values(systems).reduce((n, s) => n + s.operators.length + s.initializers.length, 0);
@@ -229,6 +236,16 @@ function extractUnusuals(miscList) {
   let missingChildCount = 0;
   for (const [effectId, pcfKey] of Object.entries(EFFECT_PCF_KEY)) {
     const systems = unusuals[pcfKey].systems;
+    if (effectId === 'sparkle') {
+      const effectDir = path.join(unusualsOutDir, effectId);
+      fs.rmSync(effectDir, { recursive: true, force: true });
+      fs.writeFileSync(
+        path.join(unusualsOutDir, `${effectId}.json`),
+        JSON.stringify({ root: 'community_sparkle', systems }),
+      );
+      bundleCount++;
+      continue;
+    }
     const bundles = buildBundlesForEffect(systems, effectId, weaponKeys, (eId, wKey, root, missingName) => {
       missingChildCount++;
       log(`  ${eId}/${wKey}: child "${missingName}" referenced from ${root} is missing from ${pcfKey}'s systems map`);
@@ -241,7 +258,7 @@ function extractUnusuals(miscList) {
       bundleCount++;
     }
   }
-  log(`unusual bundles: ${bundleCount} written across ${Object.keys(EFFECT_PCF_KEY).length} effects x ${weaponKeys.length} weapons `
+  log(`unusual bundles: ${bundleCount} written across ${Object.keys(EFFECT_PCF_KEY).length} effects (${weaponKeys.length} weapon variants plus shared effects) `
     + `(${fallbackCount} used the alphabetical fallback, ${missingChildCount} missing child references)`);
 
   return { unusuals, materials: allMaterials };
@@ -549,7 +566,7 @@ function main() {
     if (!u.roots.length || !leafCounts) allNonEmpty = false;
     log(`unusuals[${name}]: roots=${u.roots.length} systems=${Object.keys(u.systems).length} totalOps/inits=${leafCounts}`);
   }
-  log(`unusual pcf data non-empty for all 4 systems: ${allNonEmpty}`);
+  log(`unusual pcf data non-empty for all ${UNUSUAL_PCFS.length} systems: ${allNonEmpty}`);
 
   const particleFiles = Object.values(particleIndex);
   log(`particle sprite PNGs written: ${particleFiles.length}`);

@@ -1,17 +1,16 @@
 import * as THREE from 'three';
 import type { UnusualSystemDef } from './parse';
 import { ControlPoint, SystemInstance } from './sim';
-import type { AttachmentAnchor, AttachmentsJson } from './util';
-import { DEFAULT_ATTACHMENT_QUAT, loadParticleIndex, parseAttachmentEntry } from './util';
+import type { AttachmentAnchor, AttachmentsJson, HitboxesJson } from './util';
+import { DEFAULT_ATTACHMENT_QUAT, loadHitboxes, loadParticleIndex, parseAttachmentEntry } from './util';
 
 export { setParticlePointScale } from './sim';
 export { loadParticleIndex, loadParticleTexture } from './util';
 
 // Unusual weapon effects
 //
-// A CPU port of the four weapon_unusual_* particle systems
-// (attribute_controlled_attached_particles 701-704), driven by their
-// extracted PCF definitions. Semantics follow the Source particle library
+// A CPU port of the weapon unusual particle systems, driven by their extracted
+// PCF definitions. Semantics follow the Source particle library
 // (public/particles/particles.h attribute model, Alien Swarm SDK operator
 // lineage): particles simulate in WORLD space while control points follow
 // the weapon's attachments (PATTACH_POINT_FOLLOW in
@@ -33,7 +32,7 @@ export interface UnusualEffect {
   dispose(): void;
 }
 
-const KNOWN_EFFECT_IDS = new Set(['hot', 'isotope', 'cool', 'energy_orb']);
+const KNOWN_EFFECT_IDS = new Set(['hot', 'isotope', 'cool', 'energy_orb', 'sparkle']);
 
 // A pre-resolved (effect, weapon) bundle: the system name the game actually
 // spawns for that pair (see the removed runtime selectSystemName(), now baked in
@@ -59,7 +58,10 @@ function loadUnusualBundle(effectId: string, weaponKey: string): Promise<Unusual
     // canonical world-model dispatch, then bind its CPs to those authored can
     // attachments through the same lookup path as every real weapon.
     const bundleWeaponKey = weaponKey === 'paintkit_tool' ? 'c_rocketlauncher' : weaponKey;
-    promise = fetch(`${base}data/effects/unusuals/${effectId}/${bundleWeaponKey}.json`).then((r) => {
+    const bundlePath = effectId === 'sparkle'
+      ? 'sparkle.json'
+      : `${effectId}/${bundleWeaponKey}.json`;
+    promise = fetch(`${base}data/effects/unusuals/${bundlePath}`).then((r) => {
       if (!r.ok) throw new Error(`unusual bundle "${key}" fetch failed: ${r.status}`);
       return r.json() as Promise<UnusualBundle>;
     });
@@ -128,8 +130,9 @@ export function createUnusualEffect(
   const TELEPORT_DIST = 20; // world units in one frame
   const TELEPORT_ANGLE = THREE.MathUtils.degToRad(45);
 
-  Promise.all([loadUnusualBundle(id, weaponKey), loadAttachmentsJson(), loadParticleIndex()])
-    .then(([bundle, attachments, particleIndex]) => {
+  const hitboxesPromise: Promise<HitboxesJson> = id === 'sparkle' ? loadHitboxes() : Promise.resolve({});
+  Promise.all([loadUnusualBundle(id, weaponKey), loadAttachmentsJson(), loadParticleIndex(), hitboxesPromise])
+    .then(([bundle, attachments, particleIndex, hitboxes]) => {
       if (disposed) return;
       const systemName = bundle.root;
       const weaponAttachments = attachments[weaponKey] ?? {};
@@ -168,7 +171,11 @@ export function createUnusualEffect(
         visited.add(name);
         const sysDef = bundle.systems[name];
         if (!sysDef) return null;
-        const instance = new SystemInstance(name, sysDef, radius, getCp, createDynamicCp, particleIndex);
+        const instance = new SystemInstance(
+          name, sysDef, radius, getCp, createDynamicCp, particleIndex,
+          hitboxes[weaponKey] ?? [],
+          (point) => point.applyMatrix4(anchorMatrix),
+        );
         for (const childName of sysDef.children) {
           const child = build(childName, visited);
           if (child) instance.children.push(child);

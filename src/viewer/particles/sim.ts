@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { EmitterConfig, ParsedConstraint, ParsedInit, ParsedOp, UnusualSystemDef } from './parse';
+import type { HitboxJson } from './util';
 import { parseConstraints, parseEmitters, parseInitializers, parseOperators } from './parse';
 import type { ParticleIndex, ParticleSheet } from './util';
 import { colorFromArray, dotTexture, numOr, resolveParticleTexture, warnOnce } from './util';
@@ -89,6 +90,8 @@ export class SystemInstance {
   private defaultColor: THREE.Color;
   private defaultAlpha: number;
   private safeRadius: number;
+  private hitboxes: HitboxJson[];
+  private geometryToWorld: (point: THREE.Vector3) => THREE.Vector3;
 
   private systemAge = 0;
   private spawnCounter = 0;
@@ -106,10 +109,14 @@ export class SystemInstance {
     getCp: (index: number, forSystem: SystemInstance) => ControlPoint,
     createDynamicCp: (index: number) => ControlPoint,
     particleIndex: ParticleIndex,
+    hitboxes: HitboxJson[],
+    geometryToWorld: (point: THREE.Vector3) => THREE.Vector3,
   ) {
     this.name = name;
     this.getCp = getCp;
     this.createDynamicCp = createDynamicCp;
+    this.hitboxes = hitboxes;
+    this.geometryToWorld = geometryToWorld;
     this.inits = parseInitializers(def.initializers);
     this.ops = parseOperators(def.operators);
     this.constraints = parseConstraints(def.constraints ?? []);
@@ -249,6 +256,46 @@ export class SystemInstance {
 
     for (const init of this.inits) {
       switch (init.kind) {
+        case 'positionModel': {
+          const config = init.positionModel!;
+          anchorCp = this.getCp(config.cp, this);
+          if (!this.hitboxes.length) {
+            p.pos.copy(anchorCp.worldPos);
+            break;
+          }
+          const nonZeroBias = config.bias.some((value) => Math.abs(value) > 0.0001);
+          const attempts = Math.max(config.tries, nonZeroBias ? 5 : 0) + 1;
+          let bestGoodness = -Infinity;
+          for (let attempt = 0; attempt < attempts; attempt++) {
+            const hitbox = this.hitboxes[Math.floor(Math.random() * this.hitboxes.length)];
+            const min = 1 - config.bboxScale;
+            const max = config.bboxScale;
+            const u = min + Math.random() * (max - min);
+            const v = min + Math.random() * (max - min);
+            const w = min + Math.random() * (max - min);
+            tmpV1.set(
+              lerp(hitbox.min[0], hitbox.max[0], u),
+              lerp(hitbox.min[1], hitbox.max[1], v),
+              lerp(hitbox.min[2], hitbox.max[2], w),
+            );
+            const m = hitbox.transform;
+            tmpV2.set(
+              m[0] * tmpV1.x + m[1] * tmpV1.y + m[2] * tmpV1.z + m[3],
+              m[4] * tmpV1.x + m[5] * tmpV1.y + m[6] * tmpV1.z + m[7],
+              m[8] * tmpV1.x + m[9] * tmpV1.y + m[10] * tmpV1.z + m[11],
+            );
+            this.geometryToWorld(tmpV2);
+            const goodness = Math.random() * 72
+              + (tmpV2.x - anchorCp.worldPos.x) * config.bias[0]
+              + (tmpV2.y - anchorCp.worldPos.y) * config.bias[1]
+              + (tmpV2.z - anchorCp.worldPos.z) * config.bias[2];
+            if (goodness > bestGoodness) {
+              bestGoodness = goodness;
+              p.pos.copy(tmpV2);
+            }
+          }
+          break;
+        }
         case 'sphere': {
           // C_INIT_CreateWithinSphere. Expected frame for the energy orb
           // (weapon_unusual_energyorb_*): CP1 anchors at unusual_1 near the

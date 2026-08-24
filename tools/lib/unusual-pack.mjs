@@ -15,6 +15,7 @@ export const EFFECT_PCF_KEY = {
   isotope: 'weapon_unusual_isotope',
   cool: 'weapon_unusual_cool',
   energy_orb: 'weapon_unusual_energyorb',
+  sparkle: 'item_fx',
 };
 
 // System selection: the game (items_game use_suffix_name) spawns the system named
@@ -26,6 +27,7 @@ export const EFFECT_PCF_KEY = {
 // fallback is reported back to the caller instead so it can be logged/summarized
 // once per migration run rather than once per instance.
 export function selectSystemName(systems, effectId, weaponKey) {
+  if (effectId === 'sparkle') return { name: systems.community_sparkle ? 'community_sparkle' : null, fallback: false };
   const base = `weapon_unusual_${effectId === 'energy_orb' ? 'energyorb' : effectId}`;
   const weapon = weaponKey.replace(/^c_/, '');
   const worldName = `${base}_${weapon}`;

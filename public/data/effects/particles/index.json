@@ -86,5 +86,13 @@
   "height": 256,
   "additive": true,
   "shader": "UnlitGeneric"
+ },
+ "effects/tp_sparkle2.vmt": {
+  "file": "effects_tp_sparkle2.png",
+  "frames": 1,
+  "width": 128,
+  "height": 128,
+  "additive": true,
+  "shader": "Spritecard"
  }
 }

@@ -163,7 +163,7 @@ interface Result {
   expected: number[];
 }
 
-// Unusual effect simulation checks: instantiate each of the four effects for
+// Unusual effect simulation checks: instantiate each weapon effect for
 // c_rocketlauncher with an identity anchor (world space == geometry space),
 // step 5 simulated seconds at 60 Hz, and assert population/shape invariants
 // against the extracted attachment data.
@@ -200,7 +200,7 @@ async function runEffectSimChecks(): Promise<Result[]> {
   const modelRadius = 40; // roughly the rocket launcher's half-length
   const center = new THREE.Vector3(unusual0[0], unusual0[1], (unusual0[2] + unusual5[2]) / 2);
 
-  for (const id of ['hot', 'isotope', 'cool', 'energy_orb']) {
+  for (const id of ['hot', 'isotope', 'cool', 'energy_orb', 'sparkle']) {
     const effect = createUnusualEffect(id, modelRadius, 'c_rocketlauncher', center);
     if (!effect) {
       out.push({ name: `Effects: ${id} created`, pass: false, got: [0, 0, 0], expected: [1, 0, 0] });
@@ -217,11 +217,12 @@ async function runEffectSimChecks(): Promise<Result[]> {
     const totalNan = stats.reduce((n, s) => n + s.nan, 0);
     const maxDist = Math.max(0, ...stats.map((s) => s.maxDist([center.x, center.y, center.z])));
 
+    const minimumPopulation = id === 'sparkle' ? 1 : 20;
     out.push({
       name: `Effects: ${id} population (alive, NaN, systems)`,
-      pass: totalAlive >= 20 && totalNan === 0 && stats.length >= 1,
+      pass: totalAlive >= minimumPopulation && totalNan === 0 && stats.length >= 1,
       got: [totalAlive, totalNan, stats.length],
-      expected: [20, 0, 1],
+      expected: [minimumPopulation, 0, 1],
     });
     out.push({
       name: `Effects: ${id} bounded (max dist from model center)`,

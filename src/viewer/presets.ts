@@ -51,6 +51,7 @@ export const UNUSUAL_PRESETS: UnusualPreset[] = [
   { id: 'isotope', label: 'Isotope' },
   { id: 'cool', label: 'Cool' },
   { id: 'energy_orb', label: 'Energy Orb' },
+  { id: 'sparkle', label: 'Community Sparkle' },
 ];
 
 // View angle presets

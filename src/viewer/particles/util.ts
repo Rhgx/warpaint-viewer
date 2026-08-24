@@ -33,8 +33,27 @@ export type ParticleIndex = Record<string, ParticleIndexEntry>;
 // the fixed Source-to-glb axis convention as their frame.
 export type AttachmentEntryJson = [number, number, number] | { pos: [number, number, number]; quat: [number, number, number, number] };
 export type AttachmentsJson = Record<string, Record<string, AttachmentEntryJson>>;
+export interface HitboxJson {
+  min: [number, number, number];
+  max: [number, number, number];
+  transform: [number, number, number, number, number, number, number, number, number, number, number, number];
+  fallback?: 'hull';
+}
+export type HitboxesJson = Record<string, HitboxJson[]>;
 
 let particleIndexPromise: Promise<ParticleIndex> | null = null;
+let hitboxesPromise: Promise<HitboxesJson> | null = null;
+export function loadHitboxes(): Promise<HitboxesJson> {
+  if (!hitboxesPromise) {
+    const base = import.meta.env.BASE_URL;
+    hitboxesPromise = fetch(`${base}data/effects/hitboxes.json`).then((r) => {
+      if (!r.ok) throw new Error(`hitboxes.json fetch failed: ${r.status}`);
+      return r.json() as Promise<HitboxesJson>;
+    });
+  }
+  return hitboxesPromise;
+}
+
 export function loadParticleIndex(): Promise<ParticleIndex> {
   if (!particleIndexPromise) {
     const base = import.meta.env.BASE_URL;

@@ -4,6 +4,7 @@
 // geometry (see rootFrameTransforms() in tools/models/lib/mdl.mjs).
 //
 // Produces: public/data/effects/attachments.json (format v2)
+//           public/data/effects/hitboxes.json
 //   {
 //     "<weaponKey>": {
 //       "unusual_0": { "pos": [x, y, z], "quat": [qx, qy, qz, qw] },
@@ -24,7 +25,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { extractBatch, MISC_VPK } from '../lib/vpk.mjs';
-import { parseMDL, invertAffine3x4, applyMat3x4, rootFrameTransforms } from '../models/lib/mdl.mjs';
+import { parseMDL, invertAffine3x4, applyMat3x4, multiplyAffine3x4, rootFrameTransforms } from '../models/lib/mdl.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..', '..');
@@ -196,9 +197,10 @@ export function extractAttachments() {
   const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
 
   const result = {};
+  const hitboxResult = {};
   for (const [key, paths] of Object.entries(manifest)) {
     const vpkRel = Array.isArray(paths) ? paths[0] : paths;
-    if (!vpkRel) { log(`skip ${key}: no mdl path`); result[key] = {}; continue; }
+    if (!vpkRel) { log(`skip ${key}: no mdl path`); result[key] = {}; hitboxResult[key] = []; continue; }
     const mdlPath = ensureMdl(vpkRel);
     const mdl = parseMDL(mdlPath);
     const xform = rootFrameTransforms(mdl);
@@ -210,12 +212,29 @@ export function extractAttachments() {
       entry[attachment.name] = { pos: round(pos), quat: round(quat) };
     }
     result[key] = entry;
+    const rootToGeometry = mdl.bones[0]?.poseToBone;
+    const hitboxes = rootToGeometry ? mdl.hitboxes.flatMap((hitbox) => {
+      const bone = mdl.bones[hitbox.bone];
+      if (!bone) return [];
+      return [{
+        min: round(hitbox.min),
+        max: round(hitbox.max),
+        transform: round(multiplyAffine3x4(rootToGeometry, invertAffine3x4(bone.poseToBone))),
+      }];
+    }) : [];
+    hitboxResult[key] = hitboxes.length || !rootToGeometry ? hitboxes : [{
+      min: round(mdl.hullMin),
+      max: round(mdl.hullMax),
+      transform: round(rootToGeometry),
+      fallback: 'hull',
+    }];
     const unusualCount = Object.keys(entry).filter((n) => n.startsWith('unusual')).length;
     log(`${key}: ${unusualCount} unusual attachment(s)${entry.muzzle ? ', muzzle' : ''}`);
   }
 
   fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, 'attachments.json'), JSON.stringify(result, null, 1));
+  fs.writeFileSync(path.join(OUT, 'hitboxes.json'), JSON.stringify(hitboxResult));
   return result;
 }
 

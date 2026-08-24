@@ -71,7 +71,7 @@ const WEAPON_IDS = [
 ] as const;
 
 const SHEEN_IDS = ['none', 'team_shine', 'deadly_daffodil', 'manndarin', 'mean_green', 'agonizing_emerald', 'villainous_violet', 'hot_rod'] as const;
-const EFFECT_IDS = ['none', 'hot', 'isotope', 'cool', 'energy_orb'] as const;
+const EFFECT_IDS = ['none', 'hot', 'isotope', 'cool', 'energy_orb', 'sparkle'] as const;
 const LIGHT_IDS = ['inspect', 'daylight', 'overcast', 'indoors', 'night', 'inspect-legacy'] as const;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));

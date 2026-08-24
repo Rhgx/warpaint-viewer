@@ -64,7 +64,8 @@ export interface SphereInit {
 
 export interface ParsedInit {
   kind: 'sphere' | 'offset' | 'lifetime' | 'alpha' | 'radius' | 'colorRandom' | 'rotationRandom'
-      | 'yawFlip' | 'remapScalar' | 'velocityNoise' | 'velocityInherit' | 'velocityRandom' | 'sequence';
+      | 'yawFlip' | 'remapScalar' | 'velocityNoise' | 'velocityInherit' | 'velocityRandom' | 'sequence'
+      | 'positionModel';
   sphere?: SphereInit;
   offset?: { cp: number; min: [number, number, number]; max: [number, number, number]; local: boolean };
   range?: { min: number; max: number; exp: number };
@@ -75,6 +76,7 @@ export interface ParsedInit {
   noise?: { min: [number, number, number]; max: [number, number, number]; local: boolean; cp: number };
   inherit?: { cp: number; scale: number };
   sequenceRange?: { min: number; max: number };
+  positionModel?: { cp: number; bboxScale: number; tries: number; bias: [number, number, number] };
 }
 
 export interface ParsedConstraint {
@@ -153,6 +155,17 @@ export function parseInitializers(list: UnusualFunctionEntry[]): ParsedInit[] {
             min: arrOr3(p.offset_min, [0, 0, 0]),
             max: arrOr3(p.offset_max, [0, 0, 0]),
             local: boolOr(p['offset_in_local_space_0/1'], false),
+          },
+        });
+        break;
+      case 'positiononmodelrandom':
+        out.push({
+          kind: 'positionModel',
+          positionModel: {
+            cp: numOr(p.control_point_number, 0),
+            bboxScale: numOr(p.hitbox_scale, 1),
+            tries: numOr(p.force_to_be_inside_model, 0),
+            bias: arrOr3(p.direction_bias, [0, 0, 0]),
           },
         });
         break;

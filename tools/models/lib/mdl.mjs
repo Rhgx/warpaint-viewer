@@ -16,9 +16,13 @@ export function parseMDL(path) {
   const version = b.readInt32LE(4);
   const checksum = b.readInt32LE(8);
   const name = readCStr(b, 12);
+  const hullMin = [b.readFloatLE(0x68), b.readFloatLE(0x6c), b.readFloatLE(0x70)];
+  const hullMax = [b.readFloatLE(0x74), b.readFloatLE(0x78), b.readFloatLE(0x7c)];
 
   const numbones = b.readInt32LE(0x9c);
   const boneindex = b.readInt32LE(0xa0);
+  const numhitboxsets = b.readInt32LE(0xac);
+  const hitboxsetindex = b.readInt32LE(0xb0);
 
   const numtextures = b.readInt32LE(0xcc);
   const textureindex = b.readInt32LE(0xd0);
@@ -84,6 +88,22 @@ export function parseMDL(path) {
     bones.push({ index: i, name: bname, parent, pos, quat, poseToBone });
   }
 
+  // --- first hitbox set (the active set for TF2 weapon models) ---
+  const hitboxes = [];
+  if (numhitboxsets > 0) {
+    const setBase = hitboxsetindex;
+    const numhitboxes = b.readInt32LE(setBase + 4);
+    const hitboxindex = b.readInt32LE(setBase + 8);
+    for (let i = 0; i < numhitboxes; i++) {
+      const base = setBase + hitboxindex + i * 68;
+      hitboxes.push({
+        bone: b.readInt32LE(base),
+        min: [b.readFloatLE(base + 8), b.readFloatLE(base + 12), b.readFloatLE(base + 16)],
+        max: [b.readFloatLE(base + 20), b.readFloatLE(base + 24), b.readFloatLE(base + 28)],
+      });
+    }
+  }
+
   // --- bodyparts -> models -> meshes ---
   const bodyparts = [];
   for (let i = 0; i < numbodyparts; i++) {
@@ -140,7 +160,7 @@ export function parseMDL(path) {
     path, version, checksum, name,
     textures, cdtextures, skins,
     numskinref, numskinfamilies,
-    bones, bodyparts, attachments,
+    bones, bodyparts, attachments, hitboxes, hullMin, hullMax,
   };
 }
 
@@ -164,6 +184,23 @@ export function applyMat3x4(m, v) {
     m[4] * v[0] + m[5] * v[1] + m[6] * v[2] + m[7],
     m[8] * v[0] + m[9] * v[1] + m[10] * v[2] + m[11],
   ];
+}
+
+// Compose two row-major affine 3x4 matrices: a * b.
+export function multiplyAffine3x4(a, b) {
+  const out = new Array(12);
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      out[row * 4 + col] = a[row * 4] * b[col]
+        + a[row * 4 + 1] * b[4 + col]
+        + a[row * 4 + 2] * b[8 + col];
+    }
+    out[row * 4 + 3] = a[row * 4] * b[3]
+      + a[row * 4 + 1] * b[7]
+      + a[row * 4 + 2] * b[11]
+      + a[row * 4 + 3];
+  }
+  return out;
 }
 
 // Orientation: TF2 c_model weapons are NOT authored in Source world space
