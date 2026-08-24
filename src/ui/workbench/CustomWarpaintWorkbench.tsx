@@ -36,6 +36,7 @@ import { revokeReleasedAssetUrls, revokeTextureUrl } from '../../workbench/asset
 import { loadImage, mergeAlpha, readTexture } from '../../workbench/textureImport';
 import type { ExportDefinitionsContext, ExportItem } from './ExportPanel';
 import type { EditorDownloadFormat } from '../../editor/definitionExport';
+import type { OperationGraphEditorProps } from './OperationGraphEditor';
 import './CustomWarpaintWorkbench.css';
 
 // Tabs.Panel mounts its children only after they become active. Keeping the
@@ -65,6 +66,9 @@ const TextureTransformPanel = lazy(() =>
 );
 const MaterialOverridesPanel = lazy(() =>
   import('./MaterialOverridesPanel').then(({ MaterialOverridesPanel: panel }) => ({ default: panel })),
+);
+const OperationGraphEditor = lazy(() =>
+  import('./OperationGraphEditor').then(({ OperationGraphEditor: panel }) => ({ default: panel })),
 );
 
 type VisualWarpaintEditorPanelProps = ComponentProps<typeof VisualWarpaintEditorPanel>;
@@ -149,9 +153,10 @@ export function CustomWarpaintWorkbench({
     materials?: MaterialOverridesPanelProps;
     /** Gates the Parts/Transform sub-view switch for paint mode. */
     transform?: TextureTransformPanelProps;
-    /** Ignored while `transform` is absent, so today's paint view never changes shape. */
-    paintSubView?: 'parts' | 'transform';
-    onPaintSubViewChange?: (view: 'parts' | 'transform') => void;
+    /** Optional graph view for the same paint operation. */
+    graph?: OperationGraphEditorProps;
+    paintSubView?: 'parts' | 'transform' | 'graph';
+    onPaintSubViewChange?: (view: 'parts' | 'transform' | 'graph') => void;
     /** Per-layer marker, aligned with `selectors`, for a non-default transform range. */
     layerHasTransformEdits?: readonly boolean[];
     /** Per-layer marker, aligned with `selectors`, for transforms that are intentionally unavailable. */
@@ -1005,7 +1010,7 @@ export function CustomWarpaintWorkbench({
                     // showing, so both keep a single header row and the
                     // control never moves between them.
                     const subView = editor.paintSubView ?? 'parts';
-                    const subViewSwitch = editor.transform ? (
+                    const subViewSwitch = (editor.transform || editor.graph) ? (
                       <div className="custom-workbench-paint-subview" role="group" aria-label="Layer view">
                         <button
                           type="button"
@@ -1014,16 +1019,34 @@ export function CustomWarpaintWorkbench({
                         >
                           Parts
                         </button>
-                        <button
-                          type="button"
-                          aria-pressed={subView === 'transform'}
-                          onClick={() => editor.onPaintSubViewChange?.('transform')}
-                        >
-                          Transform
-                        </button>
+                        {editor.transform && (
+                          <button
+                            type="button"
+                            aria-pressed={subView === 'transform'}
+                            onClick={() => editor.onPaintSubViewChange?.('transform')}
+                          >
+                            Transform
+                          </button>
+                        )}
+                        {editor.graph && (
+                          <button
+                            type="button"
+                            aria-pressed={subView === 'graph'}
+                            onClick={() => editor.onPaintSubViewChange?.('graph')}
+                          >
+                            Graph
+                          </button>
+                        )}
                       </div>
                     ) : undefined;
-                    return editor.transform && subView === 'transform'
+                    return editor.graph && subView === 'graph'
+                      ? (
+                        <div className="custom-workbench-graph-view">
+                          <div className="custom-workbench-graph-switch">{subViewSwitch}</div>
+                          <Suspense fallback={<WorkbenchPanelFallback />}><OperationGraphEditor {...editor.graph} /></Suspense>
+                        </div>
+                      )
+                      : editor.transform && subView === 'transform'
                       ? <TextureTransformPanel {...editor.transform} headerSlot={subViewSwitch} />
                       : <VisualWarpaintEditorPanel {...editor} headerSlot={subViewSwitch} />;
                   })()}

@@ -43,6 +43,7 @@ import { indexPackageMaterialPaths, packageHasMaterialOverride } from './source/
 import { collectTextureRefs, exportPathFor, resolvePackageTextures } from './export/plan';
 import { customKitDefindex, isCustomKitId } from './protodefs/types';
 import type { CustomDefinitionsState, ProtoDefKitWeaponSlot, ProtoDefRecipeWithProvenance } from './protodefs/types';
+import type { OperationMsg, OperationNodeMsg, VarDefMsg } from './protodefs/messages';
 import { useProtoDefEditorSession } from './editor/useProtoDefEditorSession';
 import { SnapshotHistory } from './editor/history';
 import { discoverGroupSelectTargets, discoverGroupTextureTarget } from './editor/groupTargets';
@@ -106,6 +107,35 @@ import {
   stickerSpecularRef,
 } from './workbench/assetSlots';
 import type { EditorDownloadFormat } from './editor/definitionExport';
+import {
+  connectOperationGraph,
+  deleteOperationGraphSubtree,
+  disconnectOperationGraph,
+  duplicateOperationGraphSubtree,
+  operationGraphChildren,
+  operationToGraph,
+  composeOperationGraphNode,
+  exportOperationGraphPng,
+  exportOperationGraphVtf,
+  operationGraphPreviewObjectUrl,
+  reconnectOperationGraph,
+  reorderOperationGraphInputs,
+  createOperationGraphNode,
+  setOperationGraphParameter,
+  summarizeOperationGraphDiagnostics,
+  validateOperationGraph,
+  type OperationGraph,
+  type OperationGraphDiagnostic,
+  type OperationGraphEditResult,
+  type OperationGraphNode,
+  type OperationGraphParameterAddress,
+  type OperationGraphParameterValue,
+} from './editor/graph';
+import type {
+  OperationGraphEditorChange,
+  OperationGraphExportFormat,
+} from './ui/workbench/OperationGraphEditor';
+import type { GraphComboboxOption, GraphVariableOption } from './ui/workbench/operationGraphFieldValues';
 
 // Selftest page is code-split: it never loads in normal use.
 const SelfTestPage = lazy(() => import('./dev/selftest').then((m) => ({ default: m.SelfTestPage })));
@@ -338,6 +368,117 @@ function shortcutTargetsEditableContent(target: EventTarget | null): boolean {
   return element instanceof Element && Boolean(element.closest(
     'input, textarea, select, [contenteditable], [role="textbox"]',
   ));
+}
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function isOperationNodeMessage(value: unknown): value is OperationNodeMsg {
+  if (!isRecordValue(value)) return false;
+  return (!('stage' in value) || isRecordValue(value.stage))
+    && (!('operation_template' in value) || isRecordValue(value.operation_template));
+}
+
+function isOperationNodeCollection(value: unknown): value is OperationMsg['operation_node'] {
+  if (value === undefined || isOperationNodeMessage(value)) return true;
+  return Array.isArray(value) && value.every(isOperationNodeMessage);
+}
+
+/** Narrow the decoder's intentionally open operation record at the graph boundary. */
+function operationMessageForGraph(value: Record<string, unknown>): OperationMsg | null {
+  const header = value.header;
+  if (!isRecordValue(header) || typeof header.defindex !== 'number') return null;
+  if (!isOperationNodeCollection(value.operation_node)) return null;
+  const variables = varDefList(header.variables);
+  return {
+    header: {
+      defindex: header.defindex,
+      // Carried through so a binding onto an operation-scope variable can be
+      // resolved, and edited, without leaving the graph.
+      ...(variables.length > 0 ? { variables: Array.isArray(header.variables) ? variables : variables[0] } : {}),
+    },
+    ...(value.operation_node !== undefined ? { operation_node: value.operation_node } : {}),
+  };
+}
+
+/** Declared variables from a message header, whatever Many<T> shape they use. */
+function varDefList(value: unknown): VarDefMsg[] {
+  const list = value === undefined ? [] : Array.isArray(value) ? value : [value];
+  return list.filter((entry): entry is VarDefMsg => (
+    isRecordValue(entry) && typeof entry.name === 'string' && entry.name.length > 0
+  ));
+}
+
+const GRAPH_TEXTURE_EXTENSION = /\.(vtf|vmt|tga|psd|png|webp)$/i;
+
+/**
+ * The compositor addresses textures without the `materials/` prefix or an
+ * extension, so both the shipped catalogue and an imported package have to be
+ * folded back to that form before either can be offered as a choice.
+ */
+function graphTextureRef(path: string): string | null {
+  const trimmed = path.trim().replaceAll('\\', '/').replace(/^\/+/, '').toLowerCase();
+  const withoutRoot = trimmed.replace(/^materials\//, '').replace(/^textures\//, '');
+  const withoutExtension = withoutRoot.replace(GRAPH_TEXTURE_EXTENSION, '');
+  return withoutExtension || null;
+}
+
+/** Every texture ref an operation graph already names, in authored order. */
+function operationGraphTextureRefs(graph: OperationGraph | null): string[] {
+  if (!graph) return [];
+  const refs: string[] = [];
+  for (const node of graph.nodes) {
+    const stage = node.raw?.stage;
+    if (!stage) continue;
+    const fields = [
+      stage.texture_lookup?.texture,
+      stage.texture_lookup?.texture_red,
+      stage.texture_lookup?.texture_blue,
+      stage.select?.groups,
+    ];
+    for (const field of fields) {
+      if (field?.variable !== undefined || field?.string === undefined) continue;
+      const ref = graphTextureRef(field.string);
+      if (ref) refs.push(ref);
+    }
+  }
+  return refs;
+}
+
+/** The variable a node's scalar parameter is bound to, if it is bound at all. */
+function boundOperationGraphVariable(
+  graph: OperationGraph,
+  nodeId: string,
+  address: OperationGraphParameterAddress,
+): string | undefined {
+  const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+  const stage = node?.raw?.stage;
+  if (!stage) return undefined;
+  const container = stage.texture_lookup
+    ?? stage.select
+    ?? stage.combine_add
+    ?? stage.combine_multiply
+    ?? stage.combine_lerp
+    ?? stage.apply_sticker;
+  if (!isRecordValue(container)) return undefined;
+  const field = container[address.field];
+  return isRecordValue(field) && typeof field.variable === 'string' ? field.variable : undefined;
+}
+
+function graphNodeOperationPath(node: OperationGraphNode): readonly string[] {
+  return ['operation', ...node.sourcePath.map((segment) => String(segment))];
+}
+
+function downloadBytes(bytes: Uint8Array, fileName: string, mimeType: string): void {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  const url = URL.createObjectURL(new Blob([copy], { type: mimeType }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export default function App() {
@@ -618,7 +759,265 @@ function MainApp() {
     reset: resetEditor,
     reload: reloadEditor,
     getCurrentMessages: getEditorMessages,
+    replaceOperationGraph,
+    setDefinitionVariable,
+    revision: editorRevision,
   } = editorSession;
+  const committedOperationGraph = useMemo<OperationGraph | null>(() => {
+    if (!editorCurrent) return null;
+    const operation = operationMessageForGraph(editorCurrent.operation);
+    if (!operation) return null;
+    try {
+      return operationToGraph(operation);
+    } catch {
+      return null;
+    }
+  }, [editorCurrent]);
+  const [operationGraphDraft, setOperationGraphDraft] = useState<{
+    readonly revision: number;
+    readonly graph: OperationGraph;
+    readonly diagnostics: readonly OperationGraphDiagnostic[];
+  } | null>(null);
+  const [operationGraphEditError, setOperationGraphEditError] = useState<string | null>(null);
+  const [selectedOperationGraphNodeId, setSelectedOperationGraphNodeId] = useState<string | null>(null);
+  const [operationGraphPreviewUrls, setOperationGraphPreviewUrls] = useState<Record<string, string>>({});
+  const operationGraphPreviewUrlLeasesRef = useRef(new Map<string, { url: string; dispose: () => void }>());
+  const operationGraph = operationGraphDraft?.revision === editorRevision
+    ? operationGraphDraft.graph
+    : committedOperationGraph;
+  /**
+   * Texture choices for the graph's on-node pickers: what this graph already
+   * uses, what the imported package carries, then everything the viewer ships.
+   * Ordering matters more than completeness here, because the first group is
+   * almost always the one someone is reaching for.
+   */
+  /**
+   * Bindable variables, nearest scope first. A paint kit declares the ones an
+   * operation's stages actually bind to, while an operation only declares its
+   * own when it overrides a wear level, so both have to be offered.
+   */
+  const operationGraphVariables = useMemo<GraphVariableOption[]>(() => {
+    const options: GraphVariableOption[] = [];
+    const seen = new Set<string>();
+    const push = (variable: VarDefMsg, scope: string, editable: boolean): void => {
+      if (seen.has(variable.name)) return;
+      seen.add(variable.name);
+      options.push({
+        name: variable.name,
+        scope,
+        editable,
+        ...(variable.value !== undefined ? { value: variable.value } : {}),
+      });
+    };
+    for (const variable of varDefList(operationGraph?.operationSnapshot?.header.variables)) {
+      push(variable, 'This operation', true);
+    }
+    const definitionHeader = editorCurrent && isRecordValue(editorCurrent.definition.header)
+      ? editorCurrent.definition.header
+      : undefined;
+    for (const variable of varDefList(definitionHeader?.variables)) push(variable, 'This paint kit', true);
+    return options;
+  }, [editorCurrent, operationGraph]);
+
+  const operationGraphTextureOptions = useMemo<GraphComboboxOption[]>(() => {
+    const options: GraphComboboxOption[] = [];
+    const seen = new Set<string>();
+    const push = (ref: string, group: string, secondary = false): void => {
+      if (seen.has(ref)) return;
+      seen.add(ref);
+      const thumbnail = data?.manifest.textures?.[`textures/${ref}.webp`]
+        ? `${import.meta.env.BASE_URL}data/thumbnails/textures/${ref}.webp`
+        : undefined;
+      options.push({
+        value: ref,
+        label: ref,
+        group,
+        ...(secondary ? { secondary: true } : {}),
+        ...(thumbnail ? { thumbnailUrl: thumbnail } : {}),
+      });
+    };
+
+    const pkg = sourceProvider.package;
+    const packageRefs = new Set<string>();
+    if (pkg) {
+      for (const path of pkg.entries.keys()) {
+        if (!isSupportedTexturePath(path)) continue;
+        const ref = graphTextureRef(path);
+        if (ref) packageRefs.add(ref);
+      }
+    }
+    const exists = (ref: string): boolean => (
+      packageRefs.has(ref) || data?.manifest.textures?.[`textures/${ref}.webp`] !== undefined
+    );
+
+    // What this paint already draws with, first: literal refs on its stages,
+    // then the variable declarations that resolve to a real file. Templated
+    // declarations such as a per-weapon albedo path name no single file, so
+    // they are left out rather than offered as a dead choice.
+    for (const ref of operationGraphTextureRefs(operationGraph)) push(ref, 'In this paint');
+    for (const variable of operationGraphVariables) {
+      const ref = variable.value ? graphTextureRef(variable.value) : null;
+      if (ref && exists(ref)) push(ref, 'In this paint');
+    }
+    for (const ref of packageRefs) push(ref, pkg ? `From ${pkg.name}` : 'Imported package');
+    for (const path of Object.keys(data?.manifest.textures ?? {})) {
+      const ref = graphTextureRef(path);
+      if (ref) push(ref, 'Shipped with the viewer', true);
+    }
+    return options;
+    // packageGeneration changes whenever a different archive is mounted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.manifest.textures, operationGraph, operationGraphVariables, packageGeneration, sourceProvider]);
+  useEffect(() => {
+    setOperationGraphDraft(null);
+    setOperationGraphEditError(null);
+  }, [editableKitId, editorRevision]);
+
+  useEffect(() => {
+    setSelectedOperationGraphNodeId(null);
+  }, [editableKitId]);
+
+  useEffect(() => {
+    if (!operationGraphEditError) return;
+    const timeout = window.setTimeout(() => setOperationGraphEditError(null), 6000);
+    return () => window.clearTimeout(timeout);
+  }, [operationGraphEditError]);
+
+  const applyOperationGraphEdit = useCallback(<T,>(
+    edit: (graph: OperationGraph) => OperationGraphEditResult<T>,
+    onSuccess?: (value: T) => void,
+  ): void => {
+    if (!operationGraph) return;
+    const result = edit(operationGraph);
+    if (!result.ok) {
+      const validation = validateOperationGraph(result.graph);
+      setOperationGraphDraft({ revision: editorRevision, graph: result.graph, diagnostics: validation.diagnostics });
+      setOperationGraphEditError(summarizeOperationGraphDiagnostics(result.diagnostics));
+      return;
+    }
+    const validation = validateOperationGraph(result.graph);
+    onSuccess?.(result.value);
+    if (!validation.valid) {
+      setOperationGraphDraft({ revision: editorRevision, graph: result.graph, diagnostics: validation.diagnostics });
+      setOperationGraphEditError(summarizeOperationGraphDiagnostics(validation.diagnostics));
+      return;
+    }
+    if (replaceOperationGraph(result.graph)) {
+      setOperationGraphDraft(null);
+      setOperationGraphEditError(null);
+      return;
+    }
+    setOperationGraphDraft({ revision: editorRevision, graph: result.graph, diagnostics: validation.diagnostics });
+    setOperationGraphEditError('The valid operation graph could not be serialized.');
+  }, [editorRevision, operationGraph, replaceOperationGraph]);
+
+  const updateOperationGraphRaw = useCallback((nodeId: string, raw: OperationNodeMsg): void => {
+    if (!operationGraph) return;
+    const node = operationGraph.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node || node.locked) return;
+    const next: OperationGraph = {
+      ...operationGraph,
+      nodes: operationGraph.nodes.map((candidate) => (
+        candidate.id === nodeId ? { ...candidate, raw: structuredClone(raw) } : candidate
+      )),
+    };
+    const validation = validateOperationGraph(next);
+    if (!validation.valid) {
+      setOperationGraphDraft({ revision: editorRevision, graph: next, diagnostics: validation.diagnostics });
+      setOperationGraphEditError(summarizeOperationGraphDiagnostics(validation.diagnostics));
+      return;
+    }
+    if (replaceOperationGraph(next)) {
+      setOperationGraphDraft(null);
+      setOperationGraphEditError(null);
+    } else {
+      setOperationGraphDraft({ revision: editorRevision, graph: next, diagnostics: validation.diagnostics });
+      setOperationGraphEditError('The operation graph could not be serialized.');
+    }
+  }, [editorRevision, operationGraph, replaceOperationGraph]);
+
+  const updateOperationGraphParameter = useCallback((
+    nodeId: string,
+    address: OperationGraphParameterAddress,
+    value: OperationGraphParameterValue,
+  ): void => {
+    // Writing a bound parameter means writing its declaration. The graph layer
+    // owns operation-scope variables; paint-kit ones live a level up, so route
+    // those to the definition instead of failing the whole edit.
+    if (value.mode === 'literal' && value.preserveVariable !== false && operationGraph) {
+      const bound = boundOperationGraphVariable(operationGraph, nodeId, address);
+      const declaredInOperation = varDefList(operationGraph.operationSnapshot?.header.variables)
+        .some((variable) => variable.name === bound);
+      if (bound && !declaredInOperation) {
+        if (!setDefinitionVariable(bound, String(value.value))) return;
+        setOperationGraphEditError(null);
+        return;
+      }
+    }
+    applyOperationGraphEdit((graph) => setOperationGraphParameter(graph, { nodeId, address, value }));
+  }, [applyOperationGraphEdit, operationGraph, setDefinitionVariable]);
+
+  const handleOperationGraphChange = useCallback((change: OperationGraphEditorChange): void => {
+    if (!operationGraph) return;
+    switch (change.type) {
+      case 'move':
+      case 'arrange':
+        return;
+      case 'connect':
+        applyOperationGraphEdit((graph) => connectOperationGraph(
+          graph,
+          change.connection.source,
+          change.connection.target,
+          change.connection.inputIndex,
+        ));
+        return;
+      case 'reconnect':
+        applyOperationGraphEdit((graph) => reconnectOperationGraph(
+          graph,
+          change.previous.id,
+          change.connection.source,
+          change.connection.target,
+          change.connection.inputIndex,
+        ));
+        return;
+      case 'disconnect':
+        applyOperationGraphEdit((graph) => disconnectOperationGraph(graph, change.edge.id));
+        return;
+      case 'add':
+        applyOperationGraphEdit(
+          (graph) => createOperationGraphNode(graph, change.kind),
+          (value) => setSelectedOperationGraphNodeId(value.nodeId),
+        );
+        return;
+      case 'duplicate':
+        applyOperationGraphEdit(
+          (graph) => duplicateOperationGraphSubtree(graph, change.nodeId),
+          (value) => setSelectedOperationGraphNodeId(value.rootId),
+        );
+        return;
+      case 'delete':
+        applyOperationGraphEdit(
+          (graph) => deleteOperationGraphSubtree(graph, change.nodeId, { allowInvalid: true }),
+          (value) => {
+            if (value.deletedNodeIds.includes(selectedOperationGraphNodeId ?? '')) {
+              setSelectedOperationGraphNodeId(null);
+            }
+          },
+        );
+        return;
+      case 'reorder': {
+        const order = operationGraphChildren(operationGraph, change.nodeId);
+        if (change.fromIndex < 0 || change.fromIndex >= order.length
+          || change.toIndex < 0 || change.toIndex >= order.length) return;
+        const nextOrder = [...order];
+        const [moved] = nextOrder.splice(change.fromIndex, 1);
+        if (moved === undefined) return;
+        nextOrder.splice(change.toIndex, 0, moved);
+        applyOperationGraphEdit((graph) => reorderOperationGraphInputs(graph, change.nodeId, nextOrder));
+        return;
+      }
+    }
+  }, [applyOperationGraphEdit, operationGraph, selectedOperationGraphNodeId]);
   // The definition/operation messages the editor session holds carry no
   // items_game defindex table, so the weapon each authored slot paints (and
   // where that slot lives) is resolved separately, off the decoded source,
@@ -656,7 +1055,7 @@ function MainApp() {
   const [editorTool, setEditorTool] = useState<'paint' | 'sticker'>('paint');
   // Parts/Transform sub-view of paint mode. Lives beside editorTool rather
   // than nested under it, since it only matters while editorTool === 'paint'.
-  const [paintSubView, setPaintSubView] = useState<'parts' | 'transform'>('parts');
+  const [paintSubView, setPaintSubView] = useState<'parts' | 'transform' | 'graph'>('parts');
   const [transformScope, setTransformScope] = useState<'all' | 'weapon'>('all');
   const [transformIsolateLayer, setTransformIsolateLayer] = useState(false);
   const [transformUvSurfaceUrl, setTransformUvSurfaceUrl] = useState<string | null>(null);
@@ -871,11 +1270,17 @@ function MainApp() {
     () => stickerRecipe ? collectRecipeLayerNodes(stickerRecipe.tree) : [],
     [stickerRecipe],
   );
-  const activeTransformLayerNode = weaponBaseLayerActive && baseTextureTransform && stickerRecipe
+  const baseRecipeLayerNode = baseTextureTransform && stickerRecipe
     ? findRecipeTextureNode(stickerRecipe.tree, baseTextureTransform.textureRef)
+    : null;
+  const activeTransformLayerNode = weaponBaseLayerActive
+    ? baseRecipeLayerNode
     : activeGroupVisualIndex >= 0
       ? recipeLayerNodes[activeGroupVisualIndex] ?? null
       : null;
+  const baseLayerTextureRef = baseRecipeLayerNode?.type === 'texture_lookup'
+    ? baseRecipeLayerNode.texture
+    : baseTextureTransform?.textureRef;
   const transformPreviewRecipe = useMemo(() => {
     if (!stickerRecipe || !transformDraft
       || (!activeTransformLayerNode && !(weaponBaseLayerActive && baseTextureTransform))) {
@@ -1363,6 +1768,123 @@ function MainApp() {
     () => editorCurrent ? discoverStickerPlacementTargets(editorCurrent, stickerRecipe) : [],
     [editorCurrent, stickerRecipe],
   );
+
+  useEffect(() => {
+    const previewUrlLeases = operationGraphPreviewUrlLeasesRef.current;
+    const disposePreviews = () => {
+      for (const lease of previewUrlLeases.values()) lease.dispose();
+      previewUrlLeases.clear();
+      setOperationGraphPreviewUrls({});
+    };
+    disposePreviews();
+    if (!operationGraph || paintSubView !== 'graph' || !stickerRecipe || !engineReady) return;
+    const compositor = compositorRef.current;
+    if (!compositor) return;
+    let cancelled = false;
+    const previewNodes = operationGraph.nodes.filter((node) => (
+      node.kind !== 'output'
+      && node.kind !== 'operation_template'
+      && node.kind !== 'invalid'
+    ));
+    const render = async (): Promise<void> => {
+      let completedBatch: Record<string, string> = {};
+      let completedBatchSize = 0;
+      const publishBatch = (): void => {
+        if (completedBatchSize === 0) return;
+        const published = completedBatch;
+        completedBatch = {};
+        completedBatchSize = 0;
+        setOperationGraphPreviewUrls((current) => ({ ...current, ...published }));
+      };
+      for (const node of previewNodes) {
+        const result = await composeOperationGraphNode(compositor, {
+          graph: operationGraph,
+          nodeId: node.id,
+          recipeRoots: stickerRecipe.tree,
+          seed: state.seed,
+          dimensions: { width: 256, height: 256 },
+        } as const);
+        if (cancelled) {
+          if (result.ok) result.render.dispose();
+          return;
+        }
+        if (!result.ok) continue;
+        try {
+          const urlLease = await operationGraphPreviewObjectUrl(result.render, { maxDimension: 180 });
+          if (cancelled) {
+            urlLease.dispose();
+            return;
+          }
+          previewUrlLeases.set(node.id, urlLease);
+          completedBatch[node.id] = urlLease.url;
+          completedBatchSize += 1;
+          if (completedBatchSize >= 6) publishBatch();
+        } catch {
+          // Individual unsupported previews do not block the rest of the graph.
+        } finally {
+          result.render.dispose();
+        }
+      }
+      if (!cancelled) publishBatch();
+    };
+    void render().catch(() => undefined);
+    return () => {
+      cancelled = true;
+      disposePreviews();
+    };
+  }, [compositorRef, editorRevision, engineReady, operationGraph, paintSubView, state.seed, stickerRecipe]);
+
+  const exportOperationGraphNode = useCallback(async (
+    nodeId: string,
+    format: OperationGraphExportFormat,
+  ): Promise<void> => {
+    if (!operationGraph || !stickerRecipe || !compositorRef.current) return;
+    const result = await composeOperationGraphNode(compositorRef.current, {
+      graph: operationGraph,
+      nodeId,
+      recipeRoots: stickerRecipe.tree,
+      seed: state.seed,
+      dimensions: { width: 1024, height: 1024 },
+    });
+    if (!result.ok) return;
+    const render = result.render;
+    try {
+      const node = operationGraph.nodes.find((candidate) => candidate.id === nodeId);
+      const stage = node?.raw?.stage;
+      const sourceField = stage?.texture_lookup?.texture
+        ?? stage?.texture_lookup?.texture_red
+        ?? stage?.texture_lookup?.texture_blue
+        ?? stage?.select?.groups;
+      const sourceHint = sourceField?.variable ?? sourceField?.string;
+      const stageIndex = operationGraph.nodes
+        .filter((candidate) => candidate.kind !== 'output')
+        .findIndex((candidate) => candidate.id === nodeId) + 1;
+      const parts = [
+        selectedKit?.name ?? 'warpaint',
+        state.weaponKey.replace(/^c_/, '') || 'weapon',
+        state.team,
+        data?.manifest.wearNames[state.wearIndex] ?? `wear-${state.wearIndex}`,
+        `stage-${String(stageIndex).padStart(2, '0')}`,
+        node?.label ?? 'operation',
+        sourceHint?.replaceAll('\\', '/').split('/').at(-1),
+      ];
+      const fileBase = parts
+        .filter((part): part is string => Boolean(part))
+        .map((part) => part.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''))
+        .filter(Boolean)
+        .join('_')
+        .slice(0, 160) || 'warpaint_stage';
+      if (format === 'png') {
+        downloadBytes(await exportOperationGraphPng(render, { maxDimension: 1024 }), `${fileBase}.png`, 'image/png');
+      } else {
+        downloadBytes(exportOperationGraphVtf(render), `${fileBase}.vtf`, 'application/octet-stream');
+      }
+    } catch (cause) {
+      setOperationGraphEditError(cause instanceof Error ? cause.message : 'The graph node could not be exported.');
+    } finally {
+      render.dispose();
+    }
+  }, [compositorRef, data?.manifest.wearNames, operationGraph, selectedKit?.name, state.seed, state.team, state.wearIndex, state.weaponKey, stickerRecipe]);
   const currentStickerTextureChoices = useMemo(() => {
     const choices = new Map(allStickerTextureChoices.map((choice) => [choice.ref, choice]));
     const generatedReferences = Object.keys(data?.manifest.textures ?? {});
@@ -1969,10 +2491,10 @@ function MainApp() {
     [groupAssignmentTargets],
   );
   const layerColorTextureRefs = useMemo(
-    () => baseTextureTransform
-      ? [...editableLayerTextureRefs, baseTextureTransform.textureRef]
+    () => baseLayerTextureRef
+      ? [...editableLayerTextureRefs, baseLayerTextureRef]
       : editableLayerTextureRefs,
-    [baseTextureTransform, editableLayerTextureRefs],
+    [baseLayerTextureRef, editableLayerTextureRefs],
   );
 
   useEffect(() => {
@@ -3697,6 +4219,63 @@ function MainApp() {
     },
   } : undefined;
 
+  const openOperationTextureNode = (nodeId: string): void => {
+    const node = operationGraph?.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node || node.kind !== 'texture_lookup') return;
+    const stagePath = [...graphNodeOperationPath(node), 'stage', 'texture_lookup'];
+    const samePath = (left: readonly string[] | undefined, right: readonly string[]) => (
+      Boolean(left) && left!.join('\0') === right.join('\0')
+    );
+    if (baseTextureTransform && samePath(baseTextureTransform.transform.target.stagePath, stagePath)) {
+      setWeaponBaseLayerActive(true);
+      setPaintSubView('transform');
+      setEditorTool('paint');
+      return;
+    }
+    const targetIndex = transformDiscovery?.targets.findIndex((target) => (
+      target !== null && samePath(target.target.stagePath, stagePath)
+    )) ?? -1;
+    if (targetIndex < 0 || !groupDiscovery) return;
+    const groupTarget = groupDiscovery.targets[targetIndex];
+    const selectorIndex = groupTarget
+      ? editableGroupTargets.findIndex((target) => target.sourceKey === groupTarget.sourceKey)
+      : -1;
+    if (selectorIndex < 0) return;
+    setWeaponBaseLayerActive(false);
+    setActiveEditorSelector(selectorIndex);
+    setPaintSubView('transform');
+    setEditorTool('paint');
+  };
+
+  const openOperationSelectNode = (nodeId: string): void => {
+    const node = operationGraph?.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node || node.kind !== 'select' || !groupDiscovery) return;
+    const selectNodes = operationGraph?.nodes.filter((candidate) => candidate.kind === 'select') ?? [];
+    const operationIndex = selectNodes.findIndex((candidate) => candidate.id === node.id);
+    const groupTarget = operationIndex >= 0 ? groupDiscovery.targets[operationIndex] : undefined;
+    const selectorIndex = groupTarget
+      ? editableGroupTargets.findIndex((target) => target.sourceKey === groupTarget.sourceKey)
+      : -1;
+    if (selectorIndex < 0) return;
+    setWeaponBaseLayerActive(false);
+    setActiveEditorSelector(selectorIndex);
+    setPaintSubView('parts');
+    setEditorTool('paint');
+  };
+
+  const openOperationStickerNode = (nodeId: string): void => {
+    const node = operationGraph?.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node || node.kind !== 'apply_sticker') return;
+    const stagePath = [...graphNodeOperationPath(node), 'stage', 'apply_sticker'];
+    const targetIndex = stickerTargets.findIndex((target) => target.stagePaths.some((path) => (
+      path.join('\0') === stagePath.join('\0')
+    )));
+    if (targetIndex < 0) return;
+    updateStickerDraft(null);
+    setActiveStickerTarget(targetIndex);
+    setEditorTool('sticker');
+  };
+
   const toggleMobilePanel = (panel: MobilePanel) => setMobilePanel((current) => (current === panel ? 'none' : panel));
 
   return (
@@ -3786,7 +4365,12 @@ function MainApp() {
             workbenchOpen={workbenchOpen}
             editingMode={lightingPanelOpen && state.preset === CUSTOM_LIGHTING_ID
               ? 'lighting'
-              : editorTabActive ? editorTool : null}
+              : editorTabActive
+                // The graph is a sub-view of paint editing, but its controls
+                // share almost nothing with the weapon surface, so it gets its
+                // own page in the reference.
+                ? editorTool === 'paint' && paintSubView === 'graph' ? 'graph' : editorTool
+                : null}
             onToggleWorkbench={() => {
               setWorkbenchMounted(true);
               setWorkbenchOpen((open) => !open);
@@ -3993,7 +4577,7 @@ function MainApp() {
                   )),
                   baseLayer: baseTextureTransform ? {
                     label: baseTextureTransform.label,
-                    thumbnail: layerTexturePreviewUrls[baseTextureTransform.textureRef] ?? null,
+                    thumbnail: baseLayerTextureRef ? layerTexturePreviewUrls[baseLayerTextureRef] ?? null : null,
                     active: weaponBaseLayerActive,
                     onSelect: () => {
                       setPanelPreviewGroup(null);
@@ -4040,7 +4624,10 @@ function MainApp() {
                   canUndo: editorCanUndo,
                   canRedo: editorCanRedo,
                   error: editableKitId !== null
-                    ? (editorPackageExportError ?? (editorSessionError ? 'That area could not be changed.' : editorPreviewError))
+                    ? (editorPackageExportError
+                      ?? operationGraphEditError
+                      ?? editorSessionError
+                      ?? editorPreviewError)
                     : null,
                   selectors: editorSelectors,
                   activeSelectorId: weaponBaseLayerActive ? 'weapon-base' : String(activeEditorSelector),
@@ -4055,6 +4642,24 @@ function MainApp() {
                   onReset: resetEditorSynced,
                   onDownloadPackage: downloadEditorPackage,
                   ...(transformEditorProps ? { transform: transformEditorProps } : {}),
+                  ...(operationGraph ? {
+                    graph: {
+                      graph: operationGraph,
+                      selectedNodeId: selectedOperationGraphNodeId ?? undefined,
+                      onSelectNode: setSelectedOperationGraphNodeId,
+                      onGraphChange: handleOperationGraphChange,
+                      onUpdateNodeRaw: updateOperationGraphRaw,
+                      onUpdateParameter: updateOperationGraphParameter,
+                      textureOptions: operationGraphTextureOptions,
+                      variables: operationGraphVariables,
+                      onOpenTextureEditor: openOperationTextureNode,
+                      onOpenSelectEditor: openOperationSelectNode,
+                      onOpenStickerEditor: openOperationStickerNode,
+                      onPreviewNode: (nodeId) => operationGraphPreviewUrls[nodeId],
+                      onExportNode: (nodeId, format) => { void exportOperationGraphNode(nodeId, format); },
+                      readOnly: editorStatus !== 'ready',
+                    },
+                  } : {}),
                   ...(materialsEditorProps ? { materials: materialsEditorProps } : {}),
                   paintSubView,
                   onPaintSubViewChange: setPaintSubView,

@@ -68,7 +68,7 @@ export function StageToolbar({
   onResetView,
 }: {
   workbenchOpen: boolean;
-  editingMode?: 'paint' | 'sticker' | 'lighting' | null;
+  editingMode?: 'paint' | 'sticker' | 'lighting' | 'graph' | null;
   onToggleWorkbench: () => void;
   onSavePng: () => Promise<void>;
   onCopyImage: () => Promise<void>;

@@ -1,10 +1,23 @@
 import { useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Download,
+  Focus,
+  LayoutDashboard,
+  Search,
+  Trash2,
+  Waypoints,
+  X,
+} from 'lucide-react';
 import './ControlsHelpModal.css';
 
 type ControlsHelpModalProps = {
   open: boolean;
-  editingMode?: 'paint' | 'sticker' | 'lighting' | null;
+  editingMode?: 'paint' | 'sticker' | 'lighting' | 'graph' | null;
   onClose: () => void;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
 };
@@ -18,8 +31,17 @@ const focusableSelector = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
-function Key({ children }: { children: React.ReactNode }) {
-  return <kbd className="controls-help-key">{children}</kbd>;
+function Key({ children, label }: { children: React.ReactNode; label?: string }) {
+  return <kbd className="controls-help-key" aria-label={label}>{children}</kbd>;
+}
+
+function GraphControl({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return <span className="controls-help-graph-control">{icon}<span>{children}</span></span>;
+}
+
+/** A short length of line, so the legend looks like what it describes. */
+function Swatch({ type }: { type: 'texture' | 'mask' }) {
+  return <span className="controls-help-swatch" data-type={type} aria-hidden="true" />;
 }
 
 function ControlRow({ keys, children }: { keys: React.ReactNode; children: React.ReactNode }) {
@@ -124,6 +146,65 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
                 <ControlRow keys={<Key>Drag</Key>}>Rotate rig and weapon</ControlRow>
                 <ControlRow keys={<><Key>Right drag</Key><Key>Middle drag</Key></>}>Move weapon</ControlRow>
                 <ControlRow keys={<Key>Scroll</Key>}>Zoom</ControlRow>
+              </section>
+            </>
+          ) : editingMode === 'graph' ? (
+            <>
+              <section className="controls-help-section" aria-labelledby="graph-canvas-heading">
+                <h3 id="graph-canvas-heading">Graph canvas</h3>
+                <ControlRow keys={<Key>Drag</Key>}>Pan the canvas</ControlRow>
+                <ControlRow keys={<Key>Scroll</Key>}>Zoom</ControlRow>
+                <ControlRow keys={<Key>Click a stage</Key>}>Select it and trace its path</ControlRow>
+                <ControlRow keys={<Key>Drag a stage</Key>}>Move it</ControlRow>
+                <ControlRow keys={<Key>Click empty space</Key>}>Clear the selection</ControlRow>
+              </section>
+
+              <section className="controls-help-section" aria-labelledby="graph-connection-heading">
+                <h3 id="graph-connection-heading">Connections</h3>
+                <div className="controls-help-group">
+                  <h4>Wiring</h4>
+                  <ControlRow keys={<Key>Drag from a port</Key>}>Start a connection</ControlRow>
+                  <ControlRow keys={<Key>Drop on a lit input</Key>}>Connect the two stages</ControlRow>
+                  <ControlRow keys={<Key>Drag either end</Key>}>Move an existing connection</ControlRow>
+                  <ControlRow keys={<Key>Hover a line</Key>}>Reveal its disconnect button</ControlRow>
+                </div>
+                <div className="controls-help-group">
+                  <h4>What a line carries</h4>
+                  <ControlRow keys={<Swatch type="texture" />}>Texture, a painted surface</ControlRow>
+                  <ControlRow keys={<Swatch type="mask" />}>Mask, where a surface applies</ControlRow>
+                </div>
+              </section>
+
+              <section className="controls-help-section" aria-labelledby="graph-selected-heading">
+                <h3 id="graph-selected-heading">Selected stage</h3>
+                <ControlRow keys={<><GraphControl icon={<Focus size={12} />}>Focus</GraphControl><Key>F</Key></>}>Focus it</ControlRow>
+                <ControlRow keys={<><GraphControl icon={<Copy size={12} />}>Duplicate</GraphControl><Key>Ctrl+D</Key></>}>Duplicate</ControlRow>
+                <ControlRow keys={<><GraphControl icon={<Trash2 size={12} />}>Delete</GraphControl><Key>Del</Key></>}>Remove the stage or connection</ControlRow>
+                <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo paint edit</ControlRow>
+                <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo paint edit</ControlRow>
+              </section>
+
+              <section className="controls-help-section" aria-labelledby="graph-toolbar-heading">
+                <h3 id="graph-toolbar-heading">Graph toolbar</h3>
+                <ControlRow keys={<span className="controls-help-graph-search"><Search size={12} /> Find nodes <small>1/4</small><ChevronUp size={11} /><ChevronDown size={11} /></span>}>Search, then use the arrows or Enter to move between matches</ControlRow>
+                <ControlRow keys={(
+                  <span className="controls-help-graph-trace" aria-label="Trace all, inputs, or outputs">
+                    <span data-active="true"><Waypoints size={11} /> Both</span>
+                    <span><ArrowUp size={11} /> Inputs</span>
+                    <span><ArrowDown size={11} /> Outputs</span>
+                  </span>
+                )}>Choose which connections to trace</ControlRow>
+                <ControlRow keys={<GraphControl icon={<LayoutDashboard size={12} />}>Arrange</GraphControl>}>Lay out every stage automatically</ControlRow>
+                <ControlRow keys={<GraphControl icon={<Download size={12} />}>Export</GraphControl>}>Choose PNG image or VTF texture</ControlRow>
+              </section>
+
+              <section className="controls-help-section" aria-labelledby="graph-picker-heading">
+                <h3 id="graph-picker-heading">Value pickers</h3>
+                <ControlRow keys={<><Key label="Up arrow"><ArrowUp size={12} /></Key><Key label="Down arrow"><ArrowDown size={12} /></Key></>}>Move through the list</ControlRow>
+                <ControlRow keys={<><Key>Home</Key><Key>End</Key></>}>Jump to either end</ControlRow>
+                <ControlRow keys={<><Key>PgUp</Key><Key>PgDn</Key></>}>Move a screen at a time</ControlRow>
+                <ControlRow keys={<Key>Enter</Key>}>Pick the highlighted entry</ControlRow>
+                <ControlRow keys={<Key>Esc</Key>}>Cancel without changing it</ControlRow>
               </section>
             </>
           ) : editingMode === 'sticker' ? (

@@ -1,0 +1,405 @@
+/* Controls shared by the operation graph's on-node parameter editing. */
+
+.graph-value-field {
+  display: grid;
+  gap: 3px;
+  padding: 6px 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.graph-value-field:first-child { border-top: 0; }
+
+.graph-value-field[data-primary='true'] {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.graph-value-head {
+  display: flex;
+  min-height: 16px;
+  align-items: center;
+  gap: 6px;
+}
+
+.graph-value-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: .03em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.graph-value-bind {
+  display: inline-flex;
+  height: 17px;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-dim);
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.graph-value-bind:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text); }
+.graph-value-bind[data-active='true'] {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.graph-value-bind:disabled { cursor: default; opacity: .45; }
+
+.graph-value-control {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.graph-value-control > .graph-combobox,
+.graph-value-control > .graph-range,
+.graph-value-control > .graph-text-input { min-width: 0; flex: 1; }
+
+.graph-value-scope {
+  flex: none;
+  padding: 1px 4px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius-sm, 4px);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 8.5px;
+  font-weight: 650;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.graph-value-scope[data-locked='true'] {
+  border-color: var(--border);
+  color: var(--text-dim);
+  background: var(--panel-2);
+}
+
+.graph-value-warning {
+  margin: 0;
+  color: var(--warn, #a56b00);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+/* Combobox ---------------------------------------------------------------- */
+
+.graph-combobox { position: relative; min-width: 0; }
+
+.graph-combobox-control {
+  display: flex;
+  min-width: 0;
+  height: 24px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--panel);
+}
+
+.graph-combobox-control:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.graph-combobox[data-disabled='true'] .graph-combobox-control { opacity: .55; }
+.graph-combobox-leading { flex: none; color: var(--text-dim); }
+
+.graph-combobox-input {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+}
+
+.graph-combobox-input::placeholder { color: var(--text-dim); }
+
+.graph-combobox-toggle {
+  display: inline-flex;
+  width: 18px;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-dim);
+  background: transparent;
+  cursor: pointer;
+}
+
+.graph-combobox-toggle:hover:not(:disabled) { color: var(--text); background: var(--panel-2); }
+
+.graph-combobox-popover {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md, 6px);
+  background: var(--panel);
+  box-shadow: var(--shadow-pop, 0 10px 26px rgb(0 0 0 / 26%));
+}
+
+/* Matching the field's width would squeeze a texture path, its folder and the
+   key hints into 246px, so the list takes the room it needs and only falls
+   back to the anchor when the field is the wider of the two. */
+.graph-combobox-positioner {
+  z-index: 1200;
+  width: max(var(--anchor-width), 320px);
+  max-width: var(--available-width);
+}
+
+.graph-combobox-list {
+  max-height: min(254px, var(--available-height, 254px));
+  overflow-y: auto;
+  /* Keeps a row clear of the sticky group heading when the list scrolls to
+     reach it, rather than parking it half under the header. */
+  scroll-padding-block: 22px 0;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.graph-combobox-message {
+  margin: 0;
+  padding: 8px 9px;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+/* Sticky headings keep the answer to "where am I in this list" on screen
+   while scrolling a few hundred texture paths. */
+.graph-combobox-group {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  padding: 5px 9px 3px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--panel-2) 70%, var(--panel));
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.graph-combobox-option {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 9px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.graph-combobox-option[data-highlighted] {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.graph-combobox-thumb {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--panel-2);
+  object-fit: cover;
+}
+
+.graph-combobox-option-text {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+/* The filename identifies the entry; the folder only disambiguates it, so it
+   sits underneath at a lower weight instead of pushing the name off-screen. */
+.graph-combobox-name {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-combobox-path {
+  overflow: hidden;
+  color: var(--text-dim);
+  direction: rtl;
+  font-size: 9px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-combobox-option[data-selected='true'] .graph-combobox-name { font-weight: 700; }
+
+.graph-combobox-detail {
+  max-width: 40%;
+  flex: none;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-combobox-check { flex: none; color: var(--accent); }
+
+.graph-combobox-footer {
+  display: flex;
+  min-height: 22px;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--panel-2) 55%, var(--panel));
+  font-size: 9px;
+}
+
+/* The count yields first when both halves cannot fit; the key hints are the
+   part nobody can guess. */
+.graph-combobox-status {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.graph-combobox-keys { display: inline-flex; flex: none; align-items: center; gap: 3px; }
+
+.graph-combobox-keys kbd {
+  min-width: 13px;
+  padding: 0 3px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--panel);
+  font: inherit;
+  font-size: 8.5px;
+}
+
+/* Numbers ----------------------------------------------------------------- */
+
+.graph-range {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.graph-number,
+.graph-text-input {
+  min-width: 0;
+  height: 24px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  outline: 0;
+  color: var(--text);
+  background: var(--panel);
+  font: inherit;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-number {
+  width: 100%;
+  flex: 1;
+  appearance: textfield;
+  text-align: right;
+}
+
+.graph-number::-webkit-outer-spin-button,
+.graph-number::-webkit-inner-spin-button { margin: 0; appearance: none; }
+
+.graph-number:focus,
+.graph-text-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.graph-number:disabled,
+.graph-text-input:disabled { cursor: default; opacity: .55; }
+
+.graph-range-separator,
+.graph-axis { flex: none; color: var(--text-dim); font-size: 9px; }
+.graph-axis { width: 8px; font-weight: 650; }
+
+.graph-range-mode {
+  height: 24px;
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-dim);
+  background: var(--panel);
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.graph-range-mode:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text); }
+.graph-range[data-varies='true'] .graph-range-mode {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Segmented toggle -------------------------------------------------------- */
+
+.graph-segmented {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+}
+
+.graph-segmented button {
+  min-width: 34px;
+  height: 22px;
+  padding: 0 7px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  color: var(--text-dim);
+  background: var(--panel);
+  cursor: pointer;
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 650;
+}
+
+.graph-segmented button:first-child { border-left: 0; }
+.graph-segmented button[data-active='true'] { color: var(--accent-text); background: var(--accent); }
+.graph-segmented button:disabled { cursor: default; opacity: .55; }
+
+.graph-value-field :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
