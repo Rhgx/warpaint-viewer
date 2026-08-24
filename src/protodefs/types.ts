@@ -37,6 +37,8 @@ export interface ProtoDefKit {
   name: string;
   /** Weapon keys this kit paints, restricted to weapons the viewer can render. */
   weapons: string[];
+  /** Per-weapon Source material paths authored by item_data.material_override. */
+  materialOverrides?: Record<string, string>;
   hasTeamTextures: boolean;
   /** The prefab requests team colors, but the definition explicitly disables team textures. */
   teamTextureMismatch: boolean;

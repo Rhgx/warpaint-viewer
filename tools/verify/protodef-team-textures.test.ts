@@ -16,6 +16,7 @@ function decodeDefinition(tags: string[], hasTeamTextures: boolean) {
     has_team_textures: hasTeamTextures,
     flamethrower: {
       item_definition_template: { defindex: 165, type: 'DEF_TYPE_PAINTKIT_ITEM_DEFINITION' },
+      data: { material_override: 'Models/Paintkits/Custom/C_Flamethrower' },
     },
   };
   return decodeProtoDefsFromJson(baseBytes, [{ name: 'definition.json', text: JSON.stringify(definition) }], {
@@ -34,4 +35,11 @@ test('ordinary definitions with a false team-texture flag stay single-team', () 
   const kit = decodeDefinition(['workshop', 'three_sticker_four_texture_inner_wear'], false);
   assert.equal(kit?.hasTeamTextures, false);
   assert.equal(kit?.teamTextureMismatch, false);
+});
+
+test('imported definitions retain per-weapon material overrides', () => {
+  const kit = decodeDefinition(['workshop'], false);
+  assert.deepEqual(kit?.materialOverrides, {
+    c_flamethrower: 'models/paintkits/custom/c_flamethrower',
+  });
 });

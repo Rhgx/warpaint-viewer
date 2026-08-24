@@ -106,6 +106,7 @@ function toCatalogKit(kit: ProtoDefKit): PaintkitEntry {
     hasTeamTextures: kit.hasTeamTextures,
     weapons: kit.weapons,
     perWear: kit.perWear,
+    ...(kit.materialOverrides ? { materialOverrides: kit.materialOverrides } : {}),
   };
 }
 

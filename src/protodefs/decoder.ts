@@ -702,6 +702,13 @@ function assembleDecoded(raw: RawDecoded, options: ProtoDefOpenOptions): Decoded
     kitsByDefindex.set(defindex, { def, slots });
 
     const weapons = [...new Set(slots.map((s) => s.weaponKey))].sort();
+    const materialOverrides: Record<string, string> = {};
+    for (const { item, weaponKey } of slots) {
+      const override = item.data?.material_override;
+      if (weaponKey !== 'paintkit_tool' && typeof override === 'string' && override) {
+        materialOverrides[weaponKey] = override.toLowerCase();
+      }
+    }
     // Cheap proxy for the build pipeline's per-wear rule (see ProtoDefKit.perWear):
     // any slot's item definition template offering more than one per-wear entry.
     const perWear = slots.some((s) => many(s.itemDef.definition).length > 1);
@@ -719,6 +726,7 @@ function assembleDecoded(raw: RawDecoded, options: ProtoDefOpenOptions): Decoded
       defindex,
       name: def.header.name || `paintkit_${defindex}`,
       weapons,
+      ...(Object.keys(materialOverrides).length ? { materialOverrides } : {}),
       hasTeamTextures: !!def.has_team_textures,
       teamTextureMismatch: !def.has_team_textures && definitionUsesTeamColorPrefab(def),
       perWear,
