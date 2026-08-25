@@ -37,15 +37,12 @@ import { loadImage, mergeAlpha, readTexture } from '../../workbench/textureImpor
 import type { ExportDefinitionsContext, ExportItem } from './ExportPanel';
 import type { EditorDownloadFormat } from '../../editor/definitionExport';
 import type { OperationGraphEditorProps } from './OperationGraphEditor';
+import { AssetFilesPanel } from './AssetFilesPanel';
 import './CustomWarpaintWorkbench.css';
 
 // Tabs.Panel mounts its children only after they become active. Keeping the
-// panel imports lazy therefore makes the first Files visit independent from
-// the editor/export/source-detail code, while preserving each tab's state once
-// it has been visited.
-const AssetFilesPanel = lazy(() =>
-  import('./AssetFilesPanel').then(({ AssetFilesPanel: panel }) => ({ default: panel })),
-);
+// secondary panel imports lazy keeps the Files controls immediately available
+// while preserving each secondary tab's state once it has been visited.
 const ExportPanel = lazy(() =>
   import('./ExportPanel').then(({ ExportPanel: panel }) => ({ default: panel })),
 );
@@ -652,30 +649,28 @@ export function CustomWarpaintWorkbench({
         )}
 
         <Tabs.Panel value="files" className="custom-workbench-panel">
-          <Suspense fallback={<WorkbenchPanelFallback />}>
-            <AssetFilesPanel
-              slots={slots}
-              assets={assets}
-              errors={errors}
-              busy={busy}
-              loading={loading}
-              textureMetadata={textureMetadata}
-              resolveTexture={resolveTexture}
-              resolvePackageTexture={resolvePackageTexture}
-              hasPackageTexture={hasPackageTexture}
-              packageGeneration={packageGeneration ?? 0}
-              sourceMounted={sourcePackage.status === 'mounted'}
-              confirmReset={confirmReset}
-              onConfirmReset={() => setConfirmReset(true)}
-              onResetAll={resetAll}
-              onExport={() => onTabChange('export')}
-              onUpdateFile={(slot, file, alphaOnly) =>
-                void updateFile(slot, file, alphaOnly)
-              }
-              onRemoveAlpha={(ref) => void removeAlpha(ref)}
-              onResetSlot={resetSlot}
-            />
-          </Suspense>
+          <AssetFilesPanel
+            slots={slots}
+            assets={assets}
+            errors={errors}
+            busy={busy}
+            loading={loading}
+            textureMetadata={textureMetadata}
+            resolveTexture={resolveTexture}
+            resolvePackageTexture={resolvePackageTexture}
+            hasPackageTexture={hasPackageTexture}
+            packageGeneration={packageGeneration ?? 0}
+            sourceMounted={sourcePackage.status === 'mounted'}
+            confirmReset={confirmReset}
+            onConfirmReset={() => setConfirmReset(true)}
+            onResetAll={resetAll}
+            onExport={() => onTabChange('export')}
+            onUpdateFile={(slot, file, alphaOnly) =>
+              void updateFile(slot, file, alphaOnly)
+            }
+            onRemoveAlpha={(ref) => void removeAlpha(ref)}
+            onResetSlot={resetSlot}
+          />
         </Tabs.Panel>
         <Tabs.Panel value="editor" className="custom-workbench-panel custom-workbench-editor-panel">
           <Suspense fallback={<WorkbenchPanelFallback />}>
