@@ -233,11 +233,19 @@ export function stickerPlacementFromQuad(quad: StickerAffineQuad): StickerPlacem
   const width = Math.hypot(horizontal.x, horizontal.y);
   const height = Math.hypot(vertical.x, vertical.y);
   if (width < 1e-9 || height < 1e-9) {
-    return { editable: false, reason: 'This sticker has no usable size.' };
+    return {
+      editable: false,
+      reason: width < 1e-9 && height < 1e-9
+        ? 'All three corner points are in the same place. The sticker needs a width and height before you can move it.'
+        : 'Two corner points are in the same place. Move one point so the sticker has a width and height.',
+    };
   }
   const cross = horizontal.x * vertical.y - horizontal.y * vertical.x;
   if (Math.abs(cross) <= width * height * 1e-8) {
-    return { editable: false, reason: 'This sticker placement is degenerate and cannot be adjusted here.' };
+    return {
+      editable: false,
+      reason: 'The three corner points are in a straight line. Move one point so the sticker has a width and height.',
+    };
   }
   return {
     editable: true,

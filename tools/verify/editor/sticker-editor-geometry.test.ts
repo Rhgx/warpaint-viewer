@@ -88,8 +88,14 @@ test('compact sticker editor geometry', () => {
 
   const mirrored = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0, -0.2] });
   assert.equal(mirrored.editable, true, 'mirrored affine quads retain their reflection while edited');
+  const collapsed = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0, 0], bl: [0, 0] });
+  assert.equal(collapsed.editable, false, 'a collapsed quad requires initialization');
+  assert.match(collapsed.reason ?? '', /all three corner points/i);
+  const recovered = geometry.stickerPlacementFromQuad(geometry.stickerPlacementToQuad(geometry.fitStickerPlacement(2))!);
+  assert.equal(recovered.editable, true, 'the aspect-aware starting placement recovers a collapsed quad');
   const degenerate = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0.2, 0] });
   assert.equal(degenerate.editable, false, 'a collinear quad remains read-only');
+  assert.match(degenerate.reason ?? '', /straight line/i);
 
   const resized = geometry.resizeStickerFromCorner(
     { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 },

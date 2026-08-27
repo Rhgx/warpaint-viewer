@@ -83,6 +83,7 @@ import { discoverStickerPlacementTargets } from './editor/stickerTargets';
 import {
   DEFAULT_STICKER_PLACEMENT,
   constrainStickerPlacementToTexture,
+  fitStickerPlacement,
   snapStickerRotationToCardinal,
   stickerPlacementFromQuad,
   applyStickerPlacementToQuad,
@@ -4534,6 +4535,12 @@ function MainApp() {
                       renderStickerArtwork: !selectedStickerUsesComposedArtwork,
                       textureAspect: stickerSurfaceAspect,
                       stickerAspect,
+                      onCreatePlacement: selectedStickerTarget?.editable && !stickerPlacementRead.editable
+                        ? () => {
+                            const quad = stickerPlacementToQuad(fitStickerPlacement(stickerAspect));
+                            if (quad) setSessionStickerQuad(selectedStickerTarget.target, quad);
+                          }
+                        : undefined,
                       placement: stickerPlacement ?? DEFAULT_STICKER_PLACEMENT,
                       quad: stickerDraftQuad ?? authoredStickerQuad ?? undefined,
                       onPlacementChange: changeStickerPlacement,
@@ -4556,7 +4563,9 @@ function MainApp() {
                       onInteractionCancel: () => updateStickerDraft(null),
                       disabled: !stickerEditorReady,
                       notice: (!selectedStickerTarget?.editable || !stickerPlacementRead.editable)
-                        ? 'This sticker cannot be repositioned safely.'
+                        ? selectedStickerTarget?.reason
+                          ?? stickerPlacementRead.reason
+                          ?? 'This sticker position cannot be changed.'
                         : (!stickerEditorReady ? 'Preparing sticker editor…' : null),
                     },
                   } : {}),

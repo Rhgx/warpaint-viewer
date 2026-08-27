@@ -261,18 +261,18 @@ export function discoverStickerPlacementTargets(
       let reason: string | undefined;
       let quad: StickerQuad | undefined;
       if (!stickerStage.dest_tl || !stickerStage.dest_tr || !stickerStage.dest_bl) {
-        reason = 'This sticker does not author all three destination corners.';
+        reason = 'This sticker is missing one or more corner positions, so it cannot be moved.';
       } else if (!tl || !tr || !bl) {
-        reason = 'This sticker has an unresolved or invalid destination coordinate.';
+        reason = 'One or more sticker corner positions are missing or are not numbers.';
       } else {
         const duplicate = duplicateDestinationVariable([destTl, destTr, destBl]);
-        if (duplicate) reason = `Destination corners share variable “${duplicate}”, so they cannot move independently.`;
+        if (duplicate) reason = `Two corners use the same setting, “${duplicate}”. Each corner needs its own setting before the sticker can be moved.`;
         else if ([destTl, destTr, destBl].some((field, index) => (
           field.variableName
           && field.provenance?.scope !== 'global'
           && ![destinationSourcePaths.dest_tl, destinationSourcePaths.dest_tr, destinationSourcePaths.dest_bl][index]
         ))) {
-          reason = 'This sticker placement comes from a definition branch that cannot be edited per weapon.';
+          reason = 'This sticker position is shared with other weapons. It cannot be changed for only this weapon.';
         } else {
           quad = { tl, tr, bl };
           reason = preflightEdit(messages, target, quad);

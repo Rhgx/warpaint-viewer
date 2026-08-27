@@ -655,7 +655,7 @@ export function setStickerDestQuad(
   const stage = stickerTarget(next.operation, target);
   if (!stage.dest_tl || !stage.dest_tr || !stage.dest_bl) {
     throw new EditorMutationAmbiguityError(
-      'This sticker does not author all three destination corners, so its placement cannot be edited safely.',
+      'This sticker is missing one or more corner positions, so it cannot be moved.',
     );
   }
   const requested: Array<readonly ['dest_tl' | 'dest_tr' | 'dest_bl', string]> = [
@@ -667,7 +667,7 @@ export function setStickerDestQuad(
     if (!variable) continue;
     const prior = variableValues.get(variable);
     if (prior !== undefined && prior !== value) {
-      throw new EditorMutationAmbiguityError(`Sticker destination fields share variable “${variable}”; one variable cannot safely represent two requested coordinates.`);
+      throw new EditorMutationAmbiguityError(`Two corners use the same setting, “${variable}”. Each corner needs its own setting before the sticker can be moved.`);
     }
     variableValues.set(variable, value);
   }

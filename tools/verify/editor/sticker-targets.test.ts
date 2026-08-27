@@ -359,14 +359,14 @@ stage.dest_tr = { variable: 'sticker_tl' };
 const rejected = implementation.discoverStickerPlacementTargets(sharedDestination, resolve(sharedDestination))[0];
 assert.equal(rejected.editable, false, 'a shared destination variable is an unsafe affine target');
 assert.ok(rejected.reason);
-assert.match(rejected.reason, /share variable/i);
+assert.match(rejected.reason, /same setting/i);
 
 const unresolvedDestination = structuredClone(original);
 fixtureStickerStage(unresolvedDestination.operation).dest_bl = { variable: 'missing_destination' };
 const unresolved = implementation.discoverStickerPlacementTargets(unresolvedDestination, resolve(unresolvedDestination))[0];
 assert.equal(unresolved.editable, false, 'unresolvable destination data must be read-only rather than guessed');
 assert.ok(unresolved.reason);
-assert.match(unresolved.reason, /unresolved|invalid/i);
+assert.match(unresolved.reason, /missing|not numbers/i);
 
 // Army Guns is the canonical shipped case that declares matching sticker
 // destination variable names in both the definition and operation headers.

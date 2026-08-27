@@ -76,6 +76,8 @@ export interface StickerPlacementEditorProps {
   /** Optional source dimensions ratio so the preview does not distort the texture. */
   readonly textureAspect?: number;
   readonly stickerAspect?: number;
+  /** Creates a valid authored quad when the current one is writable but degenerate. */
+  readonly onCreatePlacement?: () => void;
   readonly notice?: string | null;
   /** Optional controlled transform mode. Omitting this keeps the control local to the editor. */
   readonly activeTool?: StickerTransformTool;
@@ -187,6 +189,7 @@ export function StickerPlacementEditor({
   disabled = false,
   label = 'Sticker placement',
   textureAspect = 1.6,
+  onCreatePlacement,
   notice,
   activeTool,
   onActiveToolChange,
@@ -569,7 +572,7 @@ export function StickerPlacementEditor({
       bl: [values.blX as number, values.blY as number],
     };
     if (!stickerPlacementFromQuad(next).editable) {
-      setCornerError('Those corners have to make a non-degenerate parallelogram.');
+      setCornerError('The three corner points must make a shape with a width and height.');
       return;
     }
     setCornerError(null);
@@ -1028,7 +1031,14 @@ export function StickerPlacementEditor({
               </div>
             ) : null}
           </div>
-          {unavailable && <span className="sticker-placement-editor-unavailable" role="status">{notice ?? 'Sticker artwork unavailable.'}</span>}
+          {unavailable && (
+            <div className="sticker-placement-editor-unavailable">
+              <span role="status">{notice ?? 'Sticker artwork unavailable.'}</span>
+              {onCreatePlacement ? (
+                <button type="button" onClick={onCreatePlacement}>Create centered placement</button>
+              ) : null}
+            </div>
+          )}
         </div>
         </div>
       </div>
