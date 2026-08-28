@@ -1,6 +1,6 @@
 import { Autocomplete } from '@base-ui/react/autocomplete';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Image as ImageIcon, Search, Variable, X } from 'lucide-react';
+import { Check, ChevronDown, Image as ImageIcon, Link2, Link2Off, Search, Variable, X } from 'lucide-react';
 import {
   operationGraphVarFieldScalarKey,
   type OperationGraphParameterValue,
@@ -420,6 +420,13 @@ export function GraphValueField({
   // re-pointed or detached, but its value has to be read where it is declared.
   const declarationLocked = Boolean(boundVariable) && declaration?.editable === false;
   const controlsDisabled = readOnly || declarationLocked;
+  const bindingActionLabel = boundVariable
+    ? `Unlink from ${boundVariable} and keep ${effectiveText} on this node`
+    : pendingBinding
+      ? 'Cancel linking this value'
+      : variables.length === 0
+        ? 'No variables available to link'
+        : 'Link this value to a variable';
 
   const valueControl = ((): React.JSX.Element => {
     const ariaLabel = boundVariable ? `${label} value of ${boundVariable}` : label;
@@ -484,13 +491,8 @@ export function GraphValueField({
           className="graph-value-bind"
           data-active={bindingMode ? 'true' : undefined}
           disabled={readOnly || (!bindingMode && variables.length === 0)}
-          title={
-            bindingMode
-              ? 'Stop using a variable and keep this value on the node'
-              : variables.length === 0
-                ? 'This operation declares no variables'
-                : 'Bind this parameter to a declared variable'
-          }
+          title={bindingActionLabel}
+          aria-label={bindingActionLabel}
           aria-pressed={bindingMode}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
@@ -500,8 +502,11 @@ export function GraphValueField({
             setPendingBinding(false);
           }}
         >
-          <Variable size={11} aria-hidden />
-          {bindingMode ? <X size={10} aria-hidden /> : null}
+          {boundVariable
+            ? <Link2Off size={13} strokeWidth={2.25} aria-hidden />
+            : pendingBinding
+              ? <X size={13} strokeWidth={2.25} aria-hidden />
+              : <Link2 size={13} strokeWidth={2.25} aria-hidden />}
         </button>
       </div>
       {bindingMode && (
@@ -525,9 +530,9 @@ export function GraphValueField({
               data-locked={declarationLocked ? 'true' : undefined}
               title={declarationLocked
                 ? `${boundVariable} is declared by ${declaration?.scope ?? 'another definition'} and is read-only here`
-                : `Editing the declared value of ${boundVariable}`}
+                : `Changing this edits ${boundVariable} everywhere it is used`}
             >
-              {declarationLocked ? declaration?.scope ?? 'Declared' : 'Declared'}
+              {declarationLocked ? declaration?.scope ?? 'Declared' : 'Variable'}
             </span>
           )}
           {valueControl}

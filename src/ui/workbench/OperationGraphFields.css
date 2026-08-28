@@ -34,20 +34,26 @@
 }
 
 .graph-value-bind {
+  position: relative;
   display: inline-flex;
-  height: 17px;
+  width: 22px;
+  height: 22px;
   flex: none;
   align-items: center;
-  gap: 1px;
-  padding: 0 4px;
+  justify-content: center;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm, 4px);
   color: var(--text-dim);
   background: var(--panel);
   cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
 }
 
+.graph-value-bind::before { position: absolute; inset: -5px; content: ''; }
 .graph-value-bind:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text); }
+.graph-value-bind:active:not(:disabled) { transform: scale(.95); }
+.graph-value-bind:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .graph-value-bind[data-active='true'] {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   color: var(--accent);
