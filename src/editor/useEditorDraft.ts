@@ -33,6 +33,7 @@ export interface EditorDraftState {
   status: EditorDraftStatus;
   savedAt?: number;
   recovery?: EditorDraftRecovery;
+  save: () => void;
 }
 
 function messagesEqual(left: ProtoDefKitMessages, right: ProtoDefKitMessages): boolean {
@@ -62,6 +63,29 @@ export function useEditorDraft({
     storageQueueRef.current = queued;
     return queued;
   }, []);
+
+  const save = useCallback(() => {
+    if (!key || kitId === null || !current || !dirty || candidate || settledKeyRef.current !== key) return;
+    const operation = ++operationRef.current;
+    const timestamp = Date.now();
+    setStorageStatus('saving');
+    const record: EditorDraftRecord = {
+      version: 1,
+      key,
+      kitId,
+      ...(paintName ? { paintName } : {}),
+      savedAt: timestamp,
+      messages: structuredClone(current),
+    };
+    void enqueue(() => writeEditorDraft(record)).then(() => {
+      if (operation !== operationRef.current) return;
+      setSavedAt(timestamp);
+      setSavedRevision(revision);
+      setStorageStatus('saved');
+    }).catch(() => {
+      if (operation === operationRef.current) setStorageStatus('error');
+    });
+  }, [candidate, current, dirty, enqueue, key, kitId, paintName, revision]);
 
   useEffect(() => {
     const operation = ++operationRef.current;
@@ -107,28 +131,10 @@ export function useEditorDraft({
 
     setStorageStatus('pending');
     const timeout = window.setTimeout(() => {
-      if (operation !== operationRef.current) return;
-      setStorageStatus('saving');
-      const timestamp = Date.now();
-      const record: EditorDraftRecord = {
-        version: 1,
-        key,
-        kitId,
-        ...(paintName ? { paintName } : {}),
-        savedAt: timestamp,
-        messages: structuredClone(current),
-      };
-      void enqueue(() => writeEditorDraft(record)).then(() => {
-        if (operation !== operationRef.current) return;
-        setSavedAt(timestamp);
-        setSavedRevision(revision);
-        setStorageStatus('saved');
-      }).catch(() => {
-        if (operation === operationRef.current) setStorageStatus('error');
-      });
+      if (operation === operationRef.current) save();
     }, SAVE_DELAY_MS);
     return () => window.clearTimeout(timeout);
-  }, [candidate, current, dirty, enqueue, key, kitId, paintName, revision]);
+  }, [candidate, current, dirty, enqueue, key, kitId, save]);
 
   const restoreCandidate = useCallback(() => {
     if (!candidate || !restore(candidate.messages)) return;
@@ -160,6 +166,7 @@ export function useEditorDraft({
 
   return {
     status,
+    save,
     ...(savedAt === undefined ? {} : { savedAt }),
     ...(recovery ? { recovery } : {}),
   };

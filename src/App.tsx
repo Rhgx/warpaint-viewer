@@ -2751,15 +2751,22 @@ function MainApp() {
     clearModelPartPickingInteraction();
   }, [clearModelPartPickingInteraction, stickerPartPickingActive]);
 
+  const { recovery: editorDraftRecovery, save: saveEditorDraft } = editorDraft;
+
   useEffect(() => {
-    if (!editorTabActive || (lightingPanelOpen && state.preset === CUSTOM_LIGHTING_ID)) return;
+    if (!editorTabActive || cameraMode === 'advanced' || (lightingPanelOpen && state.preset === CUSTOM_LIGHTING_ID)) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || !(event.ctrlKey || event.metaKey)) return;
-      if (shortcutTargetsEditableContent(event.target)) return;
       // A modal owns its own keyboard loop and must not trigger editing behind
       // it, even when focus momentarily lands on its dialog container.
       if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       const key = event.key.toLowerCase();
+      if (key === 's' && !event.altKey && !event.shiftKey && editorDirty && !editorDraftRecovery) {
+        event.preventDefault();
+        saveEditorDraft();
+        return;
+      }
+      if (shortcutTargetsEditableContent(event.target)) return;
       const actions = editorHistoryActionsRef.current;
       if (key === 'z' && !event.shiftKey && actions.canUndo) {
         event.preventDefault();
@@ -2771,7 +2778,7 @@ function MainApp() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [editorTabActive, lightingPanelOpen, state.preset]);
+  }, [cameraMode, editorDirty, editorDraftRecovery, editorTabActive, lightingPanelOpen, saveEditorDraft, state.preset]);
 
   // Paint-area selection deliberately uses Shift + click. Keep free-fly out
   // of this focused workflow and make the modifier state visible through the
