@@ -933,40 +933,44 @@ export function CustomWarpaintWorkbench({
                   </div>
                 )}
                 <div className="custom-workbench-edit-footer">
-                  <button
-                    type="button"
-                    className="custom-workbench-edit-icon-btn"
-                    title="Undo"
-                    aria-label="Undo"
-                    disabled={!editor.canUndo}
-                    onClick={editor.onUndo}
-                  >
-                    <Undo2 size={14} />
-                  </button>
-                  {draftStatusLabel(editor.draft.status) && (
-                    <span
-                      className="custom-workbench-draft-status"
-                      data-state={editor.draft.status}
-                      title={editor.draft.status === 'saved' ? 'Saved locally' : undefined}
+                  <div className="custom-workbench-history-actions">
+                    <button
+                      type="button"
+                      className="custom-workbench-edit-icon-btn"
+                      title="Undo"
+                      aria-label="Undo"
+                      disabled={!editor.canUndo}
+                      onClick={editor.onUndo}
                     >
+                      <Undo2 size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="custom-workbench-edit-icon-btn"
+                      title="Redo"
+                      aria-label="Redo"
+                      disabled={!editor.canRedo}
+                      onClick={editor.onRedo}
+                    >
+                      <Redo2 size={14} />
+                    </button>
+                  </div>
+                  <span
+                    className="custom-workbench-draft-status"
+                    data-state={editor.draft.status}
+                    title={editor.draft.status === 'saved' ? 'Saved locally' : undefined}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {draftStatusLabel(editor.draft.status) && (<>
                       {editor.draft.status === 'pending' || editor.draft.status === 'saving'
                         ? <LoaderCircle size={12} aria-hidden="true" />
                         : editor.draft.status === 'saved'
                           ? <Check size={12} aria-hidden="true" />
                           : <AlertTriangle size={12} aria-hidden="true" />}
                       {draftStatusLabel(editor.draft.status)}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="custom-workbench-edit-icon-btn"
-                    title="Redo"
-                    aria-label="Redo"
-                    disabled={!editor.canRedo}
-                    onClick={editor.onRedo}
-                  >
-                    <Redo2 size={14} />
-                  </button>
+                    </>)}
+                  </span>
                   <button
                     type="button"
                     className="custom-workbench-edit-revert"

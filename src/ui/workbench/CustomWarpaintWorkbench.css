@@ -756,13 +756,22 @@
   margin-top: 8px;
 }
 
+.custom-workbench-history-actions {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+}
+
 .custom-workbench-draft-status {
   display: inline-flex;
-  min-width: 0;
+  width: 86px;
+  min-width: 86px;
   align-items: center;
   gap: 4px;
+  overflow: hidden;
   color: var(--text-dim);
   font-size: 10px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1216,7 +1225,6 @@
     border-top: 0;
     border-left: 1px solid var(--border);
   }
-  .custom-workbench-draft-status { max-width: 86px; }
   .custom-workbench-edit-revert { margin-left: 0; }
   .custom-workbench-edit-download-group { flex: none; }
 }
