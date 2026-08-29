@@ -9,10 +9,12 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  Check,
   ChevronDown,
   Download,
   Files,
   Lock,
+  LoaderCircle,
   Maximize2,
   Minimize2,
   PackageOpen,
@@ -36,8 +38,10 @@ import { revokeReleasedAssetUrls, revokeTextureUrl } from '../../workbench/asset
 import { loadImage, mergeAlpha, readTexture } from '../../workbench/textureImport';
 import type { ExportDefinitionsContext, ExportItem } from './ExportPanel';
 import type { EditorDownloadFormat } from '../../editor/definitionExport';
+import type { EditorDraftStatus } from '../../editor/useEditorDraft';
 import type { OperationGraphEditorProps } from './OperationGraphEditor';
 import { AssetFilesPanel } from './AssetFilesPanel';
+import { EditorDraftBanner } from './EditorDraftBanner';
 import './CustomWarpaintWorkbench.css';
 
 // Tabs.Panel mounts its children only after they become active. Keeping the
@@ -83,6 +87,12 @@ function WorkbenchPanelFallback() {
 const MIN_PANEL_HEIGHT = 190;
 const RESET_CONFIRM_MS = 3000;
 
+function draftStatusLabel(status: EditorDraftStatus): string | null {
+  if (status === 'pending' || status === 'saving') return 'Saving...';
+  if (status === 'saved') return 'Saved locally';
+  if (status === 'error') return 'Autosave failed';
+  return null;
+}
 export function CustomWarpaintWorkbench({
   recipes,
   resolveTexture,
@@ -97,6 +107,7 @@ export function CustomWarpaintWorkbench({
   initialOverrides,
   onChange,
   onResetAll,
+  onClearWorkspace,
   onResize,
   onClose,
   tab,
@@ -159,6 +170,18 @@ export function CustomWarpaintWorkbench({
     /** Per-layer marker, aligned with `selectors`, for transforms that are intentionally unavailable. */
     layerTransformLocked?: readonly boolean[];
     dirty: boolean;
+    draft: {
+      status: EditorDraftStatus;
+      savedAt?: number;
+      recovery?: {
+        paintName?: string;
+        savedAt: number;
+        restore: () => void;
+        discard: () => void;
+      };
+    };
+    /** Serialises the current definition edits as downloadable fragments. */
+    onDownloadRecovery: () => void;
     canDownload: boolean;
     exporting: boolean;
     canUndo: boolean;
@@ -188,6 +211,8 @@ export function CustomWarpaintWorkbench({
   onChange: (overrides: WarpaintAssetOverrides) => void;
   /** Reset all returns the entire workbench to built-ins, including its package. */
   onResetAll?: () => void;
+  /** Opens the clear-workspace confirmation when imported data exists. */
+  onClearWorkspace?: () => void;
   /**
    * The drawer remounts whenever the selected paint or weapon changes, which is
    * how per-slot edits reset. The tab has to outlive that: importing a
@@ -541,7 +566,13 @@ export function CustomWarpaintWorkbench({
             >
               <PencilRuler size={13} />
               <span>Edit</span>
-              {editor?.dirty && <span className="visual-warpaint-editor-dirty-dot" aria-label="Unsaved changes" />}
+              {editor?.dirty && (
+                <span
+                  className="visual-warpaint-editor-dirty-dot"
+                  data-state={editor.draft.status}
+                  aria-label={draftStatusLabel(editor.draft.status) ?? 'Changes waiting to save'}
+                />
+              )}
             </Tabs.Tab>
             <Tabs.Tab value="export" className="custom-workbench-tab">
               <Download size={13} />
@@ -609,6 +640,17 @@ export function CustomWarpaintWorkbench({
                 }}
               />
             </label>
+            {onClearWorkspace && (
+              <button
+                type="button"
+                className="workbench-source workbench-source-clear"
+                title="Clear everything imported into this browser"
+                aria-label="Clear workspace"
+                onClick={onClearWorkspace}
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
           </div>
 
           {tab === 'editor' && (
@@ -675,7 +717,9 @@ export function CustomWarpaintWorkbench({
         <Tabs.Panel value="editor" className="custom-workbench-panel custom-workbench-editor-panel">
           <Suspense fallback={<WorkbenchPanelFallback />}>
           {editor ? (
-            <div className="custom-workbench-edit-body">
+            <>
+            <EditorDraftBanner draft={editor.draft} onDownloadRecovery={editor.onDownloadRecovery} />
+            <div className="custom-workbench-edit-body" inert={editor.draft.recovery ? true : undefined}>
               <div className="custom-workbench-edit-context">
                 {(editor.sticker || editor.materials) && (
                   <div className="custom-workbench-edit-mode" role="group" aria-label="Edit tool">
@@ -908,6 +952,20 @@ export function CustomWarpaintWorkbench({
                   >
                     <Undo2 size={14} />
                   </button>
+                  {draftStatusLabel(editor.draft.status) && (
+                    <span
+                      className="custom-workbench-draft-status"
+                      data-state={editor.draft.status}
+                      title={editor.draft.status === 'saved' ? 'Saved locally' : undefined}
+                    >
+                      {editor.draft.status === 'pending' || editor.draft.status === 'saving'
+                        ? <LoaderCircle size={12} aria-hidden="true" />
+                        : editor.draft.status === 'saved'
+                          ? <Check size={12} aria-hidden="true" />
+                          : <AlertTriangle size={12} aria-hidden="true" />}
+                      {draftStatusLabel(editor.draft.status)}
+                    </span>
+                  )}
                   <button
                     type="button"
                     className="custom-workbench-edit-icon-btn"
@@ -1047,6 +1105,7 @@ export function CustomWarpaintWorkbench({
                   })()}
               </div>
             </div>
+            </>
           ) : (
             <VisualWarpaintEditorPanel
               enabled={false}
