@@ -3,6 +3,11 @@ import type { SourcePackage, SourcePackageOpenResult, SourcePackageState, Source
 import { isSupportedTexturePath, sourcePathExtension } from '../source/paths';
 import { SourceTextureProvider } from '../source/provider';
 import { AppError, appErrorDiagnostic, ERROR_CODES } from '../errors';
+import {
+  deleteCustomSourceFiles,
+  readCustomSourceFiles,
+  writeCustomSourceFiles,
+} from '../editor/draftStorage';
 
 type StaticPackageSummary = Omit<
   SourcePackageSummary,
@@ -20,6 +25,15 @@ function importDiagnostic(cause: unknown) {
     message: 'The package could not be imported.',
     idPrefix: 'package:import',
   });
+}
+
+function persistenceDiagnostic(message: string): ReturnType<typeof importDiagnostic> {
+  return {
+    id: `package:persistence:${message}`,
+    level: 'warning',
+    message,
+    detail: 'Keep the original package files before reloading or closing this page.',
+  };
 }
 
 function summaryFor(pkg: SourcePackage, provider: SourceTextureProvider): SourcePackageSummary {
@@ -64,6 +78,7 @@ export function useSourcePackage(
   const fallbackRef = useRef(fallback);
   const hasBuiltInRef = useRef(hasBuiltIn);
   const importOperationRef = useRef(0);
+  const persistenceDiagnosticRef = useRef<ReturnType<typeof importDiagnostic> | null>(null);
   fallbackRef.current = fallback;
   hasBuiltInRef.current = hasBuiltIn;
   const providerRef = useRef<SourceTextureProvider | null>(null);
@@ -78,15 +93,19 @@ export function useSourcePackage(
 
   const sync = useCallback(() => {
     const snapshot = provider.snapshot();
+    const diagnostics = persistenceDiagnosticRef.current
+      ? [...snapshot.diagnostics, persistenceDiagnosticRef.current]
+      : [...snapshot.diagnostics];
     setState(snapshot.package
-      ? { status: 'mounted', summary: summaryFor(snapshot.package, provider), diagnostics: [...snapshot.diagnostics] }
-      : { status: 'empty', diagnostics: [...snapshot.diagnostics] });
+      ? { status: 'mounted', summary: summaryFor(snapshot.package, provider), diagnostics }
+      : { status: 'empty', diagnostics });
   }, [provider]);
   useEffect(sync, [activityRevision, sync]);
 
-  const onImport = useCallback((files: File[]) => {
+  const importFiles = useCallback((files: File[], persist: boolean) => {
     if (!files.length) return;
     const operation = ++importOperationRef.current;
+    persistenceDiagnosticRef.current = null;
     const format = files.some((file) => file.name.toLowerCase().endsWith('.vpk')) ? 'vpk' : 'zip';
     setState({ status: 'importing', summary: { name: files[0]?.name ?? 'package', format, entryCount: 0, materialsByExtension: [], usedCount: 0, fallbackCount: 0, nameMatchedCount: 0, ambiguousNameCount: 0, materialCount: 0, appliedMaterialPaths: [] }, diagnostics: [] });
     void (async () => {
@@ -125,6 +144,17 @@ export function useSourcePackage(
         setSuggestedPaintkitId(opened.suggestedPaintkitId);
         onSuccessfulImport();
         sync();
+        if (persist) {
+          try {
+            await writeCustomSourceFiles('package', files);
+          } catch {
+            if (operation !== importOperationRef.current) return;
+            persistenceDiagnosticRef.current = persistenceDiagnostic(
+              'The package is loaded, but its source files could not be saved locally.',
+            );
+            sync();
+          }
+        }
       } catch (cause) {
         if (operation !== importOperationRef.current) return;
         const snapshot = provider.snapshot();
@@ -137,11 +167,34 @@ export function useSourcePackage(
     })();
   }, [onSuccessfulImport, provider, sync]);
 
+  const onImport = useCallback((files: File[]) => importFiles(files, true), [importFiles]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void readCustomSourceFiles('package').then((files) => {
+      if (!cancelled && files?.length) importFiles(files, false);
+    }).catch(() => {
+      if (cancelled) return;
+      persistenceDiagnosticRef.current = persistenceDiagnostic(
+        'The locally saved package files could not be restored.',
+      );
+      sync();
+    });
+    return () => { cancelled = true; };
+  }, [importFiles, sync]);
+
   const onRemove = useCallback(() => {
     importOperationRef.current += 1;
+    persistenceDiagnosticRef.current = null;
     setSuggestedPaintkitId(undefined);
     provider.unmount();
     sync();
+    void deleteCustomSourceFiles('package').catch(() => {
+      persistenceDiagnosticRef.current = persistenceDiagnostic(
+        'The saved package files could not be removed from local storage.',
+      );
+      sync();
+    });
   }, [provider, sync]);
   useEffect(() => () => {
     importOperationRef.current += 1;

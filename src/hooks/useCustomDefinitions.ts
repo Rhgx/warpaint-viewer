@@ -26,6 +26,11 @@ import { classifyProtoDefFragment } from '../protodefs/jsonFragments';
 import { appErrorDiagnostic, ERROR_CODES } from '../errors';
 import { serializeProtoDefKitMessages } from '../editor/jsonExport';
 import { applyImplicitStickerSpecs } from '../protodefs/implicitStickerSpecs';
+import {
+  deleteCustomSourceFiles,
+  readCustomSourceFiles,
+  writeCustomSourceFiles,
+} from '../editor/draftStorage';
 
 // A stock container is under 10 MB. The cap only exists so a mis-picked file
 // cannot be read into memory in its entirety before it is rejected.
@@ -112,8 +117,8 @@ function toCatalogKit(kit: ProtoDefKit): PaintkitEntry {
 
 /**
  * Owns one imported proto_defs container: the definitions it contains, which of
- * them are in the catalog, and the recipes resolved out of it. Nothing here
- * persists, matching the rest of the custom-file surface.
+ * them are in the catalog, and the recipes resolved out of it. Imported source
+ * files are retained locally so a reload can rebuild the same container.
  */
 export function useCustomDefinitions({
   manifest,
@@ -210,7 +215,7 @@ export function useCustomDefinitions({
   const openWith = useCallback(async (
     name: string,
     run: (source: ProtoDefSource, options: ProtoDefOpenOptions) => Promise<ProtoDefIndex>,
-  ) => {
+  ): Promise<boolean> => {
     const operation = ++importOperationRef.current;
     setStatus('importing');
     setFileName(name);
@@ -225,7 +230,7 @@ export function useCustomDefinitions({
         weaponsByItemDef,
         builtInIds: manifest?.paintkits.map((kit) => kit.id) ?? [],
       });
-      if (operation !== importOperationRef.current) { source.dispose(); return; }
+      if (operation !== importOperationRef.current) { source.dispose(); return false; }
       release();
       loadedRef.current = { name, index, source };
       setLoaded(loadedRef.current);
@@ -267,11 +272,13 @@ export function useCustomDefinitions({
         ));
       }
       setDiagnostics(notes);
+      return true;
     } catch (cause) {
-      if (operation !== importOperationRef.current) return;
+      if (operation !== importOperationRef.current) return false;
       setStatus(loadedRef.current ? 'loaded' : 'empty');
       setFileName(loadedRef.current?.name);
       setDiagnostics([errorDiagnostic(cause)]);
+      return false;
     }
   }, [loadWeaponsByItemDef, manifest, provider, release]);
 
@@ -336,7 +343,7 @@ export function useCustomDefinitions({
     }
   }, [loadBaseDefs, loadWeaponsByItemDef, manifest]);
 
-  const onImport = useCallback((files: File[]) => {
+  const importFiles = useCallback((files: File[], persist: boolean) => {
     const container = files.find((entry) => entry.name.toLowerCase().endsWith('.vpd'));
     const jsonFiles = files.filter((entry) => entry.name.toLowerCase().endsWith('.json'));
     if (!container && jsonFiles.length === 0) {
@@ -345,21 +352,59 @@ export function useCustomDefinitions({
     }
     void (async () => {
       try {
+        let opened = false;
+        let sourceFiles: File[];
         if (container) {
-          await openContainer(container.name, new Uint8Array(await container.arrayBuffer()));
-          return;
+          sourceFiles = [container];
+          opened = await openContainer(container.name, new Uint8Array(await container.arrayBuffer()));
+        } else {
+          sourceFiles = jsonFiles;
+          const oversized = jsonFiles.find((entry) => entry.size > MAX_FRAGMENT_BYTES);
+          if (oversized) throw new Error(`${oversized.name} is too large to be a war paint definition.`);
+          const fragments = await Promise.all(
+            jsonFiles.map(async (entry) => ({ name: entry.name, text: await entry.text() })),
+          );
+          opened = await openFragments(jsonFiles.map((entry) => entry.name).join(', '), fragments);
         }
-        const oversized = jsonFiles.find((entry) => entry.size > MAX_FRAGMENT_BYTES);
-        if (oversized) throw new Error(`${oversized.name} is too large to be a war paint definition.`);
-        const fragments = await Promise.all(
-          jsonFiles.map(async (entry) => ({ name: entry.name, text: await entry.text() })),
-        );
-        await openFragments(jsonFiles.map((entry) => entry.name).join(', '), fragments);
+        if (!opened || !persist) return;
+        try {
+          await writeCustomSourceFiles('definitions', sourceFiles);
+        } catch {
+          setDiagnostics((current) => [
+            ...current,
+            diagnostic(
+              'warning',
+              'The definitions are loaded, but their source files could not be saved locally.',
+              'Keep the original definition files before reloading or closing this page.',
+            ),
+          ]);
+        }
       } catch (cause) {
         setDiagnostics([errorDiagnostic(cause)]);
       }
     })();
   }, [openContainer, openFragments]);
+
+  const onImport = useCallback((files: File[]) => importFiles(files, true), [importFiles]);
+
+  useEffect(() => {
+    if (!manifest || !getAssetUrl('item-defs.json')) return;
+    let cancelled = false;
+    void readCustomSourceFiles('definitions').then((files) => {
+      if (!cancelled && files?.length) importFiles(files, false);
+    }).catch(() => {
+      if (cancelled) return;
+      setDiagnostics((current) => [
+        ...current,
+        diagnostic(
+          'warning',
+          'The locally saved definition files could not be restored.',
+          'Import the original definition files again.',
+        ),
+      ]);
+    });
+    return () => { cancelled = true; };
+  }, [getAssetUrl, importFiles, manifest]);
 
   const onRemove = useCallback(() => {
     importOperationRef.current += 1;
@@ -371,6 +416,14 @@ export function useCustomDefinitions({
     setLoadedDefindexes([]);
     setIcons({});
     setSuggestedKitId(undefined);
+    void deleteCustomSourceFiles('definitions').catch(() => {
+      setDiagnostics([
+        diagnostic(
+          'warning',
+          'The saved definition files could not be removed from local storage.',
+        ),
+      ]);
+    });
   }, [release]);
 
   const onToggleKit = useCallback((defindex: number) => {
