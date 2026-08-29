@@ -38,7 +38,7 @@ import { revokeReleasedAssetUrls, revokeTextureUrl } from '../../workbench/asset
 import { loadImage, mergeAlpha, readTexture } from '../../workbench/textureImport';
 import type { ExportDefinitionsContext, ExportItem } from './ExportPanel';
 import type { EditorDownloadFormat } from '../../editor/definitionExport';
-import type { EditorDraftStatus } from '../../editor/useEditorDraft';
+import type { EditorDraftState, EditorDraftStatus } from '../../editor/useEditorDraft';
 import type { OperationGraphEditorProps } from './OperationGraphEditor';
 import { AssetFilesPanel } from './AssetFilesPanel';
 import { EditorDraftBanner } from './EditorDraftBanner';
@@ -170,16 +170,7 @@ export function CustomWarpaintWorkbench({
     /** Per-layer marker, aligned with `selectors`, for transforms that are intentionally unavailable. */
     layerTransformLocked?: readonly boolean[];
     dirty: boolean;
-    draft: {
-      status: EditorDraftStatus;
-      savedAt?: number;
-      recovery?: {
-        paintName?: string;
-        savedAt: number;
-        restore: () => void;
-        discard: () => void;
-      };
-    };
+    draft: EditorDraftState;
     /** Serialises the current definition edits as downloadable fragments. */
     onDownloadRecovery: () => void;
     canDownload: boolean;

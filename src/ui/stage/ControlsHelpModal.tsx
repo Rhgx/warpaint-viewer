@@ -180,6 +180,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
                 <ControlRow keys={<><GraphControl icon={<Focus size={12} />}>Focus</GraphControl><Key>F</Key></>}>Focus it</ControlRow>
                 <ControlRow keys={<><GraphControl icon={<Copy size={12} />}>Duplicate</GraphControl><Key>Ctrl+D</Key></>}>Duplicate</ControlRow>
                 <ControlRow keys={<><GraphControl icon={<Trash2 size={12} />}>Delete</GraphControl><Key>Del</Key></>}>Remove the stage or connection</ControlRow>
+                <ControlRow keys={<><Key>Ctrl</Key><Key>S</Key></>}>Save draft now</ControlRow>
                 <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo paint edit</ControlRow>
                 <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo paint edit</ControlRow>
               </section>
@@ -257,6 +258,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
               <section className="controls-help-section controls-help-history" aria-labelledby="sticker-history-heading">
                 <h3 id="sticker-history-heading">Edit history</h3>
                 <div className="controls-help-history-row">
+                  <ControlRow keys={<><Key>Ctrl</Key><Key>S</Key></>}>Save draft now</ControlRow>
                   <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo</ControlRow>
                   <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo</ControlRow>
                 </div>
@@ -277,6 +279,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
               <h3 id="paint-editing-heading">Paint editing</h3>
               <ControlRow keys={<><Key>Shift</Key><Key>Click</Key></>}>Add or remove a part</ControlRow>
               <ControlRow keys={<Key>Drag</Key>}>Rotate weapon</ControlRow>
+              <ControlRow keys={<><Key>Ctrl</Key><Key>S</Key></>}>Save draft now</ControlRow>
               <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo paint edit</ControlRow>
               <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo paint edit</ControlRow>
             </section>
