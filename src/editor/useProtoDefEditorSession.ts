@@ -139,6 +139,8 @@ export interface ProtoDefEditorSession {
   undo: () => void;
   redo: () => void;
   reset: () => void;
+  /** Restores a locally saved working snapshot as one undoable edit. */
+  restoreDraft: (messages: ProtoDefKitMessages) => boolean;
   /** Reloads the source kit. Dirty work requires discardEdits: true. */
   reload: (options?: ReloadProtoDefEditorSessionOptions) => Promise<boolean>;
   /** Serializes the current working snapshot to portable operation/definition JSON. */
@@ -686,6 +688,21 @@ export function useProtoDefEditorSession({
     setError(null);
   }, []);
 
+  const restoreDraft = useCallback((messages: ProtoDefKitMessages): boolean => {
+    const baseline = originalRef.current;
+    if (!baseline) {
+      setError('Load a war paint before restoring its draft.');
+      return false;
+    }
+    try {
+      commitEdit(baseline, snapshot(messages));
+      return true;
+    } catch (cause) {
+      setError(errorMessage(cause));
+      return false;
+    }
+  }, [commitEdit]);
+
   const reload = useCallback(
     (options: ReloadProtoDefEditorSessionOptions = {}) => load(options.discardEdits === true),
     [load],
@@ -745,6 +762,7 @@ export function useProtoDefEditorSession({
     undo,
     redo,
     reset,
+    restoreDraft,
     reload,
     serialize,
     getCurrentMessages,
