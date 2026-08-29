@@ -63,8 +63,14 @@ authoring them. Overwrite mode instead reuses the index of an existing war
 paint.
 
 Any of these files can also be dropped anywhere on the panel; each is routed by
-its extension. Nothing is uploaded anywhere, and nothing persists across a
-reload.
+its extension. Nothing is uploaded anywhere. Imported package and definition
+files, along with definition edits, are saved locally in the browser and
+restored or offered for recovery after a reload.
+
+**Clear workspace** in the panel header removes all of it in one step: the
+imported archive, the imported definitions, every draft belonging to them, and
+any replaced texture files. Viewer settings and drafts for built-in war paints
+are kept. It asks for confirmation and names what it will delete first.
 
 ## Development
 

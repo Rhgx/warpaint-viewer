@@ -45,6 +45,7 @@ import { customKitDefindex, isCustomKitId } from './protodefs/types';
 import type { CustomDefinitionsState, ProtoDefKitWeaponSlot, ProtoDefRecipeWithProvenance } from './protodefs/types';
 import type { OperationMsg, OperationNodeMsg, VarDefMsg } from './protodefs/messages';
 import { useProtoDefEditorSession } from './editor/useProtoDefEditorSession';
+import { useEditorDraft } from './editor/useEditorDraft';
 import { SnapshotHistory } from './editor/history';
 import { discoverGroupSelectTargets, discoverGroupTextureTarget } from './editor/groupTargets';
 import {
@@ -137,6 +138,11 @@ import type {
   OperationGraphExportFormat,
 } from './ui/workbench/OperationGraphEditor';
 import type { GraphComboboxOption, GraphVariableOption } from './ui/workbench/operationGraphFieldValues';
+import { ClearWorkspaceDialog } from './ui/common/ClearWorkspaceDialog';
+import { clearCustomWorkspace } from './editor/draftStorage';
+import { DraftToast } from './ui/common/DraftToast';
+import { ManagedToast, ToastViewport } from './ui/common/Toast';
+import { UpdateToast } from './ui/common/UpdateToast';
 
 // Selftest page is code-split: it never loads in normal use.
 const SelfTestPage = lazy(() => import('./dev/selftest').then((m) => ({ default: m.SelfTestPage })));
@@ -482,6 +488,15 @@ function downloadBytes(bytes: Uint8Array, fileName: string, mimeType: string): v
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+function downloadText(text: string, fileName: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export default function App() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('selftest') === '1') {
@@ -684,6 +699,14 @@ function MainApp() {
     return () => { cancelled = true; };
   }, [groupNameReferenceGeneration, workbenchOpen, workbenchTab]);
 
+  useEffect(() => {
+    if (!workbenchOpen || workbenchTab !== 'editor') return;
+    void Promise.all([
+      import('./editor/packageExport'),
+      import('./editor/definitionExport'),
+    ]).catch(() => undefined);
+  }, [workbenchOpen, workbenchTab]);
+
   const clearAssetOverrideCache = useCallback(() => {
     setAssetOverrideCache((cache) => {
       revokeAssetOverrideCache(cache);
@@ -758,7 +781,9 @@ function MainApp() {
     undo: undoEditor,
     redo: redoEditor,
     reset: resetEditor,
+    restoreDraft: restoreEditorDraft,
     reload: reloadEditor,
+    serialize: serializeEditor,
     getCurrentMessages: getEditorMessages,
     replaceOperationGraph,
     setDefinitionVariable,
@@ -1635,6 +1660,21 @@ function MainApp() {
 
   const selectedKit: PaintkitEntry | null =
     selectedKitId != null ? paintkits.find((p) => p.id === selectedKitId) ?? null : null;
+  const editorDraftKey = editableKitId === null
+    ? null
+    : isCustomKitId(editableKitId)
+      ? `custom:${customKitDefindex(editableKitId)}:${definitions.state.fileName ?? 'definitions'}`
+      : `stock:${editableKitId}`;
+  const editorDraft = useEditorDraft({
+    key: editorStatus === 'ready' ? editorDraftKey : null,
+    kitId: editorStatus === 'ready' ? editableKitId : null,
+    paintName: selectedKit?.name,
+    revision: editorRevision,
+    original: editorStatus === 'ready' ? editorOriginal : null,
+    current: editorStatus === 'ready' ? editorCurrent : null,
+    dirty: editorDirty,
+    restore: restoreEditorDraft,
+  });
   const editorDefinitionGeneration = selectedKit && !isCustomKitId(selectedKit.id)
     ? stockEditGeneration
     : definitions.editGeneration;
@@ -3494,6 +3534,50 @@ function MainApp() {
     }).finally(() => setEditorPackageExporting(false));
   }, [editableKitId, editorPackageExporting, getEditorMessages, selectedKit?.name, sourceProvider]);
 
+  const [clearWorkspaceOpen, setClearWorkspaceOpen] = useState(false);
+  const [clearingWorkspace, setClearingWorkspace] = useState(false);
+  const [clearWorkspaceError, setClearWorkspaceError] = useState<string | null>(null);
+  const [workspaceCleared, setWorkspaceCleared] = useState<{ drafts: number } | null>(null);
+
+  const packageMounted = sourcePackage.status === 'mounted';
+  const definitionsLoaded = definitions.state.status === 'loaded';
+  const hasWorkspace = packageMounted || definitionsLoaded;
+
+  const openClearWorkspace = useCallback(() => {
+    setClearWorkspaceError(null);
+    setClearWorkspaceOpen(true);
+  }, []);
+
+  const clearWorkspaceWarning = editorDraft.status === 'error'
+    ? 'Your editor draft could not be saved locally, so it will not come back after this.'
+    : editorDirty
+      ? `You have unsaved edits${selectedKit?.name ? ` to ${selectedKit.name}` : ''}. They are part of what gets removed.`
+      : null;
+
+  const clearWorkspace = useCallback(() => {
+    setClearingWorkspace(true);
+    setClearWorkspaceError(null);
+    void clearCustomWorkspace().then((result) => {
+      removePackage();
+      definitions.state.onRemove();
+      clearAssetOverrideCache();
+      setWorkbenchExpanded(false);
+      setWorkbenchTab('files');
+      setClearWorkspaceOpen(false);
+      setWorkspaceCleared({ drafts: result.drafts });
+    }).catch((cause) => {
+      setClearWorkspaceError(cause instanceof Error
+        ? cause.message
+        : 'The local data could not be deleted.');
+    }).finally(() => setClearingWorkspace(false));
+  }, [clearAssetOverrideCache, definitions.state, removePackage]);
+
+  const downloadEditorRecovery = useCallback(() => {
+    const serialized = serializeEditor({ name: selectedKit?.name });
+    if (!serialized) return;
+    for (const fragment of serialized.fragments) downloadText(fragment.text, fragment.name);
+  }, [selectedKit?.name, serializeEditor]);
+
   // Set up viewer + compositor on the canvas. The three.js stack is dynamically
   // imported so it lands in its own chunk and the UI shell paints first.
   useEffect(() => {
@@ -3558,14 +3642,15 @@ function MainApp() {
   // tab close, or navigation would discard any cached edit set.
   useEffect(() => {
     const hasCachedEdits = Object.values(assetOverrideCache).some((entry) => Object.keys(entry.assets).length > 0);
-    if (!hasCachedEdits && sourcePackage.status !== 'mounted' && definitions.state.status !== 'loaded') return;
+    const editorDraftAtRisk = editorDirty && editorDraft.status !== 'saved';
+    if (!hasCachedEdits && !editorDraftAtRisk && sourcePackage.status !== 'mounted' && definitions.state.status !== 'loaded') return;
     const confirmLoss = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', confirmLoss);
     return () => window.removeEventListener('beforeunload', confirmLoss);
-  }, [assetOverrideCache, sourcePackage.status, definitions.state.status]);
+  }, [assetOverrideCache, editorDirty, editorDraft.status, sourcePackage.status, definitions.state.status]);
 
   // A blank catalog selection has no model/paint work to wait for. Once the
   // renderer environment is ready, the intentionally empty stage is ready too.
@@ -4628,6 +4713,8 @@ function MainApp() {
                     }
                   } : undefined,
                   dirty: editorDirty,
+                  draft: editorDraft,
+                  onDownloadRecovery: downloadEditorRecovery,
                   canDownload: editableKitId !== null && !editorLoading && !editorPackageExporting,
                   exporting: editorPackageExporting,
                   canUndo: editorCanUndo,
@@ -4690,6 +4777,7 @@ function MainApp() {
                   removePackage();
                   clearAssetOverrideCache();
                 }}
+                onClearWorkspace={hasWorkspace ? openClearWorkspace : undefined}
                 // A height of 0 means "back to the default clamp", which is what
                 // double-clicking the drawer's resize handle asks for.
                 onResize={setWorkbenchHeight}
@@ -4751,6 +4839,37 @@ function MainApp() {
           <span>Controls</span>
         </button>
       </nav>
+      <ToastViewport>
+        <DraftToast
+          draft={editorDraft}
+          draftKey={editorDraftKey}
+        />
+        <UpdateToast
+          editorDirty={editorDirty}
+          draftStatus={editorDraft.status}
+          onDownloadRecovery={downloadEditorRecovery}
+        />
+        <ManagedToast
+          id="workspace-cleared"
+          open={workspaceCleared !== null}
+          title="Workspace cleared"
+          description={workspaceCleared && workspaceCleared.drafts > 0
+            ? `The imported archive, definitions, and ${workspaceCleared.drafts} draft${workspaceCleared.drafts === 1 ? '' : 's'} were removed from this browser.`
+            : 'The imported files were removed from this browser.'}
+          dismissible
+          timeout={4_500}
+          onClose={() => setWorkspaceCleared(null)}
+        />
+      </ToastViewport>
+      <ClearWorkspaceDialog
+        open={clearWorkspaceOpen}
+        onOpenChange={setClearWorkspaceOpen}
+        unsavedWarning={clearWorkspaceWarning}
+        onDownloadRecovery={downloadEditorRecovery}
+        clearing={clearingWorkspace}
+        error={clearWorkspaceError}
+        onConfirm={clearWorkspace}
+      />
       {boot.progress < 100 && <BootLoader boot={boot} />}
     </div>
   );
