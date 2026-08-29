@@ -1,8 +1,79 @@
+export interface ScreenshotSize {
+  readonly maxEdge: number;
+}
+
+export interface ScreenshotCapture {
+  readonly width: number;
+  readonly height: number;
+  readonly paddingScale: number;
+  readonly outputMaxEdge: number | null;
+}
+
+export function resolveScreenshotCapture(
+  size: number | ScreenshotSize,
+  viewportWidth: number,
+  viewportHeight: number,
+): ScreenshotCapture {
+  if (typeof size === 'number') {
+    return {
+      width: viewportWidth * size,
+      height: viewportHeight * size,
+      paddingScale: size,
+      outputMaxEdge: null,
+    };
+  }
+  const scale = size.maxEdge / Math.max(viewportWidth, viewportHeight);
+  return {
+    width: Math.max(1, Math.round(viewportWidth * scale)),
+    height: Math.max(1, Math.round(viewportHeight * scale)),
+    paddingScale: scale,
+    outputMaxEdge: size.maxEdge,
+  };
+}
+
+export function fitScreenshotCapture(
+  capture: ScreenshotCapture,
+  maxDimension: number,
+  maxPixels: number,
+): ScreenshotCapture {
+  const scale = Math.min(
+    1,
+    maxDimension / Math.max(capture.width, capture.height),
+    Math.sqrt(maxPixels / (capture.width * capture.height)),
+  );
+  if (scale === 1) return capture;
+  return {
+    ...capture,
+    width: Math.max(1, Math.floor(capture.width * scale)),
+    height: Math.max(1, Math.floor(capture.height * scale)),
+    paddingScale: capture.paddingScale * scale,
+  };
+}
+
+export function screenshotOutputSize(
+  croppedWidth: number,
+  croppedHeight: number,
+  outputMaxEdge: number | null,
+): { readonly width: number; readonly height: number } {
+  if (outputMaxEdge === null) return { width: croppedWidth, height: croppedHeight };
+  if (croppedWidth >= croppedHeight) {
+    return {
+      width: outputMaxEdge,
+      height: Math.max(1, Math.round(croppedHeight * outputMaxEdge / croppedWidth)),
+    };
+  }
+  return {
+    width: Math.max(1, Math.round(croppedWidth * outputMaxEdge / croppedHeight)),
+    height: outputMaxEdge,
+  };
+}
+
 export async function screenshotPixelsToBlob(
   raw: Uint8Array,
   width: number,
   height: number,
-  scale: number,
+  paddingScale: number,
+  outputMaxEdge: number | null,
 ): Promise<Blob> {
   const image = new ImageData(width, height);
   const out = image.data;
@@ -33,18 +104,31 @@ export async function screenshotPixelsToBlob(
   }
 
   const hasContent = maxX >= minX && maxY >= minY;
-  const padding = Math.max(8, Math.round(24 * scale));
+  const padding = Math.max(8, Math.round(24 * paddingScale));
   const cropLeft = hasContent ? Math.max(0, minX - padding) : 0;
   const cropTop = hasContent ? Math.max(0, minY - padding) : 0;
   const cropRight = hasContent ? Math.min(width, maxX + 1 + padding) : width;
   const cropBottom = hasContent ? Math.min(height, maxY + 1 + padding) : height;
-  const scratch = document.createElement('canvas');
-  scratch.width = cropRight - cropLeft;
-  scratch.height = cropBottom - cropTop;
-  const ctx = scratch.getContext('2d');
-  if (!ctx) throw new Error('[warpaint-viewer] screenshot canvas 2d context unavailable');
-  ctx.putImageData(image, -cropLeft, -cropTop);
-  const blob = await new Promise<Blob | null>((resolve) => scratch.toBlob(resolve, 'image/png'));
+  const cropped = document.createElement('canvas');
+  cropped.width = cropRight - cropLeft;
+  cropped.height = cropBottom - cropTop;
+  const croppedContext = cropped.getContext('2d');
+  if (!croppedContext) throw new Error('[warpaint-viewer] screenshot canvas 2d context unavailable');
+  croppedContext.putImageData(image, -cropLeft, -cropTop);
+
+  const outputSize = screenshotOutputSize(cropped.width, cropped.height, outputMaxEdge);
+  let output = cropped;
+  if (outputSize.width !== cropped.width || outputSize.height !== cropped.height) {
+    output = document.createElement('canvas');
+    output.width = outputSize.width;
+    output.height = outputSize.height;
+    const outputContext = output.getContext('2d');
+    if (!outputContext) throw new Error('[warpaint-viewer] screenshot resize canvas 2d context unavailable');
+    outputContext.imageSmoothingQuality = 'high';
+    outputContext.drawImage(cropped, 0, 0, output.width, output.height);
+  }
+
+  const blob = await new Promise<Blob | null>((resolve) => output.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('[warpaint-viewer] screenshot capture failed');
   return blob;
 }

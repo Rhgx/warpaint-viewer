@@ -7,18 +7,18 @@ export function useScreenshotActions({
   paintName,
   weaponKey,
   seed,
-  scale,
+  maxEdge,
 }: {
   viewerRef: RefObject<Viewer | null>;
   paintName?: string;
   weaponKey: string;
   seed: string;
-  scale: number;
+  maxEdge: number;
 }) {
   const saveImage = useCallback(async () => {
     const viewer = viewerRef.current;
     if (!viewer) throw new Error('Viewer not ready');
-    const blob = await viewer.captureScreenshot(scale);
+    const blob = await viewer.captureScreenshot({ maxEdge });
     const slug = paintName
       ? paintName
           .toLowerCase()
@@ -33,16 +33,16 @@ export function useScreenshotActions({
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-  }, [viewerRef, paintName, weaponKey, seed, scale]);
+  }, [viewerRef, paintName, weaponKey, seed, maxEdge]);
 
   const copyImage = useCallback(async () => {
     const viewer = viewerRef.current;
     if (!viewer) throw new Error('Viewer not ready');
-    const blob = await viewer.captureScreenshot(scale);
+    const blob = await viewer.captureScreenshot({ maxEdge });
     await navigator.clipboard.write([
       new ClipboardItem({ 'image/png': blob }),
     ]);
-  }, [viewerRef, scale]);
+  }, [viewerRef, maxEdge]);
 
   return { saveImage, copyImage };
 }

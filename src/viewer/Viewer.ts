@@ -34,7 +34,12 @@ import { installTf2VertexLit, TF2_VERTEXLIT_CACHE_KEY } from './shaders/vertexli
 import { createUnusualEffect, setParticlePointScale } from './particles';
 import type { UnusualEffect } from './particles';
 import type { WeaponMaterial } from '../data/types';
-import { screenshotPixelsToBlob } from './capture';
+import {
+  fitScreenshotCapture,
+  resolveScreenshotCapture,
+  screenshotPixelsToBlob,
+  type ScreenshotSize,
+} from './capture';
 import { computeModelBounds, ModelLoader, type ModelPart } from './modelLoader';
 import { CullableGeometry } from './modelCulling';
 import { configureTf2Material, createTf2Uniforms } from './materialConfig';
@@ -2549,10 +2554,13 @@ export class Viewer {
     };
   }
 
-  // Renders at `scale`x resolution with no background so the PNG carries
-  // alpha. Capture uses an offscreen target rather than resizing the live
-  // canvas: the animation loop can keep running while PNG encoding completes
-  // without observing temporary renderer or camera state.
+  // Renders at the current viewport aspect with no background so the PNG
+  // carries alpha. Numeric sizes retain the scaled, cropped path used by
+  // generated thumbnails. Size presets crop the same way, then resize the
+  // result so its longest edge matches the requested tier. Capture uses an
+  // offscreen target rather than resizing the live canvas, so the animation
+  // loop can keep running while PNG encoding completes without observing
+  // temporary renderer state.
   //
   // The buffer can't go through canvas.toBlob() directly: additive passes
   // (unusual particles, sheens) add color while leaving destination alpha
@@ -2564,15 +2572,22 @@ export class Viewer {
   // closest "over" approximation: alpha = max(alpha, r, g, b) and color
   // rescaled to keep color * alpha unchanged. Over dark backgrounds this
   // reproduces the glow exactly; opaque weapon pixels pass through untouched.
-  async captureScreenshot(scale = 2): Promise<Blob> {
+  async captureScreenshot(size: number | ScreenshotSize = 2): Promise<Blob> {
     const w = this.canvas.clientWidth || 1;
     const h = this.canvas.clientHeight || 1;
-    const width = w * scale;
-    const height = h * scale;
+    // ponytail: cap the working target at an 8K pixel budget; tile the render
+    // if native 16K detail ever becomes a real requirement.
+    const { width, height, paddingScale, outputMaxEdge } = fitScreenshotCapture(
+      resolveScreenshotCapture(size, w, h),
+      this.renderer.capabilities.maxTextureSize,
+      7680 * 4320,
+    );
     const target = new THREE.WebGLRenderTarget(width, height, {
       depthBuffer: true,
       stencilBuffer: false,
-      samples: 4,
+      // Large exports already carry enough edge detail, and multisampling would
+      // multiply their GPU memory cost.
+      samples: width * height <= 2560 * 1440 ? 4 : 0,
     });
     target.texture.colorSpace = this.renderer.outputColorSpace;
     const prevTarget = this.renderer.getRenderTarget();
@@ -2598,7 +2613,7 @@ export class Viewer {
       target.dispose();
     }
 
-    return screenshotPixelsToBlob(raw, width, height, scale);
+    return screenshotPixelsToBlob(raw, width, height, paddingScale, outputMaxEdge);
   }
 
   private installTf2Shader() {

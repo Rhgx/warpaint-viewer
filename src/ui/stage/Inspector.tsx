@@ -17,11 +17,13 @@ import { LightingRigSummary } from './LightingRigSummary';
 const rgbCss = ([r, g, b]: [number, number, number]) =>
   `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
 
-const SCREENSHOT_SCALE_OPTIONS = [
-  { value: '1', label: '1x' },
-  { value: '2', label: '2x' },
-  { value: '4', label: '4x' },
-  { value: '8', label: '8x' },
+const SCREENSHOT_SIZE_OPTIONS = [
+  { value: '1280', label: '720p' },
+  { value: '1920', label: '1080p' },
+  { value: '2560', label: '2K' },
+  { value: '3840', label: '4K' },
+  { value: '7680', label: '8K' },
+  { value: '15360', label: '16K' },
 ];
 
 // A collapsible group of controls. Expanded by default; each section keeps
@@ -302,11 +304,11 @@ export function Inspector({
           </div>
         </Control>
 
-        <Control label={<span>Screenshot scale</span>}>
+        <Control label={<span>Screenshot size</span>}>
           <SelectField
-            value={String(state.screenshotScale)}
-            onChange={(v) => onChange({ screenshotScale: Number(v) })}
-            options={SCREENSHOT_SCALE_OPTIONS}
+            value={String(state.screenshotMaxEdge)}
+            onChange={(value) => onChange({ screenshotMaxEdge: Number(value) })}
+            options={SCREENSHOT_SIZE_OPTIONS}
           />
         </Control>
       </InspectorSection>

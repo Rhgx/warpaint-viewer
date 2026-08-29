@@ -559,7 +559,7 @@ function MainApp() {
     unusual: 'none',
     fov: DEFAULT_VIEWER_FOV,
     projection: 'perspective',
-    screenshotScale: 2,
+    screenshotMaxEdge: 1920,
     customLighting: loadCustomLighting(),
   }));
   const customLightingRef = useRef(state.customLighting);
@@ -4035,7 +4035,7 @@ function MainApp() {
     paintName: selectedKit?.name,
     weaponKey: state.weaponKey,
     seed: state.seed,
-    scale: state.screenshotScale,
+    maxEdge: state.screenshotMaxEdge,
   });
 
   const paintToolForIcons = data?.manifest.weapons.find((weapon) => weapon.key === 'paintkit_tool');
