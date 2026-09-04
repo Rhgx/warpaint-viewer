@@ -272,7 +272,7 @@ export function useProtoDefEditorSession({
       return false;
     }
     const request = ++requestRef.current;
-    setStatus('loading');
+    clear('loading');
     setError(null);
     try {
       const messages = await loaderRef.current(kitId);

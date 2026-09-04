@@ -66,7 +66,7 @@ function DefinitionRow({
     <div
       className="definitions-row"
       data-loaded={kit.loaded || undefined}
-      data-unsupported={kit.unsupported || undefined}
+      data-unsupported={kit.unsupported || kit.quarantined || undefined}
     >
       <div className="definitions-row-main">
         <span className="definitions-row-name">{kit.name}</span>
@@ -77,7 +77,11 @@ function DefinitionRow({
       <span className="definitions-row-chip" data-new={kit.isNew || undefined}>
         {kit.isNew ? 'New' : `Built-in #${kit.defindex}`}
       </span>
-      {kit.unsupported ? (
+      {kit.quarantined ? (
+        <span className="definitions-row-reason">
+          Could not produce a paint recipe
+        </span>
+      ) : kit.unsupported ? (
         <span className="definitions-row-reason">
           No weapon this viewer can render
         </span>

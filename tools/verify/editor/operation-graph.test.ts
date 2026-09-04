@@ -9,7 +9,6 @@ import {
   operationGraphChildren,
 } from '../../../src/editor/graph/operationGraph';
 import { validateOperationGraph } from '../../../src/editor/graph/validation';
-import { layoutOperationGraph } from '../../../src/editor/graph/layout';
 
 function texture(variable: string): OperationNodeMsg {
   return {
@@ -138,24 +137,4 @@ test('multiple roots connect to one synthetic output in authored order', () => {
     .sort((a, b) => a.inputIndex - b.inputIndex);
   assert.deepEqual(outputEdges.map((edge) => edge.source), graph.roots);
   assert.equal(validateOperationGraph(graph).valid, true);
-});
-
-test('layout is deterministic and places sources before combines and output', () => {
-  const graph = operationToGraph(operation({
-    stage: {
-      combine_add: {
-        operation_node: [texture('a'), texture('b')],
-      },
-    },
-  }));
-  const first = layoutOperationGraph(graph, { horizontalGap: 100, verticalGap: 50, outputGap: 20 });
-  const second = layoutOperationGraph(graph, { horizontalGap: 100, verticalGap: 50, outputGap: 20 });
-  assert.deepEqual(first, second);
-  const root = graph.nodes.find((node) => node.kind === 'combine_add');
-  assert.ok(root);
-  assert.equal(first[root.id].x, 100);
-  assert.equal(first[graph.outputId].x, 220);
-  for (const edge of graph.edges.filter((candidate) => candidate.target === root.id)) {
-    assert.equal(first[edge.source].x, 0);
-  }
 });

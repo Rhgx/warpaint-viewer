@@ -359,7 +359,9 @@ export function useComposedPaint({
       if (cancelled) return;
       if (!sourceRecipe) {
         console.warn(`[warpaint-viewer] no recipe for ${requestKey}`);
-        if (!firstPaintLoggedRef.current) setError('The initial warpaint recipe is missing.');
+        if (!firstPaintLoggedRef.current && !isCustomKitId(selectedKit.id)) {
+          setError('The initial warpaint recipe is missing.');
+        }
         return;
       }
       const recipe = applyTextureOverrides(sourceRecipe, activeTextureOverrides);

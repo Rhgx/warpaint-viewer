@@ -202,6 +202,8 @@ export interface CustomDefinitionKitRow {
   loaded: boolean;
   /** No renderable weapon, so it cannot be loaded. */
   unsupported: boolean;
+  /** Its first renderable weapon could not produce an initial recipe. */
+  quarantined: boolean;
 }
 
 /** A proto_defs file the mounted Source package carries. */

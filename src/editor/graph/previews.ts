@@ -490,7 +490,7 @@ export async function exportOperationGraphPng(
   options: OperationGraphPreviewOptions = {},
 ): Promise<Uint8Array> {
   assertRenderActive(render);
-  const blob = await render.previewBlob(options.maxDimension ?? 1024, options.forceOpaque ?? true);
+  const blob = await render.previewBlob(options.maxDimension ?? 1024, options.forceOpaque ?? false);
   return new Uint8Array(await blob.arrayBuffer());
 }
 

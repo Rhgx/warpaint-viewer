@@ -26,6 +26,7 @@ import { classifyProtoDefFragment } from '../protodefs/jsonFragments';
 import { appErrorDiagnostic, ERROR_CODES } from '../errors';
 import { serializeProtoDefKitMessages } from '../editor/jsonExport';
 import { applyImplicitStickerSpecs } from '../protodefs/implicitStickerSpecs';
+import { partitionResolvableKits } from '../protodefs/validation';
 import {
   deleteCustomSourceFiles,
   readCustomSourceFiles,
@@ -131,6 +132,7 @@ export function useCustomDefinitions({
   const [fileName, setFileName] = useState<string | undefined>();
   const [diagnostics, setDiagnostics] = useState<SourceDiagnostic[]>([]);
   const [loadedDefindexes, setLoadedDefindexes] = useState<number[]>([]);
+  const [quarantinedDefindexes, setQuarantinedDefindexes] = useState<number[]>([]);
   const [icons, setIcons] = useState<Record<number, string>>({});
   const [suggestedKitId, setSuggestedKitId] = useState<number | undefined>();
   const [generation, setGeneration] = useState(0);
@@ -231,30 +233,42 @@ export function useCustomDefinitions({
         builtInIds: manifest?.paintkits.map((kit) => kit.id) ?? [],
       });
       if (operation !== importOperationRef.current) { source.dispose(); return false; }
+
+      const candidates = index.kits.filter((kit) => kit.isNew && kit.weapons.length > 0);
+      const { loadable: newKits, quarantined } = await partitionResolvableKits(source, candidates);
+      if (operation !== importOperationRef.current) { source.dispose(); return false; }
+
       release();
       loadedRef.current = { name, index, source };
       setLoaded(loadedRef.current);
 
-      const newKits = index.kits.filter((kit) => kit.isNew && kit.weapons.length > 0);
       setLoadedDefindexes(newKits.map((kit) => kit.defindex));
+      setQuarantinedDefindexes(quarantined.map((kit) => kit.defindex));
       setStatus('loaded');
       setGeneration((current) => current + 1);
       setSuggestedKitId(newKits.length ? customKitId(newKits[0].defindex) : undefined);
 
       const notes: SourceDiagnostic[] = [];
+      const unsupported = index.kits.filter((kit) => kit.weapons.length === 0).length;
       if (index.kits.length === 0) {
         notes.push(diagnostic('error', 'This file contains no war paint definitions.', name));
-      } else if (newKits.length === 0) {
+      } else if (newKits.length === 0 && unsupported === 0 && quarantined.length === 0) {
         notes.push(diagnostic(
           'warning',
           'Every definition in this file matches a built-in war paint index, so none were added automatically. Load one below to use the imported version.',
         ));
       }
-      const unsupported = index.kits.filter((kit) => kit.weapons.length === 0).length;
       if (unsupported > 0) {
         notes.push(diagnostic(
           'warning',
-          `${unsupported.toLocaleString()} ${unsupported === 1 ? 'definition paints' : 'definitions paint'} a weapon this viewer has no model for.`,
+          `${unsupported.toLocaleString()} ${unsupported === 1 ? 'definition uses' : 'definitions use'} a weapon this viewer has no model for.`,
+        ));
+      }
+      if (quarantined.length > 0) {
+        notes.push(diagnostic(
+          'warning',
+          `${quarantined.length.toLocaleString()} ${quarantined.length === 1 ? 'definition could' : 'definitions could'} not produce a paint recipe and ${quarantined.length === 1 ? 'was' : 'were'} not loaded.`,
+          'Use Remove to discard the saved source files, or Replace to import corrected files.',
         ));
       }
       const teamTextureMismatches = index.kits.filter((kit) => kit.teamTextureMismatch);
@@ -414,6 +428,7 @@ export function useCustomDefinitions({
     setFileName(undefined);
     setDiagnostics([]);
     setLoadedDefindexes([]);
+    setQuarantinedDefindexes([]);
     setIcons({});
     setSuggestedKitId(undefined);
     void deleteCustomSourceFiles('definitions').catch(() => {
@@ -427,10 +442,11 @@ export function useCustomDefinitions({
   }, [release]);
 
   const onToggleKit = useCallback((defindex: number) => {
+    if (quarantinedDefindexes.includes(defindex)) return;
     setLoadedDefindexes((current) => current.includes(defindex)
       ? current.filter((entry) => entry !== defindex)
       : [...current, defindex]);
-  }, []);
+  }, [quarantinedDefindexes]);
 
   // A war paint ships its definitions inside the same archive as its textures,
   // either as a whole modded container or (far more often) as the two JSON
@@ -486,6 +502,7 @@ export function useCustomDefinitions({
   }, [pkg, packageFragments, openContainer, openFragments]);
 
   const loadedSet = useMemo(() => new Set(loadedDefindexes), [loadedDefindexes]);
+  const quarantinedSet = useMemo(() => new Set(quarantinedDefindexes), [quarantinedDefindexes]);
 
   const kitRows = useMemo<CustomDefinitionKitRow[]>(
     () => (loaded?.index.kits ?? []).map((kit) => ({
@@ -496,8 +513,9 @@ export function useCustomDefinitions({
       isNew: kit.isNew,
       loaded: loadedSet.has(kit.defindex),
       unsupported: kit.weapons.length === 0,
+      quarantined: quarantinedSet.has(kit.defindex),
     })),
-    [loaded, loadedSet],
+    [loaded, loadedSet, quarantinedSet],
   );
 
   const catalogKits = useMemo<PaintkitEntry[]>(

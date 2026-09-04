@@ -697,8 +697,6 @@ function assembleDecoded(raw: RawDecoded, options: ProtoDefOpenOptions): Decoded
     const defindex = def.header.defindex;
     const unsupportedItemDefs: number[] = [];
     const slots = resolveSlots(def, ctx, options.weaponsByItemDef, unsupportedItemDefs);
-    if (!slots.length) continue;
-
     kitsByDefindex.set(defindex, { def, slots });
 
     const weapons = [...new Set(slots.map((s) => s.weaponKey))].sort();
@@ -715,7 +713,7 @@ function assembleDecoded(raw: RawDecoded, options: ProtoDefOpenOptions): Decoded
     const isNew = !builtInIds.has(defindex);
 
     let iconRef: string | undefined;
-    if (isNew && iconRefBudget > 0) {
+    if (isNew && slots.length > 0 && iconRefBudget > 0) {
       iconRefBudget -= 1;
       const first = slots[0];
       const r = resolveOne(def, first.item, first.itemDef, 0, 'red', ctx);

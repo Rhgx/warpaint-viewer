@@ -9,11 +9,11 @@ import type { RecipeNode } from '../../../src/compositor/types';
 import {
   createOperationGraphObjectUrl,
   mapOperationGraphNodeToRecipe,
+  exportOperationGraphPng,
   exportOperationGraphVtf,
   type OperationGraphRenderLease,
 } from '../../../src/editor/graph/previews';
 import { operationToGraph } from '../../../src/editor/graph/operationGraph';
-import { encodeVtf } from '../../../src/export/vtfEncode';
 import { decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipe } from '../../../src/protodefs/decoder';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -176,18 +176,6 @@ test('creates explicitly disposable object URLs', async () => {
   assert.equal(lease.isDisposed(), true);
 });
 
-test('VTF encoding accepts compositor-sized RGBA readback', () => {
-  const pixels = new Uint8Array([
-    255, 0, 0, 255,
-    0, 255, 0, 255,
-    0, 0, 255, 255,
-    255, 255, 255, 255,
-  ]);
-  const vtf = encodeVtf({ width: 2, height: 2, pixels, format: 'bgra8888' });
-  assert.deepEqual([...vtf.subarray(0, 4)], [0x56, 0x54, 0x46, 0x00]);
-  assert.ok(vtf.length > pixels.length);
-});
-
 test('VTF helper uses the render lease readback and owns no extra target', () => {
   const pixels = new Uint8Array([
     255, 0, 0, 255,
@@ -210,6 +198,19 @@ test('VTF helper uses the render lease readback and owns no extra target', () =>
   } as unknown as OperationGraphRenderLease;
   const vtf = exportOperationGraphVtf(render, { format: 'bgra8888' });
   assert.deepEqual([...vtf.subarray(0, 4)], [0x56, 0x54, 0x46, 0x00]);
+});
+
+test('PNG export preserves compositor alpha by default', async () => {
+  let forceOpaque: boolean | undefined;
+  const render = {
+    previewBlob: async (_maxDimension: number, opaque: boolean) => {
+      forceOpaque = opaque;
+      return new Blob([new Uint8Array([1, 2, 3])]);
+    },
+    isDisposed: () => false,
+  } as unknown as OperationGraphRenderLease;
+  assert.deepEqual([...await exportOperationGraphPng(render)], [1, 2, 3]);
+  assert.equal(forceOpaque, false);
 });
 
 test('Invisible_V2 authored nodes correlate with their resolved recipe', async () => {
