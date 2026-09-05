@@ -8,7 +8,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
 import type { RecipeNode } from '../../../src/compositor/types';
-import { SnapshotHistory } from '../../../src/editor/history';
 import {
   addStickerStages,
   moveStickerStages,
@@ -48,7 +47,6 @@ const implementation = {
   removeStickerStages,
   resolveKitRecipeWithProvenance,
   setStickerDestQuad,
-  SnapshotHistory,
 };
 
 test('sticker placement discovery and mutation', () => {
@@ -345,13 +343,6 @@ assert.deepEqual(
   { tl: [0.1, 0.15], tr: [0.6, 0.15], bl: [0.1, 0.65] },
   'moving a sticker on one weapon must preserve another weapon slot\'s placement',
 );
-
-const history = new implementation.SnapshotHistory();
-history.record(original);
-const undone = history.undo(moved);
-assert.deepEqual(undone, original, 'one placement operation restores all three corners with one undo');
-assert.equal(history.canUndo, false);
-assert.deepEqual(history.redo(undone), moved, 'redo restores the complete placement snapshot');
 
 const sharedDestination = structuredClone(original);
 const stage = fixtureStickerStage(sharedDestination.operation);

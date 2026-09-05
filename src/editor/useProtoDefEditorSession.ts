@@ -13,7 +13,6 @@ import {
   setWeaponMaterialOverride,
   setWeaponMaterialOverrides,
   setGroupTextureReference,
-  toggleSelectGroupId,
   type SelectGroupAssignmentResult,
   type SelectGroupAssignmentTarget,
   type SelectGroupTarget,
@@ -80,14 +79,6 @@ export interface ProtoDefEditorSession {
   canUndo: boolean;
   canRedo: boolean;
   error: string | null;
-  /** Safely applies one literal select-group toggle to the exact target stage. */
-  toggleSelectGroup: (target: SelectGroupTarget, groupId: number) => boolean;
-  /** Assigns a group to one layer, clearing any existing owner in one undo step. */
-  assignSelectGroup: (
-    active: SelectGroupAssignmentTarget,
-    candidates: readonly SelectGroupAssignmentTarget[],
-    groupId: number,
-  ) => Omit<SelectGroupAssignmentResult, 'messages'> | null;
   /** Assigns several raw ids as one atomic editor action. */
   assignSelectGroups: (
     active: SelectGroupAssignmentTarget,
@@ -309,40 +300,20 @@ export function useProtoDefEditorSession({
     setError(null);
   }, []);
 
-  const toggleSelectGroup = useCallback((target: SelectGroupTarget, groupId: number): boolean => {
+  const applyEdit = useCallback((edit: (prior: ProtoDefKitMessages) => ProtoDefKitMessages): boolean => {
     const prior = currentRef.current;
     if (!prior) {
       setError('Load an imported definition before editing it.');
       return false;
     }
     try {
-      const next = snapshot(toggleSelectGroupId(prior, target, groupId));
-      commitEdit(prior, next);
+      const next = edit(prior);
+      if (next === prior) return false;
+      commitEdit(prior, snapshot(next));
       return true;
     } catch (cause) {
       setError(errorMessage(cause));
       return false;
-    }
-  }, [commitEdit]);
-
-  const assignSelectGroup = useCallback((
-    active: SelectGroupAssignmentTarget,
-    candidates: readonly SelectGroupAssignmentTarget[],
-    groupId: number,
-  ): Omit<SelectGroupAssignmentResult, 'messages'> | null => {
-    const prior = currentRef.current;
-    if (!prior) {
-      setError('Load an imported definition before editing it.');
-      return null;
-    }
-    try {
-      const result = assignSelectGroupExclusively(prior, active, candidates, groupId);
-      const next = snapshot(result.messages);
-      commitEdit(prior, next);
-      return { action: result.action, displacedLabels: result.displacedLabels };
-    } catch (cause) {
-      setError(errorMessage(cause));
-      return null;
     }
   }, [commitEdit]);
 
@@ -376,73 +347,33 @@ export function useProtoDefEditorSession({
     }
   }, [commitEdit]);
 
-  const clearSelectGroups = useCallback((target: SelectGroupTarget, groupIds: readonly number[]): boolean => {
-    const prior = currentRef.current;
-    if (!prior) {
-      setError('Load an imported definition before editing it.');
-      return false;
-    }
-    if (groupIds.length === 0) return false;
-    try {
-      const cleared = clearSelectGroupIds(prior, target, groupIds);
-      if (cleared === prior) return false;
-      commitEdit(prior, snapshot(cleared));
-      return true;
-    } catch (cause) {
-      setError(errorMessage(cause));
-      return false;
-    }
-  }, [commitEdit]);
+  const clearSelectGroups = useCallback((target: SelectGroupTarget, groupIds: readonly number[]): boolean => (
+    applyEdit((prior) => clearSelectGroupIds(prior, target, groupIds))
+  ), [applyEdit]);
 
   const setGroupTexture = useCallback((
     target: GroupTextureTarget,
     textureRef: string,
     defaultAssignment?: GroupTextureDefaultAssignment,
-  ): boolean => {
-    const prior = currentRef.current;
-    if (!prior) {
-      setError('Load an imported definition before editing it.');
-      return false;
-    }
-    try {
-      let next = setGroupTextureReference(prior, target, textureRef);
-      if (defaultAssignment) {
-        for (const groupId of defaultAssignment.groupIds) {
-          next = assignSelectGroupExclusively(
-            next,
-            defaultAssignment.active,
-            defaultAssignment.candidates,
-            groupId,
-          ).messages;
-        }
+  ): boolean => applyEdit((prior) => {
+    let next = setGroupTextureReference(prior, target, textureRef);
+    if (defaultAssignment) {
+      for (const groupId of defaultAssignment.groupIds) {
+        next = assignSelectGroupExclusively(
+          next,
+          defaultAssignment.active,
+          defaultAssignment.candidates,
+          groupId,
+        ).messages;
       }
-      commitEdit(prior, snapshot(next));
-      return true;
-    } catch (cause) {
-      setError(errorMessage(cause));
-      return false;
     }
-  }, [commitEdit]);
+    return next;
+  }), [applyEdit]);
 
-
-  const setStickerQuad = useCallback((target: StickerTarget, quad: StickerQuad): boolean => {
-    const prior = currentRef.current;
-    if (!prior) {
-      setError('Load an imported definition before editing it.');
-      return false;
-    }
-    try {
-      // A drag may update all three corners many times in the UI, but each
-      // completed gesture calls this action once and therefore produces one
-      // immutable history snapshot.
-      const next = snapshot(setStickerDestQuad(prior, target, quad));
-      commitEdit(prior, next);
-      return true;
-    } catch (cause) {
-      setError(errorMessage(cause));
-      return false;
-    }
-  }, [commitEdit]);
+  // The UI commits the quad once per completed drag, keeping one undo step.
+  const setStickerQuad = useCallback((target: StickerTarget, quad: StickerQuad): boolean => (
+    applyEdit((prior) => setStickerDestQuad(prior, target, quad))
+  ), [applyEdit]);
 
   // Batches a transform drag or typing burst into one history entry while
   // still updating `current` (and therefore the live viewer) on every
@@ -518,39 +449,13 @@ export function useProtoDefEditorSession({
     weaponOverridePaths,
   )), [applyTransformEdit]);
 
-  const setWeaponMaterial = useCallback((target: WeaponMaterialTarget, overridePath: string | null): boolean => {
-    const prior = currentRef.current;
-    if (!prior) {
-      setError('Load an imported definition before editing it.');
-      return false;
-    }
-    try {
-      const changed = setWeaponMaterialOverride(prior, target, overridePath);
-      if (changed === prior) return false;
-      commitEdit(prior, snapshot(changed));
-      return true;
-    } catch (cause) {
-      setError(errorMessage(cause));
-      return false;
-    }
-  }, [commitEdit]);
+  const setWeaponMaterial = useCallback((target: WeaponMaterialTarget, overridePath: string | null): boolean => (
+    applyEdit((prior) => setWeaponMaterialOverride(prior, target, overridePath))
+  ), [applyEdit]);
 
-  const setWeaponMaterials = useCallback((updates: readonly WeaponMaterialUpdate[]): boolean => {
-    const prior = currentRef.current;
-    if (!prior) {
-      setError('Load an imported definition before editing it.');
-      return false;
-    }
-    try {
-      const changed = setWeaponMaterialOverrides(prior, updates);
-      if (changed === prior) return false;
-      commitEdit(prior, snapshot(changed));
-      return true;
-    } catch (cause) {
-      setError(errorMessage(cause));
-      return false;
-    }
-  }, [commitEdit]);
+  const setWeaponMaterials = useCallback((updates: readonly WeaponMaterialUpdate[]): boolean => (
+    applyEdit((prior) => setWeaponMaterialOverrides(prior, updates))
+  ), [applyEdit]);
 
   const replaceOperationGraph = useCallback((graph: OperationGraph): boolean => {
     const prior = currentRef.current;
@@ -614,32 +519,17 @@ export function useProtoDefEditorSession({
     return true;
   }, [commitEdit]);
 
-  const applyStickerStructureEdit = useCallback((edit: (prior: ProtoDefKitMessages) => ProtoDefKitMessages): boolean => {
-    const prior = currentRef.current;
-    if (!prior) {
-      setError('Load an imported definition before editing it.');
-      return false;
-    }
-    try {
-      commitEdit(prior, snapshot(edit(prior)));
-      return true;
-    } catch (cause) {
-      setError(errorMessage(cause));
-      return false;
-    }
-  }, [commitEdit]);
-
   const addSticker = useCallback((target: StickerStructureTarget, quad: StickerQuad, baseReference: string) => (
-    applyStickerStructureEdit((prior) => addStickerStages(prior, target, quad, baseReference))
-  ), [applyStickerStructureEdit]);
+    applyEdit((prior) => addStickerStages(prior, target, quad, baseReference))
+  ), [applyEdit]);
 
   const removeSticker = useCallback((target: StickerStructureTarget) => (
-    applyStickerStructureEdit((prior) => removeStickerStages(prior, target))
-  ), [applyStickerStructureEdit]);
+    applyEdit((prior) => removeStickerStages(prior, target))
+  ), [applyEdit]);
 
   const moveSticker = useCallback((target: StickerStructureTarget, direction: -1 | 1) => (
-    applyStickerStructureEdit((prior) => moveStickerStages(prior, target, direction))
-  ), [applyStickerStructureEdit]);
+    applyEdit((prior) => moveStickerStages(prior, target, direction))
+  ), [applyEdit]);
 
   const undo = useCallback(() => {
     const currentMessages = currentRef.current;
@@ -741,8 +631,6 @@ export function useProtoDefEditorSession({
     canUndo,
     canRedo,
     error,
-    toggleSelectGroup,
-    assignSelectGroup,
     assignSelectGroups,
     clearSelectGroups,
     setGroupTexture,

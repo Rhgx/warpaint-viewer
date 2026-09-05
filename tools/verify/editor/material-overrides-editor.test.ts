@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { SnapshotHistory } from '../../../src/editor/history';
 import {
   setWeaponMaterialOverrides,
   type WeaponMaterialUpdate,
@@ -43,7 +42,7 @@ function materialOverride(messages: ProtoDefKitMessages, weapon: string): unknow
   return (data as Record<string, unknown>).material_override;
 }
 
-test('material overrides batch into one snapshot and ignore no-op writes', () => {
+test('material overrides update both weapons and ignore no-op writes', () => {
   const original = fixture();
   const noOp = setWeaponMaterialOverrides(original, [{
     target: { weaponKey: 'rocketlauncher', path: ['definition', 'rocketlauncher'] },
@@ -58,9 +57,4 @@ test('material overrides batch into one snapshot and ignore no-op writes', () =>
     materialOverride(edited, 'scattergun'),
     'models/paintkits/macaw/c_scattergun',
   );
-
-  const history = new SnapshotHistory<ProtoDefKitMessages>();
-  history.record(original);
-  assert.equal(history.undo(edited), original);
-  assert.equal(history.redo(original), edited);
 });

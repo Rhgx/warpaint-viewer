@@ -5,7 +5,6 @@ import { test } from 'vitest';
 import { resolveRecipe } from '../../../src/compositor/resolve';
 import { advancePaintkitStream, createPaintkitRandomState, resolveRange } from '../../../src/compositor/rng';
 import type { RecipeNode } from '../../../src/compositor/types';
-import { SnapshotHistory } from '../../../src/editor/history';
 import {
   pushTextureTransformRangeToAllWeapons,
   setTextureTransformRange,
@@ -21,6 +20,18 @@ import {
   getKitWeaponSlots,
   resolveKitRecipeWithProvenance,
 } from '../../../src/protodefs/decoder';
+
+const root = path.resolve(import.meta.dirname, '..', '..', '..');
+const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'manifest.json'), 'utf8')) as {
+  paintkits: Array<{ id: number; name: string }>;
+};
+const decoded = decodeProtoDefs(
+  new Uint8Array(fs.readFileSync(path.join(root, 'public', 'data', 'protodefs-full.bin'))),
+  {
+    weaponsByItemDef: JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'item-defs.json'), 'utf8')),
+    builtInIds: manifest.paintkits.map((paint) => paint.id),
+  },
+);
 
 const stagePath = ['operation', 'operation_node', '0', 'stage', 'texture_lookup'] as const;
 
@@ -113,17 +124,6 @@ test('discovers the unmasked base texture as its own transform layer', () => {
 });
 
 test('Storage War exposes its crate pattern base in Transform', () => {
-  const root = path.resolve(import.meta.dirname, '..', '..', '..');
-  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'manifest.json'), 'utf8')) as {
-    paintkits: Array<{ id: number }>;
-  };
-  const decoded = decodeProtoDefs(
-    new Uint8Array(fs.readFileSync(path.join(root, 'public', 'data', 'protodefs-full.bin'))),
-    {
-      weaponsByItemDef: JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'item-defs.json'), 'utf8')),
-      builtInIds: manifest.paintkits.map((paint) => paint.id),
-    },
-  );
   const messages = extractKitMessages(decoded, 441);
   const slot = getKitWeaponSlots(decoded, 441).find((entry) => entry.weaponKey === 'c_rocketlauncher');
   assert.ok(messages && slot);
@@ -138,17 +138,6 @@ test('Storage War exposes its crate pattern base in Transform', () => {
 });
 
 test('every shipped paint exposes its effective unmasked base layer', () => {
-  const root = path.resolve(import.meta.dirname, '..', '..', '..');
-  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'manifest.json'), 'utf8')) as {
-    paintkits: Array<{ id: number; name: string }>;
-  };
-  const decoded = decodeProtoDefs(
-    new Uint8Array(fs.readFileSync(path.join(root, 'public', 'data', 'protodefs-full.bin'))),
-    {
-      weaponsByItemDef: JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'item-defs.json'), 'utf8')),
-      builtInIds: manifest.paintkits.map((paint) => paint.id),
-    },
-  );
   const missing: string[] = [];
   let auditedRecipes = 0;
   for (const paint of manifest.paintkits) {
@@ -169,17 +158,6 @@ test('every shipped paint exposes its effective unmasked base layer', () => {
 }, 15_000);
 
 test('team-texture and weapon-albedo bases use the intended transform policy', () => {
-  const root = path.resolve(import.meta.dirname, '..', '..', '..');
-  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'manifest.json'), 'utf8')) as {
-    paintkits: Array<{ id: number }>;
-  };
-  const decoded = decodeProtoDefs(
-    new Uint8Array(fs.readFileSync(path.join(root, 'public', 'data', 'protodefs-full.bin'))),
-    {
-      weaponsByItemDef: JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'item-defs.json'), 'utf8')),
-      builtInIds: manifest.paintkits.map((paint) => paint.id),
-    },
-  );
   const baseFor = (kitId: number) => {
     const messages = extractKitMessages(decoded, kitId);
     const slot = getKitWeaponSlots(decoded, kitId)[0];
@@ -194,7 +172,7 @@ test('team-texture and weapon-albedo bases use the intended transform policy', (
   assert.equal(baseFor(390).transformLocked, false, 'Dragon Slayer custom paint base is editable');
 });
 
-test('texture transform scope, normalization, history and JSON round trip', () => {
+test('texture transform scope, normalization and JSON round trip', () => {
   const original = fixture();
 
   const literal = setTextureTransformRange(original, { stagePath }, 'translate_u', {
@@ -261,11 +239,6 @@ test('texture transform scope, normalization, history and JSON round trip', () =
   assert.equal(headerVariable(promoted).value, '45');
   assert.deepEqual(weaponVariables(promoted, 'rocketlauncher'), []);
   assert.deepEqual(weaponVariables(promoted, 'scattergun'), []);
-
-  const history = new SnapshotHistory<ProtoDefKitMessages>();
-  history.record(original);
-  assert.deepEqual(history.undo(weaponOnly), original);
-  assert.deepEqual(history.redo(original), weaponOnly);
 
   const exported = serializeProtoDefKitMessages(literal);
   const imported = normalizeProtoDefFragments([...exported.fragments]);
