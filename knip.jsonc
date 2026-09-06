@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/knip/schema-jsonc.json",
+  // Standalone tools not reached through package scripts or application imports.
+  "entry": [
+    "tools/dev/selftest-driver.mjs",
+    "tools/extract/group-names.mjs",
+    "tools/models/check.mjs",
+    "tools/models/mdl2gltf.mjs",
+    "tools/verify/protodef-json.mjs"
+  ],
+  // TypeScript resolves this declaration alongside the imported .mjs module.
+  "ignoreFiles": ["tools/lib/vtf-core.d.mts"],
+  // Native executables used by asset extraction, not npm packages.
+  "ignoreBinaries": ["magick", "xz"]
+}
