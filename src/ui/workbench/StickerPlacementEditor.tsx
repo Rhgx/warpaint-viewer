@@ -43,7 +43,6 @@ export interface StickerSelectionTarget {
   readonly id: string;
   readonly label: string;
   readonly placement: StickerPlacement;
-  readonly artworkSrc: string | null;
 }
 
 export interface StickerPlacementEditorProps {
@@ -999,18 +998,7 @@ export function StickerPlacementEditor({
               })}
             />
             <span className="sticker-placement-editor-grid" aria-hidden="true" />
-            {selectionTargets.map((target, index) => (
-              target.id !== activeSelectionId && target.artworkSrc ? (
-                <div
-                  key={target.id}
-                  className="sticker-placement-editor-passive-item"
-                  style={placementStyle(target.placement, 4 + index)}
-                  aria-hidden="true"
-                >
-                  <img src={target.artworkSrc} alt="" draggable={false} />
-                </div>
-              ) : null
-            ))}
+            {/* Other stickers are already composed into the surface texture. */}
             {stickerSrc || groupPreview ? (
               <div
                 className="sticker-placement-editor-item"

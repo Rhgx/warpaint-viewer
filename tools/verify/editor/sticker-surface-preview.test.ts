@@ -179,15 +179,15 @@ test('sticker surface preview source contract', () => {
     /<GroupStickerUvPreview sources=\{groupPreview\} quad=\{quadValue\}/,
     'group stickers use a live UV renderer instead of their opening-position thumbnail',
   );
-  assert.match(
+  assert.doesNotMatch(
     placementEditorSource,
-    /selectionTargets\.map\(\(target, index\) =>[\s\S]*?target\.id !== activeSelectionId && target\.artworkSrc[\s\S]*?sticker-placement-editor-passive-item/,
-    'deselected stickers remain visible on the UV surface',
+    /sticker-placement-editor-passive-item|target\.artworkSrc/,
+    'inactive stickers are already baked into the surface and must not receive a second artwork overlay',
   );
-  assert.match(
+  assert.doesNotMatch(
     appSource,
-    /artworkSrc: groupStickerArtwork\[target\.id\]\?\.url[\s\S]*?\?\? stickerTargetArtwork\[target\.id\]/,
-    'selection targets carry both composed group artwork and ordinary sticker artwork',
+    /artworkSrc: groupStickerArtwork\[target\.id\]/,
+    'selection targets only provide hit testing, not artwork that can disagree with the baked variant',
   );
   assert.match(
     appSource,
