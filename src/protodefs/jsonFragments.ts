@@ -18,6 +18,7 @@
 // are size-capped, and anything that isn't a JSON object after normalization
 // is rejected with a specific error rather than passed through.
 
+import { printParseErrorCode, visit, type ParseErrorCode } from 'jsonc-parser';
 import type { ProtoDefJsonFragment } from './types';
 import { AppError, ERROR_CODES } from '../errors';
 
@@ -112,37 +113,27 @@ function coerceEnumStrings(value: unknown): unknown {
   return value;
 }
 
-function jsonErrorLocation(message: string, text: string) {
-  const positionMatch = message.match(/position\s+(\d+)/i);
-  const position = positionMatch ? Number(positionMatch[1]) : undefined;
-  const coordinatesMatch = message.match(/line\s+(\d+)\s+column\s+(\d+)/i);
-  if (coordinatesMatch) {
-    return {
-      line: Number(coordinatesMatch[1]),
-      column: Number(coordinatesMatch[2]),
-      ...(position === undefined ? {} : { position }),
-    };
-  }
-  if (position === undefined) return undefined;
-  const before = text.slice(0, Math.min(position, text.length));
-  const lastNewline = before.lastIndexOf('\n');
-  return {
-    line: before.split('\n').length,
-    column: before.length - lastNewline,
-    position,
-  };
+function jsonError(text: string) {
+  let firstError: { code: ParseErrorCode; offset: number; line: number; column: number } | undefined;
+  visit(text, {
+    onError(code, offset, _length, line, column) {
+      firstError ??= { code, offset, line: line + 1, column: column + 1 };
+    },
+  }, { disallowComments: true, allowTrailingComma: false });
+  return firstError;
 }
 
 function parseFragmentJson(name: string, jsonText: string): Record<string, unknown> {
   let value: unknown;
   try {
+    // Keep native JSON semantics and speed; only diagnose rejected input with jsonc-parser.
     value = JSON.parse(jsonText);
   } catch (cause) {
-    const message = cause instanceof Error ? cause.message : String(cause);
+    const error = jsonError(jsonText);
+    const message = error ? printParseErrorCode(error.code) : String(cause);
     const context = `File: ${name}\nParser: ${message}`;
-    const location = jsonErrorLocation(message, jsonText);
-    const sourceLocation = location && { line: location.line, column: location.column };
-    if (/unterminated string/i.test(message)) {
+    const sourceLocation = error && { line: error.line, column: error.column };
+    if (error && message === 'UnexpectedEndOfString') {
       throw new AppError(
         ERROR_CODES.definitionJsonUnterminatedString,
         'Missing closing quotation mark.',
@@ -154,10 +145,7 @@ function parseFragmentJson(name: string, jsonText: string): Record<string, unkno
         },
       );
     }
-    const stoppedAtEnd = location?.position === undefined
-      ? /unexpected end|end of data/i.test(message)
-      : location.position >= jsonText.length - 1;
-    if (stoppedAtEnd && /unexpected end|end of data|expected .+ after/i.test(message)) {
+    if (error && error.offset >= jsonText.length) {
       throw new AppError(
         ERROR_CODES.definitionJsonIncomplete,
         'Incomplete JSON.',
