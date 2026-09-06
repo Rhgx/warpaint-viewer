@@ -80,4 +80,22 @@ test('physical periodic sticker UV-chart topology', () => {
   const nonIndexedTopology = buildStickerUvTopology([nonIndexed]);
   assert.equal(nonIndexedTopology.charts.length, 1, 'non-indexed duplicate vertices still join through a matched physical+UV edge');
   assert.equal(nonIndexedTopology.triangles.length, 2);
+
+  // Compare indexed chart queries with the exhaustive path at bin boundaries,
+  // wrapped tiles and just outside edges. Visibility/triangle identity must
+  // remain identical; the index is only a search acceleration.
+  const targets: StickerUv[] = [];
+  for (let u = -2; u <= 18; u += 1) {
+    for (let v = -2; v <= 18; v += 1) {
+      targets.push([u / 16, v / 16], [u / 16 - 1e-8, v / 16 + 1e-8]);
+    }
+  }
+  for (const topology of [reused, seam, mirrored, nonIndexedTopology]) {
+    const exhaustive = topology.findCandidates(targets);
+    for (const chart of topology.charts) {
+      assert.deepEqual(topology.findCandidates(targets, chart.id), exhaustive.map((candidates) => (
+        candidates.filter((candidate) => candidate.chartId === chart.id)
+      )));
+    }
+  }
 });

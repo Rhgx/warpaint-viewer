@@ -350,6 +350,8 @@ export class Viewer {
   private sheenMaterial: THREE.ShaderMaterial | null = null;
   private sheenMeshes: THREE.Mesh[] = [];
   private sheenElapsed = 0;
+  private sheenLastTime = performance.now();
+  private sheenWakeTimer = 0;
   private sheenFrameData: SheenFrameData = { scaleX: 1, offsetX: 0, scaleY: 1, offsetY: 0, sweepAxis: 0, sideAxis: 1 };
   private meshIsLens: boolean[] = [];
 
@@ -369,6 +371,13 @@ export class Viewer {
   // Transform isolation keeps the complete paint as a translucent context
   // pass, then redraws only the selected groups with the isolated recipe.
   private transformIsolationMaskTexture: THREE.DataTexture | null = null;
+  private transformIsolationSource: {
+    pixels: Uint8Array | Uint8ClampedArray;
+    width: number;
+    height: number;
+    buckets: string;
+    materialToken: number;
+  } | null = null;
   private transformIsolationMaterial: THREE.MeshPhongMaterial | null = null;
   private transformIsolationMeshes: THREE.Mesh[] = [];
   private transformIsolationBaseState: {
@@ -407,9 +416,9 @@ export class Viewer {
   private stickerGizmoProjectionKey = '';
   private stickerGizmoPointerId: number | null = null;
   // A decal must stay attached to one physical UV chart. This cache is built
-  // only when model geometry changes; every live camera/drag frame queries it
+  // on first use after model geometry changes; live camera/drag frames query it
   // rather than rediscovering overlapping UV instances independently.
-  private stickerUvTopology: StickerUvTopology | null = null;
+  private cachedStickerUvTopology: StickerUvTopology | null = null;
   private stickerUvTopologyTriangles = new Map<string, StickerUvTopologyTriangle>();
   private stickerGizmoAnchorChartId: number | null = null;
 
@@ -632,13 +641,18 @@ export class Viewer {
   // Schedule a single paint. Animated state calls this again after each frame;
   // a static scene therefore consumes no requestAnimationFrame callbacks.
   private invalidate() {
+    window.clearTimeout(this.sheenWakeTimer);
+    this.sheenWakeTimer = 0;
     if (this.disposed || this.raf || document.hidden) return;
     this.raf = requestAnimationFrame(this.renderFrame);
   }
 
   private onVisibilityChange = () => {
     this.lastTime = performance.now();
+    this.sheenLastTime = this.lastTime;
     if (document.hidden) {
+      window.clearTimeout(this.sheenWakeTimer);
+      this.sheenWakeTimer = 0;
       cancelAnimationFrame(this.raf);
       this.raf = 0;
       return;
@@ -683,7 +697,7 @@ export class Viewer {
       }
     }
     this.lightEditor.update();
-    this.updateSheenAnimation(dt);
+    this.updateSheenAnimation();
     if (this.activeUnusual) {
       // Particles simulate in world space; re-anchor the control points to
       // the weapon's current transform first so they follow the model the way
@@ -700,8 +714,16 @@ export class Viewer {
       this.updateStickerGizmoOverlay();
       this.renderer.render(this.scene, this.camera);
     }
-    const sheenAnimating = this.sheenId !== 'none' && this.sheenMaterial !== null && this.sheenMeshes.length > 0;
+    const sheenActive = this.sheenId !== 'none' && this.sheenMaterial !== null && this.sheenMeshes.length > 0;
+    const sheenAnimating = sheenActive && this.sheenMeshes.some((mesh) => mesh.visible);
     if (controlsAnimating || sheenAnimating || emissiveAnimating || this.activeUnusual) this.invalidate();
+    else if (sheenActive) {
+      const cycle = SHEEN_SWEEP_SECONDS + SHEEN_PAUSE_SECONDS;
+      this.sheenWakeTimer = window.setTimeout(() => {
+        this.sheenWakeTimer = 0;
+        this.invalidate();
+      }, (cycle - this.sheenElapsed % cycle) * 1000);
+    }
   };
 
   // Derives the ortho camera from the perspective camera every frame: same
@@ -933,8 +955,11 @@ export class Viewer {
   }
 
   private applyVisibleMap() {
-    this.material.map = visibleStickerEditorMap(this.composedMap, this.stickerEditorBaseMap);
-    this.material.needsUpdate = true;
+    const map = visibleStickerEditorMap(this.composedMap, this.stickerEditorBaseMap);
+    if (this.material.map !== map) {
+      this.material.map = map;
+      this.material.needsUpdate = true;
+    }
     this.invalidate();
   }
 
@@ -958,6 +983,15 @@ export class Viewer {
       return;
     }
 
+    const bucketKey = buckets.join(',');
+    const prior = this.transformIsolationSource;
+    if (this.transformIsolationMaterial && prior?.pixels === pixels
+      && prior.width === width && prior.height === height && prior.buckets === bucketKey
+      && prior.materialToken === this.materialLoadToken) {
+      this.transformIsolationMaterial.map = texture;
+      this.invalidate();
+      return;
+    }
     const selectedBuckets = new Set(buckets);
     const maskData = new Uint8Array(width * height * 4);
     for (let sourceOffset = 0, targetOffset = 0; targetOffset < maskData.length; sourceOffset += 4, targetOffset += 4) {
@@ -979,6 +1013,7 @@ export class Viewer {
     mask.needsUpdate = true;
 
     this.applyTransformIsolation(texture, mask);
+    this.transformIsolationSource = { pixels, width, height, buckets: bucketKey, materialToken: this.materialLoadToken };
   }
 
   private applyTransformIsolation(texture: THREE.Texture, mask: THREE.DataTexture): void {
@@ -1067,6 +1102,7 @@ export class Viewer {
   }
 
   private teardownTransformIsolationPass(): void {
+    this.transformIsolationSource = null;
     this.teardownTransformIsolationMeshes();
     this.transformIsolationMaterial?.dispose();
     this.transformIsolationMaterial = null;
@@ -1083,7 +1119,10 @@ export class Viewer {
       this.teardownSheenMeshes();
       return;
     }
-    if (wasOff) this.sheenElapsed = 0;
+    if (wasOff) {
+      this.sheenElapsed = 0;
+      this.sheenLastTime = performance.now();
+    }
     void this.ensureSheenReady().then(() => {
       if (this.disposed || this.sheenId === 'none') return;
       this.rebuildSheenMeshes();
@@ -1146,9 +1185,11 @@ export class Viewer {
 
   // Sweep timing (CProxyAnimatedWeaponSheen): 60 mask frames at 25 fps, then
   // invisible for 5s with no killstreak owner (the inspect case), then loop.
-  private updateSheenAnimation(dt: number) {
+  private updateSheenAnimation() {
     if (this.sheenId === 'none' || !this.sheenMaterial || this.sheenMeshes.length === 0) return;
-    this.sheenElapsed += dt;
+    const now = performance.now();
+    this.sheenElapsed += (now - this.sheenLastTime) / 1000;
+    this.sheenLastTime = now;
     const cycle = SHEEN_SWEEP_SECONDS + SHEEN_PAUSE_SECONDS;
     const tInCycle = this.sheenElapsed % cycle;
     const sweeping = tInCycle < SHEEN_SWEEP_SECONDS;
@@ -1397,7 +1438,6 @@ export class Viewer {
       this.stickerGizmoPointerId = null;
       this.canvas.style.cursor = '';
     }
-    this.stickerGizmoProjectionKey = '';
     // Projection walks paintable UV triangles. A live 2D edit already
     // invalidates the next render, whose normal overlay pass performs this
     // work once; doing it here as well makes every pointer move scan the mesh
@@ -1870,16 +1910,23 @@ export class Viewer {
   private resetStickerUvTopology() {
     this.stickerGizmoAnchorChartId = null;
     this.stickerUvTopologyTriangles.clear();
-    this.stickerUvTopology = this.paintableMeshes.length > 0
+    this.cachedStickerUvTopology = null;
+    this.stickerGizmoProjectionKey = '';
+  }
+
+  private get stickerUvTopology(): StickerUvTopology | null {
+    if (this.cachedStickerUvTopology) return this.cachedStickerUvTopology;
+    // Build only when sticker picking/projection needs the current mesh.
+    this.cachedStickerUvTopology = this.paintableMeshes.length > 0
       ? buildStickerUvTopology(this.paintableMeshes.map((mesh) => mesh.geometry))
       : null;
-    for (const triangle of this.stickerUvTopology?.triangles ?? []) {
+    for (const triangle of this.cachedStickerUvTopology?.triangles ?? []) {
       this.stickerUvTopologyTriangles.set(
         this.stickerTopologyFaceKey(triangle.meshIndex, triangle.triangleIndex),
         triangle,
       );
     }
-    this.stickerGizmoProjectionKey = '';
+    return this.cachedStickerUvTopology;
   }
 
   private stickerGizmoChartForRaycastHit(hit: THREE.Intersection<THREE.Object3D>): number | null {
@@ -2642,16 +2689,17 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     mat: WeaponMaterial,
     resolveTexture: (ref: string) => string | Promise<string> = (ref) => ref,
     resolveCubemap: (ref: string) => Promise<string[] | null> = async () => null,
+    cancelled: () => boolean = () => false,
   ): Promise<void> {
+    const token = ++this.materialLoadToken;
     await this.envReady;
-    if (this.disposed) return;
+    if (this.disposed || cancelled() || token !== this.materialLoadToken) return;
     const u = this.tf2Uniforms;
     configureTf2Material(mat, this.material, u);
     this.materialRimLight = u.uTf2RimLight.value;
     this.syncMaterialRimLight();
     this.invalidate();
 
-    const token = ++this.materialLoadToken;
     this.normalTexture?.dispose();
     this.exponentTexture?.dispose();
     this.lightwarpTexture?.dispose();
@@ -3023,6 +3071,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
 
   dispose() {
     this.disposed = true;
+    window.clearTimeout(this.sheenWakeTimer);
     cancelAnimationFrame(this.raf);
     this.canvas.removeEventListener('pointermove', this.onStickerGizmoPointerMove);
     this.canvas.removeEventListener('pointerdown', this.onStickerGizmoPointerDown);

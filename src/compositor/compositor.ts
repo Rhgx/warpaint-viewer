@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { PaintSeed, RecipeNode, TextureResolver } from './types';
 import type { ResolvedNode, ResolvedTransform } from './resolve';
-import { resolveRecipe } from './resolve';
+import { isIdentityTransform, resolveRecipe } from './resolve';
 import { TextureCache, textureCacheBudgetBytes } from './textureCache';
 import type { TextureMetadata } from '../data/types';
 export { textureUvMatrix } from './transforms';
@@ -72,6 +72,7 @@ interface LatestComposeRequest {
   readonly dimensions?: ComposeDimensions;
   readonly resolve: (result: ComposeResult | null) => void;
   readonly reject: (cause: unknown) => void;
+  readonly cancelled?: () => boolean;
 }
 
 interface LatestComposeChannel {
@@ -177,7 +178,10 @@ export class Compositor {
   }
 
   private release(t: THREE.WebGLRenderTarget) {
-    if (t.width === this.width && t.height === this.height) this.pool.push(t);
+    // Retain scratch space up to 32 MiB; a complex recipe must not permanently
+    // reserve its peak allocation after its intermediates have been released.
+    if (t.width === this.width && t.height === this.height
+      && (this.pool.length + 1) * t.width * t.height * 4 <= 32 * 1024 * 1024) this.pool.push(t);
     else t.dispose();
   }
 
@@ -242,17 +246,24 @@ export class Compositor {
   // Decode and upload all possible inputs while the current paint is already
   // visible. The compositor remains GPU-native; no pixel buffers cross back to
   // JavaScript, a Worker, or WASM.
-  async preload(recipe: RecipeNode): Promise<void> {
+  async preload(recipe: RecipeNode, waitForIdle: () => Promise<void>, cancelled: () => boolean): Promise<void> {
     const refs: { ref: string; nearest: boolean }[] = [];
     this.collectRecipeRefs(recipe, refs);
     const unique = [...new Map(refs.map((ref) => [this.textures.keyFor(ref.ref, { nearest: ref.nearest }), ref])).values()];
-    const keys = unique.map((ref) => this.textures.keyFor(ref.ref, { nearest: ref.nearest }));
-    const unpin = this.textures.pin(keys);
-    try {
-      const loaded = await Promise.all(unique.map((ref) => this.textures.load(ref.ref, { nearest: ref.nearest }).catch(() => null)));
-      for (const texture of loaded) if (texture) this.renderer.initTexture(texture);
-    } finally {
-      unpin();
+    for (const ref of unique) {
+      await waitForIdle();
+      if (cancelled()) return;
+      const unpin = this.textures.pin([this.textures.keyFor(ref.ref, { nearest: ref.nearest })]);
+      try {
+        const texture = await this.textures.load(ref.ref, { nearest: ref.nearest });
+        // Decode can outlive the idle period or the requesting view. Yield
+        // again before upload and never upload obsolete speculative inputs.
+        await waitForIdle();
+        if (cancelled()) return;
+        this.renderer.initTexture(texture);
+      } finally {
+        unpin();
+      }
     }
   }
 
@@ -472,14 +483,16 @@ export class Compositor {
     recipe: RecipeNode,
     seed: PaintSeed,
     dimensions?: ComposeDimensions,
+    cancelled?: () => boolean,
   ): Promise<ComposeResult | null> {
-    return this.composeResolvedLatest(channel, resolveRecipe(recipe, seed), dimensions);
+    return this.composeResolvedLatest(channel, resolveRecipe(recipe, seed), dimensions, cancelled);
   }
 
   composeResolvedLatest(
     channel: string,
     recipe: ResolvedNode,
     dimensions?: ComposeDimensions,
+    cancelled?: () => boolean,
   ): Promise<ComposeResult | null> {
     let state = this.latestComposeChannels.get(channel);
     if (!state) {
@@ -488,7 +501,7 @@ export class Compositor {
     }
     return new Promise<ComposeResult | null>((resolve, reject) => {
       state!.pending?.resolve(null);
-      state!.pending = { recipe, dimensions, resolve, reject };
+      state!.pending = { recipe, dimensions, resolve, reject, cancelled };
       if (!state!.running) void this.runLatestComposeChannel(channel, state!);
     });
   }
@@ -499,8 +512,13 @@ export class Compositor {
       const request = state.pending;
       state.pending = null;
       try {
-        const result = await this.composeResolved(request.recipe, request.dimensions);
-        if (state.pending) {
+        const task = this.composeQueue.then(() => state.pending || request.cancelled?.()
+          ? null : this.composeResolvedNow(request.recipe, request.dimensions, () => Boolean(state.pending) || Boolean(request.cancelled?.())));
+        this.composeQueue = task.then(() => undefined, () => undefined);
+        const result = await task;
+        if (!result) {
+          request.resolve(null);
+        } else if (state.pending || request.cancelled?.()) {
           this.releaseResult(result);
           request.resolve(null);
         } else {
@@ -583,7 +601,9 @@ export class Compositor {
     return this.composeResolvedNow(resolveRecipe(recipe, seed), dimensions);
   }
 
-  private async composeResolvedNow(resolved: ResolvedNode, dimensions?: ComposeDimensions): Promise<ComposeResult> {
+  private composeResolvedNow(resolved: ResolvedNode, dimensions?: ComposeDimensions): Promise<ComposeResult>;
+  private composeResolvedNow(resolved: ResolvedNode, dimensions: ComposeDimensions | undefined, cancelled: () => boolean): Promise<ComposeResult | null>;
+  private async composeResolvedNow(resolved: ResolvedNode, dimensions?: ComposeDimensions, cancelled?: () => boolean): Promise<ComposeResult | null> {
     if (dimensions) this.setOutputSize(dimensions.width, dimensions.height);
     const refs: { ref: string; nearest: boolean }[] = [];
     this.collectRefs(resolved, refs);
@@ -593,14 +613,19 @@ export class Compositor {
     const unpin = this.textures.pin(uniqueRefs.map((r) => this.textures.keyFor(r.ref, { nearest: r.nearest })));
     try {
       await Promise.all(uniqueRefs.map((r) => this.textures.load(r.ref, { nearest: r.nearest }).catch(() => null)));
+      // A newer input may have arrived while the textures were loading.
+      if (cancelled?.()) return null;
       const result = await this.evaluate(resolved);
       let target = result.target;
-      if (!target) {
+      // Nested stages apply their transform when sampled by their parent.
+      // The root has no parent, so materialize any remaining transform here.
+      if (!target || !isIdentityTransform(result.transform)) {
         target = this.acquire();
         const u = this.material.uniforms;
         u.uMode.value = MODE_TEXTURE;
         this.configureInputs([result], this.constWhite());
         this.renderInto(target);
+        if (result.target) this.release(result.target);
       }
       // RGB bytes are sRGB-encoded by the compositor shader, but the target
       // must remain NoColorSpace. Marking a pooled render target as sRGB makes

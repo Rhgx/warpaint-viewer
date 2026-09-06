@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useStore, type StoreApi } from 'zustand';
 import type { CSSProperties } from 'react';
 import { Braces, Copy, Expand, Eye, EyeOff, Link2, Magnet, Minus, MoreHorizontal, Move, Plus, RotateCw, Unlink2 } from 'lucide-react';
 import {
@@ -46,6 +47,7 @@ export interface StickerSelectionTarget {
 }
 
 export interface StickerPlacementEditorProps {
+  readonly draftStore: StoreApi<StickerAffineQuad | null>;
   /** The unwrapped weapon texture the decal is positioned on. URLs may be object URLs. */
   readonly textureSrc: string | null;
   /** The decal artwork. URLs may be object URLs. */
@@ -173,12 +175,13 @@ function nextNumber(value: string): number | null {
  * lockstep without exposing implementation detail to the user.
  */
 export function StickerPlacementEditor({
+  draftStore,
   textureSrc,
   stickerSrc,
   groupPreview,
   renderStickerArtwork = true,
-  placement,
-  quad,
+  placement: authoredPlacement,
+  quad: authoredQuad,
   onPlacementChange,
   onQuadChange,
   protoVariableNames,
@@ -206,6 +209,9 @@ export function StickerPlacementEditor({
   onModelPartPickingChange,
   onRestoreHiddenModelParts,
 }: StickerPlacementEditorProps) {
+  const draftQuad = useStore(draftStore);
+  const quad = draftQuad ?? authoredQuad;
+  const placement = draftQuad ? stickerPlacementFromQuad(draftQuad).placement ?? authoredPlacement : authoredPlacement;
   const surfaceRef = useRef<HTMLDivElement>(null);
   const interactionRef = useRef<PointerInteraction | null>(null);
   const selectionPointerRef = useRef<{ pointerId: number; x: number; y: number; moved: boolean } | null>(null);

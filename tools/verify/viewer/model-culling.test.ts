@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { test } from 'vitest';
+import { test, vi } from 'vitest';
 import { CullableGeometry } from '../../../src/viewer/modelCulling';
 
 function indexedGeometry(positions: readonly number[], indices: readonly number[]): THREE.BufferGeometry {
@@ -26,6 +26,23 @@ function indexValues(geometry: THREE.BufferGeometry): number[] {
   const index = geometry.getIndex();
   return index ? Array.from({ length: index.count }, (_, offset) => index.getX(offset)) : [];
 }
+
+test('builds connectivity only on first selection query', () => {
+  const source = sampleGeometry();
+  const cullable = new CullableGeometry(source);
+  const reads = vi.spyOn(cullable.geometry.getAttribute('position'), 'getX');
+  assert.equal(cullable.hiddenCount, 0);
+  assert.equal(reads.mock.calls.length, 0);
+  assert.equal(cullable.componentForVisibleFace(0), 0);
+  const firstQueryReads = reads.mock.calls.length;
+  assert.ok(firstQueryReads > 0);
+  assert.equal(cullable.componentCount, 2);
+  assert.equal(cullable.componentForVisibleFace(2), 1);
+  assert.equal(reads.mock.calls.length, firstQueryReads);
+  reads.mockRestore();
+  cullable.dispose();
+  source.dispose();
+});
 
 test('assigns stable component IDs and caches component geometry', () => {
   const source = sampleGeometry();

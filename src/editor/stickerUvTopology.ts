@@ -280,6 +280,37 @@ export function buildStickerUvTopology(
   const chartByFace = new Map<string, number>();
   for (const triangle of triangles) chartByFace.set(`${triangle.meshIndex}:${triangle.triangleIndex}`, triangle.chartId);
 
+  // A live drag queries one physical chart repeatedly. Bin its UV bounds,
+  // wrapping cell coordinates so seam-crossing and unwrapped edits agree.
+  const binSide = 16;
+  const wrapCell = (cell: number) => ((cell % binSide) + binSide) % binSide;
+  const chartBins = new Map<number, Map<number, StickerUvTopologyTriangle[]>>();
+  for (const triangle of triangles) {
+    const [a, rawB, rawC] = triangle.uvs;
+    const b = unwrapAround(a, rawB);
+    const c = unwrapAround(a, rawC);
+    const minU = Math.min(a[0], b[0], c[0]);
+    const maxU = Math.max(a[0], b[0], c[0]);
+    const minV = Math.min(a[1], b[1], c[1]);
+    const maxV = Math.max(a[1], b[1], c[1]);
+    // Match the barycentric test's tolerance just beyond triangle edges.
+    const padU = Math.max(1, maxU - minU) * EPSILON * 3;
+    const padV = Math.max(1, maxV - minV) * EPSILON * 3;
+    const firstU = Math.floor((minU - padU) * binSide);
+    const firstV = Math.floor((minV - padV) * binSide);
+    const lastU = Math.min(firstU + binSide - 1, Math.floor((maxU + padU) * binSide));
+    const lastV = Math.min(firstV + binSide - 1, Math.floor((maxV + padV) * binSide));
+    let bins = chartBins.get(triangle.chartId);
+    if (!bins) { bins = new Map(); chartBins.set(triangle.chartId, bins); }
+    for (let u = 0; u <= lastU - firstU; u += 1) {
+      for (let v = 0; v <= lastV - firstV; v += 1) {
+        const key = wrapCell(firstU + u) + wrapCell(firstV + v) * binSide;
+        const bin = bins.get(key);
+        if (bin) bin.push(triangle); else bins.set(key, [triangle]);
+      }
+    }
+  }
+
   return {
     triangles,
     charts,
@@ -288,13 +319,16 @@ export function buildStickerUvTopology(
       return chartByFace.get(`${meshIndex}:${triangleIndex}`) ?? null;
     },
     findCandidates(targets, chartId) {
-      const source = chartId === undefined
-        ? triangles
-        : (chartTriangleIndexes.get(chartId) ?? []).map((triangleIndex) => triangles[triangleIndex]);
-      return targets.map((target, targetIndex) => source.flatMap((triangle) => {
-        const candidate = candidateForTarget(triangle, target, targetIndex);
-        return candidate ? [candidate] : [];
-      }));
+      return targets.map((target, targetIndex) => {
+        const key = wrapCell(Math.floor(target[0] * binSide)) + wrapCell(Math.floor(target[1] * binSide)) * binSide;
+        const source = chartId === undefined ? triangles : chartBins.get(chartId)?.get(key) ?? [];
+        const candidates: StickerUvCandidate[] = [];
+        for (const triangle of source) {
+          const candidate = candidateForTarget(triangle, target, targetIndex);
+          if (candidate) candidates.push(candidate);
+        }
+        return candidates;
+      });
     },
   };
 }

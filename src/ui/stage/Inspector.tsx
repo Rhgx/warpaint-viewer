@@ -11,6 +11,7 @@ import { LIGHTING_PRESETS } from '../../viewer/lighting';
 import { SHEEN_PRESETS, UNUSUAL_PRESETS, VIEW_ANGLES } from '../../viewer/presets';
 import type { Manifest } from '../../data/types';
 import type { ControlsState } from '../../viewer/controls';
+import type { LightingStore } from '../../editor/lightingStore';
 import { CUSTOM_LIGHTING_ID } from '../../viewer/customLighting';
 import { LightingRigSummary } from './LightingRigSummary';
 
@@ -138,12 +139,9 @@ export function Inspector({
   onUndoSeed,
   canUndoSeed,
   onViewAngle,
-  lightingPanelOpen,
-  selectedLightId,
+  lightingStore,
   onToggleLightingPanel,
   onSelectLight,
-  onCustomLightingChange,
-  onCustomLightingPreviewChange,
 }: {
   manifest: Manifest;
   weaponOptions: IconOption[];
@@ -155,12 +153,9 @@ export function Inspector({
   onUndoSeed: () => void;
   canUndoSeed: boolean;
   onViewAngle: (id: string) => void;
-  lightingPanelOpen: boolean;
-  selectedLightId: string | null;
+  lightingStore: LightingStore;
   onToggleLightingPanel: () => void;
   onSelectLight: (id: string) => void;
-  onCustomLightingChange: (rig: ControlsState['customLighting']) => void;
-  onCustomLightingPreviewChange: (rig: ControlsState['customLighting']) => void;
 }) {
   const presetOptions = [
     ...LIGHTING_PRESETS.map((p) => ({ value: p.id, label: p.label })),
@@ -229,11 +224,7 @@ export function Inspector({
 
         {state.preset === CUSTOM_LIGHTING_ID && (
           <LightingRigSummary
-            rig={state.customLighting}
-            panelOpen={lightingPanelOpen}
-            selectedLightId={selectedLightId}
-            onChange={onCustomLightingChange}
-            onPreviewChange={onCustomLightingPreviewChange}
+            store={lightingStore}
             onTogglePanel={onToggleLightingPanel}
             onSelectLight={onSelectLight}
           />
