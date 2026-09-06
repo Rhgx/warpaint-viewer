@@ -516,8 +516,7 @@
 
 .sticker-placement-editor-surface[data-snap] .sticker-placement-editor-grid { display: block; }
 
-.sticker-placement-editor-item,
-.sticker-placement-editor-passive-item {
+.sticker-placement-editor-item {
   position: absolute;
   z-index: 4;
   box-sizing: border-box;
@@ -530,14 +529,11 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 1px 4px rgb(0 0 0 / .38);
 }
 
-.sticker-placement-editor-passive-item { pointer-events: none; }
-
 .sticker-placement-editor-surface[data-tool='move'] .sticker-placement-editor-item { cursor: grab; }
 .sticker-placement-editor-surface[data-tool='move'] .sticker-placement-editor-item:active { cursor: grabbing; }
 
 .sticker-placement-editor-item img,
-.sticker-placement-editor-item canvas,
-.sticker-placement-editor-passive-item img {
+.sticker-placement-editor-item canvas {
   display: block;
   width: 100%;
   height: 100%;
