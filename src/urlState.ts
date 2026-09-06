@@ -36,7 +36,7 @@ export interface SerializedUrlState {
 // remains owned so serializing a current link removes the obsolete payload.
 const LEGACY_PARAMS = ['view', 'kit', 'weapon', 'seed', 'wear', 'team', 'sheen', 'effect', 'light', 'proj', 'fov'] as const;
 
-export const URL_STATE_DEFAULTS = {
+const URL_STATE_DEFAULTS = {
   wearIndex: 0,
   team: 'red' as const,
   sheen: 'none',

@@ -22,7 +22,7 @@ export interface ZipSourcePackageLimits {
 }
 
 /** Conservative defaults for an untrusted browser upload. */
-export const DEFAULT_ZIP_SOURCE_PACKAGE_LIMITS: Readonly<ZipSourcePackageLimits> = {
+const DEFAULT_ZIP_SOURCE_PACKAGE_LIMITS: Readonly<ZipSourcePackageLimits> = {
   maxArchiveBytes: 512 * MEBIBYTE,
   maxEntries: 10_000,
   maxEntryBytes: 128 * MEBIBYTE,

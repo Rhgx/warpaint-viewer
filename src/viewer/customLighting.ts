@@ -3,19 +3,19 @@ import type { LightingFrame } from './lighting';
 
 /** The id used by the Lighting selector for a user-authored rig. */
 export const CUSTOM_LIGHTING_ID = 'custom';
-export const CUSTOM_LIGHTING_VERSION = 1 as const;
+const CUSTOM_LIGHTING_VERSION = 1 as const;
 export const MAX_CUSTOM_LIGHTS = 8;
 
 /** Positions are authored in units of the model's largest framed dimension. */
 export const CUSTOM_LIGHT_POSITION_LIMIT = 10;
-export const CUSTOM_LIGHT_INTENSITY_LIMIT = 20;
+const CUSTOM_LIGHT_INTENSITY_LIMIT = 20;
 export const CUSTOM_LIGHT_RANGE_LIMIT = 20;
-export const MAX_SPOT_ANGLE_DEGREES = 90;
+const MAX_SPOT_ANGLE_DEGREES = 90;
 
 export type CustomLightType = 'point' | 'spot' | 'directional';
 export type FrameVector = readonly [number, number, number];
 
-export interface CustomLightBase {
+interface CustomLightBase {
   readonly id: string;
   readonly name: string;
   readonly enabled: boolean;
@@ -24,14 +24,14 @@ export interface CustomLightBase {
   readonly intensity: number;
 }
 
-export interface CustomPointLight extends CustomLightBase {
+interface CustomPointLight extends CustomLightBase {
   readonly type: 'point';
   readonly position: FrameVector;
   /** Null means no distance cutoff. */
   readonly range: number | null;
 }
 
-export interface CustomSpotLight extends CustomLightBase {
+interface CustomSpotLight extends CustomLightBase {
   readonly type: 'spot';
   readonly position: FrameVector;
   readonly target: FrameVector;
@@ -41,7 +41,7 @@ export interface CustomSpotLight extends CustomLightBase {
   readonly softness: number;
 }
 
-export interface CustomDirectionalLight extends CustomLightBase {
+interface CustomDirectionalLight extends CustomLightBase {
   readonly type: 'directional';
   /** Unit light-ray vector from the source toward the illuminated point. */
   readonly direction: FrameVector;
@@ -256,7 +256,7 @@ export function createDefaultCustomLightingRig(): CustomLightingRig {
   };
 }
 
-export function customLightFrameScale(frame?: Pick<LightingFrame, 'dimensions'> | null): number {
+function customLightFrameScale(frame?: Pick<LightingFrame, 'dimensions'> | null): number {
   if (!frame) return 1;
   const dimensions = frame.dimensions;
   const largest = Math.max(...dimensions.map((value) => Math.abs(value)));
@@ -277,7 +277,7 @@ function makeColor(color: string): THREE.Color {
 }
 
 /** Build one runtime light from its serializable definition. */
-export function buildCustomLight(light: CustomLight, frame?: Pick<LightingFrame, 'dimensions'> | null): CustomLightRuntime {
+function buildCustomLight(light: CustomLight, frame?: Pick<LightingFrame, 'dimensions'> | null): CustomLightRuntime {
   const frameScale = customLightFrameScale(frame);
   const source = light.type === 'directional'
     ? vector(light.direction).multiplyScalar(-10 * frameScale)

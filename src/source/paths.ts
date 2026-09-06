@@ -1,6 +1,6 @@
 import { SourcePackageError } from './contracts';
 
-export const SUPPORTED_TEXTURE_EXTENSIONS = [
+const SUPPORTED_TEXTURE_EXTENSIONS = [
   'vtf',
   'tga',
   'png',
@@ -8,8 +8,6 @@ export const SUPPORTED_TEXTURE_EXTENSIONS = [
   'jpg',
   'jpeg',
 ] as const;
-
-export type SupportedTextureExtension = (typeof SUPPORTED_TEXTURE_EXTENSIONS)[number];
 
 const SUPPORTED_TEXTURE_EXTENSION_SET = new Set<string>(SUPPORTED_TEXTURE_EXTENSIONS);
 const SOURCE_EXTENSION_PATTERN = /\.(?:vtf|tga|psd|png|webp|jpe?g)$/i;
@@ -119,13 +117,4 @@ export function sourceTextureCandidates(reference: string): string[] {
     ? [explicitExtension, ...SUPPORTED_TEXTURE_EXTENSIONS.filter((extension) => extension !== explicitExtension)]
     : SUPPORTED_TEXTURE_EXTENSIONS;
   return extensions.map((extension) => `${identity}.${extension}`);
-}
-
-/** Removes the supported extension, leaving an exact Source identity. */
-export function sourcePathStem(path: string): string {
-  const canonical = normalizeSourcePath(path);
-  const extension = sourcePathExtension(canonical);
-  return extension && SUPPORTED_TEXTURE_EXTENSION_SET.has(extension)
-    ? canonical.slice(0, -(extension.length + 1))
-    : canonical;
 }

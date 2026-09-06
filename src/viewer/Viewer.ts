@@ -75,7 +75,7 @@ import {
 import { visibleStickerEditorMap } from './stickerEditorMap';
 
 /** A single, subtle tint assigned to one compositor group bucket. */
-export interface GroupLayerOverlayLayer {
+interface GroupLayerOverlayLayer {
   /** Compositor bucket (1..16), rather than the raw 0..255 group-map byte. */
   readonly bucket: number;
   /** Linear RGB channels in the 0..1 range. */
@@ -96,16 +96,16 @@ export interface GroupLayerOverlayMap {
 }
 
 /** The deliberately low-strength opacity used for the all-layer surface cue. */
-export const GROUP_LAYER_OVERLAY_OPACITY = 0.16;
+const GROUP_LAYER_OVERLAY_OPACITY = 0.16;
 
 /** Opacity of the normal paint while a transform layer is isolated. */
-export const TRANSFORM_ISOLATION_CONTEXT_OPACITY = 0.2;
+const TRANSFORM_ISOLATION_CONTEXT_OPACITY = 0.2;
 
 /**
  * Distinct but muted default tints for editor layers. The UI may use these for
  * its own swatches and passes the chosen value explicitly to Viewer.
  */
-export const GROUP_LAYER_OVERLAY_COLORS = EDITOR_LAYER_MAP_COLORS;
+const GROUP_LAYER_OVERLAY_COLORS = EDITOR_LAYER_MAP_COLORS;
 
 export interface ModelPartPick {
   readonly meshIndex: number;
@@ -170,7 +170,7 @@ export interface GroupStickerPreviewResources {
 }
 
 /** A projected, visible sticker transform control. Client coordinates match pointer events. */
-export interface StickerGizmoHandle {
+interface StickerGizmoHandle {
   readonly kind: StickerGizmoHandleKind;
   readonly clientX: number;
   readonly clientY: number;

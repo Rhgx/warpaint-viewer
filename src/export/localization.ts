@@ -53,6 +53,7 @@ export function encodeLocalization(file: LocalizationFile): Uint8Array {
 }
 
 /** The token a paint kit definition's loc_desctoken points at. */
+/** @public Used by tools/verify/protodefs-write.mjs through its generated SSR entry. */
 export function paintkitNameToken(defindex: number): string {
   return `9_${defindex}_field { field_number: 2 }`;
 }
@@ -94,13 +95,6 @@ export function setPaintkitName(file: LocalizationFile, defindex: number, name: 
     ...file,
     text: `${file.text.slice(0, tokensBrace)}${entry}${newline}${file.text.slice(tokensBrace)}`,
   };
-}
-
-/** Language name from a shipped snapshot path or a user's file name. */
-export function localizationLanguage(fileName: string): string {
-  const match = /tf_proto_obj_defs_([a-z]+)\.txt$/i.exec(fileName)
-    ?? /^([a-z]+)\.txt$/i.exec(fileName.split('/').pop() ?? '');
-  return (match?.[1] ?? 'english').toLowerCase();
 }
 
 /** Where the pack has to put it for the game to read it. */

@@ -39,7 +39,7 @@ export interface StickerUvTopologyTriangle {
   readonly uvs: readonly [StickerUv, StickerUv, StickerUv];
 }
 
-export interface StickerUvChart {
+interface StickerUvChart {
   readonly id: number;
   readonly meshIndex: number;
   readonly triangleIndexes: readonly number[];

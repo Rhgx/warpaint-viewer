@@ -19,7 +19,7 @@ import { canConnectOperationPorts, validateOperationGraph } from './validation';
 import { operationGraphNodeKind as rawOperationGraphNodeKind } from './operationGraph';
 
 /** Additional diagnostics emitted by a structural graph edit. */
-export type OperationGraphEditDiagnosticCode =
+type OperationGraphEditDiagnosticCode =
   | OperationGraphDiagnosticCode
   | 'missing-edge'
   | 'locked-node'
@@ -35,7 +35,7 @@ export type OperationGraphEditDiagnosticCode =
   | 'unresolved-variable'
   | 'ambiguous-variable';
 
-export interface OperationGraphEditDiagnostic {
+interface OperationGraphEditDiagnostic {
   readonly code: OperationGraphEditDiagnosticCode;
   readonly severity: 'error' | 'warning';
   readonly message: string;
@@ -44,14 +44,14 @@ export interface OperationGraphEditDiagnostic {
   readonly path?: OperationGraphPath;
 }
 
-export interface OperationGraphEditSuccess<T> {
+interface OperationGraphEditSuccess<T> {
   readonly ok: true;
   readonly graph: OperationGraph;
   readonly value: T;
   readonly diagnostics: readonly OperationGraphEditDiagnostic[];
 }
 
-export interface OperationGraphEditFailure {
+interface OperationGraphEditFailure {
   readonly ok: false;
   /** The original graph is returned so a refused edit can be handled without a rollback. */
   readonly graph: OperationGraph;

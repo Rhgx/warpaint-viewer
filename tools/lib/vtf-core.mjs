@@ -2,7 +2,7 @@
 // DataView, so it is shared by the Node extraction tools and the web client.
 // It decodes the largest high-resolution mip by default.
 
-export const VTF_FORMAT = {
+const VTF_FORMAT = {
   RGBA8888: 0, ABGR8888: 1, RGB888: 2, BGR888: 3, RGB565: 4, I8: 5, IA88: 6, P8: 7, A8: 8,
   RGB888_BLUESCREEN: 9, BGR888_BLUESCREEN: 10, ARGB8888: 11, BGRA8888: 12, DXT1: 13, DXT3: 14,
   DXT5: 15, BGRX8888: 16, BGR565: 17, BGRX5551: 18, BGRA4444: 19, DXT1_ONEBITALPHA: 20,
@@ -102,7 +102,7 @@ function mipByteSize(format, width, height) {
 
 // Sampling flags are independent from pixel decoding. Keep this a small typed
 // data contract for the eventual source-file-system texture provider.
-export function getVTFSamplingMetadata(flags) {
+function getVTFSamplingMetadata(flags) {
   return {
     clampS: Boolean(flags & FLAG_CLAMPS),
     clampT: Boolean(flags & FLAG_CLAMPT),
@@ -296,12 +296,6 @@ export function decodeVTF(input) {
 
 function largestMipFrameOffset(header, frameIndex) {
   return largestMipOffset(header) + frameIndex * mipByteSize(header.highResFormat, header.width, header.height) * header.faces * header.depth;
-}
-
-export function decodeVTFFrame(input, frameIndex) {
-  const header = parseVTFHeader(input); assertDimensions(header);
-  if (!Number.isInteger(frameIndex) || frameIndex < 0 || frameIndex >= header.frames) throw new Error(`Frame index ${frameIndex} out of range (frames=${header.frames})`);
-  return decodeLargestMipAt(input, header, largestMipFrameOffset(header, frameIndex));
 }
 
 export function decodeVTFAllFrames(input) {

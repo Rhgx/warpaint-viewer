@@ -11,12 +11,12 @@ export function readImageDimensions(publicDataPath, publicRef) {
     : pngHeaderDimensions(buffer);
 }
 
-export function pngHeaderDimensions(buffer) {
+function pngHeaderDimensions(buffer) {
   if (buffer.length < 24 || buffer.toString('ascii', 1, 4) !== 'PNG') return null;
   return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
 }
 
-export function webpHeaderDimensions(buffer) {
+function webpHeaderDimensions(buffer) {
   if (buffer.length < 30) return null;
   if (buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WEBP') return null;
   const fourcc = buffer.toString('ascii', 12, 16);

@@ -26,7 +26,7 @@ export const EFFECT_PCF_KEY = {
 // selectSystemName(), which called console.warn on the fallback path; here the
 // fallback is reported back to the caller instead so it can be logged/summarized
 // once per migration run rather than once per instance.
-export function selectSystemName(systems, effectId, weaponKey) {
+function selectSystemName(systems, effectId, weaponKey) {
   if (effectId === 'sparkle') return { name: systems.community_sparkle ? 'community_sparkle' : null, fallback: false };
   const base = `weapon_unusual_${effectId === 'energy_orb' ? 'energyorb' : effectId}`;
   const weapon = weaponKey.replace(/^c_/, '');

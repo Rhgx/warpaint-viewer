@@ -1,7 +1,6 @@
 import { many, type Many, type OperationMsg, type OperationNodeMsg, type OperationStageMsg } from '../../protodefs/messages';
 import {
   manyShape,
-  type GraphPathSegment,
   type ManyShape,
   type OperationGraph,
   type OperationGraphBuildOptions,
@@ -350,20 +349,4 @@ export function operationGraphChildren(graph: OperationGraph, nodeId: string): r
 /** Utility for clients creating a new authored node from a raw message. */
 export function operationGraphNodeKind(raw: OperationNodeMsg): OperationGraphNodeKind {
   return stageKindOf(raw).kind;
-}
-
-/** Keep this helper public for graph mutation code that must preserve Many shapes. */
-export function operationGraphChildrenShape(value: Many<OperationNodeMsg>): ManyShape {
-  return manyShape(value);
-}
-
-/** The stage value for a known operation kind, useful to focused inspectors. */
-export function operationGraphStageValue(raw: OperationNodeMsg, kind: OperationStageKind): OperationStageValue | undefined {
-  return stageValue(raw.stage, kind);
-}
-
-/** Build a path with a numeric child index without mutating an existing path. */
-export function operationGraphChildPath(parent: OperationGraphPath, index: number): OperationGraphPath {
-  const next: GraphPathSegment[] = [...parent, 'operation_node', index];
-  return next;
 }

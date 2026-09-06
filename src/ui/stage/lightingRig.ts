@@ -41,7 +41,7 @@ export const AXES = ['X', 'Y', 'Z'] as const;
 /** A finite range to fall back to when the user turns off "no cutoff". */
 export const DEFAULT_FINITE_RANGE = 6;
 
-export function cloneVector(vector: FrameVector): FrameVector {
+function cloneVector(vector: FrameVector): FrameVector {
   return [vector[0], vector[1], vector[2]];
 }
 
@@ -76,7 +76,7 @@ export function uniqueLightName(lights: readonly CustomLight[], base: string): s
 }
 
 /** Duplicating a duplicate reads as "Key light copy 2", not "copy copy". */
-export function duplicateLightName(lights: readonly CustomLight[], name: string): string {
+function duplicateLightName(lights: readonly CustomLight[], name: string): string {
   return uniqueLightName(lights, `${name.replace(/ copy( \d+)?$/, '')} copy`);
 }
 

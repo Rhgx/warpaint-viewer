@@ -42,7 +42,7 @@ interface GraphComboboxProps {
  * texture-shaped fields because community packs ship paths the viewer has
  * not indexed yet.
  */
-export function GraphCombobox({
+function GraphCombobox({
   value,
   options,
   ariaLabel,

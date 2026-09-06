@@ -32,7 +32,7 @@ export function LightTypeBadge({ type }: { type: CustomLightType }) {
  * draft so the field can be cleared and retyped, and it only commits on Enter
  * or blur. An out-of-range or unparseable draft reverts to the live value.
  */
-export function NumberReadout({
+function NumberReadout({
   value,
   min,
   max,

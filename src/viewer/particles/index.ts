@@ -5,7 +5,6 @@ import type { AttachmentAnchor, AttachmentsJson, HitboxesJson } from './util';
 import { DEFAULT_ATTACHMENT_QUAT, loadHitboxes, loadParticleIndex, parseAttachmentEntry } from './util';
 
 export { setParticlePointScale } from './sim';
-export { loadParticleIndex, loadParticleTexture } from './util';
 
 // Unusual weapon effects
 //
@@ -38,7 +37,7 @@ const KNOWN_EFFECT_IDS = new Set(['hot', 'isotope', 'cool', 'energy_orb', 'spark
 // spawns for that pair (see the removed runtime selectSystemName(), now baked in
 // at build time by tools/extract/effects.mjs) plus
 // its transitive children, copied verbatim from the source PCF data.
-export interface UnusualBundle {
+interface UnusualBundle {
   root: string;
   systems: Record<string, UnusualSystemDef>;
 }

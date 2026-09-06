@@ -29,7 +29,7 @@ export interface GroupSelectTargetInfo {
   blockers: GroupSelectTargetBlocker[];
 }
 
-export type GroupSelectTargetBlocker =
+type GroupSelectTargetBlocker =
   | 'variable-select-value'
   | 'invalid-select-value'
   | 'uneditable-weapon-select-value';

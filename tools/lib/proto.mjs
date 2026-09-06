@@ -21,7 +21,7 @@ export const DEF_TYPE = {
   PAINTKIT_DEFINITION: 9,
 };
 
-export const MSG_FOR_DEFTYPE = {
+const MSG_FOR_DEFTYPE = {
   6: 'CMsgPaintKit_Variables',
   7: 'CMsgPaintKit_Operation',
   8: 'CMsgPaintKit_ItemDefinition',

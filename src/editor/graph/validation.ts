@@ -320,11 +320,6 @@ export function validateOperationGraph(graph: OperationGraph): OperationGraphVal
   return { valid: diagnostics.every((diagnostic) => diagnostic.severity !== 'error'), diagnostics };
 }
 
-/** Convenience boolean for connection guards. */
-export function isOperationGraphValid(graph: OperationGraph): boolean {
-  return validateOperationGraph(graph).valid;
-}
-
 /** Check whether one output can connect to one input without mutating a graph. */
 export function canConnectOperationPorts(source: OperationPortType, target: OperationPortType): boolean {
   return compatible(source, target);

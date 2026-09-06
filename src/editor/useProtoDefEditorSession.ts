@@ -42,7 +42,7 @@ import {
 import type { OperationMsg } from '../protodefs/messages';
 
 /** Fetches one imported kit by its catalog id. */
-export type ProtoDefEditorKitLoader = (kitId: number) => Promise<ProtoDefKitMessages | null>;
+type ProtoDefEditorKitLoader = (kitId: number) => Promise<ProtoDefKitMessages | null>;
 
 export interface UseProtoDefEditorSessionOptions {
   /** The selected imported catalog id, or null when the editor has no kit. */
@@ -51,7 +51,7 @@ export interface UseProtoDefEditorSessionOptions {
   loadKit: ProtoDefEditorKitLoader;
 }
 
-export interface ReloadProtoDefEditorSessionOptions {
+interface ReloadProtoDefEditorSessionOptions {
   /**
    * Reloading replaces the session baseline and discards edits. The caller
    * must opt into that when the session is dirty rather than losing work as a
@@ -60,7 +60,7 @@ export interface ReloadProtoDefEditorSessionOptions {
   discardEdits?: boolean;
 }
 
-export interface GroupTextureDefaultAssignment {
+interface GroupTextureDefaultAssignment {
   readonly active: SelectGroupAssignmentTarget;
   readonly candidates: readonly SelectGroupAssignmentTarget[];
   readonly groupIds: readonly number[];

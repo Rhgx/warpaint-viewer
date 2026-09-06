@@ -89,14 +89,3 @@ export function stockMaterialCubemapUrls(ref: string): string[] | null {
   const root = `${import.meta.env.BASE_URL}data/effects/material-cubemaps/${directory}/`;
   return CUBEMAP_FACES.map((face) => `${root}${face}.png`);
 }
-
-export function loadMapSkybox(skybox: string): Promise<THREE.CubeTexture> {
-  const root = `${import.meta.env.BASE_URL}data/env/maps/${skybox}/`;
-  return new THREE.CubeTextureLoader().setPath(root).loadAsync([
-    'px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png',
-  ]).then((texture) => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.needsUpdate = true;
-    return texture;
-  });
-}

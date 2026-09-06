@@ -4,7 +4,7 @@
  * objects and is sliced on demand.
  */
 
-import type { SourceDiagnostic, SourceEntry, SourcePackage, SourcePackageOpenResult } from './contracts'
+import type { SourceEntry, SourcePackage, SourcePackageOpenResult } from './contracts'
 import { SourcePackageError } from './contracts'
 import { normalizeSourcePath } from './paths'
 import { crc32Chunks } from './crc32'
@@ -18,7 +18,7 @@ const VPK_V2_HEADER_SIZE = 28
 const MEBIBYTE = 1024 * 1024
 const EMPTY_BYTES = new Uint8Array(0)
 
-export interface VpkSourcePackageLimits {
+interface VpkSourcePackageLimits {
   /** Total bytes across the directory VPK and every selected numbered segment. */
   maxPackageBytes: number
   /** Maximum size of any one selected directory or numbered VPK file. */
@@ -36,7 +36,7 @@ export interface VpkSourcePackageLimits {
  * Source's normal multipart target is roughly 200 MiB per segment, so these
  * defaults allow ordinary texture mods while bounding all browser work.
  */
-export const DEFAULT_VPK_SOURCE_PACKAGE_LIMITS: Readonly<VpkSourcePackageLimits> = {
+const DEFAULT_VPK_SOURCE_PACKAGE_LIMITS: Readonly<VpkSourcePackageLimits> = {
   maxPackageBytes: 512 * MEBIBYTE,
   maxFileBytes: 256 * MEBIBYTE,
   maxFiles: 64,
@@ -72,7 +72,7 @@ interface VpkHeader {
 type Limits = Readonly<VpkSourcePackageLimits>
 
 /** Error codes are stable enough for the UI to turn into helpful diagnostics. */
-export type VpkErrorCode =
+type VpkErrorCode =
   | 'vpk-invalid-input'
   | 'vpk-missing-directory'
   | 'vpk-multiple-directories'
@@ -91,7 +91,7 @@ export type VpkErrorCode =
   | 'vpk-crc-mismatch'
   | 'vpk-disposed'
 
-export class VpkPackageError extends SourcePackageError {
+class VpkPackageError extends SourcePackageError {
   readonly missingSegments?: readonly string[]
 
   constructor(code: VpkErrorCode, message: string, options?: { path?: string; missingSegments?: readonly string[] }) {
@@ -220,15 +220,6 @@ export async function openVpkSourcePackage(
   options: VpkOpenOptions = {},
 ): Promise<SourcePackageOpenResult> {
   return { package: await openVpkPackage(files, options), diagnostics: [] }
-}
-
-/** Convert package errors into the shape consumed by the shared import UI. */
-export function vpkErrorDiagnostic(error: unknown): SourceDiagnostic {
-  if (error instanceof VpkPackageError) {
-    const details = [error.path, error.missingSegments?.join(', ')].filter((value): value is string => Boolean(value))
-    return { id: `vpk-${error.code}`, level: 'error', message: error.message, detail: details.join(' - ') || undefined }
-  }
-  return { id: 'vpk-unknown-error', level: 'error', message: error instanceof Error ? error.message : String(error) }
 }
 
 function resolveLimits(options: VpkOpenOptions): Limits {

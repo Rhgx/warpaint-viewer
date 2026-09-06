@@ -204,8 +204,3 @@ export function compatibleGroupTextures(groupsRef: string): CompatibleGroupTextu
       label: `Layout ${number ?? index + 1}`,
     }));
 }
-
-export const groupNameReferenceSource = {
-  title: 'War Paint Texture Groups Reference for War Paint Authors',
-  url: 'https://steamcommunity.com/sharedfiles/filedetails/?id=3035470027',
-} as const;

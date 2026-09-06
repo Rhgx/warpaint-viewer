@@ -48,7 +48,7 @@ function swizzleSourceWorld(v: [number, number, number]): THREE.Vector3 {
 
 // Parsed system configuration
 
-export interface SphereInit {
+interface SphereInit {
   cp: number;
   distMin: number;
   distMax: number;

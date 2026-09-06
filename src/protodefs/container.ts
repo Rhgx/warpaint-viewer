@@ -9,7 +9,7 @@
 // run past the end of the buffer, are rejected with a specific error rather
 // than allowed to read out of bounds or allocate unbounded arrays.
 
-export interface ContainerBlock {
+interface ContainerBlock {
   size: number;
   buffer: Uint8Array;
 }

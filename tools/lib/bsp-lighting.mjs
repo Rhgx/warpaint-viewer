@@ -168,7 +168,7 @@ export function sampleBspAmbientCube(bspPath, position) {
   };
 }
 
-export function readBspWorldLights(bspPath) {
+function readBspWorldLights(bspPath) {
   const bsp = fs.readFileSync(bspPath);
   if (bsp.toString('ascii', 0, 4) !== 'VBSP') throw new Error(`Not a Source BSP: ${bspPath}`);
   const data = readLump(bsp, LUMP_WORLDLIGHTS_HDR).data;

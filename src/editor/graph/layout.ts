@@ -18,7 +18,7 @@ export interface OperationGraphNodeDimensions {
 }
 
 /** Optional sizing inputs layered on top of the stable graph layout options. */
-export interface OperationGraphLayoutSizingOptions {
+interface OperationGraphLayoutSizingOptions {
   /** Measured React Flow node boxes, keyed by stable operation graph ID. */
   readonly nodeDimensions?: Readonly<Record<string, OperationGraphNodeDimensions>>;
   /** Conservative fallback width for nodes that have not been measured yet. */

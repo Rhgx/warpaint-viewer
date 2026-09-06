@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { useEffect, type ReactNode } from 'react';
 import './Toast.css';
 
-export interface AppToastAction {
+interface AppToastAction {
   label: string;
   onClick: () => void;
   disabled?: boolean;

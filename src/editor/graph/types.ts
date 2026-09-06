@@ -15,8 +15,7 @@ export type OperationGraphNodeKind = OperationStageKind | 'operation_template' |
 /** The value carried by a node connection. */
 export type OperationPortType = 'texture' | 'mask' | 'unknown' | 'none';
 
-export type GraphPathSegment = string | number;
-export type OperationGraphPath = readonly GraphPathSegment[];
+export type OperationGraphPath = readonly (string | number)[];
 
 /** How a protobuf `Many<T>` field was represented in the source message. */
 export type ManyShape = 'undefined' | 'singleton' | 'array';
