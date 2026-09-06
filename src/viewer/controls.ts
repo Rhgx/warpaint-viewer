@@ -37,5 +37,4 @@ export interface ControlsState {
   fov: number;
   projection: 'perspective' | 'orthographic';
   screenshotMaxEdge: number;
-  customLighting: CustomLightingRig;
 }

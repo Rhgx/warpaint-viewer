@@ -1,5 +1,6 @@
 import { Aperture, SlidersHorizontal } from 'lucide-react';
-import type { CustomLightingRig } from '../../viewer/customLighting';
+import { useStore } from 'zustand';
+import type { LightingStore } from '../../editor/lightingStore';
 import { SwitchField } from '../common/controls';
 import { LightIcon, ScalarRow } from './lightingFields';
 import './Lighting.css';
@@ -11,22 +12,18 @@ import './Lighting.css';
  * authoring lives in the stage panel, next to the render it changes.
  */
 export function LightingRigSummary({
-  rig,
-  panelOpen,
-  selectedLightId,
-  onChange,
-  onPreviewChange,
+  store,
   onTogglePanel,
   onSelectLight,
 }: {
-  rig: CustomLightingRig;
-  panelOpen: boolean;
-  selectedLightId: string | null;
-  onChange: (rig: CustomLightingRig) => void;
-  onPreviewChange: (rig: CustomLightingRig) => void;
+  store: LightingStore;
   onTogglePanel: () => void;
   onSelectLight: (id: string) => void;
 }) {
+  const rig = useStore(store, (state) => state.rig);
+  const panelOpen = useStore(store, (state) => state.open);
+  const selectedLightId = useStore(store, (state) => state.selectedLightId);
+  const { apply: onChange, preview: onPreviewChange } = store.getState();
   return (
     <div className="lighting-summary">
       <div className="lighting-chips">

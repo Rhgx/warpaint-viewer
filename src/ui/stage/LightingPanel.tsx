@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { useStore } from 'zustand';
+import type { LightingStore } from '../../editor/lightingStore';
 import { Copy, Eye, EyeOff, Plus, Redo2, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
 import {
   CUSTOM_LIGHT_POSITION_LIMIT,
@@ -7,7 +9,6 @@ import {
   createDefaultCustomLightingRig,
   type CustomLight,
   type CustomLightType,
-  type CustomLightingRig,
 } from '../../viewer/customLighting';
 import { SelectField } from '../common/controls';
 import { ColorRow, LightIcon, LightTypeBadge, ScalarRow, VectorRow } from './lightingFields';
@@ -17,8 +18,6 @@ import {
   TYPE_OPTIONS,
   TYPE_TEMPLATES,
   changeLightType,
-  deleteLightFromRig,
-  duplicateLightInRig,
   nextLightId,
   templateLight,
   uniqueLightName,
@@ -30,17 +29,7 @@ const INTENSITY_MAX = 10;
 const RESET_ARM_MS = 3000;
 
 interface LightingPanelProps {
-  rig: CustomLightingRig;
-  open: boolean;
-  selectedLightId: string | null;
-  onChange: (rig: CustomLightingRig) => void;
-  onPreviewChange: (rig: CustomLightingRig) => void;
-  canUndo: boolean;
-  canRedo: boolean;
-  onUndo: () => void;
-  onRedo: () => void;
-  onClose: () => void;
-  onSelectedLightIdChange: (id: string | null) => void;
+  store: LightingStore;
 }
 
 // Name edits stay local until commit so clearing the field does not snap back
@@ -81,19 +70,14 @@ function NameInput({ light, onCommit }: { light: CustomLight; onCommit: (name: s
  * light helpers and the move gizmo; closing it puts the viewport back to a
  * clean render without needing a separate edit mode.
  */
-export function LightingPanel({
-  rig,
-  open,
-  selectedLightId,
-  onChange,
-  onPreviewChange,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo,
-  onClose,
-  onSelectedLightIdChange,
-}: LightingPanelProps) {
+export function LightingPanel({ store }: LightingPanelProps) {
+  const rig = useStore(store, (state) => state.rig);
+  const open = useStore(store, (state) => state.open);
+  const selectedLightId = useStore(store, (state) => state.selectedLightId);
+  const canUndo = useStore(store, (state) => state.canUndo);
+  const canRedo = useStore(store, (state) => state.canRedo);
+  const { apply: onChange, preview: onPreviewChange, undo: onUndo, redo: onRedo,
+    select: onSelectedLightIdChange, setOpen, deleteSelected, duplicateSelected } = store.getState();
   const [addOpen, setAddOpen] = useState(false);
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimer = useRef(0);
@@ -136,20 +120,6 @@ export function LightingPanel({
     onChange({ ...rig, lights: [...rig.lights, { ...light, name: uniqueLightName(rig.lights, light.name) }] });
     onSelectedLightIdChange(id);
     setAddOpen(false);
-  };
-
-  const deleteLight = (light: CustomLight) => {
-    const result = deleteLightFromRig(rig, light.id);
-    if (!result) return;
-    onChange(result.rig);
-    if (selectedLightId === light.id) onSelectedLightIdChange(result.selectedLightId);
-  };
-
-  const duplicateLight = (light: CustomLight) => {
-    const result = duplicateLightInRig(rig, light.id);
-    if (!result) return;
-    onChange(result.rig);
-    onSelectedLightIdChange(result.selectedLightId);
   };
 
   // Reset is destructive and persists straight to storage, so it arms on the
@@ -207,7 +177,7 @@ export function LightingPanel({
           className="lighting-head-button"
           title="Close lights panel"
           aria-label="Close lights panel"
-          onClick={onClose}
+          onClick={() => setOpen(false)}
         >
           <X size={14} />
         </button>
@@ -458,7 +428,7 @@ export function LightingPanel({
                 className="lighting-action-button"
                 disabled={full}
                 title={full ? `Limit is ${MAX_CUSTOM_LIGHTS} lights` : undefined}
-                onClick={() => duplicateLight(selected)}
+                onClick={duplicateSelected}
               >
                 <Copy size={12} />
                 <span>Duplicate</span>
@@ -466,7 +436,7 @@ export function LightingPanel({
               <button
                 type="button"
                 className="lighting-action-button lighting-delete-button"
-                onClick={() => deleteLight(selected)}
+                onClick={deleteSelected}
               >
                 <Trash2 size={12} />
                 <span>Delete</span>

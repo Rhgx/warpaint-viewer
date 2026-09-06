@@ -285,12 +285,17 @@ export function useComposedPaint({
       if (old && old !== result) comp.releaseResult(old);
       cache.delete(key);
       cache.set(key, result);
-      while (cache.size > composeCacheLimit()) {
+      const byteBudget = composeCacheLimit() * 1024 * 1024 * 4;
+      let bytes = [...cache.values()].reduce((sum, entry) => sum + entry.target.width * entry.target.height * 4, 0);
+      while (cache.size > composeCacheLimit() || bytes > byteBudget) {
         const victim = [...cache.keys()].find((candidate) => candidate !== lastComposeKeyRef.current && candidate !== key);
         if (!victim) break;
         const evicted = cache.get(victim);
         cache.delete(victim);
-        if (evicted) comp.releaseResult(evicted);
+        if (evicted) {
+          bytes -= evicted.target.width * evicted.target.height * 4;
+          comp.releaseResult(evicted);
+        }
       }
     };
 
@@ -400,9 +405,7 @@ export function useComposedPaint({
         if (!firstPaintLoggedRef.current) advanceBoot(70, 'Composing initial warpaint…');
         // TF2 selects the complete paint-kit recipe for the wear category; it
         // does not crossfade that result with Factory New.
-        const result = interactive
-          ? await comp.composeLatest('transform-paint', recipe, state.seed, dimensions)
-          : await comp.compose(recipe, state.seed, dimensions);
+        const result = await comp.composeLatest('visible-paint', recipe, state.seed, dimensions, () => cancelled);
         if (!result) return;
         if (cancelled) {
           comp.releaseResult(result);
@@ -456,17 +459,22 @@ export function useComposedPaint({
           if (!variantRecipe || cancelled) return;
           const key = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${variant.team}|${variant.wear}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|recipe:${recipeFingerprint(variantRecipe)}|interactive:0`;
           if (composeCacheRef.current.has(key)) return;
-          await comp.preload(variantRecipe);
+          await comp.preload(variantRecipe, waitForIdle,
+            () => cancelled || compositorRef.current !== comp || !allowSpeculativeCompose());
           if (cancelled || compositorRef.current !== comp || !allowSpeculativeCompose()) return;
           await waitForIdle();
           if (cancelled || compositorRef.current !== comp || !allowSpeculativeCompose()) return;
-          const warmed = await comp.compose(variantRecipe, state.seed, dimensions);
+          const warmed = await comp.composeLatest('speculative-paint', variantRecipe, state.seed, dimensions,
+            () => cancelled || compositorRef.current !== comp || !allowSpeculativeCompose());
+          if (!warmed) return;
           if (cancelled || compositorRef.current !== comp || !allowSpeculativeCompose()) {
             comp.releaseResult(warmed);
             return;
           }
           cacheResult(key, warmed, comp);
-        })();
+        })().catch((cause: unknown) => {
+          if (!cancelled) console.warn('[warpaint-viewer] speculative compose failed:', cause);
+        });
       } catch (e) {
         console.error('[warpaint-viewer] compose failed:', e);
         // A failure on the built-in catalogue means the shipped data is broken,

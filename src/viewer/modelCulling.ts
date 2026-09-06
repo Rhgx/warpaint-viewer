@@ -127,21 +127,30 @@ function buildCullMap(source: THREE.BufferGeometry): CullMap | null {
 export class CullableGeometry {
   readonly geometry: THREE.BufferGeometry;
 
-  readonly #cullMap: CullMap | null;
-  readonly #activeFaces: number[];
-  readonly #componentGeometries: Array<THREE.BufferGeometry | null>;
+  #cachedCullMap: CullMap | null | undefined;
+  readonly #activeFaces: number[] = [];
+  readonly #componentGeometries: Array<THREE.BufferGeometry | null> = [];
   readonly #hiddenComponents = new Set<number>();
   #disposed = false;
 
   constructor(source: THREE.BufferGeometry) {
     this.geometry = source.clone();
-    this.#cullMap = buildCullMap(this.geometry);
-    this.#componentGeometries = this.#cullMap
-      ? Array.from({ length: this.#cullMap.componentIndices.length }, () => null)
-      : [];
-    this.#activeFaces = this.#cullMap
-      ? Array.from({ length: this.#cullMap.faceComponents.length }, (_, face) => face)
-      : [];
+  }
+
+  get #cullMap(): CullMap | null {
+    if (this.#disposed) return null;
+    // Ordinary weapon viewing never needs connected-component selection.
+    if (this.#cachedCullMap === undefined) {
+      this.#cachedCullMap = buildCullMap(this.geometry);
+      if (this.#cachedCullMap) {
+        this.#componentGeometries.length = this.#cachedCullMap.componentIndices.length;
+        this.#componentGeometries.fill(null);
+        for (let face = 0; face < this.#cachedCullMap.faceComponents.length; face += 1) {
+          this.#activeFaces.push(face);
+        }
+      }
+    }
+    return this.#cachedCullMap;
   }
 
   get componentCount(): number {
@@ -196,7 +205,7 @@ export class CullableGeometry {
   }
 
   restore(): boolean {
-    if (this.#disposed || !this.#cullMap || this.#hiddenComponents.size === 0) return false;
+    if (this.#disposed || this.#hiddenComponents.size === 0) return false;
     this.#hiddenComponents.clear();
     this.#syncVisibleIndex();
     return true;

@@ -5,6 +5,7 @@ import type { RecipeNode } from '../../compositor/types';
 import { createUnusualEffect } from '../../viewer/particles';
 import { collectPointsStats } from './particleChecks';
 import { compositorTransformChecks } from './compositorChecks';
+import { compositorSchedulingChecks } from './schedulingChecks';
 import './selftest.css';
 
 // /?selftest=1 - composites known recipes offscreen and asserts the compositor's
@@ -395,6 +396,12 @@ export function SelfTestPage() {
         const pass = c.expected.every((expected, channel) => Math.abs(got[channel] - expected) <= c.tol);
         out.push({ name: c.name, pass, got, expected: c.expected });
         res.target.dispose();
+      }
+      try {
+        out.push(...await compositorSchedulingChecks());
+      } catch (err) {
+        console.error('[selftest] scheduling checks failed to run:', err);
+        out.push({ name: 'Scheduling: checks ran', pass: false, got: [0], expected: [1] });
       }
       try {
         out.push(...await runEffectSimChecks());
