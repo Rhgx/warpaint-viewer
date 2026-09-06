@@ -16,8 +16,8 @@ export interface StickerViewportSize {
   readonly height: number;
 }
 
-export const STICKER_VIEWPORT_MIN_ZOOM = 0.25;
-export const STICKER_VIEWPORT_MAX_ZOOM = 16;
+const STICKER_VIEWPORT_MIN_ZOOM = 0.25;
+const STICKER_VIEWPORT_MAX_ZOOM = 16;
 
 export const DEFAULT_STICKER_VIEWPORT: StickerViewport = Object.freeze({ zoom: 1, panX: 0, panY: 0 });
 
@@ -41,7 +41,7 @@ export function clampStickerViewportZoom(value: number): number {
 }
 
 /** Keep a zoomed canvas covering the viewport; a zoomed-out canvas is centred. */
-export function clampStickerViewportPan(
+function clampStickerViewportPan(
   pan: Pick<StickerViewport, 'panX' | 'panY'>,
   zoom: number,
   size: StickerViewportSize,

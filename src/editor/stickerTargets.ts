@@ -15,7 +15,7 @@ import type { StickerQuad, StickerTarget } from './mutations';
 import { EditorMutationAmbiguityError, setStickerDestQuad } from './mutations';
 
 /** A field as authored in the operation, alongside the value the resolver uses. */
-export interface StickerResolvedField {
+interface StickerResolvedField {
   readonly fieldPath: readonly string[];
   readonly variableName?: string;
   /** The editable kit header's original variable value, or a literal value. */
@@ -25,7 +25,7 @@ export interface StickerResolvedField {
   readonly provenance?: ProtoDefValueProvenance;
 }
 
-export interface StickerVariantInfo {
+interface StickerVariantInfo {
   readonly index: number;
   readonly base: StickerResolvedField;
   readonly weight: StickerResolvedField;

@@ -9,7 +9,7 @@ import type { SourceDiagnostic } from '../source/contracts';
  * custom kit can never shadow or collide with one of the shipped 250, and so
  * any id in this range is recognisable as memory-only.
  */
-export const CUSTOM_KIT_ID_BASE = 10_000_000;
+const CUSTOM_KIT_ID_BASE = 10_000_000;
 
 export function customKitId(defindex: number): number {
   return CUSTOM_KIT_ID_BASE + defindex;
@@ -77,7 +77,7 @@ export interface ProtoDefRecipe {
  * deliberately remain data (rather than object references) so
  * they can safely cross the worker boundary.
  */
-export type ProtoDefValueScope = 'global' | 'weapon' | 'wear' | 'literal';
+type ProtoDefValueScope = 'global' | 'weapon' | 'wear' | 'literal';
 
 export interface ProtoDefValueProvenance {
   variableName?: string;
@@ -207,7 +207,7 @@ export interface CustomDefinitionKitRow {
 }
 
 /** A proto_defs file the mounted Source package carries. */
-export interface CustomDefinitionsCandidate {
+interface CustomDefinitionsCandidate {
   path: string;
   onLoad: () => void;
 }

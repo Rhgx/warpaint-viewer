@@ -6,7 +6,7 @@ import { findOperationGraphNode, operationGraphChildren } from './operationGraph
 import type { OperationGraph, OperationGraphNode } from './types';
 
 /** Why a graph node cannot be associated with a resolved recipe subtree. */
-export type OperationGraphRecipeUnavailableReason =
+type OperationGraphRecipeUnavailableReason =
   | 'missing-node'
   | 'output-node'
   | 'opaque-operation-template'
@@ -26,7 +26,7 @@ export interface OperationGraphRecipeUnavailable {
   readonly message: string;
 }
 
-export interface OperationGraphRecipeMapping {
+interface OperationGraphRecipeMapping {
   readonly ok: true;
   readonly nodeId: string;
   /** The resolved recipe subtree corresponding to the requested authored node. */
@@ -436,17 +436,6 @@ function assertRenderActive(render: OperationGraphRenderLease): void {
 export interface OperationGraphPreviewOptions {
   readonly maxDimension?: number;
   readonly forceOpaque?: boolean;
-}
-
-/** Produce the same browser-displayable PNG data URL used by the compositor. */
-export function operationGraphPreviewDataUrl(
-  render: OperationGraphRenderLease,
-  options: OperationGraphPreviewOptions = {},
-): string {
-  assertRenderActive(render);
-  const maxDimension = options.maxDimension ?? 1024;
-  const forceOpaque = options.forceOpaque ?? true;
-  return render.previewDataUrl(maxDimension, forceOpaque);
 }
 
 export interface OperationGraphObjectUrlLease {

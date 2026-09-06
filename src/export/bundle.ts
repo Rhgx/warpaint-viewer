@@ -59,7 +59,7 @@ export interface ExportExtraFile {
   data: Uint8Array;
 }
 
-export interface ExportedFile {
+interface ExportedFile {
   path: string;
   bytes: number;
   format: string;

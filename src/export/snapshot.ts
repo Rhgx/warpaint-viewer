@@ -14,9 +14,9 @@
 
 const DATA_ROOT = `${import.meta.env.BASE_URL}data`;
 
-export const SNAPSHOT_CONTAINER_URL = `${DATA_ROOT}/protodefs-full.bin`;
+const SNAPSHOT_CONTAINER_URL = `${DATA_ROOT}/protodefs-full.bin`;
 
-export function snapshotLocalizationUrl(language: string): string {
+function snapshotLocalizationUrl(language: string): string {
   return `${DATA_ROOT}/protodefs-loc/${language}.txt`;
 }
 
@@ -43,7 +43,7 @@ export function loadSnapshotContainer(): Promise<Uint8Array> {
 
 const localizationCache = new Map<string, Promise<Uint8Array>>();
 
-export function loadSnapshotLocalization(language: string): Promise<Uint8Array> {
+function loadSnapshotLocalization(language: string): Promise<Uint8Array> {
   const cached = localizationCache.get(language);
   if (cached) return cached;
   const promise = fetchBytes(snapshotLocalizationUrl(language), `${language} name list`).catch((cause: unknown) => {
@@ -60,7 +60,7 @@ export function loadSnapshotLocalization(language: string): Promise<Uint8Array> 
  * language, and the files are small enough that carrying all of them is
  * cheaper than explaining the choice.
  */
-export const SNAPSHOT_LANGUAGES = [
+const SNAPSHOT_LANGUAGES = [
   'brazilian', 'bulgarian', 'czech', 'danish', 'dutch', 'english', 'finnish', 'french',
   'german', 'greek', 'hungarian', 'italian', 'korean', 'koreana', 'latam', 'norwegian',
   'polish', 'portuguese', 'romanian', 'russian', 'schinese', 'spanish', 'swedish',

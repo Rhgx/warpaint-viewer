@@ -27,9 +27,8 @@
   align-items: center;
 }
 /* The seed is a full 64-bit decimal (up to 20 digits); the generic
-   .ui-num-input width is too narrow to show it without scrolling. It also
-   stands alone (no .ui-numfield group around it), so it needs its own panel
-   background and border to read as an input instead of bare text.
+   .ui-num-input width is too narrow to show it without scrolling. The seed
+   field supplies its own panel background and border.
    padding-right clears the two .seed-field-actions buttons. */
 .seed-input {
   width: 172px;

@@ -8,7 +8,7 @@ export interface ParticleSheet {
   sequences: Array<{ clamp: boolean; frames: Array<[number, number, number, number]> }>;
 }
 
-export interface ParticleIndexEntry {
+interface ParticleIndexEntry {
   file?: string;
   frames?: number;
   width?: number;
@@ -66,7 +66,7 @@ export function loadParticleIndex(): Promise<ParticleIndex> {
 }
 
 const particleTextureCache = new Map<string, Promise<THREE.Texture>>();
-export function loadParticleTexture(file: string): Promise<THREE.Texture> {
+function loadParticleTexture(file: string): Promise<THREE.Texture> {
   let promise = particleTextureCache.get(file);
   if (!promise) {
     const base = import.meta.env.BASE_URL;

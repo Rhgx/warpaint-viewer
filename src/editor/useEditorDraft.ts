@@ -11,7 +11,7 @@ const SAVE_DELAY_MS = 300;
 
 export type EditorDraftStatus = 'idle' | 'checking' | 'pending' | 'saving' | 'saved' | 'error';
 
-export interface EditorDraftRecovery {
+interface EditorDraftRecovery {
   paintName?: string;
   savedAt: number;
   restore: () => void;

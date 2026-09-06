@@ -30,7 +30,7 @@ export interface HeaderMsg {
   variables?: Many<VarDefMsg>;
 }
 
-export interface DefIdMsg {
+interface DefIdMsg {
   defindex: number;
   type?: number;
 }
@@ -46,7 +46,7 @@ export interface ItemMsg {
   data?: ItemDataMsg;
 }
 
-export interface DefinitionEntryMsg {
+interface DefinitionEntryMsg {
   operation_template?: DefIdMsg;
   variable?: Many<VarFieldMsg>;
 }
@@ -91,7 +91,7 @@ export interface SelectStageMsg {
   select?: Many<VarFieldMsg>;
 }
 
-export interface StickerMsg {
+interface StickerMsg {
   base?: VarFieldMsg;
   weight?: VarFieldMsg;
   spec?: VarFieldMsg;

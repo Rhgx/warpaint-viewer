@@ -28,7 +28,9 @@ import type { INamespace, Type } from 'protobufjs/light';
 import schemaJson from '../protodefs/schema.generated.json';
 
 /** Container defType values, mirroring src/protodefs/decoder.ts DEF_TYPE. */
+/** @public Used by tools/verify/protodefs-write.mjs through its generated SSR entry. */
 export const DEF_TYPE_PAINTKIT_OPERATION = 7;
+/** @public Used by tools/verify/protodefs-write.mjs through its generated SSR entry. */
 export const DEF_TYPE_PAINTKIT_DEFINITION = 9;
 
 const MSG_FOR_DEFTYPE: Record<number, string> = {
@@ -81,6 +83,7 @@ export function parseProtoDefGroups(bytes: Uint8Array): ProtoDefGroup[] {
   return groups;
 }
 
+/** @public Used by tools/verify/protodefs-write.mjs through its generated SSR entry. */
 export function writeProtoDefGroups(groups: readonly ProtoDefGroup[]): Uint8Array {
   let total = 0;
   for (const group of groups) {
@@ -112,7 +115,7 @@ function loadRoot(): Root {
 }
 
 /** Serializes one decoded message back to the bytes a container block holds. */
-export function encodeProtoDefMessage(defType: number, value: Record<string, unknown>): Uint8Array {
+function encodeProtoDefMessage(defType: number, value: Record<string, unknown>): Uint8Array {
   const typeName = MSG_FOR_DEFTYPE[defType];
   if (!typeName) throw new Error(`No message mapping for defType ${defType}.`);
   const message: Type = loadRoot().lookupType(typeName);
@@ -132,6 +135,7 @@ function headerDefindex(value: Record<string, unknown>): number | undefined {
 }
 
 /** Reads every defindex a container already uses for one defType. */
+/** @public Used by tools/verify/protodefs-write.mjs through its generated SSR entry. */
 export function usedDefindexes(groups: readonly ProtoDefGroup[], defType: number): Set<number> {
   const typeName = MSG_FOR_DEFTYPE[defType];
   if (!typeName) throw new Error(`No message mapping for defType ${defType}.`);
@@ -157,7 +161,7 @@ function nextFreeDefindex(used: ReadonlySet<number>): number {
 }
 
 /** Sets a message's own defindex, leaving every reference it holds alone. */
-export function setHeaderDefindex(value: Record<string, unknown>, defindex: number): void {
+function setHeaderDefindex(value: Record<string, unknown>, defindex: number): void {
   const header = value.header;
   if (header === null || typeof header !== 'object') {
     throw new Error('This message has no header to assign a defindex to.');
@@ -177,7 +181,7 @@ export function setHeaderDefindex(value: Record<string, unknown>, defindex: numb
  * operation keeps pointing at it, which is what a paint built on a Valve
  * template needs.
  */
-export function retargetOperation(value: unknown, from: number, to: number): void {
+function retargetOperation(value: unknown, from: number, to: number): void {
   if (Array.isArray(value)) {
     for (const entry of value) retargetOperation(entry, from, to);
     return;
@@ -210,7 +214,7 @@ export function retargetOperation(value: unknown, from: number, to: number): voi
  * assigned a synthetic numeric id by the importer. Constructing the token from
  * the final id handles both compiled VPDs and those JSON fragments.
  */
-export function retargetLocToken(definition: Record<string, unknown>, to: number): void {
+function retargetLocToken(definition: Record<string, unknown>, to: number): void {
   definition.loc_desctoken = `9_${to}_field { field_number: 2 }`;
 }
 

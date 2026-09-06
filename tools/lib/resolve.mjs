@@ -76,15 +76,6 @@ export function texturePublicPath(ref) {
   return `textures/${p}.webp`;
 }
 
-// Convert a raw compositor texture reference into the vpk-relative path "materials/<path>.vtf".
-export function textureVpkPath(ref) {
-  if (!ref) return null;
-  let p = String(ref).trim().replace(/\\/g, '/');
-  p = p.replace(/^materials\//i, '');
-  p = p.replace(/\.(vtf|tga|psd|png)$/i, '');
-  return `materials/${p}.vtf`;
-}
-
 // ---- variable dictionary construction ----
 
 // A CMsgVarField holds either a `variable` reference (name) plus optional baked default value,

@@ -1,6 +1,5 @@
 import { Select } from '@base-ui/react/select';
 import { Slider } from '@base-ui/react/slider';
-import { NumberField } from '@base-ui/react/number-field';
 import { Switch } from '@base-ui/react/switch';
 import { Toggle } from '@base-ui/react/toggle';
 import { Input } from '@base-ui/react/input';
@@ -386,40 +385,6 @@ export function WearSliderField({
         ))}
       </div>
     </div>
-  );
-}
-
-export function NumberFieldControl({
-  value,
-  onChange,
-  min,
-  max,
-  step,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  min?: number;
-  max?: number;
-  step?: number;
-}) {
-  return (
-    <NumberField.Root
-      value={value}
-      onValueChange={(v) => onChange(v ?? 0)}
-      min={min}
-      max={max}
-      step={step ?? 1}
-      // Plain integer digits, no locale grouping/decimal separators (a seed is
-      // an id, not a quantity).
-      format={{ useGrouping: false, maximumFractionDigits: 0 }}
-      locale="en-US"
-    >
-      <NumberField.Group className="ui-numfield">
-        <NumberField.Decrement className="ui-num-btn">-</NumberField.Decrement>
-        <NumberField.Input className="ui-num-input" />
-        <NumberField.Increment className="ui-num-btn">+</NumberField.Increment>
-      </NumberField.Group>
-    </NumberField.Root>
   );
 }
 

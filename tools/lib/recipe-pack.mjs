@@ -41,7 +41,7 @@ function deepEqual(a, b) {
 // (see DEFAULTS) from plain objects encountered anywhere in the tree, including
 // nested `nodes` arrays and every node type. Every other field passes through
 // byte-for-byte unmodified.
-export function compactNode(value) {
+function compactNode(value) {
   if (Array.isArray(value)) return value.map(compactNode);
   if (value && typeof value === 'object') {
     const out = {};
@@ -52,28 +52,6 @@ export function compactNode(value) {
     return out;
   }
   return value;
-}
-
-// Deep-compares two node trees where a field absent on either side is treated
-// as equal to its default value from DEFAULTS (mirrors how the compositor
-// resolves a missing field at runtime). Used to verify that compaction (and
-// bundle round-tripping) didn't change the effective tree.
-export function nodesEquivalent(a, b) {
-  if (a === b) return true;
-  if (Array.isArray(a) || Array.isArray(b)) {
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-    return a.every((v, i) => nodesEquivalent(v, b[i]));
-  }
-  if (a && b && typeof a === 'object' && typeof b === 'object') {
-    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-    for (const k of keys) {
-      const av = Object.prototype.hasOwnProperty.call(a, k) ? a[k] : DEFAULTS[k];
-      const bv = Object.prototype.hasOwnProperty.call(b, k) ? b[k] : DEFAULTS[k];
-      if (!nodesEquivalent(av, bv)) return false;
-    }
-    return true;
-  }
-  return a === b;
 }
 
 // Builds a { trees, variants } bundle from a flat list of { key, tree } entries

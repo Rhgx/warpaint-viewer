@@ -59,9 +59,9 @@ export interface StickerPlacementReadResult {
 
 const MIN_SIZE = 0.02;
 const MAX_SIZE = 1.5;
-export const DEFAULT_STICKER_SNAP_STEP = 0.025;
-export const DEFAULT_STICKER_TURN_SNAP = 15;
-export const DEFAULT_CARDINAL_SNAP_THRESHOLD = 4;
+const DEFAULT_STICKER_SNAP_STEP = 0.025;
+const DEFAULT_STICKER_TURN_SNAP = 15;
+const DEFAULT_CARDINAL_SNAP_THRESHOLD = 4;
 
 export const DEFAULT_STICKER_PLACEMENT: StickerPlacement = Object.freeze({
   x: 0.5,
@@ -88,7 +88,7 @@ function snap(value: number, step: number): number {
 }
 
 /** Convert any finite angle to the compact -180..180 range. */
-export function normalizeStickerRotation(rotation: number): number {
+function normalizeStickerRotation(rotation: number): number {
   const normalized = ((finite(rotation, 0) + 180) % 360 + 360) % 360 - 180;
   // Prefer 180 to -180 so the numeric editor does not appear to jump at that point.
   return normalized === -180 ? 180 : normalized;
@@ -165,7 +165,7 @@ export function snapStickerPlacement(
   });
 }
 
-export function rotateStickerPoint(point: StickerPoint, degrees: number): StickerPoint {
+function rotateStickerPoint(point: StickerPoint, degrees: number): StickerPoint {
   const radians = degrees * (Math.PI / 180);
   const cosine = Math.cos(radians);
   const sine = Math.sin(radians);
@@ -182,19 +182,6 @@ function cornerSigns(corner: StickerCorner): StickerPoint {
     case 'bottom-right': return { x: 1, y: 1 };
     case 'bottom-left': return { x: -1, y: 1 };
   }
-}
-
-/** The four rotated texture-space vertices, useful for a model-side overlay. */
-export function stickerPlacementCorners(placement: StickerPlacement): readonly StickerPoint[] {
-  const value = clampStickerPlacement(placement);
-  return (['top-left', 'top-right', 'bottom-right', 'bottom-left'] as const).map((corner) => {
-    const signs = cornerSigns(corner);
-    const offset = rotateStickerPoint({
-      x: signs.x * value.width / 2,
-      y: signs.y * value.height / 2,
-    }, value.rotation);
-    return { x: value.x + offset.x, y: value.y + offset.y };
-  });
 }
 
 function isFiniteQuad(quad: StickerAffineQuad): boolean {

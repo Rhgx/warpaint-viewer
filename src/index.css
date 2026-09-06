@@ -46,7 +46,6 @@ button {
 .btn:focus-visible,
 .ui-select-trigger:focus-visible,
 .ui-input:focus-visible,
-.ui-numfield:focus-within,
 .ui-team-btn:focus-visible,
 .ui-toggle-btn:focus-visible,
 .ui-switch:focus-visible,
@@ -390,34 +389,7 @@ button {
   font-weight: 700;
 }
 
-/* ---------- Base UI: NumberField ---------- */
-.ui-numfield {
-  display: inline-flex;
-  min-height: var(--control-h);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: var(--panel);
-  transition: var(--transition-fast);
-}
-.ui-numfield:focus-within {
-  border-color: var(--accent);
-}
-.ui-num-btn {
-  width: 24px;
-  background: var(--panel-2);
-  border: none;
-  border-right: 1px solid var(--border);
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-.ui-num-btn:last-child {
-  border-right: none;
-  border-left: 1px solid var(--border);
-}
-.ui-num-btn:hover {
-  background: var(--border);
-}
+/* ---------- Numeric input ---------- */
 .ui-num-input {
   width: 92px;
   border: none;

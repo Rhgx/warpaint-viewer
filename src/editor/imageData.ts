@@ -2,7 +2,7 @@ import type { RgbaImageDataLike } from './groupSampling';
 import { decodeImageThumbnailExact } from '../export/decodeImage';
 
 const MAX_GROUP_PIXELS = 16 * 1024 * 1024;
-export const LAYER_COLOR_THUMBNAIL_SIDE = 32;
+const LAYER_COLOR_THUMBNAIL_SIDE = 32;
 
 /** Decode a resolved group-map URL into CPU-readable pixels for UV picking. */
 export async function loadRgbaImageData(url: string): Promise<RgbaImageDataLike> {

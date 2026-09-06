@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { BSP_MAP_LIGHTING } from './mapLighting.generated';
 
-export type AmbientCube = readonly [
+type AmbientCube = readonly [
   THREE.Vector3, THREE.Vector3, THREE.Vector3,
   THREE.Vector3, THREE.Vector3, THREE.Vector3,
 ];

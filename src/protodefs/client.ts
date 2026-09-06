@@ -89,7 +89,7 @@ class InProcessSource {
   }
 }
 
-export class ProtoDefClient implements ProtoDefSource {
+class ProtoDefClient implements ProtoDefSource {
   private worker: Worker | null = null;
   private workerDisabled = false;
   private nextRequestId = 1;

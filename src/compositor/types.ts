@@ -9,7 +9,7 @@
 //   - select values are raw 0..255 group ids; the shader compares them with the
 //     fxc's 1/16 bucketing (cFac in compositor.cpp).
 
-export type Range = [number, number];
+type Range = [number, number];
 
 // Transform + adjust fields shared by texture_lookup and the combine stages
 // (CMsgPaintKit_Operation_TextureStage / _CombineStage carry the same set).
@@ -25,7 +25,7 @@ export interface StageTransform {
   flipV?: boolean;
 }
 
-export interface TextureLookupNode extends StageTransform {
+interface TextureLookupNode extends StageTransform {
   type: 'texture_lookup';
   // Path relative to public/data (real data) or a mock key / data: URL (mock).
   texture: string;
@@ -49,7 +49,7 @@ export interface SelectNode {
   select: Array<number | string>;
 }
 
-export interface StickerDef {
+interface StickerDef {
   base: string;
   weight?: number;
   spec?: string;
@@ -68,9 +68,6 @@ export interface ApplyStickerNode {
 }
 
 export type RecipeNode = TextureLookupNode | CombineNode | SelectNode | ApplyStickerNode;
-
-// A whole recipe file is just a root node (the outermost operation stage).
-export type Recipe = RecipeNode;
 
 // Resolves a texture path/ref to a URL the browser can load.
 export type TextureResolver = (ref: string) => string | Promise<string>;

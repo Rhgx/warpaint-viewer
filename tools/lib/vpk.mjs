@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const TF_DIR = 'C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2';
-export const VPK_EXE = `${TF_DIR}/bin/vpk.exe`;
+const VPK_EXE = `${TF_DIR}/bin/vpk.exe`;
 export const TEXTURES_VPK = `${TF_DIR}/tf/tf2_textures_dir.vpk`;
 export const MISC_VPK = `${TF_DIR}/tf/tf2_misc_dir.vpk`;
 // TF2 mounts the HL2 base-game VPKs too; several particle materials referenced by the unusual

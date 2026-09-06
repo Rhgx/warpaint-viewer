@@ -10,7 +10,7 @@ const RANGE_DEFAULTS: Record<TextureTransformRangeField, readonly [number, numbe
   translate_v: [0, 0],
 };
 
-export type TextureTransformFieldBlocker = 'unresolved-value' | 'invalid-value';
+type TextureTransformFieldBlocker = 'unresolved-value' | 'invalid-value';
 
 export interface TextureTransformRangeFieldState {
   readonly mode: 'fixed' | 'varies';
@@ -22,19 +22,19 @@ export interface TextureTransformRangeFieldState {
   readonly blockers: readonly TextureTransformFieldBlocker[];
 }
 
-export interface TextureTransformFlipFieldState {
+interface TextureTransformFlipFieldState {
   readonly allowed: boolean;
   readonly isVariable: boolean;
   readonly inheritable: boolean;
   readonly blockers: readonly TextureTransformFieldBlocker[];
 }
 
-export type TextureTransformTargetBlocker =
+type TextureTransformTargetBlocker =
   | 'no-texture-lookup-stage'
   | 'ambiguous-source-stage'
   | TextureTransformFieldBlocker;
 
-export interface TextureTransformTargetInfo {
+interface TextureTransformTargetInfo {
   readonly target: TextureTransformTarget;
   /** The authored texture this stage samples, when it resolves to a single literal. */
   readonly textureRef?: string;

@@ -38,11 +38,8 @@ export interface DecodedVTF {
   format: number;
 }
 
-export const VTF_FORMAT: Readonly<Record<string, number>>;
-export function getVTFSamplingMetadata(flags: number): VTFSamplingMetadata;
 export function parseVTFHeader(input: Uint8Array | ArrayBuffer): VTFHeader;
 export function decodeVTF(input: Uint8Array | ArrayBuffer): DecodedVTF;
-export function decodeVTFFrame(input: Uint8Array | ArrayBuffer, frameIndex: number): DecodedVTF;
 export function decodeVTFAllFrames(input: Uint8Array | ArrayBuffer): DecodedVTF[];
 export function decodeVTFCubemap(input: Uint8Array | ArrayBuffer): DecodedVTF[];
 export function parseVTFSpriteSheet(input: Uint8Array | ArrayBuffer): unknown | null;

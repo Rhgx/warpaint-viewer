@@ -17,8 +17,8 @@ import { isSupportedTexturePath, normalizeSourcePath, sourcePathExtension, sourc
 
 // KeyValues
 
-export type KvValue = string | KvBlock | (string | KvBlock)[];
-export interface KvBlock { [key: string]: KvValue }
+type KvValue = string | KvBlock | (string | KvBlock)[];
+interface KvBlock { [key: string]: KvValue }
 
 /**
  * Minimal Valve KeyValues (text) reader: quoted and unquoted tokens, nested
@@ -26,7 +26,7 @@ export interface KvBlock { [key: string]: KvValue }
  * into an array. Ported from tools/lib/kv.mjs so the browser and the pipeline
  * read the same files the same way.
  */
-export function parseKeyValues(text: string): KvBlock {
+function parseKeyValues(text: string): KvBlock {
   let index = 0;
   const length = text.length;
 
@@ -114,7 +114,7 @@ export function parseKeyValues(text: string): KvBlock {
 }
 
 /** KeyValues keys are case-insensitive in Source; VMT authors rely on that. */
-export function kvGet(block: KvBlock | undefined, key: string): KvValue | undefined {
+function kvGet(block: KvBlock | undefined, key: string): KvValue | undefined {
   if (!block) return undefined;
   const direct = block[key];
   if (direct !== undefined) return direct;
@@ -207,7 +207,7 @@ const UNSUPPORTED_PARAMETERS: { key: string; label: string }[] = [
  */
 const SUPPORTED_DETAIL_MODES = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
-export interface ParsedVmt {
+interface ParsedVmt {
   shader: string;
   material: WeaponMaterial;
   /** Every texture the material names, in `textures/<path>.webp` form. */
@@ -221,6 +221,7 @@ export interface ParsedVmt {
  * in Source, so unset parameters take shader defaults rather than inheriting
  * from the weapon's built-in material.
  */
+/** @public Used by tools/verify/vmt-parity.mjs through its generated SSR entry. */
 export function parseWeaponMaterialVmt(text: string): ParsedVmt {
   const root = parseKeyValues(text);
   const shaderKey = Object.keys(root)[0] ?? '';
@@ -373,7 +374,7 @@ export function packageHasMaterialOverride(
  * (`c_models/<key>/<key>` for most weapons, `workshop/` for the Steam
  * Workshop imports, and the two flatter historical layouts).
  */
-export function weaponMaterialIdentities(weaponKey: string, materialOverrideId?: string): string[] {
+function weaponMaterialIdentities(weaponKey: string, materialOverrideId?: string): string[] {
   const identities = materialOverrideId ? [materialOverrideId] : [];
   identities.push(
     `models/weapons/c_models/${weaponKey}/${weaponKey}`,

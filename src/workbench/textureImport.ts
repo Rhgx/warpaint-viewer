@@ -1,5 +1,4 @@
 import { encodeRgbaPng } from '../source/png';
-export { revokeTextureUrl } from './assetUrls';
 
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 const MAX_VTF_PIXELS = 16 * 1024 * 1024;
