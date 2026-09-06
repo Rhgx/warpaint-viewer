@@ -174,7 +174,8 @@ export function Inspector({
   return (
     <>
       <InspectorSection title="Item">
-        <Control label={<><Crosshair size={12} /><span>Weapon</span></>}>
+        <div className="control" role="group" aria-label="Weapon">
+          <span className="control-label"><Crosshair size={12} /><span>Weapon</span></span>
           <IconSelectField
             value={state.weaponKey}
             onChange={(v) => onChange({ weaponKey: v })}
@@ -183,9 +184,9 @@ export function Inspector({
             stepLabels={{ previous: 'Previous weapon', next: 'Next weapon' }}
             searchPlaceholder="Filter weapons..."
           />
-        </Control>
+        </div>
 
-        <Control label={<><Droplets size={12} /><span>Wear</span></>}>
+        <Control group label={<><Droplets size={12} /><span>Wear</span></>}>
           <WearSliderField
             value={state.wearIndex}
             names={manifest.wearNames}
@@ -193,7 +194,7 @@ export function Inspector({
           />
         </Control>
 
-        <Control label={<><Users size={12} /><span>Team</span></>}>
+        <Control group label={<><Users size={12} /><span>Team</span></>}>
           <TeamToggle
             team={state.team}
             disabled={!hasTeamTextures && state.sheen !== 'team_shine'}
@@ -202,7 +203,7 @@ export function Inspector({
           />
         </Control>
 
-        <Control label={<><Hash size={12} /><span>Seed</span></>}>
+        <Control group label={<><Hash size={12} /><span>Seed</span></>}>
           <SeedField
             seed={state.seed}
             onCommit={(seed) => onChange({ seed })}
@@ -272,7 +273,7 @@ export function Inspector({
           />
         </Control>
 
-        <Control label={<span>Projection</span>}>
+        <Control group label={<span>Projection</span>}>
           <div className="ui-toggle-group" role="group" aria-label="Projection">
             <button
               type="button"

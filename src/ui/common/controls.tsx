@@ -4,7 +4,7 @@ import { Switch } from '@base-ui/react/switch';
 import { Toggle } from '@base-ui/react/toggle';
 import { Input } from '@base-ui/react/input';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 
 export interface Option {
@@ -93,12 +93,14 @@ export function AssetIcon({
 
 // A labelled control row used throughout the inspector panel. `label` accepts
 // a leading icon plus text (see Inspector) as well as a plain string.
-export function Control({ label, children, className }: { label: ReactNode; children: ReactNode; className?: string }) {
+export function Control({ label, children, className, group = false }: { label: ReactNode; children: ReactNode; className?: string; group?: boolean }) {
+  const labelId = useId();
+  const Container = group ? 'div' : 'label';
   return (
-    <label className={`control${className ? ` ${className}` : ''}`}>
-      <span className="control-label">{label}</span>
+    <Container className={`control${className ? ` ${className}` : ''}`} role={group ? 'group' : undefined} aria-labelledby={group ? labelId : undefined}>
+      <span id={labelId} className="control-label">{label}</span>
       {children}
-    </label>
+    </Container>
   );
 }
 
@@ -323,7 +325,7 @@ export function SliderField({
       <Slider.Control className="ui-slider-control">
         <Slider.Track className="ui-slider-track">
           <Slider.Indicator className="ui-slider-indicator" />
-          <Slider.Thumb className="ui-slider-thumb" />
+          <Slider.Thumb className="ui-slider-thumb" aria-label={ariaLabel} />
         </Slider.Track>
       </Slider.Control>
     </Slider.Root>
@@ -366,7 +368,7 @@ export function WearSliderField({
                 style={{ left: `${index * 25}%`, backgroundColor: color }}
               />
             ))}
-            <Slider.Thumb className="wear-slider-thumb" />
+            <Slider.Thumb className="wear-slider-thumb" aria-label="Weapon wear" aria-valuetext={names[selected] ?? WEAR_SHORT[selected]} />
           </Slider.Track>
         </Slider.Control>
       </Slider.Root>
