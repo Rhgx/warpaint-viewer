@@ -189,21 +189,18 @@ function isFiniteQuad(quad: StickerAffineQuad): boolean {
 }
 
 /**
- * The parallelogram Source actually paints. Source projects each dest pixel
- * onto the TL->TR and TL->BL edges independently, so for sheared (non
- * perpendicular) quads the painted corners differ from the authored ones.
- * Degenerate quads are returned unchanged.
+ * The rectangle Source actually paints. CTCApplyStickerStage builds
+ * translate(TL) * rotate(angle of TL->BL) * scale(|TL->TR|, |TL->BL|), so the
+ * vertical edge is TL->BL exactly and the horizontal edge is its perpendicular
+ * towards TR with the full length of TL->TR. Degenerate quads are returned
+ * unchanged.
  */
 export function stickerCoverageQuad(quad: StickerAffineQuad): StickerAffineQuad {
-  const [tlX, tlY] = quad.tl;
-  const uX = quad.tr[0] - tlX, uY = quad.tr[1] - tlY;
-  const vX = quad.bl[0] - tlX, vY = quad.bl[1] - tlY;
-  const su = (uX * uX + uY * uY) / (uX * vY - uY * vX);
-  const sv = (vX * vX + vY * vY) / (uX * vY - uY * vX);
-  const tr: [number, number] = [tlX + vY * su, tlY - vX * su];
-  const bl: [number, number] = [tlX - uY * sv, tlY + uX * sv];
-  if (![...tr, ...bl].every(Number.isFinite)) return quad;
-  return { tl: quad.tl, tr, bl };
+  const uX = quad.tr[0] - quad.tl[0], uY = quad.tr[1] - quad.tl[1];
+  const vX = quad.bl[0] - quad.tl[0], vY = quad.bl[1] - quad.tl[1];
+  const s = Math.hypot(uX, uY) / Math.hypot(vX, vY) * (uX * vY - uY * vX > 0 ? 1 : -1);
+  if (!Number.isFinite(s)) return quad;
+  return { tl: quad.tl, tr: [quad.tl[0] + vY * s, quad.tl[1] - vX * s], bl: quad.bl };
 }
 
 /**
@@ -226,8 +223,8 @@ export function stickerPlacementToQuad(placement: StickerPlacement): StickerAffi
 }
 
 /**
- * Read an authored affine destination into the compact transform controls.
- * The controls describe its centre and two edge lengths; callers that edit a
+ * Read an authored destination into the compact transform controls. The
+ * controls describe the painted rectangle (stickerCoverageQuad); callers that edit a
  * skewed quad must apply the placement delta to the original quad rather than
  * rebuilding a rectangle with stickerPlacementToQuad().
  */
@@ -252,14 +249,16 @@ export function stickerPlacementFromQuad(quad: StickerAffineQuad): StickerPlacem
       reason: 'The three corner points are in a straight line. Move one point so the sticker has a width and height.',
     };
   }
+  const painted = stickerCoverageQuad(quad);
+  const right = { x: painted.tr[0] - quad.tl[0], y: painted.tr[1] - quad.tl[1] };
   return {
     editable: true,
     placement: {
-      x: quad.tl[0] + (horizontal.x + vertical.x) / 2,
-      y: quad.tl[1] + (horizontal.y + vertical.y) / 2,
-      width,
+      x: quad.tl[0] + (right.x + vertical.x) / 2,
+      y: quad.tl[1] + (right.y + vertical.y) / 2,
+      width: Math.hypot(right.x, right.y),
       height,
-      rotation: normalizeStickerRotation(Math.atan2(horizontal.y, horizontal.x) * (180 / Math.PI)),
+      rotation: normalizeStickerRotation(Math.atan2(right.y, right.x) * (180 / Math.PI)),
     },
   };
 }

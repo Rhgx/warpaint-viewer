@@ -1755,18 +1755,18 @@ export class Viewer {
     this.invalidate();
   }
 
-  private setStickerPreviewQuad(quad: StickerPlacementQuad | null, opacity: number | undefined): boolean {
-    if (!quad || ![quad.tl, quad.tr, quad.bl].every((uv) => Number.isFinite(uv[0]) && Number.isFinite(uv[1]))) return false;
+  private setStickerPreviewQuad(authored: StickerPlacementQuad | null, opacity: number | undefined): boolean {
+    if (!authored || ![authored.tl, authored.tr, authored.bl].every((uv) => Number.isFinite(uv[0]) && Number.isFinite(uv[1]))) return false;
+    const quad = stickerCoverageQuad(authored);
     const x0 = quad.tr[0] - quad.tl[0];
     const y0 = quad.tr[1] - quad.tl[1];
     const x1 = quad.bl[0] - quad.tl[0];
     const y1 = quad.bl[1] - quad.tl[1];
     if (Math.abs(x0 * y1 - y0 * x1) < 1e-8) return false;
     const material = this.ensureStickerPreviewMaterial();
-    const dest = stickerCoverageQuad(quad);
-    material.uniforms.uStickerTl.value.set(dest.tl[0], dest.tl[1]);
-    material.uniforms.uStickerTr.value.set(dest.tr[0], dest.tr[1]);
-    material.uniforms.uStickerBl.value.set(dest.bl[0], dest.bl[1]);
+    material.uniforms.uStickerTl.value.set(quad.tl[0], quad.tl[1]);
+    material.uniforms.uStickerTr.value.set(quad.tr[0], quad.tr[1]);
+    material.uniforms.uStickerBl.value.set(quad.bl[0], quad.bl[1]);
     material.uniforms.uStickerCenter.value.set(
       quad.tl[0] + (x0 + x1) * 0.5,
       quad.tl[1] + (y0 + y1) * 0.5,
