@@ -549,9 +549,15 @@ export class Viewer {
     // buffer on every animation frame causes visible clears and flicker, so
     // keep the existing frame CSS-scaled during the short transition and do
     // one real renderer resize after the layout has settled.
+    let observedInitialSize = false;
     this.resizeObserver = new ResizeObserver(() => {
       this.syncDisplayAspect();
       this.invalidate();
+      if (!observedInitialSize) {
+        observedInitialSize = true;
+        this.onResize();
+        return;
+      }
       window.clearTimeout(this.resizeTimer);
       this.resizeTimer = window.setTimeout(this.onResize, 240);
     });
