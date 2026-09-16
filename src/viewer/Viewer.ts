@@ -49,6 +49,7 @@ import {
   stickerQuadCenter,
   type StickerPlacementQuad,
 } from '../editor/viewerStickerPlacement';
+import { stickerCoverageQuad } from '../editor/stickerGeometry';
 import {
   deriveStickerGizmoScreenCentre,
   hasUsableStickerGizmoScaleDirection,
@@ -1762,9 +1763,10 @@ export class Viewer {
     const y1 = quad.bl[1] - quad.tl[1];
     if (Math.abs(x0 * y1 - y0 * x1) < 1e-8) return false;
     const material = this.ensureStickerPreviewMaterial();
-    material.uniforms.uStickerTl.value.set(quad.tl[0], quad.tl[1]);
-    material.uniforms.uStickerTr.value.set(quad.tr[0], quad.tr[1]);
-    material.uniforms.uStickerBl.value.set(quad.bl[0], quad.bl[1]);
+    const dest = stickerCoverageQuad(quad);
+    material.uniforms.uStickerTl.value.set(dest.tl[0], dest.tl[1]);
+    material.uniforms.uStickerTr.value.set(dest.tr[0], dest.tr[1]);
+    material.uniforms.uStickerBl.value.set(dest.bl[0], dest.bl[1]);
     material.uniforms.uStickerCenter.value.set(
       quad.tl[0] + (x0 + x1) * 0.5,
       quad.tl[1] + (y0 + y1) * 0.5,
@@ -2095,11 +2097,12 @@ export class Viewer {
   }
 
   private updateStickerGizmoOverlay() {
-    const quad = this.stickerGizmoQuad;
-    if (this.disposed || !quad || !this.isUsableStickerQuad(quad)) {
+    const authored = this.stickerGizmoQuad;
+    if (this.disposed || !authored || !this.isUsableStickerQuad(authored)) {
       this.hideStickerGizmoOverlay();
       return;
     }
+    const quad = stickerCoverageQuad(authored);
     const rect = this.canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0 || this.paintableMeshes.length === 0) {
       this.hideStickerGizmoOverlay();

@@ -7,6 +7,7 @@ import type { TextureMetadata } from '../data/types';
 export { textureUvMatrix } from './transforms';
 import { textureUvMatrix } from './transforms';
 import { compositorReadbackToEditorPixels } from '../editor/stickerSurface';
+import { stickerCoverageQuad } from '../editor/stickerGeometry';
 import {
   FRAG,
   VERT,
@@ -427,9 +428,10 @@ export class Compositor {
           textureUvMatrix(t.rotationDeg, t.translateU, t.translateV, t.scale, t.flipU, t.flipV),
         );
         (u.uAdjust1.value as THREE.Vector3).set(node.black, node.white, node.gamma);
-        (u.uDestTl.value as THREE.Vector2).set(node.destTl[0], node.destTl[1]);
-        (u.uDestTr.value as THREE.Vector2).set(node.destTr[0], node.destTr[1]);
-        (u.uDestBl.value as THREE.Vector2).set(node.destBl[0], node.destBl[1]);
+        const dest = stickerCoverageQuad({ tl: node.destTl, tr: node.destTr, bl: node.destBl });
+        (u.uDestTl.value as THREE.Vector2).fromArray(dest.tl);
+        (u.uDestTr.value as THREE.Vector2).fromArray(dest.tr);
+        (u.uDestBl.value as THREE.Vector2).fromArray(dest.bl);
         this.renderInto(out);
         if (base.target) this.release(base.target);
         return { texture: out.texture, transform: IDENTITY_TRANSFORM, target: out };
@@ -564,9 +566,10 @@ export class Compositor {
         (u.uUv1.value as THREE.Matrix3).copy(IDENTITY3);
         (u.uUv2.value as THREE.Matrix3).copy(IDENTITY3);
         (u.uUv3.value as THREE.Matrix3).copy(IDENTITY3);
-        (u.uDestTl.value as THREE.Vector2).fromArray(input.destTl);
-        (u.uDestTr.value as THREE.Vector2).fromArray(input.destTr);
-        (u.uDestBl.value as THREE.Vector2).fromArray(input.destBl);
+        const dest = stickerCoverageQuad({ tl: input.destTl, tr: input.destTr, bl: input.destBl });
+        (u.uDestTl.value as THREE.Vector2).fromArray(dest.tl);
+        (u.uDestTr.value as THREE.Vector2).fromArray(dest.tr);
+        (u.uDestBl.value as THREE.Vector2).fromArray(dest.bl);
         this.renderInto(target);
         return this.toPreviewDataUrl(target, size, false);
       } finally {

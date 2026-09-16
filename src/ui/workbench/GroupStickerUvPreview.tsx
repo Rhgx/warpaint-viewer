@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import type { StickerAffineQuad } from '../../editor/stickerGeometry';
+import { stickerCoverageQuad, type StickerAffineQuad } from '../../editor/stickerGeometry';
 
 export interface GroupStickerPreviewSources {
   readonly maskSrc: string;
@@ -204,7 +204,8 @@ async function createRuntime(
   };
 
   return {
-    draw(quad) {
+    draw(authored) {
+      const quad = stickerCoverageQuad(authored);
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);

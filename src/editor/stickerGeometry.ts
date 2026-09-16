@@ -189,6 +189,24 @@ function isFiniteQuad(quad: StickerAffineQuad): boolean {
 }
 
 /**
+ * The parallelogram Source actually paints. Source projects each dest pixel
+ * onto the TL->TR and TL->BL edges independently, so for sheared (non
+ * perpendicular) quads the painted corners differ from the authored ones.
+ * Degenerate quads are returned unchanged.
+ */
+export function stickerCoverageQuad(quad: StickerAffineQuad): StickerAffineQuad {
+  const [tlX, tlY] = quad.tl;
+  const uX = quad.tr[0] - tlX, uY = quad.tr[1] - tlY;
+  const vX = quad.bl[0] - tlX, vY = quad.bl[1] - tlY;
+  const su = (uX * uX + uY * uY) / (uX * vY - uY * vX);
+  const sv = (vX * vX + vY * vY) / (uX * vY - uY * vX);
+  const tr: [number, number] = [tlX + vY * su, tlY - vX * su];
+  const bl: [number, number] = [tlX - uY * sv, tlY + uX * sv];
+  if (![...tr, ...bl].every(Number.isFinite)) return quad;
+  return { tl: quad.tl, tr, bl };
+}
+
+/**
  * Convert the compact editor value to the exact authored three-point form.
  * Unlike clampStickerPlacement(), this function does not constrain valid
  * unwrapped positions or large dimensions, so a supported authored quad can
