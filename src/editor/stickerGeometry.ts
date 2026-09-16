@@ -273,19 +273,25 @@ export function applyStickerPlacementToQuad(
   const source = current.placement;
   const scaleX = next.width / source.width;
   const scaleY = next.height / source.height;
-  const sourceRadians = source.rotation * Math.PI / 180;
-  const nextRadians = next.rotation * Math.PI / 180;
-  const map = ([x, y]: readonly [number, number]): readonly [number, number] => {
-    const dx = x - source.x;
-    const dy = y - source.y;
-    const localX = dx * Math.cos(sourceRadians) + dy * Math.sin(sourceRadians);
-    const localY = -dx * Math.sin(sourceRadians) + dy * Math.cos(sourceRadians);
-    return [
-      next.x + localX * scaleX * Math.cos(nextRadians) - localY * scaleY * Math.sin(nextRadians),
-      next.y + localX * scaleX * Math.sin(nextRadians) + localY * scaleY * Math.cos(nextRadians),
-    ];
+  const radians = (next.rotation - source.rotation) * Math.PI / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const rotateScale = (x: number, y: number, scale: number): readonly [number, number] => {
+    return [(x * cos - y * sin) * scale, (x * sin + y * cos) * scale];
   };
-  return { tl: map(quad.tl), tr: map(quad.tr), bl: map(quad.bl) };
+  const painted = stickerCoverageQuad(quad);
+  const right = rotateScale(painted.tr[0] - painted.tl[0], painted.tr[1] - painted.tl[1], scaleX);
+  const down = rotateScale(painted.bl[0] - painted.tl[0], painted.bl[1] - painted.tl[1], scaleY);
+  const authoredRight = rotateScale(quad.tr[0] - quad.tl[0], quad.tr[1] - quad.tl[1], scaleX);
+  const tl: readonly [number, number] = [
+    next.x - (right[0] + down[0]) / 2,
+    next.y - (right[1] + down[1]) / 2,
+  ];
+  return {
+    tl,
+    tr: [tl[0] + authoredRight[0], tl[1] + authoredRight[1]],
+    bl: [tl[0] + down[0], tl[1] + down[1]],
+  };
 }
 
 /**

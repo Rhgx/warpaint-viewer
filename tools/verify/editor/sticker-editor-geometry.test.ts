@@ -86,6 +86,25 @@ test('compact sticker editor geometry', () => {
   closePoint(movedSkew.tr, [0.5, 0.2], 'affine movement preserves top-right');
   closePoint(movedSkew.bl, [0.300836, 0.4], 'affine movement preserves authored shear');
 
+  const authoredAmputator = { tl: [0, 0.555], tr: [1, 0], bl: [0.175, 0.555] } as const;
+  const amputatorPlacement = geometry.stickerPlacementFromQuad(authoredAmputator).placement;
+  assert.ok(amputatorPlacement);
+  const editedAmputator = geometry.applyStickerPlacementToQuad(authoredAmputator, {
+    x: 0.4,
+    y: 0.45,
+    width: 0.6,
+    height: 0.2,
+    rotation: 25,
+  });
+  assert.ok(editedAmputator);
+  const editedAmputatorPlacement = geometry.stickerPlacementFromQuad(editedAmputator).placement;
+  assert.ok(editedAmputatorPlacement);
+  close(editedAmputatorPlacement.x, 0.4, 'sheared editor change uses painted centre x');
+  close(editedAmputatorPlacement.y, 0.45, 'sheared editor change uses painted centre y');
+  close(editedAmputatorPlacement.width, 0.6, 'sheared editor change uses painted width');
+  close(editedAmputatorPlacement.height, 0.2, 'sheared editor change uses painted height');
+  close(editedAmputatorPlacement.rotation, 25, 'sheared editor change uses painted rotation');
+
   const mirrored = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0, -0.2] });
   assert.equal(mirrored.editable, true, 'mirrored affine quads retain their reflection while edited');
   const collapsed = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0, 0], bl: [0, 0] });
