@@ -427,14 +427,18 @@ export class Compositor {
         (u.uUv0.value as THREE.Matrix3).copy(
           textureUvMatrix(t.rotationDeg, t.translateU, t.translateV, t.scale, t.flipU, t.flipV),
         );
-        (u.uAdjust1.value as THREE.Vector3).set(node.black, node.white, node.gamma);
+        (u.uAdjust1.value as THREE.Vector3).set(0, 1, 1);
         const dest = stickerCoverageQuad({ tl: node.destTl, tr: node.destTr, bl: node.destBl });
         (u.uDestTl.value as THREE.Vector2).fromArray(dest.tl);
         (u.uDestTr.value as THREE.Vector2).fromArray(dest.tr);
         (u.uDestBl.value as THREE.Vector2).fromArray(dest.bl);
         this.renderInto(out);
         if (base.target) this.release(base.target);
-        return { texture: out.texture, transform: IDENTITY_TRANSFORM, target: out };
+        return {
+          texture: out.texture,
+          transform: { ...IDENTITY_TRANSFORM, black: node.black, white: node.white, gamma: node.gamma },
+          target: out,
+        };
       }
     }
   }

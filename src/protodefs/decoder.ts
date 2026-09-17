@@ -30,7 +30,7 @@ import {
   type PaintkitDefinitionMsg, type VarDefMsg, type VarFieldMsg,
 } from './messages';
 import {
-  applyVarDefOverrides, applyVarFieldOverrides, buildVarDict, parseBool,
+  applyVarDefOverrides, applyVarFieldOverrides, buildVarDict,
   parseInverseRange, parseRange, parseRangeDiv255, parseVec2, texturePublicPath,
   varFieldValue, type VarEntry,
 } from './values';
@@ -162,6 +162,10 @@ function commonTransforms(
   },
   dict: Map<string, VarEntry>,
 ) {
+  const flipRange = (field: VarFieldMsg | undefined): [number, number] => {
+    const range = parseRange(varFieldValue(field, dict), [0, 0]);
+    return range && range.every(Number.isFinite) ? range : [0, 0];
+  };
   return {
     adjustBlack: parseRangeDiv255(varFieldValue(stage.adjust_black, dict), DEFAULTS.adjustBlack),
     adjustOffset: parseRangeDiv255(varFieldValue(stage.adjust_offset, dict), DEFAULTS.adjustOffset),
@@ -170,8 +174,8 @@ function commonTransforms(
     translateU: parseRange(varFieldValue(stage.translate_u, dict), DEFAULTS.translateU) as [number, number],
     translateV: parseRange(varFieldValue(stage.translate_v, dict), DEFAULTS.translateV) as [number, number],
     scaleUV: parseRange(varFieldValue(stage.scale_uv, dict), DEFAULTS.scaleUV) as [number, number],
-    flipU: parseBool(varFieldValue(stage.flip_u, dict)),
-    flipV: parseBool(varFieldValue(stage.flip_v, dict)),
+    flipU: flipRange(stage.flip_u),
+    flipV: flipRange(stage.flip_v),
   };
 }
 
@@ -188,7 +192,8 @@ function resolveNodes(
       const ref = ctx.opByIdx.get(node.operation_template.defindex);
       if (ref) {
         const inlined = resolveNodes(ref.operation_node, ctx, dict, team, textureRefs);
-        for (const c of inlined) out.push(c);
+        if (inlined.length === 1) out.push(inlined[0]);
+        else out.push({ type: 'combine_multiply', rootCopy: true, nodes: inlined });
       }
       continue;
     }
@@ -320,7 +325,7 @@ function resolveOne(
   // so if there is exactly one root node use it directly, else wrap in a passthrough combine.
   let tree: RecipeNode;
   if (nodes.length === 1) tree = nodes[0];
-  else tree = { type: 'combine_multiply', ...DEFAULTS, flipU: false, flipV: false, nodes };
+  else tree = { type: 'combine_multiply', rootCopy: true, nodes };
   return { tree, textureRefs };
 }
 

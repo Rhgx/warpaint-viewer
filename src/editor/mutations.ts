@@ -1,7 +1,7 @@
 import type { ProtoDefKitMessages } from '../protodefs/types';
 import {
   asItem, many, type ItemDataMsg, type ItemMsg, type Many, type OperationNodeMsg, type OperationStageMsg,
-  type CombineStageMsg, type SelectStageMsg, type StickerStageMsg, type TextureStageMsg, type VarDefMsg, type VarFieldMsg,
+  type SelectStageMsg, type StickerStageMsg, type TextureStageMsg, type VarDefMsg, type VarFieldMsg,
 } from '../protodefs/messages';
 
 /** A refused edit is preferable to silently changing a different authored scope. */
@@ -791,14 +791,12 @@ export interface TextureTransformTarget {
   weaponOverridePath?: readonly string[];
 }
 
-type TransformStageMsg = TextureStageMsg | CombineStageMsg;
+const TRANSFORM_STAGE_NAMES = new Set(['texture_lookup']);
 
-const TRANSFORM_STAGE_NAMES = new Set(['texture_lookup', 'combine_multiply', 'combine_add', 'combine_lerp']);
-
-function textureTransformStage(operation: Record<string, unknown>, target: TextureTransformTarget): TransformStageMsg {
+function textureTransformStage(operation: Record<string, unknown>, target: TextureTransformTarget): TextureStageMsg {
   const path = target.stagePath;
   if (path[0] !== 'operation' || !TRANSFORM_STAGE_NAMES.has(path.at(-1) ?? '') || path.at(-2) !== 'stage') {
-    throw new EditorMutationAmbiguityError('This texture transform target does not identify an editable texture or combine stage.');
+    throw new EditorMutationAmbiguityError('This texture transform target does not identify an editable texture stage.');
   }
   let cursor: unknown = operation;
   for (const part of path.slice(1)) {
@@ -814,7 +812,7 @@ function textureTransformStage(operation: Record<string, unknown>, target: Textu
   if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) {
     throw new EditorMutationAmbiguityError('This texture transform stage no longer exists in this operation.');
   }
-  return cursor as TransformStageMsg;
+  return cursor as TextureStageMsg;
 }
 
 function formatTransformNumber(value: number): string {
@@ -897,7 +895,7 @@ export function pushTextureTransformRangeToAllWeapons(
   return next;
 }
 
-/** Writes one mirroring flip field ("a seeded flip is allowed", not "is flipped"). */
+/** Writes one deterministic mirroring flip field. */
 export function setTextureTransformFlip(
   messages: ProtoDefKitMessages,
   target: TextureTransformTarget,
@@ -908,7 +906,7 @@ export function setTextureTransformFlip(
   const next = cloneMessages(messages);
   const stage = textureTransformStage(next.operation, target);
   const existing = stage[field] ?? {};
-  const raw = allowed ? 'true' : 'false';
+  const raw = allowed ? '1' : '0';
   const sourcePath = target.fieldSourcePaths?.[field];
   const written = setSelectFieldValue(next, existing, raw, false, sourcePath, !sourcePath ? target.weaponOverridePath : undefined);
   stage[field] = written;

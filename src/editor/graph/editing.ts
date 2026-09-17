@@ -884,7 +884,7 @@ function parameterLocation(
     case 'combine_multiply':
     case 'combine_lerp':
       owner = raw.stage?.[kind];
-      allowed = ['adjust_black', 'adjust_offset', 'adjust_gamma', 'rotation', 'translate_u', 'translate_v', 'scale_uv', 'flip_u', 'flip_v'].includes(field);
+      allowed = ['adjust_black', 'adjust_offset', 'adjust_gamma'].includes(field);
       break;
     case 'select':
       owner = raw.stage?.select;

@@ -5,14 +5,14 @@
 // Notes on values (pre-transformed by the pipeline, do NOT re-transform):
 //   - adjustBlack / adjustOffset are already divided by 255 (0..1 shader space).
 //   - adjustGamma is already inverted (1/x).
-//   - flipU / flipV mean that a seeded flip is allowed, not that it is forced.
+//   - flipU / flipV retain the parsed integer range. Fixed ranges do not draw.
 //   - select values are raw 0..255 group ids; the shader compares them with the
 //     fxc's 1/16 bucketing (cFac in compositor.cpp).
 
 type Range = [number, number];
 
-// Transform + adjust fields shared by texture_lookup and the combine stages
-// (CMsgPaintKit_Operation_TextureStage / _CombineStage carry the same set).
+// Transform + adjust fields carried by texture_lookup and combine messages.
+// Source parses combine UV fields but ignores them during resolution.
 export interface StageTransform {
   adjustBlack?: Range;
   adjustOffset?: Range; // offset added to the sampled black point to get white
@@ -21,8 +21,8 @@ export interface StageTransform {
   translateU?: Range;
   translateV?: Range;
   scaleUV?: Range;
-  flipU?: boolean;
-  flipV?: boolean;
+  flipU?: Range | boolean;
+  flipV?: Range | boolean;
 }
 
 interface TextureLookupNode extends StageTransform {
@@ -32,11 +32,13 @@ interface TextureLookupNode extends StageTransform {
 }
 
 // Combine stages are n-ary in real data (the engine batches 4 inputs per pass
-// and chains passes for more). Their own transform/adjust fields describe how
-// the combine's OUTPUT is sampled by its parent stage.
+// and chains passes for more). Their level fields apply when the output is
+// sampled by the parent, while their UV fields have no effect.
 export interface CombineNode extends StageTransform {
   type: 'combine_multiply' | 'combine_add' | 'combine_lerp';
   nodes: RecipeNode[]; // multiply/add: 2+, lerp: exactly 3 (c0, c1, selector)
+  /** Synthetic CTCCopyStage used for an operation with multiple root nodes. */
+  rootCopy?: boolean;
 }
 
 // Select is a LEAF: it samples the groups texture directly and emits a 0/1 mask.

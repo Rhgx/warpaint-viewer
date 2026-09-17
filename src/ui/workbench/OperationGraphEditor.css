@@ -11,13 +11,13 @@
 
   /* Stage identity, used by the card stripe, glyph and eyebrow so a stage is
      recognisable while zoomed too far out to read its name. */
-  --graph-kind-texture-lookup: #2d72b6;
-  --graph-kind-select: #8763a7;
-  --graph-kind-combine-add: #a75d28;
-  --graph-kind-combine-multiply: #8d5c2b;
-  --graph-kind-combine-lerp: #2f7c66;
-  --graph-kind-apply-sticker: #9b4c67;
-  --graph-kind-operation-template: #6b747e;
+  --graph-kind-texture-lookup: #5aa7de;
+  --graph-kind-select: #b18ad4;
+  --graph-kind-combine-add: #d99553;
+  --graph-kind-combine-multiply: #cc9152;
+  --graph-kind-combine-lerp: #4fbf9d;
+  --graph-kind-apply-sticker: #dd8098;
+  --graph-kind-operation-template: #97a1ac;
   --graph-kind-invalid: var(--graph-danger);
   --graph-kind-output: var(--graph-accent);
 
@@ -31,18 +31,6 @@
   color: var(--graph-text);
   font-size: 11px;
   outline: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  .operation-graph-editor {
-    --graph-kind-texture-lookup: #5aa7de;
-    --graph-kind-select: #b18ad4;
-    --graph-kind-combine-add: #d99553;
-    --graph-kind-combine-multiply: #cc9152;
-    --graph-kind-combine-lerp: #4fbf9d;
-    --graph-kind-apply-sticker: #dd8098;
-    --graph-kind-operation-template: #97a1ac;
-  }
 }
 
 /* Toolbar ----------------------------------------------------------------- */

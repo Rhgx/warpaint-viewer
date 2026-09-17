@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'vitest';
 import { resolveRecipe } from '../../../src/compositor/resolve';
+import { textureUvMatrix } from '../../../src/compositor/transforms';
 import { advancePaintkitStream, createPaintkitRandomState, resolveRange } from '../../../src/compositor/rng';
 import type { RecipeNode } from '../../../src/compositor/types';
 import {
@@ -249,7 +250,7 @@ test('texture transform scope, normalization and JSON round trip', () => {
   assert.equal(headerVariable(roundTrip).value, '0 360');
 });
 
-test('combine stages can receive and resolve texture transforms', () => {
+test('combine UV fields are neither editable nor applied', () => {
   const messages: ProtoDefKitMessages = {
     operation: {
       header: { defindex: 710 },
@@ -269,17 +270,8 @@ test('combine stages can receive and resolve texture transforms', () => {
 
   const discovered = discoverTextureTransformTargets(messages).targets[0];
   assert.ok(discovered);
-  assert.deepEqual(discovered.target.stagePath, [
-    'operation', 'operation_node', '0', 'stage', 'combine_multiply',
-  ]);
-  assert.deepEqual([discovered.scaleUv.min, discovered.scaleUv.max], [1, 1]);
-  assert.deepEqual(discovered.blockers, []);
-
-  const edited = setTextureTransformRange(messages, discovered.target, 'scale_uv', {
-    mode: 'varies', min: 2, max: 3,
-  });
-  const combine = record(record(record((edited.operation.operation_node as unknown[])[0]).stage).combine_multiply);
-  assert.deepEqual(combine.scale_uv, { string: '2 3' });
+  assert.deepEqual(discovered.target.stagePath, []);
+  assert.deepEqual(discovered.blockers, ['ambiguous-source-stage']);
 
   const recipe: RecipeNode = {
     type: 'combine_multiply',
@@ -294,10 +286,55 @@ test('combine stages can receive and resolve texture transforms', () => {
   };
   const resolved = resolveRecipe(recipe, '123');
   assert.equal(resolved.type, 'combine_multiply');
-  assert.equal(resolved.rotationDeg, 45);
-  assert.equal(resolved.translateU, 0.25);
-  assert.equal(resolved.translateV, 0.5);
-  assert.equal(resolved.scale, 2);
+  assert.equal(resolved.rotationDeg, 0);
+  assert.equal(resolved.translateU, 0);
+  assert.equal(resolved.translateV, 0);
+  assert.equal(resolved.scale, 1);
+});
+
+test('fixed flips consume no draw and use pre-rotation column signs', () => {
+  const seed = '123';
+  const fixed = resolveRecipe({
+    type: 'texture_lookup', texture: 'patterns/fixed', flipU: [1, 1], rotation: [45, 45],
+  }, seed);
+  const unflipped = resolveRecipe({
+    type: 'texture_lookup', texture: 'patterns/plain', flipU: [0, 0], rotation: [45, 45],
+  }, seed);
+  assert.equal(fixed.type, 'texture_lookup');
+  assert.equal(unflipped.type, 'texture_lookup');
+  assert.equal(fixed.flipU, true);
+  assert.equal(fixed.rotationDeg, unflipped.rotationDeg);
+
+  const elements = textureUvMatrix(45, 0, 0, 1, true, false).elements;
+  assert.ok(Math.abs(elements[0] + Math.SQRT1_2) < 1e-6);
+  assert.ok(Math.abs(elements[1] + Math.SQRT1_2) < 1e-6);
+  assert.ok(Math.abs(elements[3] + Math.SQRT1_2) < 1e-6);
+  assert.ok(Math.abs(elements[4] - Math.SQRT1_2) < 1e-6);
+});
+
+test('sticker levels stay on the stage output', () => {
+  const resolved = resolveRecipe({
+    type: 'apply_sticker',
+    stickers: [{ base: 'patterns/sticker' }],
+    adjustBlack: [0.1, 0.1],
+    adjustOffset: [0.7, 0.7],
+    adjustGamma: [1.5, 1.5],
+    nodes: [{ type: 'texture_lookup', texture: 'patterns/base' }],
+  }, '123');
+  assert.equal(resolved.type, 'apply_sticker');
+  assert.equal(resolved.black, 0.1);
+  assert.ok(Math.abs(resolved.white - 0.8) < 1e-12);
+  assert.equal(resolved.gamma, 1.5);
+});
+
+test('a multi-root copy stage does not draw or toggle the random stream', () => {
+  const child: RecipeNode = {
+    type: 'texture_lookup', texture: 'patterns/child', rotation: [0, 360], translateU: [0, 1],
+  };
+  const direct = resolveRecipe(child, '123');
+  const copied = resolveRecipe({ type: 'combine_multiply', rootCopy: true, nodes: [child] }, '123');
+  assert.equal(copied.type, 'combine_multiply');
+  assert.deepEqual(copied.nodes[0], direct);
 });
 
 test('transformless combine stages preserve seeded child texture placement', () => {

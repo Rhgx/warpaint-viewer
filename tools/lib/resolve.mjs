@@ -59,12 +59,6 @@ function parseVec2(str, dflt) {
   return dflt.slice();
 }
 
-function parseBool(str) {
-  if (str == null) return false;
-  const s = String(str).trim().toLowerCase();
-  return s === '1' || s === 'true';
-}
-
 // Convert a raw compositor texture reference (no "materials/" prefix, no ".vtf") into the
 // public recipe path "textures/<path>.webp".
 export function texturePublicPath(ref) {
@@ -154,6 +148,10 @@ function resolveTextureRef(stage, dict, team, field) {
 
 function commonTransforms(stage, dict) {
   const out = {};
+  const flipRange = (field) => {
+    const range = parseRange(varFieldValue(field, dict), [0, 0]);
+    return range.every(Number.isFinite) ? range : [0, 0];
+  };
   out.adjustBlack = parseRangeDiv255(varFieldValue(stage.adjust_black, dict), DEFAULTS.adjustBlack);
   out.adjustOffset = parseRangeDiv255(varFieldValue(stage.adjust_offset, dict), DEFAULTS.adjustOffset);
   out.adjustGamma = parseInverseRange(varFieldValue(stage.adjust_gamma, dict), DEFAULTS.adjustGamma);
@@ -161,8 +159,8 @@ function commonTransforms(stage, dict) {
   out.translateU = parseRange(varFieldValue(stage.translate_u, dict), DEFAULTS.translateU);
   out.translateV = parseRange(varFieldValue(stage.translate_v, dict), DEFAULTS.translateV);
   out.scaleUV = parseRange(varFieldValue(stage.scale_uv, dict), DEFAULTS.scaleUV);
-  out.flipU = parseBool(varFieldValue(stage.flip_u, dict));
-  out.flipV = parseBool(varFieldValue(stage.flip_v, dict));
+  out.flipU = flipRange(stage.flip_u);
+  out.flipV = flipRange(stage.flip_v);
   return out;
 }
 
@@ -174,7 +172,8 @@ function resolveNodes(nodeList, ctx, dict, team, textureRefs) {
       const ref = ctx.opByIdx.get(node.operation_template.defindex);
       if (ref) {
         const inlined = resolveNodes(ref.operation_node, ctx, dict, team, textureRefs);
-        for (const c of inlined) out.push(c);
+        if (inlined.length === 1) out.push(inlined[0]);
+        else out.push({ type: 'combine_multiply', rootCopy: true, nodes: inlined });
       }
       continue;
     }
@@ -276,6 +275,6 @@ export function resolveRecipe(paintkitDef, slotItem, itemDef, wearIdx, team, ctx
   // so if there is exactly one root node use it directly, else wrap in a passthrough combine.
   let tree;
   if (nodes.length === 1) tree = nodes[0];
-  else tree = { type: 'combine_multiply', ...DEFAULTS, flipU: false, flipV: false, nodes };
+  else tree = { type: 'combine_multiply', rootCopy: true, nodes };
   return { tree, textureRefs };
 }

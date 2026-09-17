@@ -385,18 +385,20 @@ function parameter(
   return { address: { field }, meta: PARAMETER_META[field], field: value, primary };
 }
 
-function commonStageParameters(stage: AdjustmentStage | undefined): EditableParameter[] {
+function commonStageParameters(stage: AdjustmentStage | undefined, includeUvTransform = false): EditableParameter[] {
   if (!stage) return [];
   const parameters: EditableParameter[] = [
     parameter('adjust_black', stage.adjust_black),
     parameter('adjust_offset', stage.adjust_offset),
     parameter('adjust_gamma', stage.adjust_gamma),
-    parameter('rotation', 'rotation' in stage ? stage.rotation : undefined),
-    parameter('translate_u', 'translate_u' in stage ? stage.translate_u : undefined),
-    parameter('translate_v', 'translate_v' in stage ? stage.translate_v : undefined),
-    parameter('scale_uv', 'scale_uv' in stage ? stage.scale_uv : undefined),
-    parameter('flip_u', 'flip_u' in stage ? stage.flip_u : undefined),
-    parameter('flip_v', 'flip_v' in stage ? stage.flip_v : undefined),
+    ...(includeUvTransform ? [
+      parameter('rotation', 'rotation' in stage ? stage.rotation : undefined),
+      parameter('translate_u', 'translate_u' in stage ? stage.translate_u : undefined),
+      parameter('translate_v', 'translate_v' in stage ? stage.translate_v : undefined),
+      parameter('scale_uv', 'scale_uv' in stage ? stage.scale_uv : undefined),
+      parameter('flip_u', 'flip_u' in stage ? stage.flip_u : undefined),
+      parameter('flip_v', 'flip_v' in stage ? stage.flip_v : undefined),
+    ] : []),
   ];
   return parameters.filter((entry) => entry.field !== undefined);
 }
@@ -416,7 +418,7 @@ function editableParametersFor(node: OperationGraphNode): readonly EditableParam
         ...(hasTeamSources
           ? [parameter('texture_red', texture.texture_red, true), parameter('texture_blue', texture.texture_blue, true)]
           : []),
-        ...commonStageParameters(texture),
+        ...commonStageParameters(texture, true),
       ];
     }
     case 'select': {

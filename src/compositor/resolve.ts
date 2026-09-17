@@ -67,8 +67,13 @@ export function isIdentityTransform(t: ResolvedTransform): boolean {
 function resolveTextureTransform(node: StageTransform, rng: UniformRandomStream): ResolvedTransform {
   // TextureStage::ComputeRandomValuesThis: optional flips first, followed by UV
   // placement, then Photoshop levels.
-  const flipU = node.flipU ? rng.randomInt(0, 1) !== 0 : false;
-  const flipV = node.flipV ? rng.randomInt(0, 1) !== 0 : false;
+  const resolveFlip = (range: StageTransform['flipU']): boolean => {
+    if (typeof range === 'boolean') return range ? rng.randomInt(0, 1) !== 0 : false;
+    const [low, high] = range ?? [0, 0];
+    return rng.randomInt(Math.trunc(low), Math.trunc(high)) !== 0;
+  };
+  const flipU = resolveFlip(node.flipU);
+  const flipV = resolveFlip(node.flipV);
   const translateU = resolveRange(rng, node.translateU, 0);
   const translateV = resolveRange(rng, node.translateV, 0);
   const rotationDeg = resolveRange(rng, node.rotation, 0);
@@ -90,18 +95,8 @@ function resolveTextureTransform(node: StageTransform, rng: UniformRandomStream)
 }
 
 function resolveCombineTransform(node: StageTransform, rng: UniformRandomStream): ResolvedTransform {
-  const hasUvTransform = node.flipU !== undefined
-    || node.flipV !== undefined
-    || node.translateU !== undefined
-    || node.translateV !== undefined
-    || node.rotation !== undefined
-    || node.scaleUV !== undefined;
-  if (hasUvTransform) return resolveTextureTransform(node, rng);
-
-  // Combine stages without authored UV fields historically consume only their
-  // three levels draws. Consuming the four absent UV defaults shifts every
-  // seeded child transform, which breaks recipes whose alpha-control textures
-  // intentionally share placement with a later paint layer (Ghastly Guns).
+  // CTCCombineStage parses UV fields but only resolves its three level ranges.
+  // Its output record always carries an identity texture matrix.
   const black = resolveRange(rng, node.adjustBlack, 0);
   const offset = resolveRange(rng, node.adjustOffset, 1);
   const gamma = resolveRange(rng, node.adjustGamma, 1);
@@ -133,6 +128,21 @@ function resolveNode(node: RecipeNode, state: PaintkitRandomState): ResolvedNode
     case 'combine_multiply':
     case 'combine_add':
     case 'combine_lerp': {
+      if (node.rootCopy) {
+        return {
+          type: node.type,
+          black: 0,
+          white: 1,
+          gamma: 1,
+          rotationDeg: 0,
+          translateU: 0,
+          translateV: 0,
+          scale: 1,
+          flipU: false,
+          flipV: false,
+          nodes: node.nodes.map((n) => resolveNode(n, state)),
+        };
+      }
       const transform = resolveCombineTransform(node, rng);
       advancePaintkitStream(state);
       return {

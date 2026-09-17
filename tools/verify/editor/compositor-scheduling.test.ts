@@ -124,3 +124,25 @@ test('root levels get an output pass while identity roots avoid the extra draw',
     comp.releaseResult(adjusted);
   } finally { comp.dispose(); }
 });
+
+test('sticker levels apply after the blend', async () => {
+  vi.spyOn(THREE.TextureLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
+    const texture = new THREE.Texture<HTMLImageElement>();
+    queueMicrotask(() => onLoad?.(texture));
+    return texture;
+  });
+  const comp = new Compositor((ref) => ref);
+  const sticker: RecipeNode = {
+    type: 'apply_sticker',
+    stickers: [{ base: 'sticker' }],
+    nodes: [{ type: 'texture_lookup', texture: 'base' }],
+  };
+  try {
+    const plain = await comp.compose(sticker, '0');
+    assert.equal(gpu.render.mock.calls.length, 1);
+    comp.releaseResult(plain);
+    const adjusted = await comp.compose({ ...sticker, adjustGamma: [1.5, 1.5] }, '0');
+    assert.equal(gpu.render.mock.calls.length, 3);
+    comp.releaseResult(adjusted);
+  } finally { comp.dispose(); }
+});

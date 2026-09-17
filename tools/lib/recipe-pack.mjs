@@ -3,8 +3,8 @@
 // A recipe tree carries 9 transform fields (adjustBlack/adjustOffset/adjustGamma/
 // rotation/translateU/translateV/scaleUV/flipU/flipV) on texture_lookup, combine_*
 // and apply_sticker nodes. src/compositor/resolve.ts + rng.ts resolveRange() treat
-// an absent field exactly like its default value (a degenerate [d,d] range still
-// consumes one RNG draw; absent flipU skips the draw exactly like false), so
+// an absent field exactly like its default value (a degenerate [d,d] float range
+// still consumes one RNG draw; a fixed [0,0] flip range consumes none), so
 // dropping default-valued fields is runtime-safe and shrinks the data considerably.
 //
 // A bundle groups every variant of one paintkit into one file:
@@ -19,8 +19,8 @@ const DEFAULTS = {
   translateU: [0, 0],
   translateV: [0, 0],
   scaleUV: [1, 1],
-  flipU: false,
-  flipV: false,
+  flipU: [0, 0],
+  flipV: [0, 0],
 };
 
 function deepEqual(a, b) {

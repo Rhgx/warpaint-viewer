@@ -23,11 +23,11 @@ export function compositorTransformChecks(): CheckResult[] {
       expected: [-1.4, 0.7],
     },
     {
-      name: 'Texture flip applies after rotation',
-      pass: Math.abs(flipped.x - 1.070710678) < 1e-6
-        && Math.abs(flipped.y - 0.212132034) < 1e-6,
+      name: 'Texture flip applies before rotation',
+      pass: Math.abs(flipped.x + 0.212132034) < 1e-6
+        && Math.abs(flipped.y - 0.070710678) < 1e-6,
       got: [flipped.x, flipped.y],
-      expected: [1.070710678, 0.212132034],
+      expected: [-0.212132034, 0.070710678],
     },
   ];
 }

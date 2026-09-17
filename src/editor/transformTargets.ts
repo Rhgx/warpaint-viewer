@@ -1,5 +1,5 @@
 import type { ProtoDefKitMessages, ProtoDefValueTrace } from '../protodefs/types';
-import { many, type CombineStageMsg, type Many, type OperationNodeMsg, type TextureStageMsg, type VarDefMsg, type VarFieldMsg } from '../protodefs/messages';
+import { many, type Many, type OperationNodeMsg, type TextureStageMsg, type VarDefMsg, type VarFieldMsg } from '../protodefs/messages';
 import type { TextureTransformFlipField, TextureTransformRangeField, TextureTransformTarget } from './mutations';
 
 /** Proto defaults for the four range fields (tools/lib/resolve.mjs DEFAULTS, mirrored here for parsing). */
@@ -299,11 +299,9 @@ function buildTarget(
   if (!precedingNode || !precedingPath) return blockedTarget('no-texture-lookup-stage');
   const authoredStage = precedingNode.stage;
   if (!authoredStage) return blockedTarget('ambiguous-source-stage');
-  const stageEntry: readonly [string, TextureStageMsg | CombineStageMsg] | null =
-    authoredStage.texture_lookup ? ['texture_lookup', authoredStage.texture_lookup] :
-    authoredStage.combine_multiply ? ['combine_multiply', authoredStage.combine_multiply] :
-    authoredStage.combine_add ? ['combine_add', authoredStage.combine_add] :
-    authoredStage.combine_lerp ? ['combine_lerp', authoredStage.combine_lerp] : null;
+  const stageEntry: readonly [string, TextureStageMsg] | null = authoredStage.texture_lookup
+    ? ['texture_lookup', authoredStage.texture_lookup]
+    : null;
   if (!stageEntry) return blockedTarget('ambiguous-source-stage');
   const [stageName, transformStage] = stageEntry;
 
@@ -335,7 +333,7 @@ function buildTarget(
       ...(Object.keys(fieldSourcePaths).length > 0 ? { fieldSourcePaths } : {}),
       ...(weaponOverridePath ? { weaponOverridePath } : {}),
     },
-    ...(stageName === 'texture_lookup' ? { textureRef: textureRefOf(transformStage as TextureStageMsg, variables) } : {}),
+    textureRef: textureRefOf(transformStage, variables),
     rotation: rotation.state,
     scaleUv: scaleUv.state,
     translateU: translateU.state,
