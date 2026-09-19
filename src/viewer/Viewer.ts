@@ -756,6 +756,9 @@ export class Viewer {
   private renderFrame = () => {
     this.raf = 0;
     if (this.disposed || document.hidden) return;
+    // Thumbnail viewers share the particle uniform. Restore this drawing buffer's
+    // scale before each frame, even when another viewer resized since our last one.
+    setParticlePointScale(this.canvas.height);
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
     this.lastTime = now;
