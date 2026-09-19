@@ -21,6 +21,7 @@ import { WarpaintList } from './ui/catalog/WarpaintList';
 import { Inspector } from './ui/stage/Inspector';
 import type { ControlsState } from './viewer/controls';
 import { StageToolbar } from './ui/stage/StageToolbar';
+import { FirstPersonControls } from './ui/stage/FirstPersonControls';
 import { LightingPanel } from './ui/stage/LightingPanel';
 import { PanelEdgeToggle } from './ui/common/PanelEdgeToggle';
 import { DefinitionsPrompt } from './ui/workbench/DefinitionsPrompt';
@@ -518,6 +519,7 @@ function MainApp() {
   const seedHistoryRef = useRef<string[]>([]);
 
   const [engineReady, setEngineReady] = useState(false);
+  const [firstPersonEnabled, setFirstPersonEnabled] = useState(false);
   const [environmentReady, setEnvironmentReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedKitId, setSelectedKitId] = useState<number | null>(null);
@@ -2605,6 +2607,8 @@ function MainApp() {
   const stickerPlacementActive = editorTabActive && editorTool === 'sticker' && stickerEditorReady;
   const stickerPartPickingActive = stickerEditingActive && modelPartPickingActive;
   const editorInteractionActive = groupAssignActive || stickerPlacementActive;
+  const firstPersonActive = firstPersonEnabled && !!selectedKit && !!state.weaponKey
+    && state.weaponKey !== 'paintkit_tool' && !editorTabActive && !lightingPanelOpen;
 
   // Keep one global listener for the editor tab while reading current actions
   // from a ref, rather than replacing it after every history-state render.
@@ -4294,6 +4298,7 @@ function MainApp() {
           onWheel={() => setHintDismissed(true)}
         >
           <canvas ref={canvasRef} className="viewer-canvas" />
+          {firstPersonActive && <div className="first-person-input-shield" aria-hidden="true" />}
           <div className="stage-overlay-tl">
             {showStageHeader && selectedKit && (
               <div className="stage-header">
@@ -4657,9 +4662,18 @@ function MainApp() {
       </main>
       <aside className="inspector" id="viewer-controls-panel">
         <Inspector
+          firstPersonActive={firstPersonActive}
+          previewControls={engineReady && viewerRef.current && <FirstPersonControls
+            viewer={viewerRef.current}
+            weaponKey={state.weaponKey}
+            team={state.team}
+            enabled={firstPersonActive}
+            onEnabledChange={setFirstPersonEnabled}
+            disabled={!selectedKit || !state.weaponKey || editorTabActive || lightingPanelOpen}
+          />}
           manifest={data.manifest}
           weaponOptions={weaponOptions}
-          hasTeamTextures={selectedKit?.hasTeamTextures ?? false}
+          hasTeamTextures={firstPersonActive || (selectedKit?.hasTeamTextures ?? false)}
           state={state}
           viewAngle={viewAngleId}
           onChange={patch}

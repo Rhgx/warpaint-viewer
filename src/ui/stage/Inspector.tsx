@@ -129,6 +129,8 @@ function SeedField({
 }
 
 export function Inspector({
+  previewControls,
+  firstPersonActive = false,
   manifest,
   weaponOptions,
   hasTeamTextures,
@@ -143,6 +145,8 @@ export function Inspector({
   onToggleLightingPanel,
   onSelectLight,
 }: {
+  previewControls?: ReactNode;
+  firstPersonActive?: boolean;
   manifest: Manifest;
   weaponOptions: IconOption[];
   hasTeamTextures: boolean;
@@ -253,48 +257,53 @@ export function Inspector({
         </Control>
       </InspectorSection>
 
+      {previewControls}
+
       <InspectorSection title="Camera">
-        <Control label={<><Camera size={12} /><span>View angle</span></>}>
-          <SelectField
-            value={viewAngle}
-            onChange={onViewAngle}
-            options={viewAngleOptions}
-          />
-        </Control>
+        {!firstPersonActive && <>
+          <Control label={<><Camera size={12} /><span>View angle</span></>}>
+            <SelectField
+              value={viewAngle}
+              onChange={onViewAngle}
+              options={viewAngleOptions}
+            />
+          </Control>
 
-        <Control label={<span>Field of view - {state.fov}</span>}>
-          <SliderField
-            value={state.fov}
-            onChange={(fov) => onChange({ fov })}
-            min={30}
-            max={110}
-            step={1}
-            ariaLabel="Field of view"
-          />
-        </Control>
+          <Control label={<span>Field of view - {state.fov}</span>}>
+            <SliderField
+              value={state.fov}
+              onChange={(fov) => onChange({ fov })}
+              min={30}
+              max={110}
+              step={1}
+              ariaLabel="Field of view"
+            />
+          </Control>
 
-        <Control group label={<span>Projection</span>}>
-          <div className="ui-toggle-group" role="group" aria-label="Projection">
-            <button
-              type="button"
-              className="ui-toggle-btn"
-              data-pressed={state.projection === 'perspective' || undefined}
-              aria-pressed={state.projection === 'perspective'}
-              onClick={() => onChange({ projection: 'perspective' })}
-            >
-              Perspective
-            </button>
-            <button
-              type="button"
-              className="ui-toggle-btn"
-              data-pressed={state.projection === 'orthographic' || undefined}
-              aria-pressed={state.projection === 'orthographic'}
-              onClick={() => onChange({ projection: 'orthographic' })}
-            >
-              Orthographic
-            </button>
-          </div>
-        </Control>
+          <Control group label={<span>Projection</span>}>
+            <div className="ui-toggle-group" role="group" aria-label="Projection">
+              <button
+                type="button"
+                className="ui-toggle-btn"
+                data-pressed={state.projection === 'perspective' || undefined}
+                aria-pressed={state.projection === 'perspective'}
+                onClick={() => onChange({ projection: 'perspective' })}
+              >
+                Perspective
+              </button>
+              <button
+                type="button"
+                className="ui-toggle-btn"
+                data-pressed={state.projection === 'orthographic' || undefined}
+                aria-pressed={state.projection === 'orthographic'}
+                onClick={() => onChange({ projection: 'orthographic' })}
+              >
+                Orthographic
+              </button>
+            </div>
+          </Control>
+
+        </>}
 
         <Control label={<span>Screenshot size</span>}>
           <SelectField

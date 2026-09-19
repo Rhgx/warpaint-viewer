@@ -109,6 +109,12 @@ export class InspectControls {
   // available while that interaction is active.
   private advancedCameraAvailable = true;
   private interactionLocked = false;
+  private previewActive = false;
+
+  setPreviewActive(active: boolean): void {
+    this.previewActive = active;
+    if (active) this.setAdvancedCamera(false);
+  }
   private editorSelectionActive = false;
   // Sticker placement reserves ordinary primary drags for its own surfaces.
   // Keep this narrowly scoped: paint editing keeps the familiar orbit gesture.
@@ -599,6 +605,7 @@ export class InspectControls {
   }
 
   private isKeyboardInputBlocked(target: EventTarget | null) {
+    if (this.previewActive) return true;
     if (document.querySelector('[data-camera-input-suspended], [role="dialog"][aria-modal="true"]')) return true;
     if (!(target instanceof HTMLElement)) return false;
     return target.matches('input, textarea, select, [contenteditable="true"]')

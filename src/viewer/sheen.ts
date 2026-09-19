@@ -54,14 +54,21 @@ export async function loadSheenAssets(): Promise<SheenAssets> {
 // weapon's geometry sitting exactly on top of it, and a transform written out
 // by hand rounds differently to the weapon's, which fights the depth test.
 const SHEEN_VERTEX = /* glsl */ `
+#include <common>
+#include <skinning_pars_vertex>
+uniform mat4 uSheenModelTransform;
 varying vec3 vSheenModelPos;
 varying vec3 vSheenWorldNormal;
 varying vec3 vSheenWorldViewVector;
 void main() {
-  vSheenModelPos = position;
-  vSheenWorldNormal = mat3( modelMatrix ) * normal;
-  vSheenWorldViewVector = ( modelMatrix * vec4( position, 1.0 ) ).xyz - cameraPosition;
+  #include <skinbase_vertex>
+  #include <beginnormal_vertex>
+  #include <skinnormal_vertex>
+  vSheenModelPos = ( uSheenModelTransform * vec4( position, 1.0 ) ).xyz;
+  vSheenWorldNormal = mat3( modelMatrix ) * objectNormal;
   #include <begin_vertex>
+  #include <skinning_vertex>
+  vSheenWorldViewVector = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz - cameraPosition;
   #include <project_vertex>
 }
 `;
@@ -120,6 +127,7 @@ void main() {
 export function createSheenMaterial(assets: SheenAssets, side: THREE.Side): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
+      uSheenModelTransform: { value: new THREE.Matrix4() },
       uSheenMap: { value: assets.cubeTexture },
       uSheenMaskFrame: { value: assets.maskTexture },
       uMaskFrames: { value: assets.maskFrames },

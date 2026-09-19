@@ -30,6 +30,21 @@ Select a war paint, choose a supported weapon, and adjust its appearance using t
 
 Preset angles, projection options, field-of-view settings, and image export controls are available under **View**.
 
+The right sidebar's **Preview** section switches between Inspect and **First Person**.
+First Person supports class selection for shared weapons, idle/inspect animations,
+viewmodel FOV, and stock minimized offsets. The play/pause button beside Animation holds the current
+pose while sheen, unusual particles, and emissive materials continue animating.
+The Holy Mackerel also has an optional **Fish Bone Physics** switch, on by default;
+pausing freezes its current bend. Paint, wear, seed, team, lighting, effects, and PNG
+capture use the current selection. Close visual editors before entering First Person.
+Other procedural weapon motion and animation autolayers are not included.
+
+First-person assets load on demand. To refresh them from an extracted sibling
+viewmodel-editor project, run `node tools/models/import-viewmodels.mjs`, optionally
+passing the path to `tf-viewmodel-editor`. The imported subset covers the stock
+warpaint-supported weapons and class arms; running the viewer needs neither that
+project nor a local game install.
+
 Advanced Camera provides bounded free-flight controls inspired by TF2's roaming spectator camera.
 
 ### Custom war paints
