@@ -94,10 +94,14 @@ test.each(['c_minigun', 'c_holymackerel'])('%s materials, paused pose changes, a
   overlayMaterial.addEventListener('dispose', () => { sharedDisposed = true; });
   const configure = vi.spyOn(materialConfig, 'configureTf2Material');
   vi.spyOn(GLTFLoader.prototype, 'loadAsync').mockImplementation(async url => {
-    const bytes = fs.readFileSync(path.join('public', url));
+    assert.ok(url.startsWith(`${import.meta.env.BASE_URL}data/viewmodels/`), 'models use the deployment base path');
+    const bytes = fs.readFileSync(path.join('public', url.slice(import.meta.env.BASE_URL.length)));
     return new GLTFLoader().parseAsync(new Uint8Array(bytes).buffer, '');
   });
-  vi.spyOn(THREE.TextureLoader.prototype, 'loadAsync').mockImplementation(async () => new THREE.Texture());
+  vi.spyOn(THREE.TextureLoader.prototype, 'loadAsync').mockImplementation(async url => {
+    assert.ok(url.startsWith(`${import.meta.env.BASE_URL}data/viewmodels/`), 'textures use the deployment base path');
+    return new THREE.Texture();
+  });
   try {
     await preview.load(manifest.arms[weapon.armsKey], weapon, 'red', paint, paint, materialConfig.createTf2Uniforms(), cubemap);
     if (weaponKey === 'c_minigun') {

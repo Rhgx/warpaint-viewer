@@ -5,7 +5,7 @@ import { configureTf2Material, createTf2Uniforms, type Tf2Uniforms } from './mat
 import { installTf2VertexLit, TF2_VERTEXLIT_CACHE_KEY } from './shaders/vertexlit';
 import { FishBonePhysics, type FishJiggleSettings } from './fishPhysics';
 
-export const VIEWMODEL_DATA = '/data/viewmodels/';
+export const VIEWMODEL_DATA = `${import.meta.env.BASE_URL}data/viewmodels/`;
 interface ViewmodelMaterial extends WeaponMaterial { baseTexture: string | null; animatedWeaponSheen?: boolean }
 export interface ViewmodelAsset {
   model: string;

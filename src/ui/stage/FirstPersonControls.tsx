@@ -39,7 +39,7 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
     if (!active || manifest) return;
     const abort = new AbortController();
     setStatus('loading');
-    fetch('/data/viewmodels/manifest.json', { signal: abort.signal })
+    fetch(`${import.meta.env.BASE_URL}data/viewmodels/manifest.json`, { signal: abort.signal })
       .then(async response => {
         if (!response.ok) throw new Error(`Viewmodel assets could not be loaded (${response.status}).`);
         const data: ViewmodelManifest = await response.json();
