@@ -104,7 +104,7 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
           <SwitchField checked={fishPhysics} onChange={setFishPhysics} ariaLabel="Fish Bone Physics" />
         </Control>}
         <Control className="first-person-fov" label={<><span>Viewmodel FOV</span><span className="first-person-fov-value">{fov}</span></>}>
-          <SliderField min={54} max={120} step={1} value={fov} onChange={setFov} ariaLabel="Viewmodel FOV" />
+          <SliderField min={54} max={120} step={1} value={fov} onChange={setFov} ariaLabel="Viewmodel FOV" markers={[54, 70, 90]} />
         </Control>
         <Control className="first-person-switch-row" label="Minimized Viewmodel">
           <SwitchField checked={minimized} onChange={setMinimized} ariaLabel="Minimized Viewmodel" />

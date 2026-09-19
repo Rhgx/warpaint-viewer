@@ -292,6 +292,7 @@ button {
   border-radius: 2px;
 }
 .ui-slider-thumb {
+  z-index: 1;
   width: 13px;
   height: 13px;
   background: var(--panel);
@@ -300,6 +301,15 @@ button {
 }
 .ui-slider-thumb:hover {
   border-color: var(--accent);
+}
+.ui-slider-marker {
+  position: absolute;
+  top: -2px;
+  width: 1px;
+  height: 8px;
+  background: var(--text-dim);
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 /* ---------- Five-detent wear control ---------- */
