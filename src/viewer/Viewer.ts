@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { FirstPersonPreview, ViewmodelAsset, ViewmodelWeapon } from './firstPerson';
 import { getPreset, LEGACY_PAINTKIT_ICON_LIGHTING_ID } from './lighting';
 import {
   CUSTOM_LIGHTING_ID,
@@ -245,6 +246,91 @@ function compareStickerGizmoChartScores(left: StickerGizmoChartScore, right: Sti
 // Interaction is handled by InspectControls (model rotates, camera stays fixed,
 // like the in-game inspect panel). The model never moves on its own.
 export class Viewer {
+  private firstPerson: FirstPersonPreview | null = null;
+  private pendingFirstPerson: FirstPersonPreview | null = null;
+  private firstPersonToken = 0;
+
+  async showFirstPerson(arms: ViewmodelAsset, weapon: ViewmodelWeapon, team: 'red' | 'blu'): Promise<void> {
+    this.clearFirstPerson();
+    const token = this.firstPersonToken;
+    const { FirstPersonPreview } = await import('./firstPerson');
+    if (token !== this.firstPersonToken || this.disposed) return;
+    const preview = new FirstPersonPreview();
+    this.pendingFirstPerson = preview;
+    try {
+      await preview.load(arms, weapon, team, this.material, this.lensMaterial, this.tf2Uniforms, this.envMap);
+      if (token !== this.firstPersonToken || this.disposed) { preview.dispose(); return; }
+      this.pendingFirstPerson = null;
+      this.firstPerson = preview;
+      this.scene.add(preview.root);
+      preview.setOverlay('sheen', this.sheenId !== 'none' ? this.sheenMaterial : null);
+      preview.setOverlay('emissive', this.emissiveEnabled ? this.emissiveMaterial : null);
+      this.activeUnusual?.notifyTeleport();
+      this.controls.setPreviewActive(true);
+      this.invalidate();
+    } catch (error) {
+      preview.dispose();
+      if (this.pendingFirstPerson === preview) this.pendingFirstPerson = null;
+      throw error;
+    }
+  }
+
+  clearFirstPerson(): void {
+    this.firstPersonToken++;
+    this.pendingFirstPerson?.dispose();
+    this.pendingFirstPerson = null;
+    this.firstPerson?.dispose();
+    this.firstPerson = null;
+    this.activeUnusual?.notifyTeleport();
+    this.controls.setPreviewActive(false);
+    this.invalidate();
+  }
+
+  configureFirstPerson(fov: number, minimized: boolean, animation: string, paused = false, fishPhysics = false): void {
+    this.activeUnusual?.notifyTeleport();
+    this.firstPerson?.setPlayback(paused, fishPhysics);
+    this.firstPerson?.setView(fov, minimized);
+    this.firstPerson?.setAnimation(animation);
+    this.invalidate();
+  }
+
+  private previewChildren: THREE.Object3D[] = [];
+  private previewVisibility: boolean[] = [];
+  private previewLightPosition = new THREE.Vector3();
+  private previewLightRotation = new THREE.Quaternion();
+
+  private renderFirstPerson(): void {
+    const preview = this.firstPerson;
+    if (!preview) return;
+    const aspect = (this.canvas.clientWidth || 1) / (this.canvas.clientHeight || 1);
+    if (preview.camera.aspect !== aspect) {
+      preview.camera.aspect = aspect;
+      preview.camera.updateProjectionMatrix();
+    }
+    const visibility = this.previewVisibility;
+    const children = this.previewChildren;
+    this.previewLightPosition.copy(this.lightGroup.position);
+    this.previewLightRotation.copy(this.lightGroup.quaternion);
+    try {
+      // Particles stay at the scene root so they can trail the animated attachment.
+      for (let i = 0; i < this.scene.children.length; i++) {
+        const child = this.scene.children[i];
+        children[i] = child;
+        visibility[i] = child.visible;
+        child.visible = child === preview.root || child === this.lightGroup || child === this.activeUnusual?.object;
+      }
+      this.sheenMaterial?.uniforms.uSheenModelTransform.value.copy(preview.weaponBindInverse);
+      this.lightGroup.position.set(0, 0, 0);
+      this.lightGroup.quaternion.identity();
+      this.renderer.render(this.scene, preview.camera);
+    } finally {
+      this.sheenMaterial?.uniforms.uSheenModelTransform.value.identity();
+      for (let i = 0; i < children.length; i++) children[i].visible = visibility[i];
+      children.length = 0;
+      this.lightGroup.position.copy(this.previewLightPosition);
+      this.lightGroup.quaternion.copy(this.previewLightRotation);
+    }
+  }
   readonly renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
@@ -673,7 +759,7 @@ export class Viewer {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
     this.lastTime = now;
-    const controlsAnimating = this.controls.update(dt);
+    const controlsAnimating = !this.firstPerson && this.controls.update(dt);
     // The pass reads $time, which only moves the picture when the scroll
     // vector is non-zero. Wrapped so a long session cannot drift the sample
     // out of the range where float precision still resolves texels.
@@ -683,6 +769,17 @@ export class Viewer {
       const period = Math.max(1 / Math.max(Math.abs(scroll.x), Math.abs(scroll.y)), 1);
       this.emissiveElapsed = (this.emissiveElapsed + dt) % period;
       this.emissiveMaterial.uniforms.uEmissiveTime.value = this.emissiveElapsed;
+    }
+    if (this.firstPerson) {
+      this.firstPerson.update(dt);
+      this.updateSheenAnimation();
+      if (this.activeUnusual) {
+        this.activeUnusual.updateAnchor(this.firstPerson.weaponAnchor);
+        this.activeUnusual.update(dt);
+      }
+      this.renderFirstPerson();
+      this.scheduleNextFrame(this.firstPerson.animationPlaying || !!this.activeUnusual || emissiveAnimating, this.firstPerson.overlays.sheen);
+      return;
     }
     // Inspect lights are authored in camera-local panel space, so follow the
     // active camera through zoom and advanced-camera movement. Other presets
@@ -721,9 +818,13 @@ export class Viewer {
       this.updateStickerGizmoOverlay();
       this.renderer.render(this.scene, this.camera);
     }
-    const sheenActive = this.sheenId !== 'none' && this.sheenMaterial !== null && this.sheenMeshes.length > 0;
-    const sheenAnimating = sheenActive && this.sheenMeshes.some((mesh) => mesh.visible);
-    if (controlsAnimating || sheenAnimating || emissiveAnimating || this.activeUnusual) this.invalidate();
+    this.scheduleNextFrame(!!controlsAnimating || emissiveAnimating || !!this.activeUnusual, this.sheenMeshes);
+  };
+
+  private scheduleNextFrame(animated: boolean, sheenMeshes: readonly THREE.Mesh[]): void {
+    const sheenActive = this.sheenId !== 'none' && this.sheenMaterial !== null && sheenMeshes.length > 0;
+    const sheenAnimating = sheenActive && sheenMeshes.some((mesh) => mesh.visible);
+    if (animated || sheenAnimating) this.invalidate();
     else if (sheenActive) {
       const cycle = SHEEN_SWEEP_SECONDS + SHEEN_PAUSE_SECONDS;
       this.sheenWakeTimer = window.setTimeout(() => {
@@ -731,7 +832,7 @@ export class Viewer {
         this.invalidate();
       }, (cycle - this.sheenElapsed % cycle) * 1000);
     }
-  };
+  }
 
   // Derives the ortho camera from the perspective camera every frame: same
   // position/orientation, with a frustum sized to match the apparent scale at
@@ -1156,6 +1257,7 @@ export class Viewer {
   }
 
   private teardownSheenMeshes() {
+    this.firstPerson?.setOverlay('sheen', null);
     for (const mesh of this.sheenMeshes) this.centerGroup.remove(mesh);
     this.sheenMeshes = [];
   }
@@ -1163,6 +1265,7 @@ export class Viewer {
   private rebuildSheenMeshes() {
     this.teardownSheenMeshes();
     if (this.sheenId === 'none' || !this.sheenMaterial) return;
+    this.firstPerson?.setOverlay('sheen', this.sheenMaterial);
     for (let i = 0; i < this.meshes.length; i++) {
       if (this.meshIsLens[i]) continue;
       const mesh = new THREE.Mesh(this.meshes[i].geometry, this.sheenMaterial);
@@ -1193,7 +1296,7 @@ export class Viewer {
   // Sweep timing (CProxyAnimatedWeaponSheen): 60 mask frames at 25 fps, then
   // invisible for 5s with no killstreak owner (the inspect case), then loop.
   private updateSheenAnimation() {
-    if (this.sheenId === 'none' || !this.sheenMaterial || this.sheenMeshes.length === 0) return;
+    if (this.sheenId === 'none' || !this.sheenMaterial) return;
     const now = performance.now();
     this.sheenElapsed += (now - this.sheenLastTime) / 1000;
     this.sheenLastTime = now;
@@ -1201,6 +1304,7 @@ export class Viewer {
     const tInCycle = this.sheenElapsed % cycle;
     const sweeping = tInCycle < SHEEN_SWEEP_SECONDS;
     for (const mesh of this.sheenMeshes) mesh.visible = sweeping;
+    for (const mesh of this.firstPerson?.overlays.sheen ?? []) mesh.visible = sweeping;
     if (sweeping) {
       this.sheenMaterial.uniforms.uFrame.value = Math.min(SHEEN_MASK_FRAMES - 1, Math.floor(SHEEN_FRAMERATE * tInCycle));
     }
@@ -2654,7 +2758,9 @@ export class Viewer {
       this.scene.background = null;
       setParticlePointScale(height);
       this.renderer.setRenderTarget(target);
-      if (this.projectionMode === 'orthographic') {
+      if (this.firstPerson) {
+        this.renderFirstPerson();
+      } else if (this.projectionMode === 'orthographic') {
         this.syncOrthoCamera();
         this.renderer.render(this.scene, this.orthoCamera);
       } else {
@@ -2880,6 +2986,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
   }
 
   private teardownEmissiveMeshes() {
+    this.firstPerson?.setOverlay('emissive', null);
     for (const mesh of this.emissiveMeshes) this.centerGroup.remove(mesh);
     this.emissiveMeshes = [];
   }
@@ -2887,6 +2994,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
   private rebuildEmissiveMeshes() {
     this.teardownEmissiveMeshes();
     if (!this.emissiveEnabled || !this.emissiveMaterial) return;
+    this.firstPerson?.setOverlay('emissive', this.emissiveMaterial);
     for (let i = 0; i < this.meshes.length; i++) {
       if (this.meshIsLens[i]) continue;
       const mesh = new THREE.Mesh(this.meshes[i].geometry, this.emissiveMaterial);
@@ -3080,6 +3188,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
 
   dispose() {
     this.disposed = true;
+    this.clearFirstPerson();
     window.clearTimeout(this.sheenWakeTimer);
     cancelAnimationFrame(this.raf);
     this.canvas.removeEventListener('pointermove', this.onStickerGizmoPointerMove);

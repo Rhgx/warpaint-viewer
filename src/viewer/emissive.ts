@@ -27,10 +27,14 @@ export const EMISSIVE_DEFAULT_STRENGTH = 1;
 // together first and rounds differently to the weapon's two matrix by vector
 // products.
 const EMISSIVE_VERTEX = /* glsl */ `
+#include <common>
+#include <skinning_pars_vertex>
 varying vec2 vEmissiveUv;
 void main() {
   vEmissiveUv = uv;
+  #include <skinbase_vertex>
   #include <begin_vertex>
+  #include <skinning_vertex>
   #include <project_vertex>
 }
 `;
