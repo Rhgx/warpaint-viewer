@@ -303,6 +303,7 @@ export function SliderField({
   max,
   step,
   ariaLabel,
+  markers,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -311,6 +312,7 @@ export function SliderField({
   max: number;
   step: number;
   ariaLabel?: string;
+  markers?: readonly number[];
 }) {
   return (
     <Slider.Root
@@ -325,6 +327,8 @@ export function SliderField({
       <Slider.Control className="ui-slider-control">
         <Slider.Track className="ui-slider-track">
           <Slider.Indicator className="ui-slider-indicator" />
+          {markers?.map(marker => <span key={marker} className="ui-slider-marker" aria-hidden="true"
+            style={{ left: `${(marker - min) / (max - min) * 100}%` }} title={`${marker}°`} />)}
           <Slider.Thumb className="ui-slider-thumb" aria-label={ariaLabel} />
         </Slider.Track>
       </Slider.Control>

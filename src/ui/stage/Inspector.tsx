@@ -277,6 +277,7 @@ export function Inspector({
               max={110}
               step={1}
               ariaLabel="Field of view"
+              markers={[54, 70, 90]}
             />
           </Control>
 
