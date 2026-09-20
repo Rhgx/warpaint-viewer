@@ -29,9 +29,14 @@ export type ParticleIndex = Record<string, ParticleIndexEntry>;
 
 // Per-weapon attachment control points, in GEOMETRY space (the same space as
 // the glb vertex positions: raw, uncentered). v2 entries carry the attachment
-// orientation ({pos, quat}); v1 entries are bare [x, y, z] positions and get
-// the fixed Source-to-glb axis convention as their frame.
-export type AttachmentEntryJson = [number, number, number] | { pos: [number, number, number]; quat: [number, number, number, number] };
+// orientation ({pos, quat}); v3 also retains the authored parent bone. v1
+// entries are bare [x, y, z] positions and get the fixed Source-to-glb axis
+// convention as their frame.
+export type AttachmentEntryJson = [number, number, number] | {
+  pos: [number, number, number];
+  quat: [number, number, number, number];
+  bone?: string;
+};
 export type AttachmentsJson = Record<string, Record<string, AttachmentEntryJson>>;
 export interface HitboxJson {
   min: [number, number, number];
@@ -155,6 +160,7 @@ export const DEFAULT_ATTACHMENT_QUAT = new THREE.Quaternion().setFromRotationMat
 export interface AttachmentAnchor {
   pos: THREE.Vector3;
   quat: THREE.Quaternion;
+  bone?: string;
 }
 
 export function parseAttachmentEntry(entry: AttachmentEntryJson | undefined): AttachmentAnchor | null {
@@ -168,5 +174,5 @@ export function parseAttachmentEntry(entry: AttachmentEntryJson | undefined): At
   const quat = Array.isArray(q) && q.length >= 4
     ? new THREE.Quaternion(q[0], q[1], q[2], q[3]).normalize()
     : DEFAULT_ATTACHMENT_QUAT.clone();
-  return { pos: new THREE.Vector3(p[0], p[1], p[2]), quat };
+  return { pos: new THREE.Vector3(p[0], p[1], p[2]), quat, bone: entry.bone };
 }

@@ -7,6 +7,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FirstPersonPreview, bindViewmodelBones, mergeViewmodelBones, viewmodelFov, type ViewmodelManifest } from '../../../src/viewer/firstPerson';
 import * as materialConfig from '../../../src/viewer/materialConfig';
 import { FishBonePhysics } from '../../../src/viewer/fishPhysics';
+import { firstPersonAnimationGroups } from '../../../src/ui/stage/firstPersonAnimations';
 
 interface GlbDocument {
   materials: { name: string }[];
@@ -41,7 +42,7 @@ function uvSet(file: string, paintMaterials: string[]): Set<string> {
   return result;
 }
 
-test('first-person assets cover every paintable weapon, retain UVs, and contain their idle/inspect clips', () => {
+test('first-person assets cover every paintable weapon, retain UVs, and contain every selectable animation', () => {
   const data = path.resolve('public/data');
   const catalog: { weapons: { key: string; model: string }[] } = JSON.parse(fs.readFileSync(path.join(data, 'manifest.json'), 'utf8'));
   const manifest: ViewmodelManifest = JSON.parse(fs.readFileSync(path.join(data, 'viewmodels/manifest.json'), 'utf8'));
@@ -57,12 +58,24 @@ test('first-person assets cover every paintable weapon, retain UVs, and contain 
       assert.ok(arms.skins?.length, `${view.armsKey} has a skeleton`);
       const names = new Set(arms.animations?.map(clip => clip.name));
       assert.ok(names.has(view.activity), `${view.weaponKey}/${view.class} idle exists`);
-      for (const [key, clips] of Object.entries(view.clips)) {
-        if (!key.includes('INSPECT')) continue;
-        for (const clip of Array.isArray(clips) ? clips : [clips]) assert.ok(names.has(clip), `${view.class}: ${clip} exists`);
-      }
+      const options = firstPersonAnimationGroups(view.clips).flatMap(group => group.options);
+      assert.deepEqual(options.map(option => option.clip).sort(), Object.values(view.clips).flat().sort(), 'every variant is selectable');
+      assert.equal(new Set(options.map(option => option.id)).size, options.length, 'selection identities are unique');
+      for (const option of options) assert.ok(names.has(option.clip), `${view.weaponKey}/${view.class}: ${option.clip} exists`);
     }
   }
+});
+
+test('animation groups label alternate takes and retain unfamiliar activities', () => {
+  const groups = firstPersonAnimationGroups({
+    ACT_VM_HITCENTER: ['swing_a', 'swing_b', 'swing_c'],
+    ACT_VM_IDLE: 'idle',
+    ACT_NEW_ACTION: ['new_action'],
+  });
+  assert.deepEqual(groups.map(group => group.label), ['Basic', 'Attack', 'Other']);
+  assert.deepEqual(groups[1].options.map(option => option.label), ['Swing 1', 'Swing 2', 'Swing 3']);
+  assert.equal(groups[2].options[0].label, 'New Action');
+  assert.deepEqual(firstPersonAnimationGroups({}), []);
 });
 
 test('bonemerge follows named arms bones and preserves unmatched child offsets', () => {
@@ -80,7 +93,7 @@ test('bonemerge follows named arms bones and preserves unmatched child offsets',
   assert.ok(Math.abs(viewmodelFov(90) - 73.739795) < 0.00001);
 });
 
-test.each(['c_minigun', 'c_holymackerel', 'c_knife'])('%s materials, paused pose changes, and overlays remain correct', async weaponKey => {
+test.each(['c_minigun', 'c_gatling_gun', 'c_tomislav', 'c_holymackerel', 'c_knife'])('%s materials, paused pose changes, and overlays remain correct', async weaponKey => {
   const manifest: ViewmodelManifest = JSON.parse(fs.readFileSync('public/data/viewmodels/manifest.json', 'utf8'));
   const weapon = manifest.weapons.find(entry => entry.weaponKey === weaponKey);
   assert.ok(weapon);
@@ -110,16 +123,32 @@ test.each(['c_minigun', 'c_holymackerel', 'c_knife'])('%s materials, paused pose
     }
     if (weaponKey === 'c_knife') {
       const attachments = JSON.parse(fs.readFileSync('public/data/effects/attachments.json', 'utf8')) as
-        Record<string, Record<string, { pos: [number, number, number] }>>;
-      const attachment = new THREE.Vector3(...attachments.c_knife.unusual_0.pos);
+        Record<string, Record<string, { pos: [number, number, number]; quat: [number, number, number, number]; bone: string }>>;
+      const knifeAttachments = Array.from({ length: 6 }, (_, index) => attachments.c_knife[`unusual_${index}`]);
+      assert.ok(knifeAttachments.every(entry => entry.bone === 'vm_weapon_bone_1'), 'knife unusual attachments retain their authored bone');
+      const attachment = {
+        pos: new THREE.Vector3(...knifeAttachments[0].pos),
+        quat: new THREE.Quaternion(...knifeAttachments[0].quat),
+        bone: knifeAttachments[0].bone,
+      };
       const transform = new THREE.Matrix4();
       assert.equal(preview.resolveUnusualAnchor(0, attachment, transform), true);
-      const before = attachment.clone().applyMatrix4(transform);
+      const before = attachment.pos.clone().applyMatrix4(transform);
       const inspect = weapon.clips.ACT_VM_INSPECT_IDLE;
       preview.setAnimation(Array.isArray(inspect) ? inspect[0] : inspect);
       preview.update(0.5);
       preview.resolveUnusualAnchor(0, attachment, transform);
-      assert.ok(before.distanceTo(attachment.clone().applyMatrix4(transform)) > 1, 'attachment follows the animated knife bone');
+      assert.ok(before.distanceTo(attachment.pos.clone().applyMatrix4(transform)) > 1, 'attachment follows the animated knife bone');
+      const attachmentTransforms = knifeAttachments.map((entry, index) => {
+        const resolved = new THREE.Matrix4();
+        assert.equal(preview.resolveUnusualAnchor(index, {
+          pos: new THREE.Vector3(...entry.pos),
+          quat: new THREE.Quaternion(...entry.quat),
+          bone: entry.bone,
+        }, resolved), true);
+        return resolved;
+      });
+      assert.ok(attachmentTransforms.every(entry => entry.equals(attachmentTransforms[0])), 'all knife attachment points follow the authored blade bone');
     }
     preview.setOverlay('sheen', overlayMaterial);
     const bones: THREE.Bone[] = [];
@@ -161,6 +190,50 @@ test.each(['c_minigun', 'c_holymackerel', 'c_knife'])('%s materials, paused pose
     assert.equal(overlay.skeleton, source.skeleton);
     assert.ok(overlay.getVertexPosition(0, new THREE.Vector3()).distanceTo(source.getVertexPosition(0, new THREE.Vector3())) < 1e-9);
     assert.deepEqual(preview.weaponAnchor.elements, overlay.skeleton.bones[0].matrixWorld.elements);
+    const arms = preview.root.children[0].children[0];
+    assert.equal(arms.visible, true, 'hands are visible by default');
+    preview.setAppearance(false, false);
+    assert.equal(arms.visible, false, 'hands can be hidden independently');
+    const hiddenPose = matrices();
+    preview.update(0.2);
+    assert.notDeepEqual(matrices(), hiddenPose, 'hidden arms still animate the weapon');
+    assert.equal(source.visible, true, 'hiding hands does not hide the weapon');
+    preview.setAppearance(true, false);
+    assert.equal(arms.visible, true, 'hands can be restored');
+    assert.equal(preview.hasSpinningBarrel, ['c_minigun', 'c_gatling_gun'].includes(weaponKey));
+    if (preview.hasSpinningBarrel) {
+      preview.setAnimation(weapon.activity);
+      const barrel = overlay.skeleton.bones.find(bone => bone.name === 'barrel');
+      assert.ok(barrel);
+      const relativeBarrel = () => preview.weaponAnchor.clone().invert().multiply(barrel.matrixWorld);
+      const stopped = relativeBarrel();
+      preview.setAppearance(true, true);
+      preview.update(0.1);
+      assert.ok(!relativeBarrel().equals(stopped), 'spin rotates the barrel relative to the weapon');
+      const rotationBetween = (a: THREE.Matrix4, b: THREE.Matrix4) =>
+        new THREE.Quaternion().setFromRotationMatrix(a).angleTo(new THREE.Quaternion().setFromRotationMatrix(b));
+      const firstStep = relativeBarrel();
+      preview.update(0.1);
+      assert.ok(rotationBetween(firstStep, relativeBarrel()) > rotationBetween(stopped, firstStep), 'barrel accelerates gradually');
+      for (let i = 0; i < 40; i++) preview.update(0.1);
+      const fullSpeed = relativeBarrel();
+      preview.update(0.1);
+      assert.ok(Math.abs(rotationBetween(fullSpeed, relativeBarrel()) - 2) < 1e-5, 'speed caps at 20 radians per second');
+      preview.setPlayback(true, false);
+      const frozen = barrel.matrixWorld.clone();
+      preview.update(0.2);
+      assert.ok(barrel.matrixWorld.equals(frozen), 'pause freezes barrel spinning');
+      preview.setAppearance(true, false);
+      preview.setPlayback(false, false);
+      const coasting = relativeBarrel();
+      preview.update(0.1);
+      const coastStep = rotationBetween(coasting, relativeBarrel());
+      assert.ok(coastStep > 0 && coastStep < 2, 'disabling spin decelerates instead of stopping immediately');
+      for (let i = 0; i < 40; i++) preview.update(0.1);
+      const stoppedAgain = relativeBarrel();
+      preview.update(0.1);
+      assert.ok(relativeBarrel().elements.every((n, i) => Math.abs(n - stoppedAgain.elements[i]) < 1e-5), 'barrel settles to a complete stop');
+    }
     preview.dispose();
     assert.equal(sharedDisposed, false, 'preview disposal does not dispose shared pass materials');
     assert.equal(paintDisposed, false, 'preview disposal preserves the inspect paint material');

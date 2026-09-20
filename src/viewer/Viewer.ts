@@ -286,9 +286,12 @@ export class Viewer {
     this.invalidate();
   }
 
-  configureFirstPerson(fov: number, minimized: boolean, animation: string, paused = false, fishPhysics = false): void {
+  get firstPersonHasSpinningBarrel(): boolean { return this.firstPerson?.hasSpinningBarrel ?? false; }
+
+  configureFirstPerson(fov: number, minimized: boolean, animation: string, paused = false, fishPhysics = false, showHands = true, spinBarrel = false): void {
     this.activeUnusual?.notifyTeleport();
     this.firstPerson?.setPlayback(paused, fishPhysics);
+    this.firstPerson?.setAppearance(showHands, spinBarrel);
     this.firstPerson?.setView(fov, minimized);
     this.firstPerson?.setAnimation(animation);
     this.invalidate();

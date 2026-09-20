@@ -82,6 +82,10 @@ export class FirstPersonPreview {
   private paused = false;
   private fishPhysicsEnabled = false;
   private fishPhysics: FishBonePhysics | null = null;
+  private spinBarrel = false;
+  private barrelAngle = 0;
+  private barrelVelocity = 0;
+  private barrelRotation = new THREE.Matrix4();
 
   constructor() {
     // Source x forward, y left, z up -> Three x right, y up, z back.
@@ -222,6 +226,19 @@ export class FirstPersonPreview {
     this.root.updateMatrixWorld(true);
     if (this.bones.length < 2) return;
     mergeViewmodelBones(this.boneBindings[0]);
+    const barrel = this.hasSpinningBarrel ? this.boneMaps[1].get('barrel') : undefined;
+    if (barrel) {
+      const targetVelocity = this.spinBarrel ? 20 : 0;
+      // Source approaches the target by 0.1 per update. Use a 60 Hz equivalent
+      // acceleration so the preview's ramp does not depend on render FPS.
+      this.barrelVelocity += THREE.MathUtils.clamp(targetVelocity - this.barrelVelocity, -6 * animationDelta, 6 * animationDelta);
+      this.barrelAngle = (this.barrelAngle + animationDelta * this.barrelVelocity) % (Math.PI * 2);
+      barrel.matrixWorld.multiply(this.barrelRotation.makeRotationZ(this.barrelAngle));
+      // Bonemerge has already posed the skeleton; carry children with the barrel.
+      barrel.traverse(child => {
+        if (child !== barrel && child.parent) child.matrixWorld.multiplyMatrices(child.parent.matrixWorld, child.matrix);
+      });
+    }
     if (this.fishPhysicsEnabled) this.fishPhysics?.update(animationDelta);
     for (let i = 1; i < this.boneBindings.length; i++) mergeViewmodelBones(this.boneBindings[i]);
   }
@@ -237,36 +254,28 @@ export class FirstPersonPreview {
 
   get animationPlaying(): boolean { return !this.paused; }
 
+  get hasSpinningBarrel(): boolean { return this.weapon?.class === 'heavy' && !!this.boneMaps[1]?.has('barrel'); }
+
+  setAppearance(showHands: boolean, spinBarrel: boolean): void {
+    const arms = this.pose.children[0];
+    if (arms) arms.visible = showHands;
+    if (this.spinBarrel !== spinBarrel) this.poseDirty = true;
+    this.spinBarrel = spinBarrel;
+  }
+
   get weaponAnchor(): THREE.Matrix4 { return this.bones[1]?.[0]?.matrixWorld ?? this.root.matrixWorld; }
 
-  readonly resolveUnusualAnchor: AttachmentTransformResolver = (index, position, target) => {
+  readonly resolveUnusualAnchor: AttachmentTransformResolver = (index, attachment, target) => {
     let binding = this.unusualBindings.get(index);
     if (!binding) {
-      let nearestDistance = Infinity;
+      if (!attachment.bone) return false;
       for (const mesh of this.weaponMeshes) {
-        const positions = mesh.geometry.getAttribute('position');
-        const indices = mesh.geometry.getAttribute('skinIndex');
-        const weights = mesh.geometry.getAttribute('skinWeight');
-        if (!positions || !indices || !weights) continue;
-        for (let vertex = 0; vertex < positions.count; vertex++) {
-          const dx = positions.getX(vertex) - position.x;
-          const dy = positions.getY(vertex) - position.y;
-          const dz = positions.getZ(vertex) - position.z;
-          const distance = dx * dx + dy * dy + dz * dz;
-          if (distance >= nearestDistance) continue;
-          let strongest = 0;
-          let strongestWeight = weights.getX(vertex);
-          if (weights.getY(vertex) > strongestWeight) { strongest = 1; strongestWeight = weights.getY(vertex); }
-          if (weights.getZ(vertex) > strongestWeight) { strongest = 2; strongestWeight = weights.getZ(vertex); }
-          if (weights.getW(vertex) > strongestWeight) strongest = 3;
-          const boneIndex = strongest === 0 ? indices.getX(vertex)
-            : strongest === 1 ? indices.getY(vertex)
-              : strongest === 2 ? indices.getZ(vertex) : indices.getW(vertex);
+        const boneIndex = mesh.skeleton.bones.findIndex(bone => bone.name === attachment.bone);
+        if (boneIndex >= 0) {
           const bone = mesh.skeleton.bones[boneIndex];
           const inverse = mesh.skeleton.boneInverses[boneIndex];
-          if (!bone || !inverse) continue;
-          nearestDistance = distance;
-          binding = { mesh, bone, inverse };
+          if (bone && inverse) binding = { mesh, bone, inverse };
+          break;
         }
       }
       if (!binding) return false;

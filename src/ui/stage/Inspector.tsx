@@ -29,10 +29,10 @@ const SCREENSHOT_SIZE_OPTIONS = [
 
 // A collapsible group of controls. Expanded by default; each section keeps
 // its own local, unpersisted open/closed state.
-function InspectorSection({ title, children }: { title: string; children: ReactNode }) {
+export function InspectorSection({ title, children, className = '' }: { title: string; children: ReactNode; className?: string }) {
   const [open, setOpen] = useState(true);
   return (
-    <div className="inspector-section">
+    <div className={`inspector-section ${className}`}>
       <button
         type="button"
         className="inspector-section-header"

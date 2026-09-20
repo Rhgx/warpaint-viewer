@@ -3,7 +3,7 @@
 // staging/weapon_models.json, expressed in the same coordinate frame as the published GLB
 // geometry (see rootFrameTransforms() in tools/models/lib/mdl.mjs).
 //
-// Produces: public/data/effects/attachments.json (format v2)
+// Produces: public/data/effects/attachments.json (format v3)
 //           public/data/effects/hitboxes.json
 //   {
 //     "<weaponKey>": {
@@ -209,7 +209,11 @@ export function extractAttachments() {
     for (const attachment of mdl.attachments) {
       if (!(attachment.name.startsWith('unusual') || attachment.name === 'muzzle')) continue;
       const { pos, quat } = attachmentFrame(mdl, xform, attachment);
-      entry[attachment.name] = { pos: round(pos), quat: round(quat) };
+      entry[attachment.name] = {
+        pos: round(pos),
+        quat: round(quat),
+        bone: mdl.bones[attachment.localbone].name,
+      };
     }
     result[key] = entry;
     const rootToGeometry = mdl.bones[0]?.poseToBone;

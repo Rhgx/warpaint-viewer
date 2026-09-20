@@ -1,8 +1,17 @@
 .first-person-input-shield { position: absolute; inset: 0; z-index: 2; }
-.first-person-animation-row { display: flex; align-items: flex-end; gap: 6px; }
-.first-person-animation-row .control { flex: 1; min-width: 0; }
-.first-person-playback { width: var(--control-h); height: var(--control-h); flex-shrink: 0; justify-content: center; padding: 0; }
+.first-person-animation-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 12px; color: var(--text); }
+.first-person-animation-count { margin-left: 4px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.first-person-playback { height: 26px; gap: 5px; padding: 0 8px; font-size: 11px; }
 .first-person-playback:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.first-person-animation-list { max-height: 260px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 4px; padding: 8px; }
+.first-person-animation-group + .first-person-animation-group { margin-top: 10px; }
+.first-person-animation-group-label { margin-bottom: 4px; color: var(--text-dim); font-size: 10px; }
+.first-person-animation-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.first-person-animation-option { min-height: 28px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 3px; background: transparent; color: var(--text); font: inherit; font-size: 11px; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.first-person-animation-option:hover:not(:disabled) { border-color: var(--border-strong); background: var(--panel); }
+.first-person-animation-option[aria-pressed='true'] { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.first-person-animation-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.first-person-animation-option:disabled { opacity: 0.5; cursor: default; }
 .first-person-controls .control.first-person-switch-row { flex-direction: row; align-items: center; justify-content: space-between; min-height: var(--control-h); cursor: pointer; }
 .first-person-switch-row .control-label { font-size: 12px; text-transform: none; letter-spacing: normal; color: var(--text); }
 .first-person-controls .ui-switch { width: 30px; height: 16px; border-radius: 8px; flex-shrink: 0; }

@@ -18,7 +18,7 @@ export { setParticlePointScale } from './sim';
 
 export type AttachmentTransformResolver = (
   index: number,
-  position: THREE.Vector3,
+  attachment: AttachmentAnchor,
   target: THREE.Matrix4,
 ) => boolean;
 
@@ -119,7 +119,7 @@ export function createUnusualEffect(
   let anchorDirty = true;
 
   const updateAnchoredCp = (index: number, cp: ControlPoint) => {
-    if (cp.anchor && resolveAttachment?.(index, cp.anchor.pos, attachmentMatrix)) {
+    if (cp.anchor && resolveAttachment?.(index, cp.anchor, attachmentMatrix)) {
       attachmentQuat.setFromRotationMatrix(attachmentMatrix);
       cp.setFromAnchorMatrix(attachmentMatrix, attachmentQuat);
     } else {
