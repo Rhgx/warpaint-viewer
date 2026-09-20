@@ -4,6 +4,7 @@ import type { WeaponMaterial, Team } from '../data/types';
 import { configureTf2Material, createTf2Uniforms, type Tf2Uniforms } from './materialConfig';
 import { installTf2VertexLit, TF2_VERTEXLIT_CACHE_KEY } from './shaders/vertexlit';
 import { FishBonePhysics, type FishJiggleSettings } from './fishPhysics';
+import type { AttachmentTransformResolver } from './particles';
 
 export const VIEWMODEL_DATA = `${import.meta.env.BASE_URL}data/viewmodels/`;
 interface ViewmodelMaterial extends WeaponMaterial { baseTexture: string | null; animatedWeaponSheen?: boolean }
@@ -64,6 +65,8 @@ export class FirstPersonPreview {
   readonly weaponBindInverse = new THREE.Matrix4();
   readonly overlays: Record<'sheen' | 'emissive', THREE.SkinnedMesh[]> = { sheen: [], emissive: [] };
   private paintMeshes: THREE.SkinnedMesh[] = [];
+  private weaponMeshes: THREE.SkinnedMesh[] = [];
+  private unusualBindings = new Map<number, { mesh: THREE.SkinnedMesh; bone: THREE.Bone; inverse: THREE.Matrix4 }>();
   private pose = new THREE.Group();
   private gltfs: GLTF[] = [];
   private materials: THREE.Material[] = [];
@@ -161,6 +164,7 @@ export class FirstPersonPreview {
           return result;
         });
         object.material = Array.isArray(object.material) ? materials : materials[0];
+        if (index === 1 && object instanceof THREE.SkinnedMesh) this.weaponMeshes.push(object);
         if (index === 1 && object instanceof THREE.SkinnedMesh && materials.every(material => material === paint)) {
           this.paintMeshes.push(object);
         }
@@ -234,6 +238,43 @@ export class FirstPersonPreview {
   get animationPlaying(): boolean { return !this.paused; }
 
   get weaponAnchor(): THREE.Matrix4 { return this.bones[1]?.[0]?.matrixWorld ?? this.root.matrixWorld; }
+
+  readonly resolveUnusualAnchor: AttachmentTransformResolver = (index, position, target) => {
+    let binding = this.unusualBindings.get(index);
+    if (!binding) {
+      let nearestDistance = Infinity;
+      for (const mesh of this.weaponMeshes) {
+        const positions = mesh.geometry.getAttribute('position');
+        const indices = mesh.geometry.getAttribute('skinIndex');
+        const weights = mesh.geometry.getAttribute('skinWeight');
+        if (!positions || !indices || !weights) continue;
+        for (let vertex = 0; vertex < positions.count; vertex++) {
+          const dx = positions.getX(vertex) - position.x;
+          const dy = positions.getY(vertex) - position.y;
+          const dz = positions.getZ(vertex) - position.z;
+          const distance = dx * dx + dy * dy + dz * dz;
+          if (distance >= nearestDistance) continue;
+          let strongest = 0;
+          let strongestWeight = weights.getX(vertex);
+          if (weights.getY(vertex) > strongestWeight) { strongest = 1; strongestWeight = weights.getY(vertex); }
+          if (weights.getZ(vertex) > strongestWeight) { strongest = 2; strongestWeight = weights.getZ(vertex); }
+          if (weights.getW(vertex) > strongestWeight) strongest = 3;
+          const boneIndex = strongest === 0 ? indices.getX(vertex)
+            : strongest === 1 ? indices.getY(vertex)
+              : strongest === 2 ? indices.getZ(vertex) : indices.getW(vertex);
+          const bone = mesh.skeleton.bones[boneIndex];
+          const inverse = mesh.skeleton.boneInverses[boneIndex];
+          if (!bone || !inverse) continue;
+          nearestDistance = distance;
+          binding = { mesh, bone, inverse };
+        }
+      }
+      if (!binding) return false;
+      this.unusualBindings.set(index, binding);
+    }
+    target.copy(binding.bone.matrixWorld).multiply(binding.inverse).multiply(binding.mesh.bindMatrix);
+    return true;
+  };
 
   setOverlay(pass: 'sheen' | 'emissive', material: THREE.Material | null): void {
     for (const mesh of this.overlays[pass]) mesh.removeFromParent();

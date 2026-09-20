@@ -80,7 +80,7 @@ test('bonemerge follows named arms bones and preserves unmatched child offsets',
   assert.ok(Math.abs(viewmodelFov(90) - 73.739795) < 0.00001);
 });
 
-test.each(['c_minigun', 'c_holymackerel'])('%s materials, paused pose changes, and overlays remain correct', async weaponKey => {
+test.each(['c_minigun', 'c_holymackerel', 'c_knife'])('%s materials, paused pose changes, and overlays remain correct', async weaponKey => {
   const manifest: ViewmodelManifest = JSON.parse(fs.readFileSync('public/data/viewmodels/manifest.json', 'utf8'));
   const weapon = manifest.weapons.find(entry => entry.weaponKey === weaponKey);
   assert.ok(weapon);
@@ -107,6 +107,19 @@ test.each(['c_minigun', 'c_holymackerel'])('%s materials, paused pose changes, a
     if (weaponKey === 'c_minigun') {
       assert.equal(configure.mock.calls.length, 2, 'both Heavy hand materials are configured');
       assert.ok(configure.mock.calls.every(([params]) => !params.detailTexture), 'sheen masks do not darken the hand albedo');
+    }
+    if (weaponKey === 'c_knife') {
+      const attachments = JSON.parse(fs.readFileSync('public/data/effects/attachments.json', 'utf8')) as
+        Record<string, Record<string, { pos: [number, number, number] }>>;
+      const attachment = new THREE.Vector3(...attachments.c_knife.unusual_0.pos);
+      const transform = new THREE.Matrix4();
+      assert.equal(preview.resolveUnusualAnchor(0, attachment, transform), true);
+      const before = attachment.clone().applyMatrix4(transform);
+      const inspect = weapon.clips.ACT_VM_INSPECT_IDLE;
+      preview.setAnimation(Array.isArray(inspect) ? inspect[0] : inspect);
+      preview.update(0.5);
+      preview.resolveUnusualAnchor(0, attachment, transform);
+      assert.ok(before.distanceTo(attachment.clone().applyMatrix4(transform)) > 1, 'attachment follows the animated knife bone');
     }
     preview.setOverlay('sheen', overlayMaterial);
     const bones: THREE.Bone[] = [];

@@ -16,12 +16,18 @@ export { setParticlePointScale } from './sim';
 // CEconEntity::UpdateSingleParticleSystem), which is what makes the effects
 // lag and swirl when the weapon moves.
 
+export type AttachmentTransformResolver = (
+  index: number,
+  position: THREE.Vector3,
+  target: THREE.Matrix4,
+) => boolean;
+
 export interface UnusualEffect {
   object: THREE.Object3D;
   // Re-anchors control points from the weapon's current world transform
   // (centerGroup.matrixWorld); called by the Viewer every frame before
   // update(dt).
-  updateAnchor(matrix: THREE.Matrix4): void;
+  updateAnchor(matrix: THREE.Matrix4, resolveAttachment?: AttachmentTransformResolver): void;
   update(dt: number): void;
   // Flags the next update() as following an instant transform snap (a
   // view-angle preset or reset), so it rigidly carries every alive particle
@@ -107,7 +113,19 @@ export function createUnusualEffect(
   const dynamicCps: ControlPoint[] = [];
   const anchorMatrix = new THREE.Matrix4();
   const anchorQuat = new THREE.Quaternion();
+  const attachmentMatrix = new THREE.Matrix4();
+  const attachmentQuat = new THREE.Quaternion();
+  let resolveAttachment: AttachmentTransformResolver | undefined;
   let anchorDirty = true;
+
+  const updateAnchoredCp = (index: number, cp: ControlPoint) => {
+    if (cp.anchor && resolveAttachment?.(index, cp.anchor.pos, attachmentMatrix)) {
+      attachmentQuat.setFromRotationMatrix(attachmentMatrix);
+      cp.setFromAnchorMatrix(attachmentMatrix, attachmentQuat);
+    } else {
+      cp.setFromAnchorMatrix(anchorMatrix, anchorQuat);
+    }
+  };
 
   // Teleport handling: a view-angle preset or reset moves the weapon's whole
   // transform in a single frame. Left alone, ControlPoint.beginFrame would
@@ -143,7 +161,7 @@ export function createUnusualEffect(
             ?? parseAttachmentEntry(weaponAttachments.unusual_0)
             ?? { pos: fallbackAnchor.pos.clone(), quat: fallbackAnchor.quat.clone() };
           cp = new ControlPoint(anchor);
-          cp.setFromAnchorMatrix(anchorMatrix, anchorQuat);
+          updateAnchoredCp(index, cp);
           // Anchored CPs are created lazily on first use, which happens
           // mid-tick (after this frame's beginFrame pass): prime the
           // prev-frame state so same-tick Movement Lock sees zero motion.
@@ -200,9 +218,10 @@ export function createUnusualEffect(
 
   return {
     object: group,
-    updateAnchor(matrix: THREE.Matrix4) {
+    updateAnchor(matrix: THREE.Matrix4, resolver?: AttachmentTransformResolver) {
       anchorMatrix.copy(matrix);
       anchorQuat.setFromRotationMatrix(matrix);
+      resolveAttachment = resolver;
       anchorDirty = true;
     },
     notifyTeleport() {
@@ -211,7 +230,7 @@ export function createUnusualEffect(
     update(dt: number) {
       if (disposed || !root) return;
       if (anchorDirty) {
-        for (const cp of anchoredCps.values()) cp.setFromAnchorMatrix(anchorMatrix, anchorQuat);
+        for (const [index, cp] of anchoredCps) updateAnchoredCp(index, cp);
         anchorDirty = false;
       }
 

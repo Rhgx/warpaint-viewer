@@ -777,7 +777,7 @@ export class Viewer {
       this.firstPerson.update(dt);
       this.updateSheenAnimation();
       if (this.activeUnusual) {
-        this.activeUnusual.updateAnchor(this.firstPerson.weaponAnchor);
+        this.activeUnusual.updateAnchor(this.firstPerson.weaponAnchor, this.firstPerson.resolveUnusualAnchor);
         this.activeUnusual.update(dt);
       }
       this.renderFirstPerson();
