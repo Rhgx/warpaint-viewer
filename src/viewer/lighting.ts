@@ -15,6 +15,7 @@ export interface LightingPreset {
   ambientBasis?: (camera?: THREE.PerspectiveCamera) => THREE.Matrix3;
   background: number;
   backplate?: string;
+  environmentMap?: readonly string[];
   exposure?: number;
   spotFalloff?: number;
 }
@@ -217,6 +218,7 @@ function ambientProbeBackground(sourceCube: readonly (readonly number[])[]): num
 const mapPreset = (id: keyof typeof BSP_MAP_LIGHTING): LightingPreset => {
   const source = BSP_MAP_LIGHTING[id];
   const isLocal = source.focusDistance > 0 && source.sampleOrigin !== null;
+  const cubemapRoot = `${import.meta.env.BASE_URL}data/env/map-cubemaps/${source.map}/${source.cubemapOrigin.join('_')}`;
   return {
     id,
     label: source.label,
@@ -229,6 +231,8 @@ const mapPreset = (id: keyof typeof BSP_MAP_LIGHTING): LightingPreset => {
     // Source SDK 2013's default mat_autoexposure_max. An isolated weapon
     // against sky converges near this end of TF2's 0.5-2.0 HDR range.
     exposure: 2,
+    // This is the nearest real env_cubemap to the map lighting sample point.
+    environmentMap: ['px', 'nx', 'py', 'ny', 'pz', 'nz'].map((face) => `${cubemapRoot}/${face}.png`),
     ambientCube: sourceAmbientCube(source.ambientProbe.cube),
     ambientBasis: (camera) => sourceNormalBasis(source.captureAngles as SourceVector, camera),
     build: (camera) => isLocal

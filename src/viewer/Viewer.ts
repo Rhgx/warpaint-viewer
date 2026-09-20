@@ -390,10 +390,13 @@ export class Viewer {
   private lensNormalTexture: THREE.Texture | null = null;
   private meshes: THREE.Mesh[] = [];
   private envMap: THREE.CubeTexture;
+  private editorEnvMap: THREE.CubeTexture;
   private defaultEnvMap: THREE.CubeTexture;
+  private mapEnvMap: THREE.CubeTexture | null = null;
   private customEnvMap: THREE.CubeTexture | null = null;
   private backplateTexture: THREE.Texture | null = null;
   private backplateLoadToken = 0;
+  private environmentLoadToken = 0;
   private envReady: Promise<void>;
   private modelLoader = new ModelLoader();
   private texLoader = new THREE.TextureLoader();
@@ -584,6 +587,7 @@ export class Viewer {
     this.lightEditor.setRig(this.customLightingRig);
 
     this.envMap = makeEnvCube(0x9fb8d6, 0x40382c);
+    this.editorEnvMap = this.envMap;
     this.defaultEnvMap = this.envMap;
     this.lensMaterial.envMap = this.envMap;
     this.material = new THREE.MeshPhongMaterial({
@@ -613,14 +617,10 @@ export class Viewer {
     this.envReady = new Promise<void>((resolve) => {
       loadEditorEnvCube((texture) => {
         if (this.disposed) { texture.dispose(); resolve(); return; }
-        this.envMap.dispose();
-        this.envMap = texture;
-        this.defaultEnvMap = texture;
-        this.material.envMap = texture;
-        this.material.needsUpdate = true;
-        this.lensMaterial.envMap = texture;
-        this.lensMaterial.needsUpdate = true;
-        this.invalidate();
+        const previous = this.editorEnvMap;
+        this.editorEnvMap = texture;
+        if (previous !== texture && previous !== this.mapEnvMap && previous !== this.customEnvMap) previous.dispose();
+        if (!this.mapEnvMap) this.setDefaultEnvMap(texture);
         resolve();
       }, () => {
         console.warn('[warpaint-viewer] TF2 editor cubemap unavailable; using fallback');
@@ -960,6 +960,7 @@ export class Viewer {
     }
     const preset = getPreset(presetId);
     this.activeLightingPresetId = preset.id;
+    this.loadPresetEnvMap(preset.environmentMap);
     this.legacyInspectOpacity.value = preset.id === 'inspect-legacy'
       || preset.id === LEGACY_PAINTKIT_ICON_LIGHTING_ID ? 1 : 0;
     this.syncMaterialRimLight();
@@ -1014,6 +1015,7 @@ export class Viewer {
   }
 
   private applyCustomLighting(): void {
+    this.loadPresetEnvMap(undefined);
     this.legacyInspectOpacity.value = 0;
     this.lightGroup.position.set(0, 0, 0);
     this.lightGroup.quaternion.identity();
@@ -1030,6 +1032,42 @@ export class Viewer {
     this.scene.background = new THREE.Color(0x1c1f24);
     this.scene.backgroundIntensity = 1;
     this.invalidate();
+  }
+
+  private setDefaultEnvMap(texture: THREE.CubeTexture): void {
+    this.defaultEnvMap = texture;
+    this.lensMaterial.envMap = texture;
+    this.lensMaterial.needsUpdate = true;
+    if (!this.customEnvMap) this.setMaterialEnvMap(texture);
+    else this.invalidate();
+  }
+
+  private loadPresetEnvMap(urls: readonly string[] | undefined): void {
+    const token = ++this.environmentLoadToken;
+    if (!urls) {
+      this.mapEnvMap?.dispose();
+      this.mapEnvMap = null;
+      this.setDefaultEnvMap(this.editorEnvMap);
+      return;
+    }
+
+    new THREE.CubeTextureLoader().loadAsync([...urls]).then((texture) => {
+      if (this.disposed || token !== this.environmentLoadToken) {
+        texture.dispose();
+        return;
+      }
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.needsUpdate = true;
+      this.mapEnvMap?.dispose();
+      this.mapEnvMap = texture;
+      this.setDefaultEnvMap(texture);
+    }).catch(() => {
+      if (this.disposed || token !== this.environmentLoadToken) return;
+      this.mapEnvMap?.dispose();
+      this.mapEnvMap = null;
+      this.setDefaultEnvMap(this.editorEnvMap);
+      console.warn('[warpaint-viewer] Map cubemap unavailable; using the editor cubemap');
+    });
   }
 
   private applyCustomLightingSettings(): void {
@@ -3253,7 +3291,10 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     this.detailTexture?.dispose();
     this.emissiveMaterial?.dispose();
     for (const texture of this.emissiveTextures) texture.dispose();
+    this.environmentLoadToken++;
     this.customEnvMap?.dispose();
+    if (this.mapEnvMap && this.mapEnvMap !== this.defaultEnvMap) this.mapEnvMap.dispose();
+    if (this.editorEnvMap !== this.defaultEnvMap && this.editorEnvMap !== this.mapEnvMap) this.editorEnvMap.dispose();
     this.defaultEnvMap.dispose();
     for (const cullable of this.cullableGeometries) cullable.dispose();
     this.cullableGeometries = [];

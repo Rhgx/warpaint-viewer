@@ -20,6 +20,11 @@ export const BSP_MAP_LIGHTING = {
       0,
       364
     ],
+    "cubemapOrigin": [
+      0,
+      0,
+      341
+    ],
     "ambientProbe": {
       "source": "LUMP_LEAF_AMBIENT_LIGHTING_HDR",
       "position": [
@@ -129,6 +134,11 @@ export const BSP_MAP_LIGHTING = {
       -4.29442,
       160.25
     ],
+    "cubemapOrigin": [
+      510,
+      0,
+      152
+    ],
     "ambientProbe": {
       "source": "LUMP_LEAF_AMBIENT_LIGHTING_HDR",
       "position": [
@@ -237,6 +247,11 @@ export const BSP_MAP_LIGHTING = {
       -473.3204666154512,
       3280.0503560427633,
       -65.111
+    ],
+    "cubemapOrigin": [
+      -469,
+      3186,
+      -107
     ],
     "ambientProbe": {
       "source": "LUMP_LEAF_AMBIENT_LIGHTING_HDR",
@@ -386,6 +401,11 @@ export const BSP_MAP_LIGHTING = {
       0,
       0,
       104.25
+    ],
+    "cubemapOrigin": [
+      0,
+      0,
+      96
     ],
     "ambientProbe": {
       "source": "LUMP_LEAF_AMBIENT_LIGHTING_HDR",
