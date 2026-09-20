@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test, vi } from 'vitest';
 import * as THREE from 'three';
+import { createTf2Uniforms } from '../../../src/viewer/materialConfig';
 import { Viewer } from '../../../src/viewer/Viewer';
 
 test('transform-only previews reuse the mask and rebuild when the selection changes', () => {
@@ -70,4 +71,46 @@ test('sheen resumes at the next sweep after its invisible pause', () => {
     Reflect.apply(update, viewer, []);
     assert.equal(viewer.sheenMaterial.uniforms.uFrame.value, 6);
   } finally { now.mockRestore(); }
+});
+
+test('late composition retains the sticker base until editing ends', () => {
+  const base = new THREE.Texture();
+  const composed = new THREE.Texture();
+  const material = new THREE.MeshPhongMaterial();
+  const viewer = {
+    material, composedMap: null, stickerEditorBaseMap: null, invalidate: vi.fn(),
+    applyVisibleMap() { Reflect.apply(Reflect.get(Viewer.prototype, 'applyVisibleMap'), this, []); },
+  };
+  try {
+    Reflect.apply(Viewer.prototype.setStickerEditorBaseMap, viewer, [base]);
+    Reflect.apply(Viewer.prototype.setMap, viewer, [composed]);
+    assert.equal(material.map, base);
+    Reflect.apply(Viewer.prototype.setStickerEditorBaseMap, viewer, [null]);
+    assert.equal(material.map, composed);
+  } finally { base.dispose(); composed.dispose(); material.dispose(); }
+});
+
+test('lit sticker movement reuses diffuse and linear specular textures', async () => {
+  const texture = new THREE.Texture();
+  const specular = new THREE.Texture();
+  const uniforms = createTf2Uniforms();
+  const viewer = {
+    tf2Uniforms: uniforms, stickerPreviewLoadToken: 0, disposed: false,
+    stickerPreviewUrl: null, stickerPreviewSpecUrl: null, stickerPreviewMode: null,
+    stickerPreviewTexture: null, stickerPreviewSpecTexture: null,
+    teardownStickerPreviewMeshes: vi.fn(), invalidate: vi.fn(), clearStickerPreview: vi.fn(),
+    texLoader: { loadAsync: vi.fn(async (url: string) => url === 'spec' ? specular : texture) },
+  };
+  const load = () => Reflect.apply(Reflect.get(Viewer.prototype, 'loadLitStickerPreviewTextures'), viewer, ['base', 'spec']);
+  try {
+    load();
+    await vi.waitFor(() => assert.equal(uniforms.uTf2StickerPreview.value, 1));
+    assert.equal(uniforms.uTf2StickerMap.value, texture);
+    assert.equal(uniforms.uTf2StickerSpecMap.value, specular);
+    assert.equal(uniforms.uTf2StickerHasSpec.value, 1);
+    assert.equal(specular.colorSpace, THREE.NoColorSpace);
+    load();
+    assert.equal(viewer.texLoader.loadAsync.mock.calls.length, 2, 'moving the sticker does not reload textures');
+    assert.equal(viewer.clearStickerPreview.mock.calls.length, 0);
+  } finally { texture.dispose(); specular.dispose(); }
 });

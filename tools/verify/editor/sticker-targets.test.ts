@@ -36,18 +36,6 @@ import { buildResolveCtx } from '../../../src/protodefs/resolve';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const implementation = {
-  applyImplicitStickerSpecs,
-  buildResolveCtx,
-  decodeProtoDefs,
-  discoverStickerPlacementTargets,
-  addStickerStages,
-  extractKitMessages,
-  moveStickerStages,
-  removeStickerStages,
-  resolveKitRecipeWithProvenance,
-  setStickerDestQuad,
-};
 
 test('sticker placement discovery and mutation', () => {
 
@@ -60,7 +48,7 @@ const implicitSpecRecipe: Extract<RecipeNode, { type: 'apply_sticker' }> = {
   nodes: [{ type: 'texture_lookup', texture: 'textures/patterns/surface.webp' }],
 };
 assert.equal(
-  implementation.applyImplicitStickerSpecs(
+  applyImplicitStickerSpecs(
     implicitSpecRecipe,
     (reference) => reference === 'textures/patterns/reported_sticker_s.webp',
   ),
@@ -184,7 +172,7 @@ function decodedFor(messages: ProtoDefKitMessages): DecodedContainer {
   const fixture = fixtureDefinition(messages.definition);
   const fixtureOperationMessage = fixtureOperation(messages.operation);
   return {
-    ctx: implementation.buildResolveCtx([fixtureOperationMessage], [itemDefinition], []),
+    ctx: buildResolveCtx([fixtureOperationMessage], [itemDefinition], []),
     kitsByDefindex: new Map([[901, { def: fixture, slots: [
       { item: fixture.blackbox, itemDef: itemDefinition, weaponKey: 'blackbox' },
       { item: fixture.scattergun, itemDef: itemDefinition, weaponKey: 'scattergun' },
@@ -193,13 +181,13 @@ function decodedFor(messages: ProtoDefKitMessages): DecodedContainer {
   };
 }
 function resolve(messages: ProtoDefKitMessages, weaponKey = 'blackbox') {
-  const result = implementation.resolveKitRecipeWithProvenance(decodedFor(messages), 901, weaponKey, 'red', 0);
+  const result = resolveKitRecipeWithProvenance(decodedFor(messages), 901, weaponKey, 'red', 0);
   assert.ok(result, 'fixture should resolve through the production decoder');
   return result;
 }
 
 const original: FixtureMessages = structuredClone({ definition, operation });
-const targets = implementation.discoverStickerPlacementTargets(original, resolve(original));
+const targets = discoverStickerPlacementTargets(original, resolve(original));
 assert.equal(targets.length, 2, 'direct nested sticker stages should retain deterministic depth-first occurrences');
 const first = targets[0];
 assert.deepEqual(first.occurrences, [0], 'an ordinary sticker owns its single authored occurrence');
@@ -213,13 +201,13 @@ assert.equal(first.stickers[0].spec.authoredValue, 'stickers/authored_spec');
 assert.equal(first.stickers[0].spec.resolvedValue, 'stickers/weapon_spec');
 assert.equal(targets[1].editable, true, 'literal corner fields should be editable too');
 
-const duplicated = implementation.addStickerStages(
+const duplicated = addStickerStages(
   original,
   { stagePaths: first.stagePaths },
   first.quad!,
   'stickers/new_artwork',
 );
-const duplicatedTargets = implementation.discoverStickerPlacementTargets(duplicated, resolve(duplicated));
+const duplicatedTargets = discoverStickerPlacementTargets(duplicated, resolve(duplicated));
 assert.equal(duplicatedTargets.length, 3, 'duplicating a sticker adds an independent apply_sticker stage');
 assert.deepEqual(duplicatedTargets[1].quad, first.quad, 'the duplicate starts at the selected sticker placement');
 assert.notEqual(
@@ -231,27 +219,27 @@ assert.equal(duplicatedTargets[1].stickers[0].base.resolvedValue, 'stickers/new_
 assert.equal(duplicatedTargets[1].canMoveEarlier, true);
 
 const shiftedDuplicateQuad: StickerQuad = { tl: [0.3, 0.25], tr: [0.7, 0.25], bl: [0.3, 0.75] };
-const shiftedDuplicate = implementation.setStickerDestQuad(
+const shiftedDuplicate = setStickerDestQuad(
   duplicated,
   duplicatedTargets[1].target,
   shiftedDuplicateQuad,
 );
-const movedEarlier = implementation.moveStickerStages(
+const movedEarlier = moveStickerStages(
   shiftedDuplicate,
-  { stagePaths: implementation.discoverStickerPlacementTargets(shiftedDuplicate, resolve(shiftedDuplicate))[1].stagePaths },
+  { stagePaths: discoverStickerPlacementTargets(shiftedDuplicate, resolve(shiftedDuplicate))[1].stagePaths },
   -1,
 );
 assert.deepEqual(
-  implementation.discoverStickerPlacementTargets(movedEarlier, resolve(movedEarlier))[0].quad,
+  discoverStickerPlacementTargets(movedEarlier, resolve(movedEarlier))[0].quad,
   shiftedDuplicateQuad,
   'reordering swaps the complete authored sticker stage',
 );
-const withoutDuplicate = implementation.removeStickerStages(
+const withoutDuplicate = removeStickerStages(
   movedEarlier,
-  { stagePaths: implementation.discoverStickerPlacementTargets(movedEarlier, resolve(movedEarlier))[0].stagePaths },
+  { stagePaths: discoverStickerPlacementTargets(movedEarlier, resolve(movedEarlier))[0].stagePaths },
 );
 assert.equal(
-  implementation.discoverStickerPlacementTargets(withoutDuplicate, resolve(withoutDuplicate)).length,
+  discoverStickerPlacementTargets(withoutDuplicate, resolve(withoutDuplicate)).length,
   2,
   'removing a sticker deletes its authored stage',
 );
@@ -264,15 +252,15 @@ const soleStickerWrapper: FixtureMessages = structuredClone({ definition, operat
     operation_node: { stage: { texture_lookup: { texture: { string: 'patterns/surface' } } } },
   } } },
 } });
-const soleTarget = implementation.discoverStickerPlacementTargets(soleStickerWrapper, resolve(soleStickerWrapper))[0];
-const withoutSoleSticker = implementation.removeStickerStages(
+const soleTarget = discoverStickerPlacementTargets(soleStickerWrapper, resolve(soleStickerWrapper))[0];
+const withoutSoleSticker = removeStickerStages(
   soleStickerWrapper,
   { stagePaths: soleTarget.stagePaths },
 );
 const promotedSurface = fixtureOperation(withoutSoleSticker.operation).operation_node;
 assert.ok(promotedSurface && !Array.isArray(promotedSurface));
 assert.equal(
-  implementation.discoverStickerPlacementTargets(withoutSoleSticker, resolve(withoutSoleSticker)).length,
+  discoverStickerPlacementTargets(withoutSoleSticker, resolve(withoutSoleSticker)).length,
   0,
   'removing the sole sticker deletes its authored stage',
 );
@@ -293,11 +281,11 @@ const stickerWrapperWithSibling: FixtureMessages = structuredClone({ definition,
     } } },
   ],
 } });
-const siblingTarget = implementation.discoverStickerPlacementTargets(
+const siblingTarget = discoverStickerPlacementTargets(
   stickerWrapperWithSibling,
   resolve(stickerWrapperWithSibling),
 )[0];
-const withoutSiblingSticker = implementation.removeStickerStages(
+const withoutSiblingSticker = removeStickerStages(
   stickerWrapperWithSibling,
   { stagePaths: siblingTarget.stagePaths },
 );
@@ -312,7 +300,7 @@ const duplicatedWear = structuredClone(original);
 const duplicateCombine = fixtureStickerCombine(duplicatedWear.operation);
 const duplicateNodes = requiredArray(duplicateCombine.operation_node, 'Fixture multiply nodes');
 duplicateNodes.push(structuredClone(duplicateNodes[0]));
-const logicalWearTargets = implementation.discoverStickerPlacementTargets(duplicatedWear, resolve(duplicatedWear));
+const logicalWearTargets = discoverStickerPlacementTargets(duplicatedWear, resolve(duplicatedWear));
 assert.equal(logicalWearTargets.length, 2, 'wear-branch copies must not appear as separate logical stickers');
 assert.deepEqual(
   logicalWearTargets[0].occurrences,
@@ -321,7 +309,7 @@ assert.deepEqual(
 );
 
 const movedQuad: StickerQuad = { tl: [0.4, 0.2], tr: [0.9, 0.4], bl: [0.2, 0.8] };
-const moved = implementation.setStickerDestQuad(original, first.target, movedQuad);
+const moved = setStickerDestQuad(original, first.target, movedQuad);
 assert.equal(requiredArray(original.definition.header.variables, 'Definition variables')[3]?.value, '0 0', 'placement mutation must never mutate its input');
 assert.deepEqual(
   requiredArray(fixtureDefinition(moved.definition).header.variables, 'Definition variables')
@@ -335,9 +323,9 @@ assert.deepEqual(
   ['0.4 0.2', '0.9 0.4', '0.2 0.8'],
   'an edited placement must write only the active weapon slot',
 );
-const movedTarget = implementation.discoverStickerPlacementTargets(moved, resolve(moved))[0];
+const movedTarget = discoverStickerPlacementTargets(moved, resolve(moved))[0];
 assert.deepEqual(movedTarget.quad, movedQuad, 'production re-resolution must preserve the moved quad over weapon overrides');
-const otherWeaponTarget = implementation.discoverStickerPlacementTargets(moved, resolve(moved, 'scattergun'))[0];
+const otherWeaponTarget = discoverStickerPlacementTargets(moved, resolve(moved, 'scattergun'))[0];
 assert.deepEqual(
   otherWeaponTarget.quad,
   { tl: [0.1, 0.15], tr: [0.6, 0.15], bl: [0.1, 0.65] },
@@ -347,14 +335,14 @@ assert.deepEqual(
 const sharedDestination = structuredClone(original);
 const stage = fixtureStickerStage(sharedDestination.operation);
 stage.dest_tr = { variable: 'sticker_tl' };
-const rejected = implementation.discoverStickerPlacementTargets(sharedDestination, resolve(sharedDestination))[0];
+const rejected = discoverStickerPlacementTargets(sharedDestination, resolve(sharedDestination))[0];
 assert.equal(rejected.editable, false, 'a shared destination variable is an unsafe affine target');
 assert.ok(rejected.reason);
 assert.match(rejected.reason, /same setting/i);
 
 const unresolvedDestination = structuredClone(original);
 fixtureStickerStage(unresolvedDestination.operation).dest_bl = { variable: 'missing_destination' };
-const unresolved = implementation.discoverStickerPlacementTargets(unresolvedDestination, resolve(unresolvedDestination))[0];
+const unresolved = discoverStickerPlacementTargets(unresolvedDestination, resolve(unresolvedDestination))[0];
 assert.equal(unresolved.editable, false, 'unresolvable destination data must be read-only rather than guessed');
 assert.ok(unresolved.reason);
 assert.match(unresolved.reason, /missing|not numbers/i);
@@ -368,17 +356,17 @@ const itemDefsPath = path.join(ROOT, 'public', 'data', 'item-defs.json');
 const manifestPath = path.join(ROOT, 'public', 'data', 'manifest.json');
 if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(manifestPath)) {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  const decoded = implementation.decodeProtoDefs(new Uint8Array(fs.readFileSync(fullPath)), {
+  const decoded = decodeProtoDefs(new Uint8Array(fs.readFileSync(fullPath)), {
     weaponsByItemDef: JSON.parse(fs.readFileSync(itemDefsPath, 'utf8')),
     builtInIds: manifest.paintkits.map((kit: { id: number }) => kit.id),
   });
-  const armyGuns = implementation.extractKitMessages(decoded, 435);
+  const armyGuns = extractKitMessages(decoded, 435);
   const armyInfo = decoded.kitsByDefindex.get(435);
   assert.ok(armyGuns && armyInfo?.slots.length, 'Army Guns must be present in shipped proto_defs');
   const weaponKey = armyInfo.slots[0].weaponKey;
-  const armyResolved = implementation.resolveKitRecipeWithProvenance(decoded, 435, weaponKey, 'red', 0);
+  const armyResolved = resolveKitRecipeWithProvenance(decoded, 435, weaponKey, 'red', 0);
   assert.ok(armyResolved, 'Army Guns must resolve for a supported weapon');
-  const armyTargets = implementation.discoverStickerPlacementTargets(armyGuns, armyResolved);
+  const armyTargets = discoverStickerPlacementTargets(armyGuns, armyResolved);
   assert.ok(armyTargets.length > 0, 'Army Guns must expose sticker stages');
   assert.ok(armyTargets.some((target) => target.editable), 'Army Guns should expose at least one editable sticker placement');
   const editableArmyTarget = armyTargets.find((target) => target.editable);
@@ -388,7 +376,7 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
     tr: editableArmyTarget.quad.tr,
     bl: editableArmyTarget.quad.bl,
   };
-  const movedArmy = implementation.setStickerDestQuad(armyGuns, editableArmyTarget.target, movedArmyQuad);
+  const movedArmy = setStickerDestQuad(armyGuns, editableArmyTarget.target, movedArmyQuad);
   assert.notEqual(movedArmy, armyGuns, 'Army Guns placement must mutate a detached snapshot');
   const activeSlot = armyInfo.slots.find((entry) => entry.weaponKey === weaponKey);
   const namedSlotKey = Object.keys(armyGuns.definition).find((key) => armyGuns.definition[key] === activeSlot?.item);
@@ -409,8 +397,8 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
   }
   const movedArmyOperation = fixtureOperation(movedArmy.operation);
   decoded.ctx.opByIdx.set(movedArmyOperation.header.defindex, movedArmyOperation);
-  const movedArmyResolved = implementation.resolveKitRecipeWithProvenance(decoded, 435, weaponKey, 'red', 0);
-  const movedArmyTargets = implementation.discoverStickerPlacementTargets(movedArmy, movedArmyResolved);
+  const movedArmyResolved = resolveKitRecipeWithProvenance(decoded, 435, weaponKey, 'red', 0);
+  const movedArmyTargets = discoverStickerPlacementTargets(movedArmy, movedArmyResolved);
   assert.deepEqual(
     movedArmyTargets[editableArmyTarget.occurrence]?.quad,
     movedArmyQuad,

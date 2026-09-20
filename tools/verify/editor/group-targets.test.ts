@@ -1,10 +1,10 @@
+import { fixturePaintkitIds as manifestPaintkitIds, fixtureFragments } from '../fixtures';
 // Contract checks for conservative group-select target discovery.
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BlobReader, TextWriter, ZipReader } from '@zip.js/zip.js';
 import { test } from 'vitest';
 import { chooseBestSelectTargetForBucket, discoverGroupSelectTargets } from '../../../src/editor/groupTargets';
 import { toggleSelectGroupId } from '../../../src/editor/mutations';
@@ -16,25 +16,9 @@ import {
 } from '../../../src/protodefs/decoder';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const implementation = {
-  chooseBestSelectTargetForBucket,
-  decodeProtoDefs,
-  decodeProtoDefsFromJson,
-  discoverGroupSelectTargets,
-  extractKitMessages,
-  resolveKitRecipeWithProvenance,
-  toggleSelectGroupId,
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function manifestPaintkitIds(value: unknown): number[] {
-  if (!isRecord(value) || !Array.isArray(value.paintkits)) return [];
-  return value.paintkits.flatMap((kit) => (
-    isRecord(kit) && typeof kit.id === 'number' ? [kit.id] : []
-  ));
 }
 
 function objectMember(parent: Record<string, unknown>, key: string): Record<string, unknown> {
@@ -78,7 +62,7 @@ const messages = {
 };
 
 {
-  const found = implementation.discoverGroupSelectTargets(messages);
+  const found = discoverGroupSelectTargets(messages);
   assert.equal(found.targets.length, 4);
   assert.deepEqual(found.targets.map((target) => target.target), [
     { groupsValue: 'models/a_groups', occurrence: 0 },
@@ -96,7 +80,7 @@ const messages = {
   // UI must name that authored texture, including when it sits in a nested
   // combine result, instead of exposing an implementation variable such as
   // texture_layer_1_select_0.
-  const labelled = implementation.discoverGroupSelectTargets({
+  const labelled = discoverGroupSelectTargets({
     definition: {
       header: {
         defindex: 3,
@@ -137,7 +121,7 @@ const messages = {
   // Community paints such as Heatcast reserve more selector slots than each
   // weapon overrides. Fixed, non-inherited tail slots do not need a weapon
   // provenance path and must not make the complete layer read-only.
-  const mixedInheritance = implementation.discoverGroupSelectTargets({
+  const mixedInheritance = discoverGroupSelectTargets({
     definition: {
       header: { defindex: 5, variables: [
         { name: 'layer_select_1', value: '0', inherit: true },
@@ -184,7 +168,7 @@ const messages = {
     undefined,
   ]);
   assert.deepEqual(mixedInheritance.targets[0]?.target.inheritedSelectValues, [true, false, false]);
-  const mixedEdited = implementation.toggleSelectGroupId({
+  const mixedEdited = toggleSelectGroupId({
     definition: {
       header: { defindex: 5, variables: [
         { name: 'layer_select_1', value: '0', inherit: true },
@@ -235,21 +219,9 @@ const messages = {
   const heatcastManifestPath = path.join(ROOT, 'public', 'data', 'manifest.json');
   if (fs.existsSync(heatcastPath) && fs.existsSync(basePath)
     && fs.existsSync(heatcastItemDefsPath) && fs.existsSync(heatcastManifestPath)) {
-    const reader = new ZipReader(new BlobReader(new Blob([fs.readFileSync(heatcastPath)])));
-    let fragments;
-    try {
-      const entries = await reader.getEntries();
-      fragments = await Promise.all(entries
-        .filter((entry) => !entry.directory && 'getData' in entry && entry.filename.toLowerCase().endsWith('.json'))
-        .map(async (entry) => {
-          if (!('getData' in entry)) throw new Error(`ZIP entry ${entry.filename} cannot be read`);
-          return { name: entry.filename, text: await entry.getData(new TextWriter()) };
-        }));
-    } finally {
-      await reader.close();
-    }
+    const fragments = await fixtureFragments(heatcastPath);
     const heatcastManifest = JSON.parse(fs.readFileSync(heatcastManifestPath, 'utf8'));
-    const heatcast = implementation.decodeProtoDefsFromJson(
+    const heatcast = decodeProtoDefsFromJson(
       new Uint8Array(fs.readFileSync(basePath)),
       fragments,
       {
@@ -260,40 +232,40 @@ const messages = {
     const kit = heatcast.index.kits[0];
     const slot = heatcast.kitsByDefindex.get(kit.defindex)?.slots[0];
     assert.ok(slot, 'Heatcast should expose at least one supported weapon');
-    const resolved = implementation.resolveKitRecipeWithProvenance(
+    const resolved = resolveKitRecipeWithProvenance(
       heatcast,
       kit.defindex,
       slot.weaponKey,
       'red',
       0,
     );
-    const heatcastMessages = implementation.extractKitMessages(heatcast, kit.defindex);
+    const heatcastMessages = extractKitMessages(heatcast, kit.defindex);
     assert.ok(resolved && heatcastMessages, 'Heatcast should resolve through its imported JSON fragments');
-    const heatcastTargets = implementation.discoverGroupSelectTargets(heatcastMessages, resolved.provenance);
+    const heatcastTargets = discoverGroupSelectTargets(heatcastMessages, resolved.provenance);
     assert.ok(
       heatcastTargets.targets.some((target) => target.canToggle),
       'Heatcast must retain editable paint layers when only part of each selector inherits per-weapon values',
     );
   }
 
-  assert.deepEqual(implementation.chooseBestSelectTargetForBucket(found, 16)?.target, { groupsValue: 'models/a_groups', occurrence: 0 });
-  assert.deepEqual(implementation.chooseBestSelectTargetForBucket(found, 99, { groupsRef: 'models/c_groups' })?.target, { groupsValue: 'models/c_groups', occurrence: 0 });
-  assert.equal(implementation.chooseBestSelectTargetForBucket(found, 99), null);
-  assert.equal(implementation.chooseBestSelectTargetForBucket(found, 48), null);
-  assert.equal(implementation.chooseBestSelectTargetForBucket(found, 0), null);
+  assert.deepEqual(chooseBestSelectTargetForBucket(found, 16)?.target, { groupsValue: 'models/a_groups', occurrence: 0 });
+  assert.deepEqual(chooseBestSelectTargetForBucket(found, 99, { groupsRef: 'models/c_groups' })?.target, { groupsValue: 'models/c_groups', occurrence: 0 });
+  assert.equal(chooseBestSelectTargetForBucket(found, 99), null);
+  assert.equal(chooseBestSelectTargetForBucket(found, 48), null);
+  assert.equal(chooseBestSelectTargetForBucket(found, 0), null);
 
   const fullPath = path.join(ROOT, 'public', 'data', 'protodefs-full.bin');
   const itemDefsPath = path.join(ROOT, 'public', 'data', 'item-defs.json');
   const manifestPath = path.join(ROOT, 'public', 'data', 'manifest.json');
   if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(manifestPath)) {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-    const decoded = implementation.decodeProtoDefs(new Uint8Array(fs.readFileSync(fullPath)), {
+    const decoded = decodeProtoDefs(new Uint8Array(fs.readFileSync(fullPath)), {
       weaponsByItemDef: JSON.parse(fs.readFileSync(itemDefsPath, 'utf8')),
       builtInIds: manifestPaintkitIds(manifest),
     });
-    const armyGuns = implementation.extractKitMessages(decoded, 435);
+    const armyGuns = extractKitMessages(decoded, 435);
     assert.ok(armyGuns, 'Army Guns should be present in the shipped proto_defs');
-    const armyLabels = implementation.discoverGroupSelectTargets(armyGuns).targets;
+    const armyLabels = discoverGroupSelectTargets(armyGuns).targets;
     assert.ok(armyLabels.length > 0, 'Army Guns should expose select targets');
     assert.ok(
       armyLabels.every((target) => target.textureRef && !/^Texture Layer\b/i.test(target.label)),
@@ -302,13 +274,13 @@ const messages = {
     let directTargets = 0;
     let kitsWithOneEditableTarget = 0;
     for (const kit of decoded.index.kits) {
-      const kitMessages = implementation.extractKitMessages(decoded, kit.defindex);
+      const kitMessages = extractKitMessages(decoded, kit.defindex);
       if (!kitMessages) continue;
       const slot = decoded.kitsByDefindex.get(kit.defindex)?.slots[0];
       const resolved = slot
-        ? implementation.resolveKitRecipeWithProvenance(decoded, kit.defindex, slot.weaponKey, 'red', 0)
+        ? resolveKitRecipeWithProvenance(decoded, kit.defindex, slot.weaponKey, 'red', 0)
         : null;
-      const discovery = implementation.discoverGroupSelectTargets(kitMessages, resolved?.provenance);
+      const discovery = discoverGroupSelectTargets(kitMessages, resolved?.provenance);
       const editable = discovery.targets.filter((target) => target.canToggle);
       directTargets += editable.length;
       if (editable.length === 1) kitsWithOneEditableTarget += 1;

@@ -36,12 +36,6 @@ export function parseVec2(str: string | undefined, dflt: [number, number]): [num
   return [...dflt];
 }
 
-export function parseBool(str: string | undefined): boolean {
-  if (str == null) return false;
-  const value = String(str).trim().toLowerCase();
-  return value === '1' || value === 'true';
-}
-
 export function texturePublicPath(ref: string | undefined | null): string | null {
   if (!ref) return null;
   let path = String(ref).trim().replace(/\\/g, '/');

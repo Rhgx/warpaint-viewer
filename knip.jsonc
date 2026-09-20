@@ -5,8 +5,8 @@
     "tools/dev/selftest-driver.mjs",
     "tools/extract/group-names.mjs",
     "tools/models/check.mjs",
-    "tools/models/mdl2gltf.mjs",
-    "tools/verify/protodef-json.mjs"
+    "tools/models/import-viewmodels.mjs",
+    "tools/models/mdl2gltf.mjs"
   ],
   // TypeScript resolves this declaration alongside the imported .mjs module.
   "ignoreFiles": ["tools/lib/vtf-core.d.mts"],

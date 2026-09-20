@@ -1,8 +1,8 @@
+import { fixturePaintkitIds, fixtureFragments } from '../fixtures';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BlobReader, TextWriter, ZipReader } from '@zip.js/zip.js';
 import { test } from 'vitest';
 import type { OperationMsg, OperationNodeMsg } from '../../../src/protodefs/messages';
 import type { RecipeNode } from '../../../src/compositor/types';
@@ -17,28 +17,6 @@ import { operationToGraph } from '../../../src/editor/graph/operationGraph';
 import { decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipe } from '../../../src/protodefs/decoder';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-
-async function fixtureFragments(filePath: string): Promise<Array<{ name: string; text: string }>> {
-  const reader = new ZipReader(new BlobReader(new Blob([fs.readFileSync(filePath)])));
-  try {
-    const entries = await reader.getEntries();
-    return Promise.all(entries
-      .filter((entry) => !entry.directory && 'getData' in entry && entry.filename.toLowerCase().endsWith('.json'))
-      .map(async (entry) => {
-        if (!('getData' in entry)) throw new Error(`Fixture entry ${entry.filename} cannot be read.`);
-        return { name: entry.filename, text: await entry.getData(new TextWriter()) };
-      }));
-  } finally {
-    await reader.close();
-  }
-}
-
-function fixturePaintkitIds(value: unknown): number[] {
-  if (!value || typeof value !== 'object' || !('paintkits' in value) || !Array.isArray(value.paintkits)) return [];
-  return value.paintkits.flatMap((kit) => (
-    kit && typeof kit === 'object' && 'id' in kit && typeof kit.id === 'number' ? [kit.id] : []
-  ));
-}
 
 function texture(name: string): OperationNodeMsg {
   return { stage: { texture_lookup: { texture: { string: name } } } };

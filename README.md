@@ -116,7 +116,7 @@ Developer harnesses:
   real assets required.
 - `tools/dev/selftest-driver.mjs` drives the selftest page in headless Edge
   over raw CDP (see its header comment for usage).
-- `node tools/verify/protodefs.mjs` resolves every shipped recipe variant
+- `npx vitest run tools/verify/protodefs.test.mjs` resolves every shipped recipe variant
   through the in-browser proto_defs decoder and compares it against both the
   recipe bundles and the extraction pipeline, so a porting difference is told
   apart from data that predates the installed game.
@@ -127,13 +127,15 @@ Developer harnesses:
 - `npm run verify:vpk-interop` checks the VPK writer against TF2's own
   `bin/vpk.exe`, which catches a container Valve's tools read differently than
   this repository's reader.
-- `node tools/verify/protodefs-write.mjs` asserts the proto_defs writer
+- `npx vitest run tools/verify/protodefs-write.test.mjs` asserts the proto_defs writer
   reproduces the shipped container byte for byte when nothing is spliced, then
   checks both splice modes through two independent decoders.
-- `node tools/verify/protodef-json.mjs <dir>` resolves community JSON war paint
+- `npx vitest run tools/verify/protodef-json.test.mjs` resolves community JSON war paint
   definitions.
-- `node tools/verify/vmt-parity.mjs` compares the browser VMT parser against
+- `npx vitest run tools/verify/vmt-parity.test.mjs` compares the browser VMT parser against
   the stock materials produced by the extraction pipeline.
+
+Optional verification fixtures can be selected with `TF2_PROTODEFS`, `TF2_FRAGMENT_DIR`, `TF2_VPK_EXE`, and `TF2_VTF_FIXTURE` environment variables. Missing optional fixtures are reported as skipped tests.
 
 Application errors use stable `WV-AREA-NNNN` codes with separate user-facing
 and technical messages. See [Error codes](docs/error-codes.md) for the API,

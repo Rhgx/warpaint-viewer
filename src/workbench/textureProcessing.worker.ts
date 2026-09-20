@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { applyAlphaMask } from './alphaMask';
 import { TGALoader } from 'three/addons/loaders/TGALoader.js';
 import { encodeRgbaPng } from '../source/png';
 
@@ -70,22 +71,7 @@ async function mergeAlpha(request: MergeAlphaRequest): Promise<void> {
     context.clearRect(0, 0, width, height);
     context.drawImage(alpha, 0, 0, width, height);
     const maskPixels = context.getImageData(0, 0, width, height);
-    let hasTransparency = false;
-    for (let index = 3; index < maskPixels.data.length; index += 4) {
-      if (maskPixels.data[index] < 255) {
-        hasTransparency = true;
-        break;
-      }
-    }
-    for (let index = 0; index < colorPixels.data.length; index += 4) {
-      colorPixels.data[index + 3] = hasTransparency
-        ? maskPixels.data[index + 3]
-        : Math.round(
-            maskPixels.data[index] * 0.299
-              + maskPixels.data[index + 1] * 0.587
-              + maskPixels.data[index + 2] * 0.114,
-          );
-    }
+    applyAlphaMask(colorPixels.data, maskPixels.data);
     context.putImageData(colorPixels, 0, 0);
     // The browser's native encoder is substantially faster for a canvas that
     // already lives in the worker and avoids another full RGBA traversal.

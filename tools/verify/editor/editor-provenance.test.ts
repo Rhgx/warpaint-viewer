@@ -120,14 +120,6 @@ function recipeSticker(recipe: ProtoDefRecipeWithProvenance): ApplyStickerNode |
   return findSticker(recipe.tree);
 }
 
-const implementation = {
-  assignSelectGroupExclusively,
-  buildResolveCtx,
-  EditorMutationAmbiguityError,
-  resolveKitRecipeWithProvenance,
-  setStickerDestQuad,
-  toggleSelectGroupId,
-};
 
 test('editor provenance and safe mutations', () => {
 
@@ -188,7 +180,7 @@ const definition: FixtureDefinition = {
 function decodedFor(messages: FixtureMessages): DecodedContainer {
   const currentOperation = messages.operation;
   const currentDefinition = messages.definition;
-  const ctx = implementation.buildResolveCtx([currentOperation], [itemDefinition], []);
+  const ctx = buildResolveCtx([currentOperation], [itemDefinition], []);
   return {
     ctx,
     kitsByDefindex: new Map([[900, { def: currentDefinition, slots: [{ item: currentDefinition.blackbox, itemDef: itemDefinition, weaponKey: 'blackbox' }] }]]),
@@ -197,7 +189,7 @@ function decodedFor(messages: FixtureMessages): DecodedContainer {
 }
 
 const original: FixtureMessages = structuredClone({ definition, operation });
-const traced = implementation.resolveKitRecipeWithProvenance(decodedFor(original), 900, 'blackbox', 'red', 0);
+const traced = resolveKitRecipeWithProvenance(decodedFor(original), 900, 'blackbox', 'red', 0);
 assert.ok(traced, 'fixture should resolve');
 assert.equal(traced.tree.type, 'combine_multiply');
 const sourceFor = (suffix: string) => traced.provenance.find((entry) => entry.fieldPath.at(-1) === suffix)?.provenance;
@@ -209,18 +201,18 @@ assert.equal(sourceFor('adjust_gamma')?.scope, 'wear');
 assert.equal(sourceFor('groups')?.scope, 'literal');
 assert.equal(sourceFor('dest_tl')?.scope, 'global');
 
-const groupEdited = fixtureMessages(implementation.toggleSelectGroupId(original, {
+const groupEdited = fixtureMessages(toggleSelectGroupId(original, {
   groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups',
 }, 224));
 assert.deepEqual(selectStage(original, 1).select, { string: '16' }, 'group edit must not mutate original');
 assert.deepEqual(selectStage(groupEdited, 1).select, [{ string: '16' }, { string: '224' }]);
-const groupRecipe = implementation.resolveKitRecipeWithProvenance(decodedFor(groupEdited), 900, 'blackbox', 'red', 0);
+const groupRecipe = resolveKitRecipeWithProvenance(decodedFor(groupEdited), 900, 'blackbox', 'red', 0);
 assert.ok(groupRecipe);
 assert.deepEqual(recipeSelect(groupRecipe), [16, 224], 'Black Box-like group 224 should affect the resolved selector');
-const groupRemoved = fixtureMessages(implementation.toggleSelectGroupId(groupEdited, {
+const groupRemoved = fixtureMessages(toggleSelectGroupId(groupEdited, {
   groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups',
 }, 224));
-const removedRecipe = implementation.resolveKitRecipeWithProvenance(decodedFor(groupRemoved), 900, 'blackbox', 'red', 0);
+const removedRecipe = resolveKitRecipeWithProvenance(decodedFor(groupRemoved), 900, 'blackbox', 'red', 0);
 assert.deepEqual(
   recipeSelect(removedRecipe),
   [16, 0],
@@ -231,7 +223,7 @@ const padded = structuredClone(original);
 selectStage(padded, 1).select = [
   { string: '16' }, { string: '0' }, { string: '0' },
 ];
-const paddedEdited = fixtureMessages(implementation.toggleSelectGroupId(padded, {
+const paddedEdited = fixtureMessages(toggleSelectGroupId(padded, {
   groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups',
 }, 224));
 assert.deepEqual(
@@ -249,7 +241,7 @@ selectStage(variableBacked, 1).select = [
   { variable: 'texture_layer_2_select_1', string: '0' },
   { variable: 'texture_layer_2_select_2', string: '0' },
 ];
-const variableEdited = fixtureMessages(implementation.toggleSelectGroupId(variableBacked, {
+const variableEdited = fixtureMessages(toggleSelectGroupId(variableBacked, {
   groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups',
 }, 224));
 assert.equal(
@@ -296,7 +288,7 @@ inheritedVariableBacked.definition.scattergun = {
   ] },
 };
 function decodedForInherited(messages: FixtureMessages): DecodedContainer {
-  const ctx = implementation.buildResolveCtx([messages.operation], [itemDefinition], []);
+  const ctx = buildResolveCtx([messages.operation], [itemDefinition], []);
   const scattergun = messages.definition.scattergun;
   assert.ok(scattergun, 'fixture must retain the scattergun slot');
   return {
@@ -309,11 +301,11 @@ function decodedForInherited(messages: FixtureMessages): DecodedContainer {
   };
 }
 assert.deepEqual(
-  recipeSelect(implementation.resolveKitRecipeWithProvenance(decodedForInherited(inheritedVariableBacked), 900, 'blackbox', 'red', 0)),
+  recipeSelect(resolveKitRecipeWithProvenance(decodedForInherited(inheritedVariableBacked), 900, 'blackbox', 'red', 0)),
   [16, 0],
   'fixture must start from the weapon-provided effective selector values',
 );
-const inheritedAdded = fixtureMessages(implementation.toggleSelectGroupId(inheritedVariableBacked, {
+const inheritedAdded = fixtureMessages(toggleSelectGroupId(inheritedVariableBacked, {
   groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups',
   effectiveSelectValues: [16, 0],
   valueSourcePaths: [
@@ -322,7 +314,7 @@ const inheritedAdded = fixtureMessages(implementation.toggleSelectGroupId(inheri
   ],
 }, 224));
 assert.deepEqual(
-  recipeSelect(implementation.resolveKitRecipeWithProvenance(decodedForInherited(inheritedAdded), 900, 'blackbox', 'red', 0)),
+  recipeSelect(resolveKitRecipeWithProvenance(decodedForInherited(inheritedAdded), 900, 'blackbox', 'red', 0)),
   [16, 224],
   'an inherited selector edit must change the resolved model selector',
 );
@@ -336,7 +328,7 @@ assert.deepEqual(
   ['16', '224'],
   'the effective baseline must be written into only the active weapon slot',
 );
-const inheritedRemoved = fixtureMessages(implementation.toggleSelectGroupId(inheritedAdded, {
+const inheritedRemoved = fixtureMessages(toggleSelectGroupId(inheritedAdded, {
   groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups',
   effectiveSelectValues: [16, 224],
   valueSourcePaths: [
@@ -345,12 +337,12 @@ const inheritedRemoved = fixtureMessages(implementation.toggleSelectGroupId(inhe
   ],
 }, 224));
 assert.deepEqual(
-  recipeSelect(implementation.resolveKitRecipeWithProvenance(decodedForInherited(inheritedRemoved), 900, 'blackbox', 'red', 0)),
+  recipeSelect(resolveKitRecipeWithProvenance(decodedForInherited(inheritedRemoved), 900, 'blackbox', 'red', 0)),
   [16, 0],
   'removing an edited inherited area must restore the effective baseline',
 );
 assert.deepEqual(
-  recipeSelect(implementation.resolveKitRecipeWithProvenance(decodedForInherited(inheritedRemoved), 900, 'scattergun', 'red', 0)),
+  recipeSelect(resolveKitRecipeWithProvenance(decodedForInherited(inheritedRemoved), 900, 'scattergun', 'red', 0)),
   [48, 64],
   'clearing one weapon must preserve another weapon slot\'s assigned groups',
 );
@@ -363,7 +355,7 @@ rootCombine(overlappingLayers).operation_node = [
   { stage: { select: { groups: { string: 'models/weapons/c_blackbox/c_blackbox_groups' }, select: [{ string: '16' }, { string: '224' }] } } },
   { stage: { select: { groups: { string: 'models/weapons/c_blackbox/c_blackbox_groups' }, select: [{ string: '32' }, { string: '0' }] } } },
 ];
-const reassigned = implementation.assignSelectGroupExclusively(overlappingLayers, {
+const reassigned = assignSelectGroupExclusively(overlappingLayers, {
   label: 'Top Layer',
   target: { groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups', occurrence: 1 },
 }, [
@@ -397,7 +389,7 @@ rootCombine(inheritedOverlap).operation_node = [
   { stage: { select: { groups: { string: 'models/weapons/c_blackbox/c_blackbox_groups' }, select: [{ variable: 'base_select_1' }, { variable: 'base_select_2' }] } } },
   { stage: { select: { groups: { string: 'models/weapons/c_blackbox/c_blackbox_groups' }, select: [{ variable: 'top_select_1' }, { variable: 'top_select_2' }] } } },
 ];
-const inheritedMoved = implementation.assignSelectGroupExclusively(inheritedOverlap, {
+const inheritedMoved = assignSelectGroupExclusively(inheritedOverlap, {
   label: 'Top Layer',
   target: {
     groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups', occurrence: 1,
@@ -442,7 +434,7 @@ rootCombine(inheritedWithLiteralPadding).operation_node = [
     select: [{ variable: 'inherited_select_1' }, { variable: 'inherited_select_2' }, { variable: 'inherited_select_3' }],
   } } },
 ];
-const paddedAdded = fixtureMessages(implementation.toggleSelectGroupId(inheritedWithLiteralPadding, {
+const paddedAdded = fixtureMessages(toggleSelectGroupId(inheritedWithLiteralPadding, {
   groupsValue: 'models/weapons/c_blackbox/c_blackbox_groups',
   effectiveSelectValues: [16, 224, 0],
   inheritedSelectValues: [true, true, false],
@@ -469,17 +461,17 @@ assert.equal(
   'a newly used shared padding variable must inherit its weapon-local value',
 );
 assert.deepEqual(
-  recipeSelect(implementation.resolveKitRecipeWithProvenance(decodedForInherited(paddedAdded), 900, 'blackbox', 'red', 0)),
+  recipeSelect(resolveKitRecipeWithProvenance(decodedForInherited(paddedAdded), 900, 'blackbox', 'red', 0)),
   [16, 224, 192],
   'the activated shared slot must appear in the resolved weapon recipe',
 );
 
-const stickerEdited = fixtureMessages(implementation.setStickerDestQuad(original, {}, {
+const stickerEdited = fixtureMessages(setStickerDestQuad(original, {}, {
   tl: [0.2, 0.3], tr: [0.8, 0.3], bl: [0.2, 0.9],
 }));
 assert.equal(definitionVariables(original)[4]?.value, '0 0', 'sticker edit must not mutate original');
 assert.equal(definitionVariables(stickerEdited)[4]?.value, '0.2 0.3');
-const stickerRecipe = implementation.resolveKitRecipeWithProvenance(decodedFor(stickerEdited), 900, 'blackbox', 'red', 0);
+const stickerRecipe = resolveKitRecipeWithProvenance(decodedFor(stickerEdited), 900, 'blackbox', 'red', 0);
 assert.ok(stickerRecipe);
 const stickerNode = recipeSticker(stickerRecipe);
 assert.deepEqual(stickerNode?.destTl, [0.2, 0.3]);
@@ -488,6 +480,6 @@ assert.deepEqual(stickerNode?.destBl, [0.2, 0.9]);
 
 const ambiguous = structuredClone(original);
 rootCombine(ambiguous).operation_node.push({ stage: { select: { groups: { string: 'other_groups' }, select: { string: '32' } } } });
-assert.throws(() => implementation.toggleSelectGroupId(ambiguous, {}, 48), implementation.EditorMutationAmbiguityError);
+assert.throws(() => toggleSelectGroupId(ambiguous, {}, 48), EditorMutationAmbiguityError);
 
 });

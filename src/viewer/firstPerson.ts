@@ -6,7 +6,7 @@ import { installTf2VertexLit, TF2_VERTEXLIT_CACHE_KEY } from './shaders/vertexli
 import { FishBonePhysics, type FishJiggleSettings } from './fishPhysics';
 import type { AttachmentTransformResolver } from './particles';
 
-export const VIEWMODEL_DATA = `${import.meta.env.BASE_URL}data/viewmodels/`;
+const VIEWMODEL_DATA = `${import.meta.env.BASE_URL}data/viewmodels/`;
 interface ViewmodelMaterial extends WeaponMaterial { baseTexture: string | null; animatedWeaponSheen?: boolean }
 export interface ViewmodelAsset {
   model: string;
@@ -48,7 +48,7 @@ export function mergeViewmodelBones(bindings: ReturnType<typeof bindViewmodelBon
 }
 
 /** A second pass shares the posed skeleton and bind frame, without owning either. */
-export function createViewmodelOverlay(source: THREE.SkinnedMesh, material: THREE.Material): THREE.SkinnedMesh {
+function createViewmodelOverlay(source: THREE.SkinnedMesh, material: THREE.Material): THREE.SkinnedMesh {
   const overlay = new THREE.SkinnedMesh(source.geometry, material);
   overlay.position.copy(source.position);
   overlay.quaternion.copy(source.quaternion);

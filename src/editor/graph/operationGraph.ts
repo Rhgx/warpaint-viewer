@@ -88,16 +88,16 @@ function outputTypeOf(kind: OperationGraphNodeKind): OperationPortType {
   }
 }
 
-function port(id: string, label: string, index: number, type: OperationPortType, required = true, variadic = false): OperationGraphPort {
+export function operationGraphPort(id: string, label: string, index: number, type: OperationPortType, required = true, variadic = false): OperationGraphPort {
   return { id, label, index, type, required, ...(variadic ? { variadic: true } : {}) };
 }
 
-function inputPortsFor(kind: OperationGraphNodeKind, childCount: number): readonly OperationGraphPort[] {
+export function inputPortsFor(kind: OperationGraphNodeKind, childCount: number): readonly OperationGraphPort[] {
   switch (kind) {
     case 'combine_add':
     case 'combine_multiply': {
       const count = Math.max(2, childCount);
-      return Array.from({ length: count }, (_, index) => port(
+      return Array.from({ length: count }, (_, index) => operationGraphPort(
         `input-${index}`,
         `Input ${index + 1}`,
         index,
@@ -108,14 +108,14 @@ function inputPortsFor(kind: OperationGraphNodeKind, childCount: number): readon
     }
     case 'combine_lerp':
       return [
-        port('input-0', 'Background', 0, 'texture'),
-        port('input-1', 'Foreground', 1, 'texture'),
-        port('input-2', 'Blend mask', 2, 'mask'),
+        operationGraphPort('input-0', 'Background', 0, 'texture'),
+        operationGraphPort('input-1', 'Foreground', 1, 'texture'),
+        operationGraphPort('input-2', 'Blend mask', 2, 'mask'),
       ];
     case 'apply_sticker':
-      return [port('input-0', 'Surface', 0, 'texture')];
+      return [operationGraphPort('input-0', 'Surface', 0, 'texture')];
     case 'output':
-      return Array.from({ length: childCount }, (_, index) => port(
+      return Array.from({ length: childCount }, (_, index) => operationGraphPort(
         `input-${index}`,
         `Result ${index + 1}`,
         index,

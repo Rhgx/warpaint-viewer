@@ -1,10 +1,10 @@
+import { fixturePaintkitIds as manifestPaintkitIds, fixtureFragments as fragmentsFromZip } from '../fixtures';
 // Exhaustive Edit compatibility matrix for every local example war paint.
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BlobReader, TextWriter, ZipReader } from '@zip.js/zip.js';
 import { test } from 'vitest';
 import { discoverGroupSelectTargets } from '../../../src/editor/groupTargets';
 import { discoverStickerPlacementTargets } from '../../../src/editor/stickerTargets';
@@ -13,44 +13,15 @@ import { decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipeWithProven
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const EXAMPLES = path.join(ROOT, '.tmp', 'example-warpaints');
 
-function manifestPaintkitIds(value: unknown): number[] {
-  if (!value || typeof value !== 'object' || !('paintkits' in value) || !Array.isArray(value.paintkits)) return [];
-  return value.paintkits.flatMap((kit) => (
-    kit && typeof kit === 'object' && 'id' in kit && typeof kit.id === 'number' ? [kit.id] : []
-  ));
-}
-
-async function fragmentsFromZip(filePath: string) {
-  const reader = new ZipReader(new BlobReader(new Blob([fs.readFileSync(filePath)])));
-  try {
-    const entries = await reader.getEntries();
-    return Promise.all(entries
-      .filter((entry) => !entry.directory && 'getData' in entry && entry.filename.toLowerCase().endsWith('.json'))
-      .map(async (entry) => {
-        if (!('getData' in entry)) throw new Error(`ZIP entry ${entry.filename} cannot be read`);
-        return { name: entry.filename, text: await entry.getData(new TextWriter()) };
-      }));
-  } finally {
-    await reader.close();
-  }
-}
-
-test('local example war paint compatibility matrix', async () => {
+test('local example war paint compatibility matrix', async (context) => {
 const archives = fs.existsSync(EXAMPLES)
   ? fs.readdirSync(EXAMPLES).filter((name) => name.toLowerCase().endsWith('.zip')).sort()
   : [];
 if (archives.length === 0) {
-  console.log('[verify] no local example war paints found; skipping compatibility matrix');
-  process.exit(0);
+  context.skip('No local example war paints');
+  return;
 }
 
-const implementation = {
-  decodeProtoDefsFromJson,
-  discoverGroupSelectTargets,
-  discoverStickerPlacementTargets,
-  extractKitMessages,
-  resolveKitRecipeWithProvenance,
-};
 const baseBytes = new Uint8Array(fs.readFileSync(path.join(ROOT, 'public', 'data', 'protodefs-base.bin')));
 const itemDefs = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'item-defs.json'), 'utf8'));
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'manifest.json'), 'utf8'));
@@ -66,7 +37,7 @@ for (const archive of archives) {
   const fragments = await fragmentsFromZip(path.join(EXAMPLES, archive));
   let decoded;
   try {
-    decoded = implementation.decodeProtoDefsFromJson(baseBytes, fragments, {
+    decoded = decodeProtoDefsFromJson(baseBytes, fragments, {
       weaponsByItemDef: itemDefs,
       builtInIds: manifestPaintkitIds(manifest),
     });
@@ -76,7 +47,7 @@ for (const archive of archives) {
   }
   for (const kit of decoded.index.kits) {
     const kitInfo = decoded.kitsByDefindex.get(kit.defindex);
-    const messages = implementation.extractKitMessages(decoded, kit.defindex);
+    const messages = extractKitMessages(decoded, kit.defindex);
     if (!kitInfo || !messages) {
       failures.push(`${archive}: paint ${kit.defindex} could not expose its editable messages`);
       continue;
@@ -90,7 +61,7 @@ for (const archive of archives) {
       for (const team of ['red', 'blu'] as const) {
         for (let wearIndex = 0; wearIndex < 5; wearIndex += 1) {
           const label = `${archive} / ${weaponKey} / ${team} / wear ${wearIndex}`;
-          const resolved = implementation.resolveKitRecipeWithProvenance(
+          const resolved = resolveKitRecipeWithProvenance(
             decoded,
             kit.defindex,
             weaponKey,
@@ -102,8 +73,8 @@ for (const archive of archives) {
             continue;
           }
           recipeCount += 1;
-          const groups = implementation.discoverGroupSelectTargets(messages, resolved.provenance);
-          const stickers = implementation.discoverStickerPlacementTargets(messages, resolved);
+          const groups = discoverGroupSelectTargets(messages, resolved.provenance);
+          const stickers = discoverStickerPlacementTargets(messages, resolved);
           if (archive.toLowerCase() === 'flakfurnished.zip'
             && weaponKey === 'c_amputator' && team === 'red' && wearIndex === 0) {
             const editableLayers = groups.targets.filter((target, index, targets) => (

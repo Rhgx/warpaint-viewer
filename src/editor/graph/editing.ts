@@ -16,7 +16,7 @@ import {
   type OperationStageKind,
 } from './types';
 import { canConnectOperationPorts, validateOperationGraph } from './validation';
-import { operationGraphNodeKind as rawOperationGraphNodeKind } from './operationGraph';
+import { operationGraphNodeKind as rawOperationGraphNodeKind, operationGraphPort as port, inputPortsFor as portsFor } from './operationGraph';
 
 /** Additional diagnostics emitted by a structural graph edit. */
 type OperationGraphEditDiagnosticCode =
@@ -170,53 +170,6 @@ function labelFor(kind: OperationStageKind): string {
     case 'combine_multiply': return 'Multiply textures';
     case 'combine_lerp': return 'Blend textures';
     case 'apply_sticker': return 'Apply sticker';
-  }
-}
-
-function port(
-  id: string,
-  label: string,
-  index: number,
-  type: OperationPortType,
-  required = true,
-  variadic = false,
-): OperationGraphPort {
-  return { id, label, index, type, required, ...(variadic ? { variadic: true } : {}) };
-}
-
-function portsFor(kind: OperationGraphNode['kind'], childCount: number): readonly OperationGraphPort[] {
-  switch (kind) {
-    case 'combine_add':
-    case 'combine_multiply': {
-      const count = Math.max(2, childCount);
-      return Array.from({ length: count }, (_, index) => port(
-        `input-${index}`,
-        `Input ${index + 1}`,
-        index,
-        'texture',
-        index < 2,
-        true,
-      ));
-    }
-    case 'combine_lerp':
-      return [
-        port('input-0', 'Background', 0, 'texture'),
-        port('input-1', 'Foreground', 1, 'texture'),
-        port('input-2', 'Blend mask', 2, 'mask'),
-      ];
-    case 'apply_sticker':
-      return [port('input-0', 'Surface', 0, 'texture')];
-    case 'output':
-      return Array.from({ length: childCount }, (_, index) => port(
-        `input-${index}`,
-        `Result ${index + 1}`,
-        index,
-        'unknown',
-        true,
-        true,
-      ));
-    default:
-      return [];
   }
 }
 

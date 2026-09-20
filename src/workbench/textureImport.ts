@@ -1,3 +1,4 @@
+import { applyAlphaMask } from './alphaMask';
 import { encodeRgbaPng } from '../source/png';
 
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
@@ -102,22 +103,7 @@ async function mergeAlphaOnMainThread(colorUrl: string, alphaUrl: string): Promi
   context.clearRect(0, 0, canvas.width, canvas.height);
   context.drawImage(alpha, 0, 0, canvas.width, canvas.height);
   const maskPixels = context.getImageData(0, 0, canvas.width, canvas.height);
-  let hasTransparency = false;
-  for (let index = 3; index < maskPixels.data.length; index += 4) {
-    if (maskPixels.data[index] < 255) {
-      hasTransparency = true;
-      break;
-    }
-  }
-  for (let index = 0; index < colorPixels.data.length; index += 4) {
-    colorPixels.data[index + 3] = hasTransparency
-      ? maskPixels.data[index + 3]
-      : Math.round(
-          maskPixels.data[index] * 0.299
-            + maskPixels.data[index + 1] * 0.587
-            + maskPixels.data[index + 2] * 0.114,
-        );
-  }
+  applyAlphaMask(colorPixels.data, maskPixels.data);
   context.putImageData(colorPixels, 0, 0);
   return encodeRgbaPng(
     new Uint8Array(colorPixels.data.buffer, colorPixels.data.byteOffset, colorPixels.data.byteLength),
