@@ -72,6 +72,8 @@ export class FirstPersonPreview {
   private gltfs: GLTF[] = [];
   private materials: THREE.Material[] = [];
   private textures: THREE.Texture[] = [];
+  private scrollingMaterials: Tf2Uniforms[] = [];
+  private tf2Time = 0;
   private mixer: THREE.AnimationMixer | null = null;
   private bones: THREE.Bone[][] = [];
   private boneMaps: Map<string, THREE.Bone>[] = [];
@@ -105,6 +107,8 @@ export class FirstPersonPreview {
   async load(arms: ViewmodelAsset, weapon: ViewmodelWeapon, team: Team,
     paint: THREE.Material, lens: THREE.Material, lighting: Tf2Uniforms, envMap: THREE.CubeTexture): Promise<void> {
     this.weapon = weapon;
+    this.scrollingMaterials = [];
+    this.tf2Time = 0;
     if (weapon.flipViewmodel) this.root.matrix.scale(new THREE.Vector3(1, -1, 1));
     const loader = new GLTFLoader();
     const assets = [arms, weapon, ...weapon.attachments];
@@ -151,6 +155,7 @@ export class FirstPersonPreview {
           // Heavy's hand material names it even when no killstreak sheen is active.
           const detailTexture = params.animatedWeaponSheen ? null : params.detailTexture;
           configureTf2Material({ ...params, detailTexture }, result, uniforms);
+          if (detailTexture && uniforms.uTf2DetailScroll.value.lengthSq() > 0) this.scrollingMaterials.push(uniforms);
           result.onBeforeCompile = shader => { Object.assign(shader.uniforms, uniforms); installTf2VertexLit(shader); };
           result.customProgramCacheKey = () => TF2_VERTEXLIT_CACHE_KEY;
           const load = (ref: string | null | undefined, apply: (texture: THREE.Texture) => void) => {
@@ -240,6 +245,8 @@ export class FirstPersonPreview {
     if (this.paused && !this.poseDirty) return;
     this.poseDirty = false;
     const animationDelta = this.paused ? 0 : delta;
+    this.tf2Time += animationDelta;
+    for (const uniforms of this.scrollingMaterials) uniforms.uTf2Time.value = this.tf2Time;
     this.mixer?.update(animationDelta);
     this.root.updateMatrixWorld(true);
     if (this.bones.length < 2) return;
@@ -330,7 +337,7 @@ export class FirstPersonPreview {
     });
     for (const material of this.materials) material.dispose();
     for (const texture of this.textures) texture.dispose();
-    this.gltfs = []; this.materials = []; this.textures = [];
+    this.gltfs = []; this.materials = []; this.textures = []; this.scrollingMaterials = [];
   }
 
   dispose(): void {

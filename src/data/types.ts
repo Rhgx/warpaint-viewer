@@ -39,12 +39,20 @@ export interface WeaponMaterial {
    * see-through instead of simply passing the test.
    */
   alphaToCoverage?: boolean;
+  /** Viewmodel shader flags retained from the Source material. */
+  unlit?: boolean;
+  unlitTwoTexture?: boolean;
+  additive?: boolean;
+  translucent?: boolean;
+  alpha?: number;
   /** $detail and friends, combined per common_ps_fxc.h TextureCombine. */
   detailTexture?: string | null;
   detailScale?: number;
   detailBlendFactor?: number;
   detailBlendMode?: number;
   detailTint?: [number, number, number] | null;
+  detailScrollRate?: number | null;
+  detailScrollAngle?: number | null;
   /** $EmissiveBlendEnabled: a second additive pass over the weapon. */
   emissiveBlend?: boolean;
   emissiveBlendStrength?: number;

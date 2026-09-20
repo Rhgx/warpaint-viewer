@@ -18,7 +18,7 @@ import * as THREE from 'three';
  * three caches compiled programs across materials, so anything that changes
  * the source below has to change this key too or a stale program is reused.
  */
-export const TF2_VERTEXLIT_CACHE_KEY = 'tf2-vertexlit-v9-live-sticker-spec';
+export const TF2_VERTEXLIT_CACHE_KEY = 'tf2-vertexlit-v10-live-sticker-spec';
 
 const PARAMETERS = /* glsl */ `#include <common>
 uniform float uTf2PhongEnabled, uTf2BaseAlphaPhongMask, uTf2NormalAlphaEnvMask;
@@ -27,12 +27,14 @@ uniform float uTf2UseExponentMap, uTf2UseLightwarp, uTf2HalfLambert, uTf2AlbedoT
 uniform float uTf2RimLight, uTf2RimExponent, uTf2RimBoost, uTf2RimMask;
 uniform float uTf2SelfIllum, uTf2SelfIllumFresnel, uTf2UseSelfIllumMask;
 uniform float uTf2AlphaTestRef;
+uniform float uTf2Unlit, uTf2UnlitTwoTexture, uTf2Time;
 uniform float uTf2Detail, uTf2DetailMode, uTf2DetailScale, uTf2DetailFactor;
 uniform float uTf2SpotFalloff;
 uniform float uTf2StickerPreview, uTf2StickerHasSpec, uTf2StickerOpacity;
 uniform sampler2D uTf2ExponentMap, uTf2LightwarpMap, uTf2SelfIllumMaskMap, uTf2DetailMap;
 uniform sampler2D uTf2StickerMap, uTf2StickerSpecMap;
 uniform vec3 uTf2PhongTint, uTf2Fresnel, uTf2SelfIllumTint, uTf2EnvTint, uTf2DetailTint;
+uniform vec2 uTf2DetailScroll;
 uniform vec2 uTf2StickerTl, uTf2StickerTr, uTf2StickerBl, uTf2StickerCenter;
 uniform vec4 uTf2SelfIllumFresnelParams;
 uniform vec3 uTf2AmbientCube[6];
@@ -130,12 +132,20 @@ const BASE_AND_DETAIL = /* glsl */ `#ifdef USE_MAP
 vec4 tf2DetailColor = vec4( 1.0 );
 #ifdef USE_MAP
 if ( uTf2Detail > 0.0 ) {
-  vec4 tf2DetailTexel = texture2D( uTf2DetailMap, vMapUv * uTf2DetailScale );
+  vec2 tf2DetailUv = vMapUv * uTf2DetailScale + fract( uTf2Time * uTf2DetailScroll );
+  vec4 tf2DetailTexel = texture2D( uTf2DetailMap, tf2DetailUv );
   // vertexlitgeneric_dx9_helper.cpp loads $detail with TEXTUREFLAGS_SRGB for
-  // every blend mode except Mod2X, which reads it raw.
-  tf2DetailColor = uTf2DetailMode == 0.0 ? tf2DetailTexel : sRGBTransferEOTF( tf2DetailTexel );
+  // every blend mode except Mod2X, which reads it raw. UnlitTwoTexture loads
+  // both textures as sRGB and multiplies them directly.
+  tf2DetailColor = uTf2UnlitTwoTexture > 0.5 || uTf2DetailMode != 0.0
+    ? sRGBTransferEOTF( tf2DetailTexel ) : tf2DetailTexel;
   tf2DetailColor.rgb *= uTf2DetailTint;
-  diffuseColor = tf2TextureCombine( diffuseColor, tf2DetailColor, uTf2DetailMode, uTf2DetailFactor );
+  if ( uTf2UnlitTwoTexture > 0.5 ) {
+    diffuseColor.rgb *= tf2DetailColor.rgb;
+    diffuseColor.a = 1.0;
+  } else {
+    diffuseColor = tf2TextureCombine( diffuseColor, tf2DetailColor, uTf2DetailMode, uTf2DetailFactor );
+  }
 }
 #endif`;
 
@@ -194,10 +204,11 @@ float tf2SeparateSelfIllumMask = 0.0;
 float tf2BaseSelfIllumMask = mix( diffuseColor.a, tf2SeparateSelfIllumMask, uTf2UseSelfIllumMask );
 float tf2SelfIllumMask = uTf2SelfIllum * tf2BaseSelfIllumMask * tf2SelfIllumFresnelMask;
 float tf2SelfIllumBrightness = mix( 1.0, uTf2SelfIllumFresnelParams.w, uTf2SelfIllumFresnel );
-vec3 tf2LitDiffuse = reflectedLight.directDiffuse + tf2AmbientDiffuse;
+vec3 tf2LitDiffuse = uTf2Unlit > 0.5
+  ? diffuseColor.rgb : reflectedLight.directDiffuse + tf2AmbientDiffuse;
 // vertexlit_and_unlit_generic_ps2x.fxc combines the detail texture into the
 // lit diffuse before self-illumination and before specular is added.
-if ( uTf2Detail > 0.0 ) {
+if ( uTf2Detail > 0.0 && uTf2Unlit <= 0.5 ) {
   tf2LitDiffuse = tf2TextureCombinePostLighting( tf2LitDiffuse, tf2DetailColor, uTf2DetailMode, uTf2DetailFactor );
 }
 tf2LitDiffuse = mix(

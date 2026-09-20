@@ -17,9 +17,11 @@ export function createTf2Uniforms() {
     uTf2SelfIllumTint: { value: new THREE.Color(1, 1, 1) }, uTf2SelfIllumFresnel: { value: 0 },
     uTf2SelfIllumFresnelParams: { value: new THREE.Vector4(1, 0, 1, 1) },
     uTf2EnvTint: { value: new THREE.Color(0, 0, 0) }, uTf2AlphaTestRef: { value: 0 },
+    uTf2Unlit: { value: 0 }, uTf2UnlitTwoTexture: { value: 0 }, uTf2Time: { value: 0 },
     uTf2Detail: { value: 0 }, uTf2DetailMap: { value: null as THREE.Texture | null },
     uTf2DetailMode: { value: 0 }, uTf2DetailScale: { value: 4 },
     uTf2DetailFactor: { value: 1 }, uTf2DetailTint: { value: new THREE.Color(1, 1, 1) },
+    uTf2DetailScroll: { value: new THREE.Vector2() },
     uTf2StickerPreview: { value: 0 }, uTf2StickerHasSpec: { value: 0 },
     uTf2StickerMap: { value: null as THREE.Texture | null },
     uTf2StickerSpecMap: { value: null as THREE.Texture | null },
@@ -64,15 +66,26 @@ export function configureTf2Material(
   uniforms.uTf2SelfIllumFresnelParams.value.set(1 - bias, bias, Math.max(exponent, .001), max);
   uniforms.uTf2HalfLambert.value = source.halfLambert ? 1 : 0;
   uniforms.uTf2EnvTint.value.setRGB(...source.envmapTint);
+  uniforms.uTf2Unlit.value = source.unlit ? 1 : 0;
+  uniforms.uTf2UnlitTwoTexture.value = source.unlitTwoTexture ? 1 : 0;
   uniforms.uTf2Detail.value = source.detailTexture ? 1 : 0;
   uniforms.uTf2DetailMode.value = source.detailBlendMode ?? 0;
   uniforms.uTf2DetailScale.value = source.detailScale ?? 4;
   uniforms.uTf2DetailFactor.value = source.detailBlendFactor ?? 1;
   uniforms.uTf2DetailTint.value.setRGB(...(source.detailTint ?? [1, 1, 1]));
+  const detailScrollRate = source.detailScrollRate ?? 0;
+  const detailScrollAngle = THREE.MathUtils.degToRad(source.detailScrollAngle ?? 0);
+  uniforms.uTf2DetailScroll.value.set(
+    Math.cos(detailScrollAngle) * detailScrollRate,
+    Math.sin(detailScrollAngle) * detailScrollRate,
+  );
   uniforms.uTf2AlphaTestRef.value = source.alphaTest ? (source.alphaTestReference ?? .5) : 0;
   material.alphaTest = 0;
   material.alphaToCoverage = false;
-  material.transparent = !!source.alphaTest && !!source.alphaToCoverage;
+  material.opacity = source.alpha ?? 1;
+  material.transparent = !!source.additive || !!source.translucent || material.opacity < 1
+    || (!!source.alphaTest && !!source.alphaToCoverage);
+  material.blending = source.additive ? THREE.AdditiveBlending : THREE.NormalBlending;
   material.depthWrite = true;
   material.specular.setRGB(1, 1, 1);
   material.shininess = THREE.MathUtils.clamp(source.phongExponent ?? 5, 1, 300);

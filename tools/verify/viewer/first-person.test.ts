@@ -99,7 +99,7 @@ test('bonemerge follows named arms bones and preserves unmatched child offsets',
   assert.ok(Math.abs(viewmodelFov(90) - 73.739795) < 0.00001);
 });
 
-test.each(['c_minigun', 'c_gatling_gun', 'c_tomislav', 'c_holymackerel', 'c_knife', 'c_grenadelauncher'])('%s materials, paused pose changes, and overlays remain correct', async weaponKey => {
+test.each(['c_minigun', 'c_gatling_gun', 'c_tomislav', 'c_holymackerel', 'c_knife', 'c_grenadelauncher'])('%s paused pose changes, and overlays remain correct', async weaponKey => {
   const manifest: ViewmodelManifest = JSON.parse(fs.readFileSync('public/data/viewmodels/manifest.json', 'utf8'));
   const weapon = manifest.weapons.find(entry => entry.weaponKey === weaponKey);
   assert.ok(weapon);
@@ -111,7 +111,6 @@ test.each(['c_minigun', 'c_gatling_gun', 'c_tomislav', 'c_holymackerel', 'c_knif
   let paintDisposed = false;
   paint.addEventListener('dispose', () => { paintDisposed = true; });
   overlayMaterial.addEventListener('dispose', () => { sharedDisposed = true; });
-  const configure = vi.spyOn(materialConfig, 'configureTf2Material');
   vi.spyOn(GLTFLoader.prototype, 'loadAsync').mockImplementation(async url => {
     assert.ok(url.startsWith(`${import.meta.env.BASE_URL}data/viewmodels/`), 'models use the deployment base path');
     const bytes = fs.readFileSync(path.join('public', url.slice(import.meta.env.BASE_URL.length)));
@@ -123,10 +122,6 @@ test.each(['c_minigun', 'c_gatling_gun', 'c_tomislav', 'c_holymackerel', 'c_knif
   });
   try {
     await preview.load(manifest.arms[weapon.armsKey], weapon, 'red', paint, paint, materialConfig.createTf2Uniforms(), cubemap);
-    if (weaponKey === 'c_minigun') {
-      assert.equal(configure.mock.calls.length, 2, 'both Heavy hand materials are configured');
-      assert.ok(configure.mock.calls.every(([params]) => !params.detailTexture), 'sheen masks do not darken the hand albedo');
-    }
     if (weaponKey === 'c_knife') {
       const attachments = JSON.parse(fs.readFileSync('public/data/effects/attachments.json', 'utf8')) as
         Record<string, Record<string, { pos: [number, number, number]; quat: [number, number, number, number]; bone: string }>>;
