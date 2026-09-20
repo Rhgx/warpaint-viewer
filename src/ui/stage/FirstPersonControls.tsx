@@ -29,7 +29,7 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
   const active = enabled;
   const choices = manifest?.weapons.filter(weapon => weapon.weaponKey === weaponKey) ?? [];
   const weapon = choices.find(choice => choice.class === playerClass) ?? choices[0];
-  const animationGroups = firstPersonAnimationGroups(weapon?.clips ?? {});
+  const animationGroups = firstPersonAnimationGroups(weapon?.clips ?? {}, weapon?.weaponKey);
   const animations = animationGroups.flatMap(group => group.options);
   const selectedAnimation = animations.find(option => option.id === animation)
     ?? animations.find(option => option.clip === weapon?.activity) ?? animations[0];

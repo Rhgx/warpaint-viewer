@@ -58,8 +58,11 @@ test('first-person assets cover every paintable weapon, retain UVs, and contain 
       assert.ok(arms.skins?.length, `${view.armsKey} has a skeleton`);
       const names = new Set(arms.animations?.map(clip => clip.name));
       assert.ok(names.has(view.activity), `${view.weaponKey}/${view.class} idle exists`);
-      const options = firstPersonAnimationGroups(view.clips).flatMap(group => group.options);
-      assert.deepEqual(options.map(option => option.clip).sort(), Object.values(view.clips).flat().sort(), 'every variant is selectable');
+      const options = firstPersonAnimationGroups(view.clips, view.weaponKey).flatMap(group => group.options);
+      const expectedClips = Object.entries(view.clips)
+        .filter(([key]) => key !== 'ACT_VM_PULLBACK' || view.weaponKey === 'c_demo_cannon' || view.weaponKey === 'c_stickybomb_launcher')
+        .flatMap(([, value]) => Array.isArray(value) ? value : [value]);
+      assert.deepEqual(options.map(option => option.clip).sort(), expectedClips.sort(), 'every variant is selectable');
       assert.equal(new Set(options.map(option => option.id)).size, options.length, 'selection identities are unique');
       for (const option of options) assert.ok(names.has(option.clip), `${view.weaponKey}/${view.class}: ${option.clip} exists`);
     }
@@ -76,6 +79,9 @@ test('animation groups label alternate takes and retain unfamiliar activities', 
   assert.deepEqual(groups[1].options.map(option => option.label), ['Swing 1', 'Swing 2', 'Swing 3']);
   assert.equal(groups[2].options[0].label, 'New Action');
   assert.deepEqual(firstPersonAnimationGroups({}), []);
+  assert.deepEqual(firstPersonAnimationGroups({ ACT_VM_PULLBACK: 'charge' }, 'c_grenadelauncher'), []);
+  assert.equal(firstPersonAnimationGroups({ ACT_VM_PULLBACK: 'charge' }, 'c_demo_cannon')[0]?.options[0]?.label, 'Charge');
+  assert.equal(firstPersonAnimationGroups({ ACT_VM_PULLBACK: 'charge' }, 'c_stickybomb_launcher')[0]?.options[0]?.label, 'Charge');
 });
 
 test('bonemerge follows named arms bones and preserves unmatched child offsets', () => {
@@ -93,7 +99,7 @@ test('bonemerge follows named arms bones and preserves unmatched child offsets',
   assert.ok(Math.abs(viewmodelFov(90) - 73.739795) < 0.00001);
 });
 
-test.each(['c_minigun', 'c_gatling_gun', 'c_tomislav', 'c_holymackerel', 'c_knife'])('%s materials, paused pose changes, and overlays remain correct', async weaponKey => {
+test.each(['c_minigun', 'c_gatling_gun', 'c_tomislav', 'c_holymackerel', 'c_knife', 'c_grenadelauncher'])('%s materials, paused pose changes, and overlays remain correct', async weaponKey => {
   const manifest: ViewmodelManifest = JSON.parse(fs.readFileSync('public/data/viewmodels/manifest.json', 'utf8'));
   const weapon = manifest.weapons.find(entry => entry.weaponKey === weaponKey);
   assert.ok(weapon);
@@ -233,6 +239,38 @@ test.each(['c_minigun', 'c_gatling_gun', 'c_tomislav', 'c_holymackerel', 'c_knif
       const stoppedAgain = relativeBarrel();
       preview.update(0.1);
       assert.ok(relativeBarrel().elements.every((n, i) => Math.abs(n - stoppedAgain.elements[i]) < 1e-5), 'barrel settles to a complete stop');
+    }
+    if (weaponKey === 'c_grenadelauncher') {
+      const chamber = overlay.skeleton.bones.find(bone => bone.name === 'procedural_chamber');
+      assert.ok(chamber);
+      const relativeChamber = () => preview.weaponAnchor.clone().invert().multiply(chamber.matrixWorld);
+      const proceduralChamber = preview as unknown as { chamberAngle: number; chamberTarget: number };
+      const idle = Array.isArray(weapon.clips.ACT_VM_IDLE) ? weapon.clips.ACT_VM_IDLE[0] : weapon.clips.ACT_VM_IDLE;
+      const fire = Array.isArray(weapon.clips.ACT_VM_PRIMARYATTACK) ? weapon.clips.ACT_VM_PRIMARYATTACK[0] : weapon.clips.ACT_VM_PRIMARYATTACK;
+      const reloadActivities = ['ACT_VM_RELOAD', 'ACT_RELOAD_START', 'ACT_RELOAD_FINISH'] as const;
+      assert.ok(idle && fire);
+      preview.setAnimation(idle); preview.update(0.5);
+      const stopped = relativeChamber();
+      preview.setAnimation(fire); preview.update(0.02);
+      assert.ok(!relativeChamber().equals(stopped), 'fire rotates the grenade launcher chamber');
+      const unfinishedTarget = proceduralChamber.chamberTarget;
+      assert.ok(proceduralChamber.chamberAngle < unfinishedTarget, 'fire transition is still in progress');
+      preview.setAnimation(idle); preview.update(1);
+      assert.ok(Math.abs(proceduralChamber.chamberAngle - unfinishedTarget) < 1e-4, 'switching animation finishes the chamber turn');
+      preview.setAnimation(fire); preview.update(0.2);
+      const firstFire = proceduralChamber.chamberAngle;
+      preview.update(0.6);
+      assert.ok(proceduralChamber.chamberAngle > firstFire, 'repeating fire advances the grenade launcher chamber again');
+      const completedTarget = proceduralChamber.chamberTarget;
+      for (const activity of reloadActivities) {
+        const reload = weapon.clips[activity];
+        const clip = Array.isArray(reload) ? reload[0] : reload;
+        assert.ok(clip, `${activity} exists`);
+        preview.setAnimation(clip);
+        assert.equal(proceduralChamber.chamberTarget, completedTarget, `${activity} preserves the chamber target`);
+        preview.update(0.7);
+        assert.equal(proceduralChamber.chamberTarget, completedTarget, `${activity} does not rotate the grenade launcher chamber`);
+      }
     }
     preview.dispose();
     assert.equal(sharedDisposed, false, 'preview disposal does not dispose shared pass materials');

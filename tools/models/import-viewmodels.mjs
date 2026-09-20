@@ -40,6 +40,7 @@ for (const weapon of catalog.weapons.filter(entry => entry.key !== 'paintkit_too
     arms[armsKey] ??= asset(extracted.arms[armsKey]);
     weapons.push({ ...asset(entry, paintMaterials), paintMaterials, weaponKey: weapon.key, class: entry.class, armsKey,
       activity: entry.activity, clips: entry.clips, stockOffset: entry.stockOffset,
+      procedural: entry.procedural,
       ...(weapon.key === 'c_holymackerel' ? { jiggleBones: entry.animationMetadata.jiggleBones } : {}),
       flipViewmodel: entry.flipViewmodel, attachments: entry.attachments.map(entry => asset(entry)) });
   }

@@ -21,8 +21,12 @@ const activities: Record<string, [group: string, label: string]> = {
 };
 
 /** Keep activity identities across weapons, while exposing every alternate clip. */
-export function firstPersonAnimationGroups(clips: Record<string, string | string[]>) {
-  const keys = [...Object.keys(activities), ...Object.keys(clips).filter(key => !activities[key])];
+export function firstPersonAnimationGroups(clips: Record<string, string | string[]>, weaponKey?: string) {
+  const chargeable = weaponKey === 'c_demo_cannon' || weaponKey === 'c_stickybomb_launcher';
+  const keys = [
+    ...Object.keys(activities).filter(key => key !== 'ACT_VM_PULLBACK' || chargeable),
+    ...Object.keys(clips).filter(key => key !== 'ACT_VM_PULLBACK' || chargeable).filter(key => !activities[key]),
+  ];
   const options = keys.flatMap(key => {
     const value = clips[key];
     if (!value) return [];

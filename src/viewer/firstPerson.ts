@@ -22,6 +22,7 @@ export interface ViewmodelWeapon extends ViewmodelAsset {
   clips: Record<string, string | string[]>;
   stockOffset: [number, number, number] | null;
   flipViewmodel?: boolean;
+  procedural?: 'minigun' | 'grenadeLauncher';
   attachments: ViewmodelAsset[];
   jiggleBones?: FishJiggleSettings[];
 }
@@ -86,6 +87,13 @@ export class FirstPersonPreview {
   private barrelAngle = 0;
   private barrelVelocity = 0;
   private barrelRotation = new THREE.Matrix4();
+  private chamberAngle = 0;
+  private chamberTarget = 0;
+  private chamberAction: THREE.AnimationAction | null = null;
+  private chamberRotation = new THREE.Matrix4();
+  private readonly onAnimationLoop = (event: THREE.AnimationMixerEventMap['loop']): void => {
+    if (event.action === this.chamberAction) this.chamberTarget += Math.PI / 3 * event.loopDelta;
+  };
 
   constructor() {
     // Source x forward, y left, z up -> Three x right, y up, z back.
@@ -180,6 +188,7 @@ export class FirstPersonPreview {
     this.boneBindings = this.bones.slice(1).map((bones, index) =>
       bindViewmodelBones(bones, index === 0 ? [this.boneMaps[0]] : [this.boneMaps[1], this.boneMaps[0]]));
     this.mixer = new THREE.AnimationMixer(gltfs[0].scene);
+    this.mixer.addEventListener('loop', this.onAnimationLoop);
     const skeleton = this.paintMeshes[0]?.skeleton;
     const rootIndex = skeleton?.bones.indexOf(this.bones[1][0]) ?? -1;
     if (skeleton && rootIndex >= 0) this.weaponBindInverse.copy(skeleton.boneInverses[rootIndex]);
@@ -200,7 +209,16 @@ export class FirstPersonPreview {
     this.poseDirty = true;
     this.fishPhysics?.reset();
     this.mixer.stopAllAction();
-    this.mixer.clipAction(clip).reset().play();
+    // GLB keys are authored at frame / fps, so the repeat interval is (frames - 1) / fps.
+    const action = this.mixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).reset().play();
+    // CTFGrenadeLauncher advances its procedural chamber from SendWeaponAnim
+    // only for ACT_VM_PRIMARYATTACK. Reload bodygroups animate independently.
+    const chamberRotating = this.weapon?.procedural === 'grenadeLauncher'
+      && activity.includes('VM_PRIMARYATTACK');
+    this.chamberAction = chamberRotating ? action : null;
+    // Keep an in-progress primary-attack turn alive when another animation is selected.
+    // Source continues UpdateBarrelMovement independently of the current viewmodel sequence.
+    if (chamberRotating) this.chamberTarget = this.chamberAngle + Math.PI / 3;
     this.update(0);
   }
 
@@ -237,6 +255,15 @@ export class FirstPersonPreview {
       // Bonemerge has already posed the skeleton; carry children with the barrel.
       barrel.traverse(child => {
         if (child !== barrel && child.parent) child.matrixWorld.multiplyMatrices(child.parent.matrixWorld, child.matrix);
+      });
+    }
+    const chamber = this.weapon?.procedural === 'grenadeLauncher'
+      ? this.boneMaps[1].get('procedural_chamber') : undefined;
+    if (chamber) {
+      this.chamberAngle = THREE.MathUtils.damp(this.chamberAngle, this.chamberTarget, 10, animationDelta);
+      chamber.matrixWorld.multiply(this.chamberRotation.makeRotationZ(this.chamberAngle));
+      chamber.traverse(child => {
+        if (child !== chamber && child.parent) child.matrixWorld.multiplyMatrices(child.parent.matrixWorld, child.matrix);
       });
     }
     if (this.fishPhysicsEnabled) this.fishPhysics?.update(animationDelta);
@@ -312,6 +339,7 @@ export class FirstPersonPreview {
     this.setOverlay('sheen', null);
     this.setOverlay('emissive', null);
     this.mixer?.stopAllAction();
+    this.mixer?.removeEventListener('loop', this.onAnimationLoop);
     this.mixer?.uncacheRoot(this.mixer.getRoot());
     this.releaseResources();
   }
