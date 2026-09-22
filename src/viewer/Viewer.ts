@@ -2819,7 +2819,7 @@ export class Viewer {
       target.dispose();
     }
 
-    return screenshotPixelsToBlob(raw, width, height, paddingScale, outputMaxEdge);
+    return screenshotPixelsToBlob(raw, width, height, paddingScale, outputMaxEdge, !!this.firstPerson);
   }
 
   private installTf2Shader() {

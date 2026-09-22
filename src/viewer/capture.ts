@@ -68,12 +68,18 @@ export function screenshotOutputSize(
   };
 }
 
+export function screenshotWatermarkScale(width: number, height: number): number {
+  // Fit the same watermark proportions in landscape and portrait exports.
+  return Math.min(Math.max(width, height) / 1280, Math.min(width, height) / 720);
+}
+
 export async function screenshotPixelsToBlob(
   raw: Uint8Array,
   width: number,
   height: number,
   paddingScale: number,
   outputMaxEdge: number | null,
+  firstPersonWatermark = false,
 ): Promise<Blob> {
   const image = new ImageData(width, height);
   const out = image.data;
@@ -126,6 +132,35 @@ export async function screenshotPixelsToBlob(
     if (!outputContext) throw new Error('[warpaint-viewer] screenshot resize canvas 2d context unavailable');
     outputContext.imageSmoothingQuality = 'high';
     outputContext.drawImage(cropped, 0, 0, output.width, output.height);
+  }
+
+  if (firstPersonWatermark) {
+    const logo = new Image();
+    logo.src = `${import.meta.env.BASE_URL}watermark-logo.svg`;
+    await Promise.all([
+      logo.decode(),
+      document.fonts.load('600 18px "Barlow Semi Condensed"'),
+      document.fonts.load('400 14px "Barlow Semi Condensed"'),
+    ]);
+    const context = output.getContext('2d');
+    if (!context) throw new Error('[warpaint-viewer] watermark canvas 2d context unavailable');
+    // Draw after cropping and resizing so the label stays inside every export.
+    const scale = screenshotWatermarkScale(output.width, output.height);
+    context.save();
+    context.scale(scale, scale);
+    context.translate(28, output.height / scale - 70);
+    context.globalAlpha = 0.62;
+    context.drawImage(logo, 0, 0, 38, 41);
+    context.fillStyle = '#fff';
+    context.textBaseline = 'top';
+    context.font = '600 18px "Barlow Semi Condensed", sans-serif';
+    context.letterSpacing = '1.5px';
+    context.fillText('WAR PAINT VIEWER', 52, 3);
+    context.globalAlpha = 0.48;
+    context.font = '400 14px "Barlow Semi Condensed", sans-serif';
+    context.letterSpacing = '0px';
+    context.fillText('Not an in-game screenshot', 52, 26);
+    context.restore();
   }
 
   const blob = await new Promise<Blob | null>((resolve) => output.toBlob(resolve, 'image/png'));

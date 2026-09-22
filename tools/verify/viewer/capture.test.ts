@@ -4,7 +4,18 @@ import {
   fitScreenshotCapture,
   resolveScreenshotCapture,
   screenshotOutputSize,
+  screenshotWatermarkScale,
 } from '../../../src/viewer/capture';
+
+test('watermarks match across orientations and scale with export resolution', () => {
+  assert.equal(screenshotWatermarkScale(1920, 1080), 1.5);
+  assert.equal(screenshotWatermarkScale(1080, 1920), 1.5);
+  assert.equal(screenshotWatermarkScale(1920, 1920), 1.5);
+  assert.equal(screenshotWatermarkScale(2160, 3840), 3);
+  // Narrow crops still constrain the mark so it fits within the image.
+  assert.equal(screenshotWatermarkScale(720, 1920), 1);
+  assert.equal(screenshotWatermarkScale(1920, 720), 1);
+});
 
 test('size presets fit the viewport within the requested maximum edge', () => {
   assert.deepEqual(resolveScreenshotCapture({ maxEdge: 1920 }, 800, 1000), {
