@@ -3844,6 +3844,7 @@ function MainApp() {
     const supplied = pkg ? resolvePackageTextures(packageRefs, (ref: string) => sourceProvider.packagePathFor(ref)) : [];
     const unresolvedTextureRefs = refs.filter((ref) => {
       if (!sourceTextureIdentity(ref).startsWith('materials/patterns/')) return false;
+      if (manualTextureOverrides[ref]) return false;
       if (sourceProvider.packagePathFor(ref)) return false;
       return !data?.manifest.textures?.[ref];
     });
