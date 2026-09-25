@@ -92,7 +92,14 @@ export class TextureCache {
   // Map preserves insertion order; entries are re-inserted on hit, so iteration
   // order is least-recently-used first.
   private cache = new Map<string, Entry>();
-  private loader = new THREE.TextureLoader();
+  // Decoded off the main thread, raw (no premultiply, no color management) to
+  // match how the textures are sampled. An <img> source decodes premultiplied
+  // and color-managed, so the WebGL upload had to re-decode every 2048px
+  // pattern synchronously: 100-300ms hitches on each paint switch.
+  private loader = typeof createImageBitmap === 'function'
+    ? new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
+    : null;
+  private fallbackLoader = new THREE.TextureLoader();
   private resolve: TextureResolver;
   private budget: number;
   private totalBytes = 0;
@@ -157,66 +164,69 @@ export class TextureCache {
       failed: false,
     };
     entry.promise = Promise.resolve(this.resolve(ref)).then((url) => new Promise<THREE.Texture>((resolve) => {
-      this.loader.load(
-        url,
-        (tex) => {
-          tex.colorSpace = THREE.NoColorSpace;
-          // CRITICAL orientation contract: the composited render target is
-          // sampled by glTF UVs, whose convention (like the game's DirectX UVs)
-          // is v=0 at the image TOP with unflipped uploads. TextureLoader's
-          // default flipY=true would put the image bottom at v=0, making the
-          // whole composite land vertically mirrored on the weapon. Uploading
-          // every source unflipped keeps composite space identical to game UV
-          // space (v down), so the result maps onto the mesh exactly in-game.
-          tex.flipY = false;
-          const meta = { ...this.metadata[ref], ...this.metadataResolver?.(ref) };
-          tex.wrapS = meta?.clampS ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
-          tex.wrapT = meta?.clampT ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
-          if (opts.nearest) {
-            tex.magFilter = THREE.NearestFilter;
-            tex.minFilter = THREE.NearestFilter;
-            tex.generateMipmaps = false;
-            tex.wrapS = THREE.ClampToEdgeWrapping;
-            tex.wrapT = THREE.ClampToEdgeWrapping;
-          } else {
-            tex.magFilter = meta?.pointSample ? THREE.NearestFilter : THREE.LinearFilter;
-            tex.generateMipmaps = !(meta?.noMip || meta?.noLod);
-            tex.minFilter = !tex.generateMipmaps
-              ? tex.magFilter
-              : meta?.pointSample ? THREE.NearestMipmapNearestFilter
-                : meta?.trilinear || meta?.anisotropic ? THREE.LinearMipmapLinearFilter : THREE.LinearMipmapNearestFilter;
-            if (meta?.anisotropic) tex.anisotropy = this.maxAnisotropy;
-          }
-          tex.needsUpdate = true;
-          entry.settled = true;
-          entry.bytes = textureBytes(tex);
-          this.totalBytes += entry.bytes;
-          this.evictIfNeeded();
-          resolve(tex);
-        },
-        undefined,
-        () => {
-          entry.settled = true;
-          entry.failed = true;
-          // An input that will not load must not take the whole composite with
-          // it. An imported war paint routinely names a texture its author did
-          // not ship, and the recipe is otherwise perfectly renderable, so
-          // stand in white: the neutral element of the multiply chains that
-          // dominate these recipes, which leaves the rest of the paint intact
-          // instead of blacking out the weapon or failing the app outright.
-          this.missing.add(ref);
-          if (!reportedMissing.has(ref)) {
-            reportedMissing.add(ref);
-            console.warn(`[warpaint-viewer] missing texture, substituting white: ${ref} (${url})`);
-          }
-          const placeholder = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
-          placeholder.colorSpace = THREE.NoColorSpace;
-          placeholder.needsUpdate = true;
-          entry.bytes = 4;
-          this.totalBytes += entry.bytes;
-          resolve(placeholder);
-        },
-      );
+      const onLoad = (tex: THREE.Texture) => {
+        tex.colorSpace = THREE.NoColorSpace;
+        // CRITICAL orientation contract: the composited render target is
+        // sampled by glTF UVs, whose convention (like the game's DirectX UVs)
+        // is v=0 at the image TOP with unflipped uploads. TextureLoader's
+        // default flipY=true would put the image bottom at v=0, making the
+        // whole composite land vertically mirrored on the weapon. Uploading
+        // every source unflipped keeps composite space identical to game UV
+        // space (v down), so the result maps onto the mesh exactly in-game.
+        tex.flipY = false;
+        const meta = { ...this.metadata[ref], ...this.metadataResolver?.(ref) };
+        tex.wrapS = meta?.clampS ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+        tex.wrapT = meta?.clampT ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+        if (opts.nearest) {
+          tex.magFilter = THREE.NearestFilter;
+          tex.minFilter = THREE.NearestFilter;
+          tex.generateMipmaps = false;
+          tex.wrapS = THREE.ClampToEdgeWrapping;
+          tex.wrapT = THREE.ClampToEdgeWrapping;
+        } else {
+          tex.magFilter = meta?.pointSample ? THREE.NearestFilter : THREE.LinearFilter;
+          tex.generateMipmaps = !(meta?.noMip || meta?.noLod);
+          tex.minFilter = !tex.generateMipmaps
+            ? tex.magFilter
+            : meta?.pointSample ? THREE.NearestMipmapNearestFilter
+              : meta?.trilinear || meta?.anisotropic ? THREE.LinearMipmapLinearFilter : THREE.LinearMipmapNearestFilter;
+          if (meta?.anisotropic) tex.anisotropy = this.maxAnisotropy;
+        }
+        tex.needsUpdate = true;
+        entry.settled = true;
+        entry.bytes = textureBytes(tex);
+        this.totalBytes += entry.bytes;
+        this.evictIfNeeded();
+        resolve(tex);
+      };
+      const onError = () => {
+        entry.settled = true;
+        entry.failed = true;
+        // An input that will not load must not take the whole composite with
+        // it. An imported war paint routinely names a texture its author did
+        // not ship, and the recipe is otherwise perfectly renderable, so
+        // stand in white: the neutral element of the multiply chains that
+        // dominate these recipes, which leaves the rest of the paint intact
+        // instead of blacking out the weapon or failing the app outright.
+        this.missing.add(ref);
+        if (!reportedMissing.has(ref)) {
+          reportedMissing.add(ref);
+          console.warn(`[warpaint-viewer] missing texture, substituting white: ${ref} (${url})`);
+        }
+        const placeholder = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+        placeholder.colorSpace = THREE.NoColorSpace;
+        placeholder.needsUpdate = true;
+        entry.bytes = 4;
+        this.totalBytes += entry.bytes;
+        resolve(placeholder);
+      };
+      if (this.loader) {
+        this.loader.load(url, (bitmap) => {
+          onLoad(new THREE.Texture(bitmap));
+        }, undefined, onError);
+      } else {
+        this.fallbackLoader.load(url, onLoad, undefined, onError);
+      }
     }));
     this.cache.set(key, entry);
     return entry.promise;

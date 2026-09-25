@@ -49,6 +49,38 @@ const tmpV2 = new THREE.Vector3();
 const tmpV3 = new THREE.Vector3();
 const tmpC1 = new THREE.Color();
 
+
+// Every system uses the same shader. Disposing a material when an effect is
+// torn down drops that program to zero users, and the replacement effect
+// (whose definitions load asynchronously) then compiles it from scratch: a
+// blocking shader compile on every weapon switch. Recycled materials keep the
+// program alive.
+const particleMaterialPool: THREE.ShaderMaterial[] = [];
+
+function takeParticleMaterial(): THREE.ShaderMaterial {
+  const material = particleMaterialPool.pop() ?? new THREE.ShaderMaterial({
+    uniforms: {
+      uMap: { value: dotTexture() },
+      uFrames: { value: 1 },
+      uPointScale: particlePointScale,
+    },
+    vertexShader: PARTICLE_VERTEX,
+    fragmentShader: PARTICLE_FRAGMENT,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+  });
+  material.uniforms.uMap.value = dotTexture();
+  material.uniforms.uFrames.value = 1;
+  applyAdditiveBlending(material);
+  material.needsUpdate = true;
+  return material;
+}
+
+function releaseParticleMaterial(material: THREE.ShaderMaterial) {
+  particleMaterialPool.push(material);
+}
+
 export class SystemInstance {
   readonly name: string;
   readonly children: SystemInstance[] = [];
@@ -192,19 +224,7 @@ export class SystemInstance {
       this.geometry.setAttribute('aRotation', new THREE.BufferAttribute(this.rotations, 1).setUsage(THREE.DynamicDrawUsage));
       this.geometry.setAttribute('aUvRect', new THREE.BufferAttribute(this.uvRects, 4));
 
-      this.material = new THREE.ShaderMaterial({
-        uniforms: {
-          uMap: { value: dotTexture() },
-          uFrames: { value: 1 },
-          uPointScale: particlePointScale,
-        },
-        vertexShader: PARTICLE_VERTEX,
-        fragmentShader: PARTICLE_FRAGMENT,
-        transparent: true,
-        depthWrite: false,
-        depthTest: true,
-      });
-      applyAdditiveBlending(this.material);
+      this.material = takeParticleMaterial();
 
       this.points = new THREE.Points(this.geometry, this.material);
       this.points.name = name;
@@ -808,7 +828,7 @@ export class SystemInstance {
   dispose() {
     this.disposed = true;
     this.geometry?.dispose();
-    this.material?.dispose();
+    if (this.material) releaseParticleMaterial(this.material);
     for (const child of this.children) child.dispose();
     // Sprite textures are cached at module level and shared across effects;
     // they are intentionally not disposed here.
