@@ -61,7 +61,9 @@ import {
   preferredLayerOccurrenceIndex,
 } from './editor/transformIsolation';
 import { discoverWeaponMaterialTargets } from './editor/materialTargets';
+import { readTextureLayerTeamColors } from './editor/mutations';
 import type { TextureTransformRangeField, TextureTransformTarget } from './editor/mutations';
+import { texturePublicPath } from './protodefs/values';
 import type { TextureTransformFields, TextureTransformPanelProps } from './ui/workbench/TextureTransformPanel';
 import type { SeedRangeValue } from './ui/workbench/SeedRangeField';
 import type { SeedRangeDivergence } from './ui/workbench/SeedRangeField';
@@ -687,6 +689,9 @@ function MainApp() {
     addSticker: addSessionSticker,
     removeSticker: removeSessionSticker,
     moveSticker: moveSessionSticker,
+    setStickerBase: setSessionStickerBase,
+    setLayerTeamColors: setSessionLayerTeamColors,
+    setLayerTeamTexture: setSessionLayerTeamTexture,
     beginTransformGesture: beginSessionTransformGesture,
     endTransformGesture: endSessionTransformGesture,
     setTransformRange: setSessionTransformRange,
@@ -1565,6 +1570,18 @@ function MainApp() {
 
   const selectedKit: PaintkitEntry | null =
     selectedKitId != null ? paintkits.find((p) => p.id === selectedKitId) ?? null : null;
+  // Team colors switched on in the editor count as soon as the edit lands, so
+  // the RED/BLU toggle and the Files list follow the working definition.
+  const kitHasTeamTextures = (selectedKit?.hasTeamTextures ?? false)
+    || (editableKitId !== null && editorSession.kitId === editableKitId
+      && editorCurrent?.definition.has_team_textures === true);
+  useEffect(() => {
+    // Only a switched-off team layer lands here: picking a paint already
+    // clamps the team, and the kit is unknown while the catalog boots.
+    if (selectedKit && !kitHasTeamTextures && state.team === 'blu' && state.sheen !== 'team_shine') {
+      setState((current) => ({ ...current, team: 'red' }));
+    }
+  }, [kitHasTeamTextures, selectedKit, state.sheen, state.team]);
   const editorDraftKey = editableKitId === null
     ? null
     : isCustomKitId(editableKitId)
@@ -3588,7 +3605,7 @@ function MainApp() {
       setEditorLoading(false);
       return;
     }
-    const recipeScope = `${selectedKit.id}|${state.weaponKey}|definition:${editorDefinitionGeneration}|package:${packageGeneration}`;
+    const recipeScope = `${selectedKit.id}|${state.weaponKey}|definition:${editorDefinitionGeneration}|package:${packageGeneration}|team:${kitHasTeamTextures}`;
     const recipeVariant = `${state.team}|${state.wearIndex}`;
     if (workbenchTab === 'package' || workbenchTab === 'definitions') {
       if (editorRecipeScopeRef.current !== recipeScope) {
@@ -3614,7 +3631,7 @@ function MainApp() {
     const wearIndexes = completeRecipeMatrix && selectedKit.perWear
       ? data.manifest.wearLevels.map((_, index) => index)
       : [state.wearIndex];
-    const teams = completeRecipeMatrix && selectedKit.hasTeamTextures
+    const teams = completeRecipeMatrix && kitHasTeamTextures
       ? (['red', 'blu'] as const)
       : [state.team];
     void Promise.all(
@@ -3634,7 +3651,7 @@ function MainApp() {
       if (!cancelled) setEditorLoading(false);
     });
     return () => { cancelled = true; };
-  }, [workbenchMounted, workbenchOpen, workbenchTab, data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex, editorDefinitionGeneration, packageGeneration]);
+  }, [workbenchMounted, workbenchOpen, workbenchTab, data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex, editorDefinitionGeneration, packageGeneration, kitHasTeamTextures]);
 
   // Load the model when the weapon changes.
   useEffect(() => {
@@ -4423,6 +4440,11 @@ function MainApp() {
                         // Several stickers can share a source, so a repeated
                         // name gets its ordinal back to stay distinguishable.
                         const seen = new Map<string, number>();
+                        const bases = stickerTargets.map((target) => {
+                          const base = target.stickers[0]?.base;
+                          return base?.resolvedValue ?? base?.authoredValue;
+                        });
+                        const files = bases.map((base) => (base ? texturePublicPath(base) : null));
                         return stickerTargets.map((target, index) => {
                           const label = stickerTargetLabel(target.stickers[0]?.base.resolvedValue, index);
                           const count = (seen.get(label) ?? 0) + 1;
@@ -4432,6 +4454,8 @@ function MainApp() {
                             label: count > 1 ? `${label} ${count}` : label,
                             canMoveEarlier: target.canMoveEarlier,
                             canMoveLater: target.canMoveLater,
+                            baseReference: bases[index],
+                            sharedWith: files[index] ? files.filter((file) => file === files[index]).length - 1 : 0,
                             thumbnail: groupStickerArtwork[target.id]?.url
                               ?? stickerTargetThumbnails[target.id]
                               ?? null,
@@ -4471,6 +4495,10 @@ function MainApp() {
                           selectedStickerTarget.quad,
                           baseReference,
                         )) setPendingAddedStickerRef(baseReference);
+                      },
+                      onSetTargetTexture: (baseReference: string) => {
+                        if (!selectedStickerTarget) return;
+                        setSessionStickerBase({ stagePaths: selectedStickerTarget.stagePaths }, baseReference);
                       },
                       onRemoveTarget: () => {
                         if (!selectedStickerTarget) return;
@@ -4550,6 +4578,26 @@ function MainApp() {
                       setWeaponBaseLayerActive(true);
                     },
                   } : undefined,
+                  teamColors: (() => {
+                    // The weapon's own albedo belongs to the model, so only
+                    // authored paint layers can be split per team.
+                    const info = weaponBaseLayerActive ? null : activeTransformTargetInfo;
+                    if (!editorCurrent || !info || info.blockers.some((blocker) => (
+                      blocker === 'no-texture-lookup-stage' || blocker === 'ambiguous-source-stage'
+                    ))) return undefined;
+                    const team = readTextureLayerTeamColors(editorCurrent, info.target);
+                    if (!team?.red) return undefined;
+                    return {
+                      enabled: team.enabled,
+                      team: state.team,
+                      red: team.red,
+                      blu: team.blu,
+                      onToggle: (enabled: boolean) => { setSessionLayerTeamColors(info.target, enabled); },
+                      onSetTexture: (side: 'red' | 'blu', reference: string) => {
+                        setSessionLayerTeamTexture(info.target, side, reference);
+                      },
+                    };
+                  })(),
                   showLayerMap,
                   onShowLayerMapChange: setShowLayerMap,
                   inspectOnClick: groupAssignActive,
@@ -4674,7 +4722,7 @@ function MainApp() {
           />}
           manifest={data.manifest}
           weaponOptions={weaponOptions}
-          hasTeamTextures={firstPersonActive || (selectedKit?.hasTeamTextures ?? false)}
+          hasTeamTextures={firstPersonActive || kitHasTeamTextures}
           state={state}
           viewAngle={viewAngleId}
           onChange={patch}

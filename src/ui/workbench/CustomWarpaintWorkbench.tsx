@@ -13,6 +13,8 @@ import {
   ChevronDown,
   Download,
   Files,
+  ImageUp,
+  Link2,
   Lock,
   LoaderCircle,
   Maximize2,
@@ -26,10 +28,12 @@ import {
   ScrollText,
   Trash2,
   Undo2,
+  Users,
   X,
 } from 'lucide-react';
 import type { TextureMetadata } from '../../data/types';
 import type { CustomDefinitionsState } from '../../protodefs/types';
+import { texturePublicPath } from '../../protodefs/values';
 import type { SourcePackageState } from '../../source/contracts';
 import type { WarpaintAssetOverrides, WarpaintAssetState, WearRecipe, WorkbenchTab } from '../../workbench/types';
 import { collectSlots } from '../../workbench/assetSlots';
@@ -86,6 +90,16 @@ function WorkbenchPanelFallback() {
 }
 const MIN_PANEL_HEIGHT = 190;
 const RESET_CONFIRM_MS = 3000;
+const TEXTURE_FILE_ACCEPT = '.png,.jpg,.jpeg,.webp,.tga,.vtf';
+
+/** A definition texture reference without its materials/ root or extension. */
+function referenceStem(reference: string): string {
+  return reference.trim().replace(/\\/g, '/').replace(/^materials\//i, '').replace(/\.(vtf|tga|psd|png|webp)$/i, '');
+}
+
+function referenceLabel(reference: string): string {
+  return (referenceStem(reference).split('/').at(-1) ?? reference).replaceAll('_', ' ');
+}
 
 function draftStatusLabel(status: EditorDraftStatus): string | null {
   if (status === 'pending' || status === 'saving') return 'Saving...';
@@ -143,7 +157,13 @@ export function CustomWarpaintWorkbench({
         thumbnail?: string | null;
         canMoveEarlier: boolean;
         canMoveLater: boolean;
+        /** Authored artwork reference, as the definition names it. */
+        baseReference?: string;
+        /** How many other stickers draw this same artwork file. */
+        sharedWith?: number;
       }[];
+      /** Points the active sticker at different artwork. */
+      onSetTargetTexture?: (baseReference: string) => void;
       activeTargetId: string;
       onActiveTargetChange: (id: string) => void;
       textureChoices: readonly { ref: string; label: string; thumbnail?: string | null }[];
@@ -156,6 +176,17 @@ export function CustomWarpaintWorkbench({
       hiddenModelPartCount?: number;
       onModelPartPickingChange?: (active: boolean) => void;
       onRestoreHiddenModelParts?: () => void;
+    };
+    /** Per-team artwork for the active paint layer; absent when the layer cannot have any. */
+    teamColors?: {
+      enabled: boolean;
+      /** The team the viewer shows; Replace acts on this side. */
+      team: 'red' | 'blu';
+      /** Authored texture reference each team draws, as the definition names it. */
+      red?: string;
+      blu?: string;
+      onToggle: (enabled: boolean) => void;
+      onSetTexture: (team: 'red' | 'blu', reference: string) => void;
     };
     /** Gates the Materials mode button; absent means nothing to override yet. */
     materials?: MaterialOverridesPanelProps;
@@ -336,8 +367,8 @@ export function CustomWarpaintWorkbench({
     slot: AssetSlot,
     file: File | undefined,
     alphaOnly: boolean,
-  ) => {
-    if (!file) return;
+  ): Promise<string> => {
+    if (!file) return '';
     setSlotError(slot.ref, '');
     setBusy((current) => ({ ...current, [slot.ref]: true }));
     let importedSource: string | undefined;
@@ -358,14 +389,14 @@ export function CustomWarpaintWorkbench({
           };
       commit({ ...assetsRef.current, [slot.ref]: await rebuild(nextAsset) });
       committed = true;
+      return '';
     } catch (cause) {
       if (!committed) revokeTextureUrl(importedSource);
-      setSlotError(
-        slot.ref,
-        cause instanceof Error
-          ? cause.message
-          : 'The file could not be imported.',
-      );
+      const message = cause instanceof Error
+        ? cause.message
+        : 'The file could not be imported.';
+      setSlotError(slot.ref, message);
+      return message;
     } finally {
       setBusy((current) => {
         const next = { ...current };
@@ -374,6 +405,60 @@ export function CustomWarpaintWorkbench({
       });
     }
   };
+
+  // Edit-tab image swaps. Artwork shared with another sticker or the other
+  // team gets a fresh reference beside the original, so only the chosen use
+  // changes; one this editor already split off is replaced in place.
+  const [editImportError, setEditImportError] = useState('');
+  const isSplitOffReference = (ref: string) => Boolean(assetsRef.current[ref] && !textureMetadata?.[ref]);
+  const freshReference = (stem: string) => {
+    const taken = (candidate: string) => {
+      const ref = texturePublicPath(candidate) ?? '';
+      return Boolean(assetsRef.current[ref] || textureMetadata?.[ref] || slots.some((slot) => slot.ref === ref));
+    };
+    let candidate = stem;
+    for (let n = 2; taken(candidate); n += 1) candidate = `${stem}_${n}`;
+    return candidate;
+  };
+  const importEditTexture = async (
+    reference: string,
+    kind: AssetSlot['kind'],
+    file: File,
+    split: boolean,
+    onSplit: (reference: string) => void,
+  ) => {
+    setEditImportError('');
+    const target = split ? freshReference(referenceStem(reference)) : referenceStem(reference);
+    const ref = texturePublicPath(target);
+    if (!ref) return;
+    const error = await updateFile({ ref, kind, group: 'artwork' }, file, false);
+    if (error) setEditImportError(error);
+    else if (split) onSplit(target);
+  };
+  const replaceStickerImage = (file: File) => {
+    const sticker = editor?.sticker;
+    const active = sticker?.targets.find((target) => target.id === sticker.activeTargetId);
+    if (!sticker?.onSetTargetTexture || !active?.baseReference) return;
+    const ref = texturePublicPath(referenceStem(active.baseReference)) ?? '';
+    const split = (active.sharedWith ?? 0) > 0 || !isSplitOffReference(ref);
+    void importEditTexture(active.baseReference, 'sticker', file, split, sticker.onSetTargetTexture);
+  };
+  const replaceTeamTexture = (team: 'red' | 'blu', file: File) => {
+    const colors = editor?.teamColors;
+    const side = colors?.[team];
+    if (!colors || !side) return;
+    const other = colors[team === 'red' ? 'blu' : 'red'];
+    const ref = texturePublicPath(referenceStem(side)) ?? '';
+    const split = !isSplitOffReference(ref) || referenceStem(other ?? '') === referenceStem(side);
+    void importEditTexture(
+      split ? `${referenceStem(side)}_${team}` : side,
+      'texture',
+      file,
+      split,
+      (reference) => colors.onSetTexture(team, reference),
+    );
+  };
+  const stickerFileRef = useRef<HTMLInputElement | null>(null);
 
   const removeAlpha = async (ref: string) => {
     const current = assetsRef.current[ref];
@@ -841,6 +926,14 @@ export function CustomWarpaintWorkbench({
                         <span className="custom-workbench-edit-sticker-label">
                           {target.label || `Sticker ${index + 1}`}
                         </span>
+                        {(target.sharedWith ?? 0) > 0 && (
+                          <span
+                            className="custom-workbench-edit-layer-vary"
+                            title={`Shares its image with ${target.sharedWith} other sticker${target.sharedWith === 1 ? '' : 's'}`}
+                          >
+                            <Link2 size={11} aria-hidden="true" />
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -864,6 +957,30 @@ export function CustomWarpaintWorkbench({
                       <button type="button" title="Remove sticker" aria-label="Remove sticker" onClick={editor.sticker.onRemoveTarget}>
                         <Trash2 size={13} />
                       </button>
+                      {editor.sticker.onSetTargetTexture && (
+                        <button
+                          type="button"
+                          title={(active?.sharedWith ?? 0) > 0
+                            ? `Replace this sticker's image. The other ${active?.sharedWith} sticker${active?.sharedWith === 1 ? '' : 's'} using it keep theirs.`
+                            : "Replace this sticker's image"}
+                          aria-label="Replace this sticker's image"
+                          disabled={!active?.baseReference}
+                          onClick={() => stickerFileRef.current?.click()}
+                        >
+                          <ImageUp size={13} />
+                        </button>
+                      )}
+                      <input
+                        ref={stickerFileRef}
+                        type="file"
+                        accept={TEXTURE_FILE_ACCEPT}
+                        hidden
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0];
+                          event.currentTarget.value = '';
+                          if (file) replaceStickerImage(file);
+                        }}
+                      />
                       <span />
                       <button type="button" title="Move sticker earlier" aria-label="Move sticker earlier" disabled={!active?.canMoveEarlier} onClick={() => editor.sticker?.onMoveTarget(-1)}>
                         <ArrowUp size={13} />
@@ -1039,6 +1156,7 @@ export function CustomWarpaintWorkbench({
               </div>
               <div className="custom-workbench-edit-content">
                 {editor.error && <div className="visual-warpaint-editor-error" role="alert">{editor.error}</div>}
+                {editImportError && <div className="visual-warpaint-editor-error" role="alert">{editImportError}</div>}
                 {materialsActive && editor.materials ? (
                   <MaterialOverridesPanel {...editor.materials} />
                 ) : editor.mode === 'sticker' && editor.sticker
@@ -1087,6 +1205,43 @@ export function CustomWarpaintWorkbench({
                         )}
                       </div>
                     ) : undefined;
+                    const team = editor.teamColors;
+                    const teamName = team?.team === 'blu' ? 'BLU' : 'RED';
+                    const teamActions = team && (<>
+                      <button
+                        type="button"
+                        className="custom-workbench-team-btn"
+                        aria-pressed={team.enabled}
+                        title={team.enabled
+                          ? 'Use one texture for both teams again (keeps the RED one)'
+                          : 'Give RED and BLU their own texture on this layer. Both start as the current one.'}
+                        onClick={() => team.onToggle(!team.enabled)}
+                      >
+                        <Users size={13} aria-hidden="true" />
+                        Team colors
+                      </button>
+                      {team.enabled && team[team.team] && (
+                        <label
+                          className="custom-workbench-team-btn"
+                          data-team={team.team}
+                          title={`Replace the ${teamName} texture (${referenceLabel(team[team.team] ?? '')}). Switch the Team toggle to edit the other side.`}
+                        >
+                          <ImageUp size={13} aria-hidden="true" />
+                          Replace <strong>{teamName}</strong>
+                          <input
+                            type="file"
+                            accept={TEXTURE_FILE_ACCEPT}
+                            hidden
+                            aria-label={`Replace the ${teamName} texture`}
+                            onChange={(event) => {
+                              const file = event.currentTarget.files?.[0];
+                              event.currentTarget.value = '';
+                              if (file) replaceTeamTexture(team.team, file);
+                            }}
+                          />
+                        </label>
+                      )}
+                    </>);
                     return editor.graph && subView === 'graph'
                       ? (
                         <div className="custom-workbench-graph-view">
@@ -1095,8 +1250,8 @@ export function CustomWarpaintWorkbench({
                         </div>
                       )
                       : editor.transform && subView === 'transform'
-                      ? <TextureTransformPanel {...editor.transform} headerSlot={subViewSwitch} />
-                      : <VisualWarpaintEditorPanel {...editor} headerSlot={subViewSwitch} />;
+                      ? <TextureTransformPanel {...editor.transform} headerSlot={subViewSwitch} headerActions={teamActions} />
+                      : <VisualWarpaintEditorPanel {...editor} headerSlot={subViewSwitch} headerActions={teamActions} />;
                   })()}
               </div>
             </div>

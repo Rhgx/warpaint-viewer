@@ -62,6 +62,8 @@ export interface VisualWarpaintEditorPanelProps {
    * bar above the panel.
    */
   readonly headerSlot?: ReactNode;
+  /** Layer-level actions from the workbench, shown at the start of this head's action group. */
+  readonly headerActions?: ReactNode;
 }
 
 export function VisualWarpaintEditorPanel({
@@ -85,6 +87,7 @@ export function VisualWarpaintEditorPanel({
   groupLayerIndex,
   layerColors,
   headerSlot,
+  headerActions,
 }: VisualWarpaintEditorPanelProps) {
   const [confirmClear, setConfirmClear] = useState(false);
   const clearButtonRef = useRef<HTMLButtonElement>(null);
@@ -180,6 +183,7 @@ export function VisualWarpaintEditorPanel({
         <span className="visual-warpaint-editor-head-count">{areaCount} of {availableParts.length}</span>
         {headerSlot}
         <div className="visual-warpaint-editor-head-spacer" />
+        {headerActions}
         {(groupTextureChoices?.length ?? 0) > 1 && (
           <div className="visual-warpaint-editor-layout">
             <span>Group layout</span>

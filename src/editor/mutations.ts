@@ -746,6 +746,30 @@ export function removeStickerStages(
   return next;
 }
 
+/**
+ * Points every authored occurrence of one logical sticker at new artwork. The
+ * base becomes a literal, so a sticker that shared its artwork (or a base
+ * variable) with others stops following them without touching the rest.
+ */
+export function setStickerBaseReference(
+  messages: ProtoDefKitMessages,
+  target: StickerStructureTarget,
+  baseReference: string,
+): ProtoDefKitMessages {
+  if (target.stagePaths.length === 0) throw new EditorMutationAmbiguityError('No authored sticker stage is available to change.');
+  if (!baseReference.trim()) throw new TypeError('A sticker texture reference is required.');
+  const next = cloneMessages(messages);
+  for (const path of target.stagePaths) {
+    const location = stickerNodeLocation(next.operation, path);
+    const stage = location.nodes[location.index]?.stage?.apply_sticker;
+    if (!stage) throw new EditorMutationAmbiguityError('This sticker stage no longer exists in this operation.');
+    const variants = many(stage.sticker);
+    const replaced = (variants.length > 0 ? variants : [{}]).map((variant) => ({ ...variant, base: { string: baseReference.trim() } }));
+    replaceMany(stage as Record<string, unknown>, 'sticker', stage.sticker, replaced);
+  }
+  return next;
+}
+
 /** Move a logical sticker before or after the adjacent sticker in each sibling collection. */
 export function moveStickerStages(
   messages: ProtoDefKitMessages,
@@ -892,6 +916,100 @@ export function pushTextureTransformRangeToAllWeapons(
     const filtered = fields.filter((entry) => entry.variable !== variableName);
     if (filtered.length !== fields.length) replaceMany(owner, key, prior, filtered);
   }
+  return next;
+}
+
+function operationHasTeamTextures(nodes: Many<OperationNodeMsg>): boolean {
+  let found = false;
+  collectStages(nodes, (stage) => {
+    if (stage.texture_lookup?.texture_red || stage.texture_lookup?.texture_blue) found = true;
+  });
+  return found;
+}
+
+/**
+ * Turns per-team artwork on or off for one texture layer. Enabling copies the
+ * layer's texture to both teams, so nothing changes until one side is
+ * replaced; disabling keeps the RED texture. The definition's
+ * has_team_textures follows, which is what makes the game (and the viewer's
+ * team toggle) tell the two apart.
+ */
+export function setTextureLayerTeamColors(
+  messages: ProtoDefKitMessages,
+  target: Pick<TextureTransformTarget, 'stagePath'>,
+  enabled: boolean,
+): ProtoDefKitMessages {
+  const next = cloneMessages(messages);
+  const stage = textureTransformStage(next.operation, target);
+  if (enabled) {
+    if (stage.texture_red || stage.texture_blue) return messages;
+    if (!stage.texture) throw new EditorMutationAmbiguityError('This layer has no texture to give each team.');
+    // `texture` stays as the layer's identity (its name and group target
+    // read it); a team side, when present, wins over it for that team.
+    stage.texture_red = structuredClone(stage.texture);
+    stage.texture_blue = structuredClone(stage.texture);
+    next.definition.has_team_textures = true;
+    return next;
+  }
+  if (!stage.texture_red && !stage.texture_blue) return messages;
+  stage.texture = stage.texture_red ?? stage.texture_blue;
+  delete stage.texture_red;
+  delete stage.texture_blue;
+  // Templates can carry team artwork this snapshot cannot see, so only a
+  // template-free operation is known to have no team layers left.
+  const nodes = (next.operation as { operation_node?: Many<OperationNodeMsg> }).operation_node;
+  const usesTemplates = JSON.stringify(nodes ?? null).includes('"operation_template"');
+  if (!usesTemplates && !operationHasTeamTextures(nodes)) delete next.definition.has_team_textures;
+  return next;
+}
+
+/**
+ * Reads a layer's per-team artwork for display: null when the stage is not a
+ * plain texture lookup, otherwise whether it is team colored and the texture
+ * each team draws (a bound variable reads as its shared header value).
+ */
+export function readTextureLayerTeamColors(
+  messages: ProtoDefKitMessages,
+  target: Pick<TextureTransformTarget, 'stagePath'>,
+): { enabled: boolean; red?: string; blu?: string } | null {
+  let stage: TextureStageMsg;
+  try {
+    stage = textureTransformStage(messages.operation, target);
+  } catch {
+    return null;
+  }
+  const value = (field: VarFieldMsg | undefined) => {
+    if (!field) return undefined;
+    if (!field.variable) return literalFieldValue(field);
+    for (const message of [messages.definition, messages.operation]) {
+      const header = message.header as { variables?: Many<VarDefMsg> } | undefined;
+      const found = many(header?.variables).find((variable) => variable.name === field.variable);
+      if (found?.value !== undefined) return found.value;
+    }
+    return undefined;
+  };
+  const enabled = Boolean(stage.texture_red || stage.texture_blue);
+  return {
+    enabled,
+    red: value(stage.texture_red ?? stage.texture),
+    blu: value(stage.texture_blue ?? stage.texture),
+  };
+}
+
+/** Points one team's side of a team-colored layer at new artwork. */
+export function setTextureLayerTeamTexture(
+  messages: ProtoDefKitMessages,
+  target: Pick<TextureTransformTarget, 'stagePath'>,
+  team: 'red' | 'blu',
+  textureReference: string,
+): ProtoDefKitMessages {
+  if (!textureReference.trim()) throw new TypeError('A texture reference is required.');
+  const next = cloneMessages(messages);
+  const stage = textureTransformStage(next.operation, target);
+  if (!stage.texture_red && !stage.texture_blue) {
+    throw new EditorMutationAmbiguityError('Turn on team colors for this layer first.');
+  }
+  stage[team === 'red' ? 'texture_red' : 'texture_blue'] = { string: textureReference.trim() };
   return next;
 }
 

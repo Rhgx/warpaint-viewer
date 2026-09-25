@@ -37,6 +37,8 @@ export interface TextureTransformPanelProps {
    * single header row and the layer name never scrolls out of sight.
    */
   readonly headerSlot?: ReactNode;
+  /** Layer-level actions from the workbench, shown at the start of this head's action group. */
+  readonly headerActions?: ReactNode;
   readonly disabled?: boolean;
   readonly onFieldChange: (key: keyof TextureTransformFields, value: SeedRangeValue) => void;
   readonly onFlipChange: (axis: 'u' | 'v', allowed: boolean) => void;
@@ -96,6 +98,7 @@ export function TextureTransformPanel({
   previewAspect = 1,
   uvSurfaceLoading = false,
   headerSlot,
+  headerActions,
   disabled = false,
   onFieldChange,
   onFlipChange,
@@ -119,6 +122,7 @@ export function TextureTransformPanel({
         </span>
         {headerSlot}
         <span className="texture-transform-panel-head-spacer" />
+        {headerActions}
         <select
           id="texture-transform-scope"
           className="texture-transform-panel-scope-select"

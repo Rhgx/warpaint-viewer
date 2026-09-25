@@ -43,6 +43,8 @@
 .custom-workbench-slot:has(.custom-workbench-resizer[data-resizing]) { transition: none; }
 .custom-workbench {
   position: relative;
+  /* The header's narrow-width rules query the drawer, not the viewport. */
+  container-type: inline-size;
   height: 100%;
   min-height: 0;
   display: flex;
@@ -518,6 +520,15 @@
 
 @container (max-width: 720px) {
   .workbench-source:not(.workbench-source-import) span { display: none; }
+}
+/* Phone width: the tabs keep their full labels and the rest goes icon-only,
+   instead of the source chips sliding over Edit and Export. */
+@container (max-width: 480px) {
+  .custom-workbench-tablist { flex-shrink: 0; }
+  .custom-workbench-tab > svg,
+  .workbench-source span { display: none; }
+  .workbench-source { padding: 4px 7px; }
+  .workbench-sources { padding-right: 2px; }
 }
 
 /* ---------- Edit tab: two-pane workbench split ----------
@@ -1179,15 +1190,26 @@
     grid-template-columns: none;
     grid-template-rows: auto minmax(0, 1fr);
   }
+  /* Two rows instead of one squeezed strip: tools on top (mode, sticker
+     actions, history, download), the layer or sticker list below at full
+     width so it never has to scroll behind the buttons. */
   .custom-workbench-edit-context {
-    flex-direction: row;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "mode tools footer"
+      "list list list";
+    align-items: center;
     padding: 0;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
+  .custom-workbench-edit-mode { grid-area: mode; }
+  .custom-workbench-edit-list { grid-area: list; }
+  .custom-workbench-edit-sticker-actions { grid-area: tools; }
+  .custom-workbench-edit-footer { grid-area: footer; }
   .custom-workbench-sticker-picker {
-    top: 58px;
+    top: 88px;
     right: auto;
     bottom: 8px;
     left: 8px;
@@ -1202,28 +1224,43 @@
     border-top: 1px solid var(--border-strong);
     border-left: 1px solid var(--border-strong);
   }
-  .custom-workbench-edit-mode { margin: 8px 0 8px 8px; }
+  .custom-workbench-edit-mode { margin: 6px 0 6px 8px; }
+  .custom-workbench-edit-mode button { flex: none; min-height: 24px; padding: 0 12px; }
   .custom-workbench-edit-list {
     flex-direction: row;
+    gap: 4px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 8px;
+    padding: 6px 8px;
+    border-top: 1px solid var(--border);
+    scrollbar-width: thin;
   }
+  /* Materials has nothing to list; its note only cost a row here. */
+  .custom-workbench-edit-list:has(> .custom-workbench-edit-materials-note) { display: none; }
   .custom-workbench-edit-layer-row,
   .custom-workbench-edit-sticker-row {
     flex: none;
+    max-width: 220px;
+    min-height: 32px;
+    padding: 3px 10px 3px 4px;
     border-radius: var(--radius-sm);
   }
+  .custom-workbench-edit-layer-thumb { width: 24px; height: 24px; }
+  .custom-workbench-edit-sticker-thumb { width: 24px; height: 24px; }
   .custom-workbench-edit-layer-row[aria-selected='true'],
   .custom-workbench-edit-sticker-row[aria-selected='true'] {
     box-shadow: inset 0 -2px 0 var(--accent);
   }
+  .custom-workbench-edit-sticker-actions {
+    justify-self: start;
+    padding: 6px 0 6px 8px;
+    border-top: 0;
+  }
   .custom-workbench-edit-footer {
     flex-wrap: nowrap;
     margin: 0;
-    padding: 8px;
+    padding: 6px 8px;
     border-top: 0;
-    border-left: 1px solid var(--border);
   }
   .custom-workbench-edit-revert { margin-left: 0; }
   .custom-workbench-edit-download-group { flex: none; }
@@ -1231,6 +1268,17 @@
 
 @container (max-width: 620px) {
   .custom-workbench-sticker-picker-list { grid-template-columns: minmax(0, 1fr); }
+  /* Too narrow for mode, sticker tools and history in one line: history and
+     download take their own line under the mode switch. */
+  .custom-workbench-edit-context {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "mode tools"
+      "footer footer"
+      "list list";
+  }
+  .custom-workbench-edit-footer { padding-top: 0; }
+  .custom-workbench-edit-download-group { margin-left: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1310,3 +1358,34 @@
   .editor-draft-banner { flex-wrap: wrap; }
   .editor-draft-banner-actions { width: 100%; justify-content: flex-end; }
 }
+
+/* Per-layer team artwork, rendered as actions in the paint sub-view head. */
+.custom-workbench-team-btn {
+  display: inline-flex;
+  flex: none;
+  min-height: var(--control-h);
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.custom-workbench-team-btn:hover { border-color: var(--border-strong); color: var(--text); }
+.custom-workbench-team-btn:focus-visible,
+.custom-workbench-team-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.custom-workbench-team-btn[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.custom-workbench-team-btn[data-team='red'] strong { color: var(--red); }
+.custom-workbench-team-btn[data-team='blu'] strong { color: var(--blu); }

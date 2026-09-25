@@ -7,6 +7,9 @@ import {
   moveStickerStages,
   removeStickerStages,
   setStickerDestQuad,
+  setStickerBaseReference,
+  setTextureLayerTeamColors,
+  setTextureLayerTeamTexture,
   setTextureTransformFlip,
   setTextureTransformRange,
   pushTextureTransformRangeToAllWeapons,
@@ -98,6 +101,11 @@ export interface ProtoDefEditorSession {
   addSticker: (target: StickerStructureTarget, quad: StickerQuad, baseReference: string) => boolean;
   removeSticker: (target: StickerStructureTarget) => boolean;
   moveSticker: (target: StickerStructureTarget, direction: -1 | 1) => boolean;
+  /** Points one logical sticker at new artwork without touching stickers that shared it. */
+  setStickerBase: (target: StickerStructureTarget, baseReference: string) => boolean;
+  /** Gives one texture layer separate RED and BLU artwork, or folds it back to one. */
+  setLayerTeamColors: (target: Pick<TextureTransformTarget, 'stagePath'>, enabled: boolean) => boolean;
+  setLayerTeamTexture: (target: Pick<TextureTransformTarget, 'stagePath'>, team: 'red' | 'blu', textureReference: string) => boolean;
   /**
    * Opens a batched transform gesture: calls to setTransformRange/setTransformFlip
    * made before the matching endTransformGesture() update `current` live (so the
@@ -531,6 +539,22 @@ export function useProtoDefEditorSession({
     applyEdit((prior) => moveStickerStages(prior, target, direction))
   ), [applyEdit]);
 
+  const setStickerBase = useCallback((target: StickerStructureTarget, baseReference: string) => (
+    applyEdit((prior) => setStickerBaseReference(prior, target, baseReference))
+  ), [applyEdit]);
+
+  const setLayerTeamColors = useCallback((target: Pick<TextureTransformTarget, 'stagePath'>, enabled: boolean) => (
+    applyEdit((prior) => setTextureLayerTeamColors(prior, target, enabled))
+  ), [applyEdit]);
+
+  const setLayerTeamTexture = useCallback((
+    target: Pick<TextureTransformTarget, 'stagePath'>,
+    team: 'red' | 'blu',
+    textureReference: string,
+  ) => (
+    applyEdit((prior) => setTextureLayerTeamTexture(prior, target, team, textureReference))
+  ), [applyEdit]);
+
   const undo = useCallback(() => {
     const currentMessages = currentRef.current;
     if (!currentMessages) return;
@@ -638,6 +662,9 @@ export function useProtoDefEditorSession({
     addSticker,
     removeSticker,
     moveSticker,
+    setStickerBase,
+    setLayerTeamColors,
+    setLayerTeamTexture,
     beginTransformGesture,
     endTransformGesture,
     setTransformRange,
