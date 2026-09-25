@@ -4579,9 +4579,11 @@ function MainApp() {
                     },
                   } : undefined,
                   teamColors: (() => {
-                    // The weapon's own albedo belongs to the model, so only
-                    // authored paint layers can be split per team.
-                    const info = weaponBaseLayerActive ? null : activeTransformTargetInfo;
+                    // The base slot is the paint's main texture unless it is
+                    // the weapon's own albedo, which belongs to the model.
+                    const info = weaponBaseLayerActive && baseTextureTransform?.transformLocked !== false
+                      ? null
+                      : activeTransformTargetInfo;
                     if (!editorCurrent || !info || info.blockers.some((blocker) => (
                       blocker === 'no-texture-lookup-stage' || blocker === 'ambiguous-source-stage'
                     ))) return undefined;

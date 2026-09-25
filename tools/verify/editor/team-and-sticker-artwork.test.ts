@@ -59,3 +59,20 @@ test('team colors start identical, split per team, and fold back to RED', () => 
   assert.throws(() => setTextureLayerTeamTexture(off, layer, 'red', 'x'), /team colors/);
   assert.deepEqual(before, snapshot);
 });
+
+test('a layer with template team sides but team textures off reads as off and can be turned on', () => {
+  const before = kit();
+  const nodes = before.operation.operation_node as { stage: { apply_sticker: { operation_node: { stage: { texture_lookup: Record<string, unknown> } } } } }[];
+  nodes[0].stage.apply_sticker.operation_node.stage.texture_lookup = {
+    texture_red: { variable: 'texture_layer_1' },
+    texture_blue: { variable: 'texture_layer_1_blue' },
+  };
+  assert.equal(readTextureLayerTeamColors(before, layer)?.enabled, false);
+
+  const on = setTextureLayerTeamColors(before, layer, true);
+  assert.notEqual(on, before);
+  assert.equal(on.definition.has_team_textures, true);
+  assert.equal(readTextureLayerTeamColors(on, layer)?.enabled, true);
+  const stage = (on.operation.operation_node as typeof nodes)[0].stage.apply_sticker.operation_node.stage.texture_lookup;
+  assert.deepEqual(stage.texture_blue, { variable: 'texture_layer_1_blue' }, 'authored team sides are kept');
+});

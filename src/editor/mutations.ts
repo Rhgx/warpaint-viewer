@@ -942,12 +942,15 @@ export function setTextureLayerTeamColors(
   const next = cloneMessages(messages);
   const stage = textureTransformStage(next.operation, target);
   if (enabled) {
-    if (stage.texture_red || stage.texture_blue) return messages;
-    if (!stage.texture) throw new EditorMutationAmbiguityError('This layer has no texture to give each team.');
+    if (stage.texture_red && stage.texture_blue && next.definition.has_team_textures === true) return messages;
+    // Template-built layers can already carry team sides while the
+    // definition keeps team textures off; those sides are kept as authored.
+    const shared = stage.texture ?? stage.texture_red ?? stage.texture_blue;
+    if (!shared) throw new EditorMutationAmbiguityError('This layer has no texture to give each team.');
     // `texture` stays as the layer's identity (its name and group target
     // read it); a team side, when present, wins over it for that team.
-    stage.texture_red = structuredClone(stage.texture);
-    stage.texture_blue = structuredClone(stage.texture);
+    stage.texture_red ??= structuredClone(shared);
+    stage.texture_blue ??= structuredClone(shared);
     next.definition.has_team_textures = true;
     return next;
   }
@@ -988,7 +991,8 @@ export function readTextureLayerTeamColors(
     }
     return undefined;
   };
-  const enabled = Boolean(stage.texture_red || stage.texture_blue);
+  // Team sides only take effect while the definition has team textures on.
+  const enabled = Boolean(stage.texture_red || stage.texture_blue) && messages.definition.has_team_textures === true;
   return {
     enabled,
     red: value(stage.texture_red ?? stage.texture),
