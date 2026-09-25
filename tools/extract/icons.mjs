@@ -8,6 +8,39 @@ import { decodeVTF } from '../lib/vtf.mjs';
 import { extractBatch, listVPK, MISC_VPK, TEXTURES_VPK } from '../lib/vpk.mjs';
 import { sha1 } from './state.mjs';
 
+// Inventory icons ship at 512px but the UI never draws them above 28px; 64px
+// covers high-DPI screens at a tenth of the download.
+const INVENTORY_ICON_MAX = 64;
+
+// Halves with a 2x2 box filter (alpha-weighted, so transparent edges do not
+// bleed dark) until the image fits. VTF sizes are powers of two.
+export function downscaleRGBA(rgba, width, height, max) {
+  while (Math.max(width, height) > max && width > 1 && height > 1) {
+    const w = width >> 1;
+    const h = height >> 1;
+    const out = new Uint8Array(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let r = 0, g = 0, b = 0, a = 0;
+        for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+          const i = ((y * 2 + dy) * width + x * 2 + dx) * 4;
+          const alpha = rgba[i + 3];
+          r += rgba[i] * alpha; g += rgba[i + 1] * alpha; b += rgba[i + 2] * alpha; a += alpha;
+        }
+        const o = (y * w + x) * 4;
+        if (a > 0) {
+          out[o] = Math.round(r / a); out[o + 1] = Math.round(g / a); out[o + 2] = Math.round(b / a);
+        }
+        out[o + 3] = Math.round(a / 4);
+      }
+    }
+    rgba = out;
+    width = w;
+    height = h;
+  }
+  return { rgba, width, height };
+}
+
 const PAINT_ICON_JUNK = /blank_|paint_dirt|paint_blood|paint_scratches|_wearblend|_ao\.|_albedo\./;
 
 export function pickPaintIconRef(tree) {
@@ -141,8 +174,9 @@ export function extractInventoryIcons({
         continue;
       }
       const decoded = decodeVTF(buffer);
+      const icon = downscaleRGBA(decoded.rgba, decoded.width, decoded.height, INVENTORY_ICON_MAX);
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-      fs.writeFileSync(outputPath, encodePNG(decoded.rgba, decoded.width, decoded.height));
+      fs.writeFileSync(outputPath, encodePNG(icon.rgba, icon.width, icon.height));
       job.assign(job.outRel);
       hashes[job.outRel] = hash;
       rebuilt++;
