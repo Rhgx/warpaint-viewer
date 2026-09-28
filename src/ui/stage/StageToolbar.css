@@ -45,7 +45,7 @@
 .stage-toolbar-btn[data-feedback='error'] {
   color: var(--fail);
 }
-.custom-workbench-trigger[aria-pressed='true'] {
+.stage-toolbar-btn[aria-pressed='true'] {
   color: var(--accent);
   background: var(--accent-soft);
 }

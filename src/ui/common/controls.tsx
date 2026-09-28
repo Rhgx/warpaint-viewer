@@ -10,6 +10,8 @@ import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 export interface Option {
   value: string;
   label: string;
+  /** One short line under the label in the open list; keep it unwrapped. */
+  description?: string;
 }
 
 export interface IconOption extends Option {
@@ -128,7 +130,12 @@ export function SelectField({
           <Select.Popup className="ui-select-popup">
             {options.map((o) => (
               <Select.Item key={o.value} value={o.value} className="ui-select-item">
-                <Select.ItemText>{o.label}</Select.ItemText>
+                {o.description ? (
+                  <span className="ui-select-item-text">
+                    <Select.ItemText>{o.label}</Select.ItemText>
+                    <span className="ui-select-item-description">{o.description}</span>
+                  </span>
+                ) : <Select.ItemText>{o.label}</Select.ItemText>}
                 <Select.ItemIndicator className="ui-select-indicator"><Check size={12} aria-hidden="true" /></Select.ItemIndicator>
               </Select.Item>
             ))}

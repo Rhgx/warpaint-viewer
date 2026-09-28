@@ -21,6 +21,7 @@ import { WarpaintList } from './ui/catalog/WarpaintList';
 import { Inspector } from './ui/stage/Inspector';
 import type { ControlsState } from './viewer/controls';
 import { StageToolbar } from './ui/stage/StageToolbar';
+import { formatSize } from './ui/common/formatSize';
 import { FirstPersonControls } from './ui/stage/FirstPersonControls';
 import { LightingPanel } from './ui/stage/LightingPanel';
 import { PanelEdgeToggle } from './ui/common/PanelEdgeToggle';
@@ -33,6 +34,7 @@ import { LEGACY_PAINTKIT_ICON_LIGHTING_ID, PAINTKIT_ICON_LIGHTING_ID } from './v
 import {
   loadCustomLighting,
   saveCustomLighting,
+  TURNTABLE_SECONDS,
 } from './viewer/controls';
 import { CUSTOM_LIGHTING_ID, MAX_CUSTOM_LIGHTS } from './viewer/customLighting';
 import { useBootData, randomSeed } from './hooks/useBootData';
@@ -40,7 +42,9 @@ import { applyTextureOverrides, useComposedPaint } from './hooks/useComposedPain
 import { useSourcePackage } from './hooks/useSourcePackage';
 import { useCustomDefinitions } from './hooks/useCustomDefinitions';
 import { useStockDefinitions } from './hooks/useStockDefinitions';
-import { useScreenshotActions } from './hooks/useScreenshotActions';
+import { TURNTABLE_FORMATS, supportedTurntableFormats, useScreenshotActions } from './hooks/useScreenshotActions';
+import type { TurntableStatus } from './hooks/useScreenshotActions';
+import type { TurntableFormat } from './export/turntable.worker';
 import { useCustomWarpaintIcons } from './hooks/useCustomWarpaintIcons';
 import { isSupportedTexturePath, sourceTextureIdentity } from './source/paths';
 import { indexPackageMaterialPaths, packageHasMaterialOverride } from './source/vmt';
@@ -386,6 +390,49 @@ function isRecordValue(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
+/** Abort reason for the toast's Cancel button; any other stop offers a retry. */
+const TURNTABLE_CANCELLED = 'Cancelled';
+
+/** Rough remaining time once enough frames have been timed to trust the rate. */
+function turntableTimeLeft(done: number, frames: number, since: { at: number; done: number } | null): string | null {
+  if (!since) return null;
+  const elapsed = (performance.now() - since.at) / 1000;
+  if (done < Math.max(5, frames * 0.05) || elapsed < 1 || done <= since.done) return null;
+  const seconds = (elapsed / (done - since.done)) * (frames - done);
+  return seconds >= 60 ? `about ${Math.round(seconds / 60)} min left` : `about ${Math.max(1, Math.round(seconds))} s left`;
+}
+
+/** Title, text and behaviour of the export toast for each capture phase. */
+function turntableToast(status: TurntableStatus | null, since: { at: number; done: number } | null) {
+  switch (status?.phase) {
+    case 'rendering': {
+      const left = turntableTimeLeft(status.done, status.frames, since);
+      return {
+        title: `Exporting ${TURNTABLE_FORMATS[status.format].label}`,
+        description: status.done === 0
+          ? 'Preparing\u2026'
+          : `${status.done} of ${status.frames} frames${left ? `, ${left}` : ''}`,
+        progress: status.done === 0 ? 'indeterminate' as const : status.done / status.frames,
+      };
+    }
+    case 'finishing':
+      return { title: `Exporting ${TURNTABLE_FORMATS[status.format].label}`, description: 'Finishing file\u2026', progress: 1 };
+    case 'saved':
+      return {
+        title: `${TURNTABLE_FORMATS[status.format].label} saved`,
+        description: `${status.width} x ${status.height}, ${formatSize(status.bytes)}`,
+        dismissible: true,
+        timeout: 5_000,
+      };
+    case 'stopped':
+      return { title: 'Export stopped', description: status.reason, dismissible: true, timeout: 6_000 };
+    case 'failed':
+      return { title: 'Export failed', description: status.message, tone: 'error' as const, dismissible: true };
+    default:
+      return { title: '', description: '' };
+  }
+}
+
 function isOperationNodeMessage(value: unknown): value is OperationNodeMsg {
   if (!isRecordValue(value)) return false;
   return (!('stage' in value) || isRecordValue(value.stage))
@@ -522,6 +569,7 @@ function MainApp() {
 
   const [engineReady, setEngineReady] = useState(false);
   const [firstPersonEnabled, setFirstPersonEnabled] = useState(false);
+  const [autoSpin, setAutoSpin] = useState(false);
   const [environmentReady, setEnvironmentReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedKitId, setSelectedKitId] = useState<number | null>(null);
@@ -563,8 +611,19 @@ function MainApp() {
     unusual: 'none',
     fov: DEFAULT_VIEWER_FOV,
     projection: 'perspective',
+    captureFormat: 'image',
     screenshotMaxEdge: 1920,
+    turntableFormat: 'gif',
+    turntableProfiles: {
+      gif: TURNTABLE_FORMATS.gif.defaults,
+      webp: TURNTABLE_FORMATS.webp.defaults,
+      apng: TURNTABLE_FORMATS.apng.defaults,
+      mp4: TURNTABLE_FORMATS.mp4.defaults,
+    },
+    turntableTransparent: true,
+    turntableColor: '#1c1f24',
   }));
+  const [turntableFormats, setTurntableFormats] = useState<TurntableFormat[]>(['gif', 'apng']);
   useEffect(() => {
     if (!lightingPanelOpen || state.preset !== CUSTOM_LIGHTING_ID) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -2626,6 +2685,16 @@ function MainApp() {
   const editorInteractionActive = groupAssignActive || stickerPlacementActive;
   const firstPersonActive = firstPersonEnabled && !!selectedKit && !!state.weaponKey
     && state.weaponKey !== 'paintkit_tool' && !editorTabActive && !lightingPanelOpen;
+  // First Person renders a live view, not the inspect pose a turntable needs, so it can only capture images.
+  const captureFormat = firstPersonActive ? 'image' : state.captureFormat;
+  const editingMode = lightingPanelOpen && state.preset === CUSTOM_LIGHTING_ID
+    ? 'lighting'
+    : editorTabActive
+      // The graph is a sub-view of paint editing, but its controls share
+      // almost nothing with the weapon surface, so it gets its own page in
+      // the reference.
+      ? editorTool === 'paint' && paintSubView === 'graph' ? 'graph' : editorTool
+      : null;
 
   // Keep one global listener for the editor tab while reading current actions
   // from a ref, rather than replacing it after every history-state render.
@@ -3769,6 +3838,12 @@ function MainApp() {
     if (engineReady) viewerRef.current?.setProjection(state.projection);
   }, [engineReady, state.projection]);
 
+  // Auto spin: TF2-style inspect rotation, off during First Person or editing.
+  useEffect(() => {
+    const active = autoSpin && !firstPersonActive && editingMode === null;
+    if (engineReady) viewerRef.current?.setAutoSpin(active ? TURNTABLE_SECONDS : null);
+  }, [engineReady, autoSpin, firstPersonActive, editingMode]);
+
   // Pushing history here (rather than inside the setState updater) keeps the
   // updater pure: React/StrictMode may invoke an updater function twice in
   // dev, which would double-push if the ref mutation lived in there.
@@ -3792,6 +3867,19 @@ function MainApp() {
     setState((s) => ({ ...s, seed: prev }));
   }, []);
   const canUndoSeed = seedHistoryRef.current.length > 0;
+
+  // Probed once: GIF and APNG always work, WebP/MP4 depend on this browser's
+  // encoders. If the stored choice turns out unsupported, fall back to GIF.
+  useEffect(() => {
+    let cancelled = false;
+    void supportedTurntableFormats().then((formats) => {
+      if (cancelled) return;
+      setTurntableFormats(formats);
+      if (!formats.includes(state.turntableFormat)) patch({ turntableFormat: 'gif' });
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onSelectKit = useCallback(
     (id: number) => {
@@ -3923,6 +4011,7 @@ function MainApp() {
 
   const {
     saveImage: onScreenshot,
+    saveTurntable: onSaveTurntable,
     copyImage: onCopyImage,
   } = useScreenshotActions({
     viewerRef,
@@ -3930,7 +4019,78 @@ function MainApp() {
     weaponKey: state.weaponKey,
     seed: state.seed,
     maxEdge: state.screenshotMaxEdge,
+    turntable: {
+      turntableFormat: state.turntableFormat,
+      turntableProfiles: state.turntableProfiles,
+      turntableTransparent: state.turntableTransparent,
+      turntableColor: state.turntableColor,
+    },
   });
+  const [turntableStatus, setTurntableStatus] = useState<TurntableStatus | null>(null);
+  const turntableCaptureControllerRef = useRef<AbortController | null>(null);
+  // The first progress report after setup, for the remaining-time estimate
+  // (setup time before the first frame would skew the per-frame rate).
+  const turntableProgressStartRef = useRef<{ at: number; done: number } | null>(null);
+
+  const startTurntableCapture = useCallback(async () => {
+    const controller = new AbortController();
+    turntableCaptureControllerRef.current = controller;
+    try {
+      await onSaveTurntable((status) => {
+        if (status.phase !== 'rendering' || status.done === 0) turntableProgressStartRef.current = null;
+        else turntableProgressStartRef.current ??= { at: performance.now(), done: status.done };
+        setTurntableStatus(status);
+      }, controller.signal);
+    } finally {
+      if (turntableCaptureControllerRef.current === controller) turntableCaptureControllerRef.current = null;
+    }
+  }, [onSaveTurntable]);
+
+  // Rebuilt only when what the buttons do changes, so progress updates do not
+  // hand the toast new action objects every frame.
+  const turntableStopReason = turntableStatus?.phase === 'stopped' ? turntableStatus.reason : null;
+  const turntableCaptureActions = useMemo(() => {
+    if (turntableStatus?.phase === 'rendering' || turntableStatus?.phase === 'finishing') {
+      return [{ label: 'Cancel', onClick: (): void => turntableCaptureControllerRef.current?.abort(TURNTABLE_CANCELLED) }];
+    }
+    // A capture the user cancelled needs no retry; one the scene interrupted
+    // or that failed gets one.
+    if (turntableStatus?.phase === 'failed' || (turntableStopReason && turntableStopReason !== TURNTABLE_CANCELLED)) {
+      return [{ label: 'Try again', primary: true, onClick: (): void => void startTurntableCapture() }];
+    }
+    return undefined;
+  }, [turntableStatus?.phase, turntableStopReason, startTurntableCapture]);
+
+  // Abort a capture in flight if anything that would change what it renders
+  // changes under it: the selected paint/kit, weapon, team, wear, seed, sheen,
+  // unusual effect, fov, projection, lighting preset, material override, the
+  // mounted source package or edited definitions, manual texture overrides,
+  // the view angle, First Person, or entering/leaving an editing mode. Capture
+  // settings (captureFormat, turntable* fields, screenshotMaxEdge), autoSpin,
+  // and turntableStatus itself are deliberately excluded, since none of them
+  // change what a capture in progress renders, and none of the effect's deps
+  // change merely because a capture started.
+  useEffect(() => {
+    turntableCaptureControllerRef.current?.abort('The item or view changed during capture');
+  }, [
+    selectedKitId,
+    state.weaponKey,
+    state.team,
+    state.wearIndex,
+    state.seed,
+    state.sheen,
+    state.unusual,
+    state.fov,
+    state.projection,
+    state.preset,
+    selectedMaterialOverrideId,
+    packageGeneration,
+    editorDefinitionGeneration,
+    activeTextureOverrides,
+    viewAngleId,
+    firstPersonActive,
+    editingMode,
+  ]);
 
   const paintToolForIcons = data?.manifest.weapons.find((weapon) => weapon.key === 'paintkit_tool');
   const customCatalogKitIds = useMemo(
@@ -4351,21 +4511,19 @@ function MainApp() {
           </div>
           <StageToolbar
             workbenchOpen={workbenchOpen}
-            editingMode={lightingPanelOpen && state.preset === CUSTOM_LIGHTING_ID
-              ? 'lighting'
-              : editorTabActive
-                // The graph is a sub-view of paint editing, but its controls
-                // share almost nothing with the weapon surface, so it gets its
-                // own page in the reference.
-                ? editorTool === 'paint' && paintSubView === 'graph' ? 'graph' : editorTool
-                : null}
+            editingMode={editingMode}
             onToggleWorkbench={() => {
               setWorkbenchMounted(true);
               setWorkbenchOpen((open) => !open);
             }}
-            onSavePng={onScreenshot}
+            captureFormat={captureFormat}
+            saveLabel={captureFormat === 'image' ? 'Save PNG' : `Save ${TURNTABLE_FORMATS[state.turntableFormat].label}`}
+            onSave={captureFormat === 'animated' ? startTurntableCapture : onScreenshot}
             onCopyImage={onCopyImage}
             onResetView={() => viewerRef.current?.resetView()}
+            autoSpin={autoSpin}
+            onToggleAutoSpin={() => setAutoSpin((spinning) => !spinning)}
+            showAutoSpin={!firstPersonActive}
           />
           {state.preset === CUSTOM_LIGHTING_ID && (
             <LightingPanel store={lightingStore} />
@@ -4726,6 +4884,7 @@ function MainApp() {
           weaponOptions={weaponOptions}
           hasTeamTextures={firstPersonActive || kitHasTeamTextures}
           state={state}
+          turntableFormats={turntableFormats}
           viewAngle={viewAngleId}
           onChange={patch}
           onRandomizeSeed={randomizeSeed}
@@ -4775,6 +4934,13 @@ function MainApp() {
           editorDirty={editorDirty}
           draftStatus={editorDraft.status}
           onDownloadRecovery={downloadEditorRecovery}
+        />
+        <ManagedToast
+          id="turntable"
+          open={turntableStatus !== null}
+          {...turntableToast(turntableStatus, turntableProgressStartRef.current)}
+          actions={turntableCaptureActions}
+          onClose={() => setTurntableStatus(null)}
         />
         <ManagedToast
           id="workspace-cleared"

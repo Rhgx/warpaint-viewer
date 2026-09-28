@@ -142,6 +142,49 @@
   align-items: stretch;
   gap: 6px;
 }
+/* Short explanatory line under a control, e.g. the turntable background
+   note; text-only, no interaction. */
+.inspector-color-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.inspector-color-row .lighting-color-swatch {
+  flex: 0 0 40px;
+  height: 26px;
+}
+.inspector-color-row .lighting-color-hex {
+  flex: 1;
+  height: 26px;
+}
+/* Estimated output of the animated capture: a quiet readout closing the
+   group, with the size as the figure that matters. */
+.capture-estimate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.capture-estimate-size {
+  color: var(--text);
+  font-weight: 600;
+}
+.capture-estimate.is-over .capture-estimate-size {
+  color: var(--warn);
+}
+.capture-estimate-note {
+  flex-basis: 100%;
+  color: var(--warn);
+  font-size: 10px;
+}
 .inspector .control-label {
   justify-content: flex-start;
 }

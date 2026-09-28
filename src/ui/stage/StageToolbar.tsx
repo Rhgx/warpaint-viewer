@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
-import { Check, Copy, HelpCircle, ImageDown, PackagePlus, RotateCcw, X } from 'lucide-react';
+import { Check, Copy, Film, HelpCircle, ImageDown, PackagePlus, Rotate3d, RotateCcw, X } from 'lucide-react';
 import { ControlsHelpModal } from './ControlsHelpModal';
 
 type Feedback = 'idle' | 'success' | 'error';
@@ -55,24 +55,35 @@ function ToolbarButton({
   );
 }
 
-// Top-right overlay on the canvas: save/copy the current render and reset the
-// camera. Save/Copy image share one local "capturing" flag (both drive the same
-// expensive viewer capture) so they disable together; Reset stays independently
-// available.
+// Top-right overlay on the canvas: save the current capture format, copy
+// image (image format only), toggle auto spin, then reset the camera. The
+// capture actions share one local "capturing" flag (all drive expensive
+// viewer captures) so they disable together; Reset and Auto spin stay
+// independently available.
 export function StageToolbar({
   workbenchOpen,
   editingMode = null,
   onToggleWorkbench,
-  onSavePng,
+  captureFormat,
+  saveLabel,
+  onSave,
   onCopyImage,
   onResetView,
+  autoSpin,
+  onToggleAutoSpin,
+  showAutoSpin,
 }: {
   workbenchOpen: boolean;
   editingMode?: 'paint' | 'sticker' | 'lighting' | 'graph' | null;
   onToggleWorkbench: () => void;
-  onSavePng: () => Promise<void>;
+  captureFormat: 'image' | 'animated';
+  saveLabel: string;
+  onSave: () => Promise<void>;
   onCopyImage: () => Promise<void>;
   onResetView: () => void;
+  autoSpin: boolean;
+  onToggleAutoSpin: () => void;
+  showAutoSpin: boolean;
 }) {
   const [capturing, setCapturing] = useState(false);
   const [controlsHelpOpen, setControlsHelpOpen] = useState(false);
@@ -102,8 +113,28 @@ export function StageToolbar({
           <PackagePlus size={15} />
         </button>
         <span className="stage-toolbar-divider" aria-hidden="true" />
-        <ToolbarButton label="Save PNG" icon={ImageDown} disabled={capturing} onAction={withCapture(onSavePng)} />
-        <ToolbarButton label="Copy image" icon={Copy} disabled={capturing} onAction={withCapture(onCopyImage)} />
+        <ToolbarButton
+          label={saveLabel}
+          icon={captureFormat === 'animated' ? Film : ImageDown}
+          disabled={capturing}
+          onAction={withCapture(onSave)}
+        />
+        {captureFormat === 'image' && (
+          <ToolbarButton label="Copy image" icon={Copy} disabled={capturing} onAction={withCapture(onCopyImage)} />
+        )}
+        <span className="stage-toolbar-divider" aria-hidden="true" />
+        {showAutoSpin && (
+          <button
+            type="button"
+            className="stage-toolbar-btn"
+            title="Auto spin"
+            aria-label="Auto spin"
+            aria-pressed={autoSpin}
+            onClick={onToggleAutoSpin}
+          >
+            <Rotate3d size={15} />
+          </button>
+        )}
         <ToolbarButton label="Reset view" icon={RotateCcw} onAction={onResetView} />
         <span className="stage-toolbar-divider" aria-hidden="true" />
         <button

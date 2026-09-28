@@ -50,5 +50,14 @@ export interface ControlsState {
   unusual: string;
   fov: number;
   projection: 'perspective' | 'orthographic';
+  /** Which export the toolbar's Save button produces; the Capture section shows only its settings. */
+  captureFormat: 'image' | 'animated';
   screenshotMaxEdge: number;
+  /** Animated capture format; see TURNTABLE_FORMATS. */
+  turntableFormat: TurntableFormat;
+  /** Size, frame rate and quality remembered separately for each format. */
+  turntableProfiles: Record<TurntableFormat, TurntableProfile>;
+  turntableTransparent: boolean;
+  /** '#rrggbb' background for solid animated exports; MP4 always uses it. */
+  turntableColor: string;
 }

@@ -223,6 +223,21 @@ button {
 .ui-select-indicator {
   font-size: 11px;
 }
+.ui-select-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.ui-select-item-description {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.ui-select-item[data-highlighted] .ui-select-item-description {
+  color: inherit;
+  opacity: 0.8;
+}
 
 /* ---------- swatch select (killstreak sheen) ---------- */
 .ui-swatch {

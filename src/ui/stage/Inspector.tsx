@@ -10,10 +10,11 @@ import type { IconOption, SwatchOption } from '../common/controls';
 import { LIGHTING_PRESETS } from '../../viewer/lighting';
 import { SHEEN_PRESETS, UNUSUAL_PRESETS, VIEW_ANGLES } from '../../viewer/presets';
 import type { Manifest } from '../../data/types';
-import type { ControlsState } from '../../viewer/controls';
+import { TURNTABLE_SECONDS, type ControlsState, type TurntableFormat, type TurntableProfile, type TurntableQuality } from '../../viewer/controls';
 import type { LightingStore } from '../../editor/lightingStore';
 import { CUSTOM_LIGHTING_ID } from '../../viewer/customLighting';
 import { LightingRigSummary } from './LightingRigSummary';
+import { TURNTABLE_FORMATS, turntablePlaybackFps } from '../../hooks/useScreenshotActions';
 
 const rgbCss = ([r, g, b]: [number, number, number]) =>
   `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
@@ -26,6 +27,20 @@ const SCREENSHOT_SIZE_OPTIONS = [
   { value: '7680', label: '8K' },
   { value: '15360', label: '16K' },
 ];
+
+const TURNTABLE_QUALITY_OPTIONS = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'high', label: 'High' },
+  { value: 'maximum', label: 'Maximum' },
+];
+
+// Shown under each format in the open list; short enough never to wrap.
+const TURNTABLE_FORMAT_DESCRIPTIONS: Record<TurntableFormat, string> = {
+  gif: 'Plays everywhere, 256 colors',
+  webp: 'Full color, soft edges',
+  apng: 'Lossless, soft edges, large',
+  mp4: 'Smallest, no transparency',
+};
 
 // A collapsible group of controls. Expanded by default; each section keeps
 // its own local, unpersisted open/closed state.
@@ -128,6 +143,32 @@ function SeedField({
   );
 }
 
+// Hex readout for the turntable color swatch; mirrors the validation in
+// lightingFields.tsx's ColorRow (commit only on a full #rrggbb match, revert
+// the draft on blur otherwise).
+function TurntableColorHexField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+
+  return (
+    <input
+      className="lighting-readout lighting-color-hex"
+      value={draft}
+      maxLength={7}
+      spellCheck={false}
+      aria-label="Turntable color hex"
+      onChange={(event) => {
+        const next = event.currentTarget.value;
+        setDraft(next);
+        if (/^#[0-9a-f]{6}$/i.test(next)) onChange(next.toLowerCase());
+      }}
+      onBlur={() => {
+        if (!/^#[0-9a-f]{6}$/i.test(draft)) setDraft(value);
+      }}
+    />
+  );
+}
+
 export function Inspector({
   previewControls,
   firstPersonActive = false,
@@ -135,6 +176,7 @@ export function Inspector({
   weaponOptions,
   hasTeamTextures,
   state,
+  turntableFormats,
   viewAngle,
   onChange,
   onRandomizeSeed,
@@ -151,6 +193,7 @@ export function Inspector({
   weaponOptions: IconOption[];
   hasTeamTextures: boolean;
   state: ControlsState;
+  turntableFormats: TurntableFormat[];
   viewAngle: string;
   onChange: (patch: Partial<ControlsState>) => void;
   onRandomizeSeed: () => void;
@@ -174,6 +217,20 @@ export function Inspector({
     color: p.id === 'none' ? null : rgbCss(p.id === 'team_shine' ? p.red : (state.team === 'blu' ? p.blu : p.red)),
     secondaryColor: p.id === 'team_shine' ? rgbCss(p.blu) : null,
   }));
+
+  // First Person can only capture images, regardless of the stored format.
+  const captureFormat = firstPersonActive ? 'image' : state.captureFormat;
+
+  const profile = state.turntableProfiles[state.turntableFormat];
+  const formatInfo = TURNTABLE_FORMATS[state.turntableFormat];
+  // Patches only the current format's remembered settings.
+  const patchProfile = <K extends keyof TurntableProfile,>(key: K, value: TurntableProfile[K]) =>
+    onChange({ turntableProfiles: { ...state.turntableProfiles, [state.turntableFormat]: { ...profile, [key]: value } } });
+
+  const turntableFrames = Math.max(2, Math.round(TURNTABLE_SECONDS * turntablePlaybackFps(state.turntableFormat, profile.fps)));
+  const turntableEstimatedBytes = formatInfo.estimateBytes(profile, turntableFrames, TURNTABLE_SECONDS);
+  const turntableOverDiscordLimit = turntableEstimatedBytes > 10 * 1024 * 1024;
+  const turntableEstimatedMb = (turntableEstimatedBytes / (1024 * 1024)).toFixed(1);
 
   return (
     <>
@@ -305,14 +362,133 @@ export function Inspector({
           </Control>
 
         </>}
+      </InspectorSection>
 
-        <Control label={<span>Screenshot size</span>}>
-          <SelectField
-            value={String(state.screenshotMaxEdge)}
-            onChange={(value) => onChange({ screenshotMaxEdge: Number(value) })}
-            options={SCREENSHOT_SIZE_OPTIONS}
-          />
-        </Control>
+      <InspectorSection title="Capture">
+        {/* First Person renders a live view, not the inspect pose an animated turntable needs, so it can only capture images. */}
+        {!firstPersonActive && (
+          <Control group label={<span>Output</span>}>
+            <div className="ui-toggle-group" role="group" aria-label="Output">
+              <button
+                type="button"
+                className="ui-toggle-btn"
+                data-pressed={state.captureFormat === 'image' || undefined}
+                aria-pressed={state.captureFormat === 'image'}
+                onClick={() => onChange({ captureFormat: 'image' })}
+              >
+                Image
+              </button>
+              <button
+                type="button"
+                className="ui-toggle-btn"
+                data-pressed={state.captureFormat === 'animated' || undefined}
+                aria-pressed={state.captureFormat === 'animated'}
+                onClick={() => onChange({ captureFormat: 'animated' })}
+              >
+                Animated
+              </button>
+            </div>
+          </Control>
+        )}
+
+        {captureFormat === 'image' && (
+          <Control label={<span>Image size</span>}>
+            <SelectField
+              value={String(state.screenshotMaxEdge)}
+              onChange={(value) => onChange({ screenshotMaxEdge: Number(value) })}
+              options={SCREENSHOT_SIZE_OPTIONS}
+            />
+          </Control>
+        )}
+
+        {captureFormat === 'animated' && <>
+          <Control label={<span>Format</span>}>
+            <SelectField
+              value={state.turntableFormat}
+              onChange={(value) => onChange({ turntableFormat: value as TurntableFormat })}
+              options={turntableFormats.map((format) => ({
+                value: format,
+                label: TURNTABLE_FORMATS[format].label,
+                description: TURNTABLE_FORMAT_DESCRIPTIONS[format],
+              }))}
+            />
+          </Control>
+
+          <Control label={<span>Size</span>}>
+            <SelectField
+              value={String(profile.maxEdge)}
+              onChange={(value) => patchProfile('maxEdge', Number(value))}
+              options={formatInfo.sizes.map((n) => ({ value: String(n), label: `${n} px` }))}
+            />
+          </Control>
+
+          <Control label={<span>Frame rate</span>}>
+            <SelectField
+              value={String(profile.fps)}
+              onChange={(value) => patchProfile('fps', Number(value))}
+              options={formatInfo.frameRates.map((n) => ({ value: String(n), label: `${n} fps` }))}
+            />
+          </Control>
+
+          {formatInfo.hasQuality && (
+            <Control label={<span>Quality</span>}>
+              <SelectField
+                value={profile.quality}
+                onChange={(value) => patchProfile('quality', value as TurntableQuality)}
+                options={TURNTABLE_QUALITY_OPTIONS}
+              />
+            </Control>
+          )}
+
+          {formatInfo.alpha !== null && (
+            <Control group label={<span>Background</span>}>
+              <div className="ui-toggle-group" role="group" aria-label="Background">
+                <button
+                  type="button"
+                  className="ui-toggle-btn"
+                  data-pressed={state.turntableTransparent || undefined}
+                  aria-pressed={state.turntableTransparent}
+                  onClick={() => onChange({ turntableTransparent: true })}
+                >
+                  Transparent
+                </button>
+                <button
+                  type="button"
+                  className="ui-toggle-btn"
+                  data-pressed={!state.turntableTransparent || undefined}
+                  aria-pressed={!state.turntableTransparent}
+                  onClick={() => onChange({ turntableTransparent: false })}
+                >
+                  Solid
+                </button>
+              </div>
+            </Control>
+          )}
+
+          {(formatInfo.alpha === null || !state.turntableTransparent) && (
+            <Control group label={<span>Background color</span>}>
+              <div className="inspector-color-row">
+                <input
+                  className="lighting-color-swatch"
+                  type="color"
+                  value={state.turntableColor}
+                  aria-label="Background color picker"
+                  onChange={(event) => onChange({ turntableColor: event.currentTarget.value })}
+                />
+                <TurntableColorHexField
+                  value={state.turntableColor}
+                  onChange={(turntableColor) => onChange({ turntableColor })}
+                />
+              </div>
+            </Control>
+          )}
+
+          <div className={`capture-estimate${turntableOverDiscordLimit ? ' is-over' : ''}`}>
+            <span>{turntableFrames} frames</span>
+            <span className="capture-estimate-size">~{turntableEstimatedMb} MB</span>
+            {turntableOverDiscordLimit && <span className="capture-estimate-note">Likely over Discord's 10 MB upload limit</span>}
+          </div>
+        </>}
       </InspectorSection>
     </>
   );
