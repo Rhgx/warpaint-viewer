@@ -21,6 +21,7 @@ import { WarpaintList } from './ui/catalog/WarpaintList';
 import { Inspector } from './ui/stage/Inspector';
 import type { ControlsState } from './viewer/controls';
 import { StageToolbar } from './ui/stage/StageToolbar';
+import { SupportLink } from './ui/stage/SupportLink';
 import { formatSize } from './ui/common/formatSize';
 import { FirstPersonControls } from './ui/stage/FirstPersonControls';
 import { LightingPanel } from './ui/stage/LightingPanel';
@@ -4543,6 +4544,7 @@ function MainApp() {
                 ? 'hold Shift to preview and select parts, drag to rotate'
               : 'drag to rotate, scroll to zoom, right-drag to pan, double-click to reset'}
           </div>
+          {!editingMode && <SupportLink />}
           {promptedCandidate && (
             <DefinitionsPrompt
               path={promptedCandidate.path}
