@@ -34,7 +34,7 @@ import {
 import { installTf2VertexLit, TF2_VERTEXLIT_CACHE_KEY } from './shaders/vertexlit';
 import { createUnusualEffect, setParticlePointScale } from './particles';
 import type { UnusualEffect } from './particles';
-import type { WeaponMaterial } from '../data/types';
+import type { WeaponAttachment, WeaponMaterial } from '../data/types';
 import {
   fitScreenshotCapture,
   resolveScreenshotCapture,
@@ -72,7 +72,7 @@ export interface TurntableSink {
 }
 import { computeModelBounds, ModelLoader, type ModelPart } from './modelLoader';
 import { CullableGeometry } from './modelCulling';
-import { configureTf2Material, createTf2Uniforms } from './materialConfig';
+import { configureTf2Material, createTf2Uniforms, type Tf2Uniforms } from './materialConfig';
 import { EDITOR_LAYER_MAP_COLORS } from '../editor/layerMap';
 import {
   moveStickerQuadToUv,
@@ -290,6 +290,18 @@ function compareStickerGizmoChartScores(left: StickerGizmoChartScore, right: Sti
     || right.edges - left.edges
     || left.tileDistance - right.tileDistance
     || left.depth - right.depth;
+}
+
+interface LoadedAttachment {
+  meshes: THREE.Mesh[];
+  material: THREE.MeshPhongMaterial;
+  uniforms: Tf2Uniforms;
+}
+
+function disposeAttachment({ material, uniforms }: LoadedAttachment): void {
+  material.map?.dispose();
+  uniforms.uTf2DetailMap.value?.dispose();
+  material.dispose();
 }
 
 // three.js viewer with TF2's important VertexLitGeneric/Skin controls layered
@@ -821,6 +833,7 @@ export class Viewer {
     this.lastTime = now;
     const controlsAnimating = !this.firstPerson && this.controls.update(dt);
     const emissiveAnimating = this.stepEmissive(dt);
+    const attachmentsAnimating = !this.firstPerson && this.stepAttachments(dt);
     if (this.firstPerson) {
       this.firstPerson.update(dt);
       this.updateSheenAnimation();
@@ -869,7 +882,7 @@ export class Viewer {
       this.updateStickerGizmoOverlay();
       this.renderer.render(this.scene, this.camera);
     }
-    this.scheduleNextFrame(!!controlsAnimating || emissiveAnimating || !!this.activeUnusual, this.sheenMeshes);
+    this.scheduleNextFrame(!!controlsAnimating || emissiveAnimating || attachmentsAnimating || !!this.activeUnusual, this.sheenMeshes);
   };
 
   // The pass reads $time, which only moves the picture when the scroll vector
@@ -2943,7 +2956,7 @@ export class Viewer {
     const frameCount = Math.max(2, Math.round(seconds * fps));
     const dt = 1 / fps;
     const sheenActive = this.sheenId !== 'none' && !!this.sheenMaterial && this.sheenMeshes.length > 0;
-    const animated = !!this.activeUnusual || sheenActive || this.stepEmissive(0);
+    const animated = !!this.activeUnusual || sheenActive || this.stepEmissive(0) || this.stepAttachments(0);
     const prevTarget = this.renderer.getRenderTarget();
     const prevBackground = this.scene.background;
     const prevPointerEvents = this.canvas.style.pointerEvents;
@@ -3038,6 +3051,7 @@ export class Viewer {
         this.controls.rotateYaw((Math.PI * 2) / frameCount);
         this.updateSheenAnimation(dt);
         this.stepEmissive(dt);
+        this.stepAttachments(dt);
         if (this.activeUnusual) {
           this.centerGroup.updateWorldMatrix(true, false);
           this.activeUnusual.updateAnchor(this.centerGroup.matrixWorld);
@@ -3317,6 +3331,68 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
 
   private currentModelUrl: string | null = null;
   private loadToken = 0;
+  private attachments: LoadedAttachment[] = [];
+
+  // Attached models keep their own unpainted material and stay out of
+  // picking, framing and paint overlays. One that fails to load is left out.
+  private async loadAttachment({ model, material: params }: WeaponAttachment): Promise<LoadedAttachment | null> {
+    const loadTexture = async (ref: string | null | undefined) => {
+      if (!ref) return null;
+      const texture = await this.texLoader.loadAsync(`${import.meta.env.BASE_URL}data/${ref}`);
+      // Sampled like the viewmodel's copy in FirstPersonPreview.
+      texture.flipY = false;
+      texture.colorSpace = THREE.NoColorSpace;
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+      return texture;
+    };
+    const [parts, map, detail] = await Promise.allSettled([
+      this.modelLoader.load(`${import.meta.env.BASE_URL}data/${model}`),
+      loadTexture(params.baseTexture),
+      loadTexture(params.detailTexture),
+    ]);
+    if (parts.status === 'rejected' || map.status === 'rejected' || detail.status === 'rejected') {
+      if (map.status === 'fulfilled') map.value?.dispose();
+      if (detail.status === 'fulfilled') detail.value?.dispose();
+      console.warn('[warpaint-viewer] attached model failed to load:', model);
+      return null;
+    }
+    const uniforms = createTf2Uniforms();
+    const material = new THREE.MeshPhongMaterial({ color: 0xffffff, map: map.value });
+    configureTf2Material(params, material, uniforms);
+    uniforms.uTf2DetailMap.value = detail.value;
+    material.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, uniforms);
+      installTf2VertexLit(shader);
+    };
+    // Kept apart from this.material's program, which adds isolation uniforms.
+    material.customProgramCacheKey = () => `${TF2_VERTEXLIT_CACHE_KEY}-attachment`;
+    return { meshes: parts.value.map(({ geometry }) => new THREE.Mesh(geometry, material)), material, uniforms };
+  }
+
+  private setAttachments(attachments: LoadedAttachment[]) {
+    for (const attachment of this.attachments) {
+      this.centerGroup.remove(...attachment.meshes);
+      disposeAttachment(attachment);
+    }
+    this.attachments = attachments;
+    for (const { meshes } of attachments) this.centerGroup.add(...meshes);
+    this.invalidate();
+  }
+
+  // $texture2 TextureScroll runs on game time, so it scrolls in the inspect
+  // panel too. The base's BuildingRescueLevel reads the owner's metal and has
+  // no player there, so it stays put.
+  private stepAttachments(dt: number): boolean {
+    let animating = false;
+    for (const { uniforms } of this.attachments) {
+      const scroll = uniforms.uTf2DetailScroll.value;
+      if (scroll.lengthSq() === 0) continue;
+      animating = true;
+      const period = 1 / Math.max(Math.abs(scroll.x), Math.abs(scroll.y));
+      uniforms.uTf2Time.value = (uniforms.uTf2Time.value + dt) % period;
+    }
+    return animating;
+  }
 
   private setMeshGeometries(parts: ModelPart[], initialView?: ViewAnglePreset) {
     this.teardownSheenMeshes();
@@ -3370,6 +3446,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     this.meshes = [];
     this.paintableMeshes = [];
     this.cullableGeometries = [];
+    this.setAttachments([]);
     this.resetStickerUvTopology();
     this.meshIsLens = [];
     this.currentModelUrl = null;
@@ -3378,7 +3455,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
 
   // Load a weapon GLB. Concurrent calls resolve in call order via a token so a
   // stale load never wins; missing models leave the stage empty.
-  async loadModel(url: string | null, initialView?: ViewAnglePreset): Promise<void> {
+  async loadModel(url: string | null, initialView?: ViewAnglePreset, attachments: readonly WeaponAttachment[] = []): Promise<void> {
     if (url && url === this.currentModelUrl && this.meshes.length > 0) return;
     const token = ++this.loadToken;
     if (!url) {
@@ -3387,8 +3464,14 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     }
     try {
       const geometries = await this.modelLoader.load(url);
-      if (token !== this.loadToken || this.disposed) return;
+      const attached = (await Promise.all(attachments.map((attachment) => this.loadAttachment(attachment))))
+        .filter((attachment) => attachment !== null);
+      if (token !== this.loadToken || this.disposed) {
+        attached.forEach(disposeAttachment);
+        return;
+      }
       this.setMeshGeometries(geometries, initialView);
+      this.setAttachments(attached);
       this.currentModelUrl = url;
     } catch (err) {
       if (token !== this.loadToken || this.disposed) return;
@@ -3565,6 +3648,8 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     this.defaultEnvMap.dispose();
     for (const cullable of this.cullableGeometries) cullable.dispose();
     this.cullableGeometries = [];
+    this.attachments.forEach(disposeAttachment);
+    this.attachments = [];
     this.modelLoader.dispose();
     this.renderer.dispose();
   }

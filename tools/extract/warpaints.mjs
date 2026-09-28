@@ -571,10 +571,15 @@ async function main() {
         };
         const iconCamera = w.modelPath ? extractModelAttachment(w.modelPath, 'icon_camera') : null;
         const roundVector = (values) => values.map((value) => Math.round(value * 1e6) / 1e6);
+        // World-visible attached_models (the Rescue Ranger's screen) reuse the
+        // viewmodel import's assets, which this tool does not produce, so keep
+        // them across runs like the textures below.
+        const attachments = previousManifest?.weapons?.find((entry) => entry.key === w.key)?.attachments;
         return ({
         key: w.key,
         name: w.name,
         model: `models/${w.key}.glb`,
+        ...(attachments ? { attachments } : {}),
         ...(dimensions ? { compositeWidth: dimensions.width, compositeHeight: dimensions.height } : {}),
         ...(w.icon ? { icon: w.icon } : {}),
         ...(iconCamera ? {

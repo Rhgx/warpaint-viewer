@@ -13674,6 +13674,32 @@
    "key": "c_tele_shotgun",
    "name": "Rescue Ranger",
    "model": "models/c_tele_shotgun.glb",
+   "attachments": [
+    {
+     "model": "viewmodels/models/c_tele_shotgun_screen.glb",
+     "material": {
+      "unlit": true,
+      "unlitTwoTexture": true,
+      "baseTexture": "viewmodels/textures/models/workshop/weapons/c_models/c_tele_shotgun/c_tele_shotgun_tv.webp",
+      "detailTexture": "viewmodels/textures/models/workshop/weapons/c_models/c_tele_shotgun/c_tele_shotgun_gradient.webp",
+      "detailScale": 1,
+      "detailBlendFactor": 1,
+      "detailBlendMode": 0,
+      "detailScrollRate": -0.6,
+      "detailScrollAngle": 0,
+      "phongExponent": null,
+      "phongBoost": 1,
+      "envmapTint": [
+       0,
+       0,
+       0
+      ],
+      "normalMap": null,
+      "phong": false,
+      "phongExponentFactor": null
+     }
+    }
+   ],
    "compositeWidth": 2048,
    "compositeHeight": 2048,
    "icon": "icons/weapons/c_tele_shotgun.png",

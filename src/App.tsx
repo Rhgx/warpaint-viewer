@@ -1635,13 +1635,20 @@ function MainApp() {
   const kitHasTeamTextures = (selectedKit?.hasTeamTextures ?? false)
     || (editableKitId !== null && editorSession.kitId === editableKitId
       && editorCurrent?.definition.has_team_textures === true);
+  // Camera policy follows the Edit tab itself, even while its group map is
+  // loading or unavailable. Selection input remains stricter: it only starts
+  // once the editor has a usable target and image.
+  const editorTabActive = workbenchOpen && workbenchTab === 'editor';
+  const firstPersonActive = firstPersonEnabled && !!selectedKit && !!state.weaponKey
+    && state.weaponKey !== 'paintkit_tool' && !editorTabActive && !lightingPanelOpen;
   useEffect(() => {
-    // Only a switched-off team layer lands here: picking a paint already
-    // clamps the team, and the kit is unknown while the catalog boots.
-    if (selectedKit && !kitHasTeamTextures && state.team === 'blu' && state.sheen !== 'team_shine') {
+    // Only a switched-off team layer (or leaving First Person, whose arms keep
+    // the team meaningful) lands here: picking a paint already clamps the
+    // team, and the kit is unknown while the catalog boots.
+    if (selectedKit && !kitHasTeamTextures && !firstPersonActive && state.team === 'blu' && state.sheen !== 'team_shine') {
       setState((current) => ({ ...current, team: 'red' }));
     }
-  }, [kitHasTeamTextures, selectedKit, state.sheen, state.team]);
+  }, [kitHasTeamTextures, firstPersonActive, selectedKit, state.sheen, state.team]);
   const editorDraftKey = editableKitId === null
     ? null
     : isCustomKitId(editableKitId)
@@ -1710,9 +1717,9 @@ function MainApp() {
     setState((current) => ({
       ...current,
       weaponKey: kit.weapons.includes(current.weaponKey) ? current.weaponKey : (kit.weapons[0] ?? current.weaponKey),
-      team: kit.hasTeamTextures || current.sheen === 'team_shine' ? current.team : 'red',
+      team: kit.hasTeamTextures || current.sheen === 'team_shine' || firstPersonActive ? current.team : 'red',
     }));
-  }, [editorDirty, paintkits, suggestedKitId, suggestionToken]);
+  }, [editorDirty, firstPersonActive, paintkits, suggestedKitId, suggestionToken]);
   const resolvePackageTexture = useCallback((ref: string) => sourceProvider.resolvePreview(ref), [sourceProvider]);
   const manualTextureOverrides = useMemo(
     () => Object.fromEntries(
@@ -2673,10 +2680,6 @@ function MainApp() {
   }, [activeTextureOverrides, displayedGroupRef, sourceProvider, packageGeneration]);
 
   const editorEnabled = editorStatus === 'ready' && Boolean(activeGroupEditTarget && groupImage);
-  // Camera policy follows the Edit tab itself, even while its group map is
-  // loading or unavailable. Selection input remains stricter: it only starts
-  // once the editor has a usable target and image.
-  const editorTabActive = workbenchOpen && workbenchTab === 'editor';
   const stickerEditingActive = editorTabActive && editorTool === 'sticker';
   const groupAssignActive = editorEnabled && editorTabActive && editorTool === 'paint' && paintSubView === 'parts';
   const stickerEditorPreparing = editorTabActive && editorTool === 'sticker'
@@ -2684,8 +2687,6 @@ function MainApp() {
   const stickerPlacementActive = editorTabActive && editorTool === 'sticker' && stickerEditorReady;
   const stickerPartPickingActive = stickerEditingActive && modelPartPickingActive;
   const editorInteractionActive = groupAssignActive || stickerPlacementActive;
-  const firstPersonActive = firstPersonEnabled && !!selectedKit && !!state.weaponKey
-    && state.weaponKey !== 'paintkit_tool' && !editorTabActive && !lightingPanelOpen;
   // First Person renders a live view, not the inspect pose a turntable needs, so it can only capture images.
   const captureFormat = firstPersonActive ? 'image' : state.captureFormat;
   const editingMode = lightingPanelOpen && state.preset === CUSTOM_LIGHTING_ID
@@ -3753,6 +3754,7 @@ function MainApp() {
           : state.weaponKey === 'paintkit_tool'
             ? weaponIconView(weapon)
             : VIEW_ANGLES.find((preset) => preset.id === viewAngleIdRef.current) ?? VIEW_ANGLES[0],
+        weapon.attachments,
       ),
       applyMaterial,
     ]).then(() => {
@@ -3892,11 +3894,12 @@ function MainApp() {
         next.weaponKey = kit.weapons[0] ?? state.weaponKey;
       }
       // Team Shine is the one sheen with a per-team color, so the team choice
-      // stays meaningful (and selectable) even on single-team warpaints.
-      if (kit && !kit.hasTeamTextures && state.sheen !== 'team_shine') next.team = 'red';
+      // stays meaningful (and selectable) even on single-team warpaints, as
+      // it does in First Person, where the arms follow the team.
+      if (kit && !kit.hasTeamTextures && state.sheen !== 'team_shine' && !firstPersonActive) next.team = 'red';
       patch(next);
     },
-    [editorDirty, paintkits, selectedKitId, state.weaponKey, state.sheen, patch],
+    [editorDirty, paintkits, selectedKitId, state.weaponKey, state.sheen, firstPersonActive, patch],
   );
 
   // Selecting a kit belongs to the app, so the hook leaves that hole for it.

@@ -77,6 +77,13 @@ export interface WeaponEntry {
     up: [number, number, number];
   };
   material: WeaponMaterial;
+  /** items_game attached_models drawn with the weapon but never painted, e.g. the Rescue Ranger's screen. */
+  attachments?: WeaponAttachment[];
+}
+
+export interface WeaponAttachment {
+  model: string; // relative to public/data
+  material: WeaponMaterial & { baseTexture: string };
 }
 
 export type Grade = 'civilian' | 'freelance' | 'mercenary' | 'commando' | 'assassin' | 'elite';
