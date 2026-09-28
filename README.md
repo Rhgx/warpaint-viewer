@@ -1,156 +1,46 @@
 # TF2 Warpaint Viewer
 
-A 1:1 recreation of the Team Fortress 2 lighting engine in Three.js, presented as an interactive viewer.
+A 1:1 recreation of the Team Fortress 2 lighting engine in Three.js, presented as
+an interactive viewer. **[Open the viewer](https://rhgx.github.io/warpaint-viewer/)**
 
 ## Features
 
-- Browse and search war paints by name or collection.
-- Preview each paint on its supported weapons.
-- Compare wear levels and RED/BLU variants.
-- Enter or randomize paint seeds.
-- Select different lighting environments, viewing angles, sheens, and unusual effects.
-- Adjust the camera projection and field of view.
-- Export transparent PNG images at multiple resolutions.
-- Preview custom war paints: import your own definitions and textures and view
-  them on any supported weapon.
+- Browse war paints on every supported weapon, with wear, team, and seed.
+- TF2 lighting environments, sheens, unusual effects, and a first-person view.
+- Export transparent PNGs and animated turntables (GIF, WebP, APNG, MP4).
+- Preview custom war paints from your own definitions and textures.
 
-## Usage
+## Documentation
 
-Select a war paint, choose a supported weapon, and adjust its appearance using the controls below the viewer.
-
-### Camera controls
-
-| Action       | Result                          |
-| ------------ | -------------------------------- |
-| Drag         | Rotate the weapon               |
-| Scroll       | Zoom in or out                  |
-| Right-drag   | Move the weapon within the view |
-| Double-click | Reset the view                  |
-| `Alt`        | Toggle Advanced Camera          |
-
-Preset angles, projection options, field-of-view settings, and image export controls are available under **View**.
-
-The right sidebar's **Preview** section switches between Inspect and **First Person**.
-First Person supports class selection for shared weapons, idle/inspect animations,
-viewmodel FOV, and stock minimized offsets. The play/pause button beside Animation holds the current
-pose while sheen, unusual particles, and emissive materials continue animating.
-The Holy Mackerel also has an optional **Fish Bone Physics** switch, on by default;
-pausing freezes its current bend. Paint, wear, seed, team, lighting, effects, and PNG
-capture use the current selection. Close visual editors before entering First Person.
-Other procedural weapon motion and animation autolayers are not included.
-
-First-person assets load on demand. To refresh them from an extracted sibling
-viewmodel-editor project, run `node tools/models/import-viewmodels.mjs`, optionally
-passing the path to `tf-viewmodel-editor`. The imported subset covers the stock
-warpaint-supported weapons and class arms; running the viewer needs neither that
-project nor a local game install.
-
-Advanced Camera provides bounded free-flight controls inspired by TF2's roaming spectator camera.
-
-### Custom war paints
-
-The panel under the viewer holds four tabs:
-
-- **Files** replaces any single texture the selected recipe reads, with PNG,
-  JPG, WebP, TGA, or VTF, and an optional separate alpha mask.
-- **Package** mounts a Source asset archive (`.zip` or `.vpk`) whose textures
-  then take priority over the built-in ones. Archives that keep their textures
-  under `materials/` at any depth are read as authored; an archive with no
-  `materials/` directory is treated as if its root were one, and its files are
-  matched to a recipe by name when no path matches.
-- **Definitions** imports a war paint's own definitions: the two JSON files a
-  custom paint ships (its operation and its definition, under any file names),
-  or a whole `proto_defs.vpd`. Imported paints appear in the catalog under
-  **Imported definitions**. JSON definitions are resolved against the base game
-  definitions in `public/data/protodefs-base.bin`, so a paint that reuses a
-  stock operation template still resolves.
-- **Export** packages edited textures and imported definitions as a folder
-  `.zip`, or as a `.zip` containing a game-ready `.vpk` and its README.
-  Definition exports require the
-  [custom_items_games](https://github.com/ficool2/custom_items_games) client
-  plugin and TF2 must be launched with `-insecure`; stock TF2 rejects modified
-  `proto_defs.vpd` files during startup.
-
-Appending a definition creates a new war-paint index that no owned item refers
-to. The [tf2warpaints](https://github.com/Mince1844/tf2warpaints) server plugin
-provides chat commands for giving players those war paints while testing and
-authoring them. Overwrite mode instead reuses the index of an existing war
-paint.
-
-Any of these files can also be dropped anywhere on the panel; each is routed by
-its extension. Nothing is uploaded anywhere. Imported package and definition
-files, along with definition edits, are saved locally in the browser and
-restored or offered for recovery after a reload.
-
-**Clear workspace** in the panel header removes all of it in one step: the
-imported archive, the imported definitions, every draft belonging to them, and
-any replaced texture files. Viewer settings and drafts for built-in war paints
-are kept. It asks for confirmation and names what it will delete first.
+- [Using the viewer](docs/usage.md): controls, first person, and capture
+- [Custom war paints](docs/custom-war-paints.md): importing and exporting paints
+- [Development](docs/development.md): scripts, game data, and verification
 
 ## Development
 
-Requires Node 22+. Install dependencies with `npm install`, then:
+Requires Node 22+.
 
-| Script | Purpose |
-| ------ | ------- |
-| `npm run dev` | Start the Vite dev server |
-| `npm run build` | Type-check and build the production bundle |
-| `npm run lint` | Run oxlint |
-| `npm run update:warpaints` | Regenerate `public/data` (manifest, recipe bundles, textures) from a local TF2 install |
-| `npm run extract:effects` | Regenerate unusual-effect particle data from TF2's PCF files |
-| `npm run extract:map-lighting` | Regenerate map lighting presets from TF2 BSP files |
-| `npm run gen:protodefs` | Regenerate the browser protobuf schema from `tools/proto/tf_proto_def_messages.proto` |
+```sh
+npm install
+npm run dev
+```
 
-The extraction scripts in `tools/` read a local Team Fortress 2 installation
-and write derived data into `public/data`; the app itself never needs the game
-installed. Warpaint recipes are stored as one bundle per paint kit
-(`public/data/recipes/<id>.json`) holding every weapon/team/wear variant, and
-compositor textures are lossless WebP.
+## Support
 
-Developer harnesses:
+If the viewer is useful to you, you can support its development:
 
-- `/?selftest=1` composites known recipes offscreen and asserts the
-  compositor's pixel math; the page title becomes `SELFTEST PASS` or
-  `SELFTEST FAIL`.
-- `/?data=mock` boots the app against tiny generated placeholder data, with no
-  real assets required.
-- `tools/dev/selftest-driver.mjs` drives the selftest page in headless Edge
-  over raw CDP (see its header comment for usage).
-- `npx vitest run tools/verify/protodefs.test.mjs` resolves every shipped recipe variant
-  through the in-browser proto_defs decoder and compares it against both the
-  recipe bundles and the extraction pipeline, so a porting difference is told
-  apart from data that predates the installed game.
-- `npm test` runs the typed Vitest suites, including deterministic VTF
-  encoder/decoder and VPK writer/reader round trips.
-- `npm run verify:vtf -- <path>` additionally compares a re-encode of a real
-  Valve texture against the original's header, flags and image-section size.
-- `npm run verify:vpk-interop` checks the VPK writer against TF2's own
-  `bin/vpk.exe`, which catches a container Valve's tools read differently than
-  this repository's reader.
-- `npx vitest run tools/verify/protodefs-write.test.mjs` asserts the proto_defs writer
-  reproduces the shipped container byte for byte when nothing is spliced, then
-  checks both splice modes through two independent decoders.
-- `npx vitest run tools/verify/protodef-json.test.mjs` resolves community JSON war paint
-  definitions.
-- `npx vitest run tools/verify/vmt-parity.test.mjs` compares the browser VMT parser against
-  the stock materials produced by the extraction pipeline.
-
-Optional verification fixtures can be selected with `TF2_PROTODEFS`, `TF2_FRAGMENT_DIR`, `TF2_VPK_EXE`, and `TF2_VTF_FIXTURE` environment variables. Missing optional fixtures are reported as skipped tests.
-
-Application errors use stable `WV-AREA-NNNN` codes with separate user-facing
-and technical messages. See [Error codes](docs/error-codes.md) for the API,
-allocation rules, and current registry.
+<a href="https://boosty.to/rhgx/donate"><img src="docs/assets/boosty.svg" alt="" width="16" height="16"> <b>Support me on Boosty</b></a>
 
 ## Credits
 
-Team Fortress 2 and its weapon models, war-paint artwork, textures, effects, names, and other game assets are the property of Valve Corporation.
-
-Parts of this project are based on reference material and implementations from the [Source SDK](https://github.com/valvesoftware/source-sdk-2013). Valve's published resources provided the basis for reproducing relevant TF2 material, lighting, pattern, and effect behavior.
-
-This is an independent community project and is not affiliated with, sponsored by, or endorsed by Valve Corporation.
+Team Fortress 2 and its weapon models, war-paint artwork, textures, effects,
+names, and other game assets are the property of Valve Corporation. Parts of
+this project are based on the [Source SDK](https://github.com/valvesoftware/source-sdk-2013).
+This is an independent community project and is not affiliated with, sponsored
+by, or endorsed by Valve Corporation.
 
 ## License
 
-The original source code in this repository is licensed under the [GNU General Public License v3.0](LICENSE).
-
-This license does not apply to Team Fortress 2, the Source SDK, or any Valve-owned assets. Those materials remain subject to their respective terms and ownership.
+The original source code is licensed under the [GNU General Public License v3.0](LICENSE).
+It does not apply to Team Fortress 2, the Source SDK, or any Valve-owned assets,
+which remain subject to their respective terms and ownership.
