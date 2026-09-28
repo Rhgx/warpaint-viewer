@@ -18,6 +18,7 @@ import type {
 } from '../../workbench/exportTypes';
 import { TextField } from '../common/controls';
 import './ExportPanel.css';
+import { formatSize } from '../common/formatSize';
 
 export type { ExportDefinitionsContext, ExportItem } from '../../workbench/exportTypes';
 
@@ -167,12 +168,6 @@ function PaintPicker({
       </div>
     </div>
   );
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**

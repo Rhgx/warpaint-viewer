@@ -1,12 +1,7 @@
 import { useState } from 'react';
 import type { ExportCompression } from '../export/plan';
 import type { WarpaintExportInputs } from '../workbench/exportTypes';
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+import { formatSize } from '../ui/common/formatSize';
 
 export function useWarpaintExport(inputs: WarpaintExportInputs) {
   const [busy, setBusy] = useState(false);

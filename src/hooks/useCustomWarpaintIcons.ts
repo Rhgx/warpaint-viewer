@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { Compositor } from '../compositor/compositor';
 import type { RecipeNode } from '../compositor/types';
 import type { PaintkitEntry, Team, WeaponEntry } from '../data/types';
-import { PAINTKIT_TOOL_FOV, PAINTKIT_TOOL_VIEW, weaponIconView } from '../viewer/presets';
+import { PAINTKIT_TOOL_VIEW, TF2_ITEM_PANEL_FOV, weaponIconView } from '../viewer/presets';
 import { PAINTKIT_ICON_LIGHTING_ID } from '../viewer/lighting';
 
 interface IdleDeadlineLike {
@@ -138,7 +138,7 @@ export function useCustomWarpaintIcons({
       const viewer = new Viewer(canvas);
       session.host = host;
       session.viewer = viewer;
-      viewer.setFov(PAINTKIT_TOOL_FOV);
+      viewer.setFov(TF2_ITEM_PANEL_FOV);
       await Promise.all([
         viewer.ready(),
         viewer.loadModel(modelUrl, weaponIconView(paintTool, true) ?? PAINTKIT_TOOL_VIEW),

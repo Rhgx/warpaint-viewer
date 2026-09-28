@@ -130,4 +130,3 @@ export const PAINTKIT_TOOL_VIEW: ViewAnglePreset = {
 // shared by TF2's shipped modern war-paint icons.
 export const DEFAULT_VIEWER_FOV = 70;
 export const TF2_ITEM_PANEL_FOV = 54;
-export const PAINTKIT_TOOL_FOV = TF2_ITEM_PANEL_FOV;
