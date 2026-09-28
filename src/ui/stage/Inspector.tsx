@@ -316,8 +316,9 @@ export function Inspector({
 
       {previewControls}
 
-      <InspectorSection title="Camera">
-        {!firstPersonActive && <>
+      {/* First Person has its own camera, so none of these apply there. */}
+      {!firstPersonActive && (
+        <InspectorSection title="Camera">
           <Control label={<><Camera size={12} /><span>View angle</span></>}>
             <SelectField
               value={viewAngle}
@@ -361,8 +362,8 @@ export function Inspector({
             </div>
           </Control>
 
-        </>}
-      </InspectorSection>
+        </InspectorSection>
+      )}
 
       <InspectorSection title="Capture">
         {/* First Person renders a live view, not the inspect pose an animated turntable needs, so it can only capture images. */}
