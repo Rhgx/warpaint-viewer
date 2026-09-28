@@ -9,8 +9,8 @@ import * as THREE from 'three';
 //   right/middle drag  pan the model in the view plane (limited)
 //   double-click       reset rotation, zoom and pan to the framed default
 // Rotation carries a short inertia tail that decays in well under a second and
-// can never become a continuous spin (unlike the game's auto-spin, which is
-// intentionally not implemented; the model stays still unless the user acts).
+// can never become a continuous spin on its own. The game's auto-spin is
+// opt-in (setAutoSpin); otherwise the model stays still unless the user acts.
 // Advanced Camera temporarily freezes that inspect pose and drives the camera
 // as a bounded, TF2-inspired free-fly view.
 
@@ -33,6 +33,12 @@ const ADVANCED_RESPONSE = 8;
 const ADVANCED_BOUNDARY_FACTOR = 12;
 const ADVANCED_SOFT_BOUNDARY_START = 0.8;
 const DOUBLE_CLICK_WINDOW_MS = 350;
+// Auto-spin timing from CTFItemInspectionPanel::OnThink: spin_vel drops to 0
+// the moment the model is grabbed, and 2 s after release ramps back to 1 over
+// 2 s through vgui's INTERPOLATOR_BIAS at 0.75.
+const SPIN_RESUME_DELAY = 2;
+const SPIN_RAMP_SECONDS = 2;
+const SPIN_RAMP_EXPONENT = Math.log(0.75) / Math.log(0.5);
 const DOUBLE_CLICK_DISTANCE_PX = 6;
 
 export type CameraMode = 'inspect' | 'advanced';
@@ -93,6 +99,11 @@ export class InspectControls {
 
   // Inspect Camera interaction state
   private mode: 'none' | 'rotate' | 'pan' = 'none';
+  /** Auto-spin speed at full ramp in rad/s; 0 when off. */
+  private spinRate = 0;
+  /** Seconds into the auto-spin ramp, or -1 while stopped by manipulation. */
+  private spinRamp = -1;
+  private spinIdle = 0;
   private lastX = 0;
   private lastY = 0;
   private lastMoveTime = 0;
@@ -362,6 +373,33 @@ export class InspectControls {
     this.velYaw = 0;
     this.velPitch = 0;
     this.applyInspect();
+  }
+
+  /** TF2 inspect auto-spin at `radiansPerSecond` (0 turns it off), ramping in from rest. */
+  setAutoSpin(radiansPerSecond: number) {
+    if (radiansPerSecond > 0 && this.spinRate === 0) this.spinRamp = 0;
+    this.spinRate = radiansPerSecond;
+  }
+
+  // CBaseModelPanel::RotateYaw: turn the model about world up, keeping pitch,
+  // pan and zoom. Touches only the model, so the turntable also works while
+  // Advanced Camera has the camera.
+  rotateYaw(radians: number) {
+    this.velYaw = 0;
+    this.velPitch = 0;
+    this.yaw = (this.yaw + radians) % (Math.PI * 2);
+    this.model.rotation.set(this.pitch, this.yaw, 0);
+  }
+
+  /** Current inspect zoom distance, and the framed default it resets to. */
+  getDistance(): { current: number; framed: number } {
+    return { current: this.dist, framed: this.baseDist };
+  }
+
+  /** Jumps the inspect zoom (no smoothing); Advanced Camera keeps its pose. */
+  setDistance(distance: number) {
+    this.dist = this.targetDist = distance;
+    if (this.cameraMode === 'inspect') this.applyInspect();
   }
 
   // Rescales the framed default distance (e.g. after an FOV change) while
@@ -675,6 +713,21 @@ export class InspectControls {
       if (Math.abs(this.velYaw) < INERTIA_CUTOFF && Math.abs(this.velPitch) < INERTIA_CUTOFF) this.velYaw = this.velPitch = 0;
       dirty = true;
     }
+    if (this.spinRate > 0) {
+      if (this.mode !== 'none') {
+        this.spinRamp = -1;
+        this.spinIdle = 0;
+      } else {
+        this.spinIdle += dt;
+        if (this.spinRamp < 0 && this.spinIdle > SPIN_RESUME_DELAY) this.spinRamp = 0;
+        if (this.spinRamp >= 0) {
+          this.spinRamp = Math.min(SPIN_RAMP_SECONDS, this.spinRamp + dt);
+          const speed = (this.spinRamp / SPIN_RAMP_SECONDS) ** SPIN_RAMP_EXPONENT;
+          this.yaw = (this.yaw + this.spinRate * speed * dt) % (Math.PI * 2);
+          dirty = true;
+        }
+      }
+    }
     if (Math.abs(this.dist - this.targetDist) > 1e-4) {
       this.dist += (this.targetDist - this.dist) * (1 - Math.exp(-ZOOM_SMOOTHING * dt));
       if (Math.abs(this.dist - this.targetDist) < 1e-4) this.dist = this.targetDist;
@@ -684,7 +737,7 @@ export class InspectControls {
     // Keep a frame pending while a pointer is held, even between pointermove
     // events. This makes controls responsive on displays that present faster
     // than input events, while the viewer can otherwise stay fully idle.
-    return dirty || this.mode !== 'none';
+    return dirty || this.mode !== 'none' || this.spinRate > 0;
   }
 
   private updateAdvanced(dt: number): boolean {

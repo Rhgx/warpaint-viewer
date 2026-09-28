@@ -39,8 +39,37 @@ import {
   fitScreenshotCapture,
   resolveScreenshotCapture,
   screenshotPixelsToBlob,
+  TurntableFrameResolver,
+  unionContentBounds,
   type ScreenshotSize,
 } from './capture';
+
+export interface TurntableOptions {
+  /** Output long edge in pixels. */
+  readonly maxEdge: number;
+  readonly fps: number;
+  /** Duration of one full revolution. */
+  readonly seconds: number;
+  /** 0xRRGGBB solid background, or null for transparent frames. */
+  readonly background: number | null;
+  /** Transparency the output format holds (see TurntableFrameResolver). */
+  readonly alpha: 'binary' | 'full';
+  /** Render palette samples before the frames (GIF needs its palette up front). */
+  readonly paletteSamples: boolean;
+}
+
+/** A turntable capture stopped on purpose (cancelled, or the scene changed under it). */
+export class TurntableStoppedError extends Error {
+  override name = 'TurntableStoppedError';
+}
+
+/** Receives a turntable capture as it renders. */
+export interface TurntableSink {
+  /** Called once, before any frame, with the output size and any palette samples. */
+  start(info: { width: number; height: number; frames: number; fps: number }, samples: Uint8Array[]): void;
+  /** Each output frame in order (ownership passes on); resolves when more may follow. */
+  frame(rgba: Uint8Array): Promise<void>;
+}
 import { computeModelBounds, ModelLoader, type ModelPart } from './modelLoader';
 import { CullableGeometry } from './modelCulling';
 import { configureTf2Material, createTf2Uniforms } from './materialConfig';
@@ -102,6 +131,29 @@ const GROUP_LAYER_OVERLAY_OPACITY = 0.16;
 
 /** Opacity of the normal paint while a transform layer is isolated. */
 const TRANSFORM_ISOLATION_CONTEXT_OPACITY = 0.2;
+
+/**
+ * Turntable anti-aliasing, measured on Taxi Cabbed's checkerboard against a
+ * 16x + MSAA reference (Oklab error; ~0.02 is one just-noticeable step):
+ *   2x + MSAA  99th pct 0.060, 99.9th 0.134 (visible sparkle)
+ *   6x + MSAA  99th pct 0.009, 99.9th 0.024
+ *   8x + MSAA  99th pct 0.006, 99.9th 0.015
+ * With the GPU filter even 8x costs ~12 ms a frame, so GPU memory (samples
+ * across the MSAA render target) is the real limit.
+ */
+const TURNTABLE_MAX_SUPERSAMPLE = 8;
+/** ~190 MB of colour + depth samples; 480 px GIFs get 6x + MSAA. */
+const TURNTABLE_SAMPLE_BUDGET = 24_000_000;
+/** Low-resolution sweep that finds the turntable crop. */
+const TURNTABLE_PROBE_EDGE = 320;
+const TURNTABLE_PROBE_STEPS = 36;
+/** Frames rendered up front to fit the shared GIF palette. */
+const TURNTABLE_PALETTE_SAMPLES = 40;
+/** Crossfade length hiding the loop seam of time-driven effects. */
+const TURNTABLE_SEAM_SECONDS = 0.5;
+const TURNTABLE_SEAM_BUDGET_BYTES = 64 * 1024 * 1024;
+/** Widest probe frustum, in viewport sizes, before a sweep is clipped. */
+const TURNTABLE_MAX_REACH = 27;
 
 /**
  * Distinct but muted default tints for editor layers. The UI may use these for
@@ -443,6 +495,7 @@ export class Viewer {
   private sheenMaterial: THREE.ShaderMaterial | null = null;
   private sheenMeshes: THREE.Mesh[] = [];
   private sheenElapsed = 0;
+  private turntableCapturing = false;
   private sheenLastTime = performance.now();
   private sheenWakeTimer = 0;
   private sheenFrameData: SheenFrameData = { scaleX: 1, offsetX: 0, scaleY: 1, offsetY: 0, sweepAxis: 0, sideAxis: 1 };
@@ -758,7 +811,8 @@ export class Viewer {
 
   private renderFrame = () => {
     this.raf = 0;
-    if (this.disposed || document.hidden) return;
+    // A turntable capture owns the scene and steps its animations itself.
+    if (this.disposed || document.hidden || this.turntableCapturing) return;
     // Thumbnail viewers share the particle uniform. Restore this drawing buffer's
     // scale before each frame, even when another viewer resized since our last one.
     setParticlePointScale(this.canvas.height);
@@ -766,16 +820,7 @@ export class Viewer {
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
     this.lastTime = now;
     const controlsAnimating = !this.firstPerson && this.controls.update(dt);
-    // The pass reads $time, which only moves the picture when the scroll
-    // vector is non-zero. Wrapped so a long session cannot drift the sample
-    // out of the range where float precision still resolves texels.
-    const scroll: THREE.Vector2 | undefined = this.emissiveMaterial?.uniforms.uEmissiveScroll.value;
-    const emissiveAnimating = this.emissiveEnabled && !!scroll && scroll.lengthSq() > 0;
-    if (emissiveAnimating && this.emissiveMaterial) {
-      const period = Math.max(1 / Math.max(Math.abs(scroll.x), Math.abs(scroll.y)), 1);
-      this.emissiveElapsed = (this.emissiveElapsed + dt) % period;
-      this.emissiveMaterial.uniforms.uEmissiveTime.value = this.emissiveElapsed;
-    }
+    const emissiveAnimating = this.stepEmissive(dt);
     if (this.firstPerson) {
       this.firstPerson.update(dt);
       this.updateSheenAnimation();
@@ -827,6 +872,20 @@ export class Viewer {
     this.scheduleNextFrame(!!controlsAnimating || emissiveAnimating || !!this.activeUnusual, this.sheenMeshes);
   };
 
+  // The pass reads $time, which only moves the picture when the scroll vector
+  // is non-zero. Wrapped so a long session cannot drift the sample out of the
+  // range where float precision still resolves texels.
+  private stepEmissive(dt: number): boolean {
+    const scroll: THREE.Vector2 | undefined = this.emissiveMaterial?.uniforms.uEmissiveScroll.value;
+    const animating = this.emissiveEnabled && !!scroll && scroll.lengthSq() > 0;
+    if (animating && this.emissiveMaterial) {
+      const period = Math.max(1 / Math.max(Math.abs(scroll.x), Math.abs(scroll.y)), 1);
+      this.emissiveElapsed = (this.emissiveElapsed + dt) % period;
+      this.emissiveMaterial.uniforms.uEmissiveTime.value = this.emissiveElapsed;
+    }
+    return animating;
+  }
+
   private scheduleNextFrame(animated: boolean, sheenMeshes: readonly THREE.Mesh[]): void {
     const sheenActive = this.sheenId !== 'none' && this.sheenMaterial !== null && sheenMeshes.length > 0;
     const sheenAnimating = sheenActive && sheenMeshes.some((mesh) => mesh.visible);
@@ -857,6 +916,12 @@ export class Viewer {
     this.orthoCamera.near = this.camera.near;
     this.orthoCamera.far = this.camera.far;
     this.orthoCamera.updateProjectionMatrix();
+  }
+
+  /** TF2-style inspect auto-spin taking `secondsPerTurn` per revolution, or null to stop. */
+  setAutoSpin(secondsPerTurn: number | null) {
+    this.controls.setAutoSpin(secondsPerTurn ? (Math.PI * 2) / secondsPerTurn : 0);
+    this.invalidate();
   }
 
   resetView() {
@@ -1339,10 +1404,11 @@ export class Viewer {
 
   // Sweep timing (CProxyAnimatedWeaponSheen): 60 mask frames at 25 fps, then
   // invisible for 5s with no killstreak owner (the inspect case), then loop.
-  private updateSheenAnimation() {
+  // `dt` overrides wall-clock time for deterministic captures.
+  private updateSheenAnimation(dt?: number) {
     if (this.sheenId === 'none' || !this.sheenMaterial) return;
     const now = performance.now();
-    this.sheenElapsed += (now - this.sheenLastTime) / 1000;
+    this.sheenElapsed += dt ?? (now - this.sheenLastTime) / 1000;
     this.sheenLastTime = now;
     const cycle = SHEEN_SWEEP_SECONDS + SHEEN_PAUSE_SECONDS;
     const tInCycle = this.sheenElapsed % cycle;
@@ -2820,6 +2886,207 @@ export class Viewer {
     }
 
     return screenshotPixelsToBlob(raw, width, height, paddingScale, outputMaxEdge, !!this.firstPerson);
+  }
+
+  /**
+   * Renders one revolution of the TF2 inspect-panel turntable
+   * (CTFItemInspectionPanel::OnThink: yaw advances about world up while pitch
+   * and pan hold; tf_item_inspect_model_spin_rate's 30 deg/s is a 12 s
+   * `seconds`) and streams it to `sink` as top-down RGBA frames with 1-bit
+   * alpha. Frames are cropped to the whole area the spinning model sweeps,
+   * even where that leaves the viewport, and supersampled 2x, then flattened
+   * to the format's alpha (see TurntableFrameResolver) or onto a solid `background`.
+   * Zoom never gets closer than the framed default: nearer than that the model
+   * swings past the lens and no crop can hold it.
+   *
+   * Sheens, particles and scrolling emissives advance in lockstep with the
+   * spin, so the capture plays back at real inspect speed. When any of them is
+   * running, the render continues past the full turn and those extra frames
+   * crossfade into the start (same poses, later effect state), hiding the loop
+   * seam. The live view pauses and ignores pointer input until the capture
+   * settles; aborting `signal`, resizing or switching camera mode stops it
+   * with a TurntableStoppedError.
+   */
+  async captureTurntable(
+    { maxEdge, fps, seconds, background, alpha, paletteSamples }: TurntableOptions,
+    sink: TurntableSink,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (this.firstPerson) throw new Error('Turntable GIFs need the Inspect view');
+    if (this.turntableCapturing) throw new Error('A turntable capture is already running');
+    // Let the caller's busy state paint before the synchronous probe (the
+    // timeout covers hidden tabs, where animation frames never come).
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => setTimeout(resolve, 0));
+      setTimeout(resolve, 100);
+    });
+    if (this.disposed) throw new Error('Viewer disposed');
+
+    const viewW = this.canvas.clientWidth || 1;
+    const viewH = this.canvas.clientHeight || 1;
+    const distance = this.controls.getDistance();
+    this.controls.setDistance(Math.max(distance.current, distance.framed));
+    const camera = this.projectionMode === 'orthographic' ? this.orthoCamera : this.camera;
+    if (camera === this.orthoCamera) this.syncOrthoCamera();
+    const cameraMode = this.controls.getCameraMode();
+    // Between frames the page stays live: the caller aborts `signal` for a
+    // cancel or a scene change it knows about, and a resize or camera switch
+    // would warp every later frame, so all of them stop the capture.
+    const checkInterrupted = () => {
+      if (this.disposed) throw new Error('Viewer disposed');
+      if (signal?.aborted) throw new TurntableStoppedError(String(signal.reason ?? 'Cancelled'));
+      if (this.canvas.clientWidth !== viewW || this.canvas.clientHeight !== viewH) {
+        throw new TurntableStoppedError('The viewer was resized');
+      }
+      if (this.controls.getCameraMode() !== cameraMode) throw new TurntableStoppedError('The camera mode changed');
+    };
+    const frameCount = Math.max(2, Math.round(seconds * fps));
+    const dt = 1 / fps;
+    const sheenActive = this.sheenId !== 'none' && !!this.sheenMaterial && this.sheenMeshes.length > 0;
+    const animated = !!this.activeUnusual || sheenActive || this.stepEmissive(0);
+    const prevTarget = this.renderer.getRenderTarget();
+    const prevBackground = this.scene.background;
+    const prevPointerEvents = this.canvas.style.pointerEvents;
+    const disposables: { dispose(): void }[] = [];
+    const renderTarget = (width: number, height: number, samples: number) => {
+      const target = new THREE.WebGLRenderTarget(width, height, { depthBuffer: true, stencilBuffer: false, samples });
+      target.texture.colorSpace = this.renderer.outputColorSpace;
+      disposables.push(target);
+      return target;
+    };
+    this.turntableCapturing = true;
+    this.canvas.style.pointerEvents = 'none';
+    this.lightEditor.setCaptureMode(true);
+    this.scene.background = null;
+    try {
+      // Probe: the screen area the model sweeps through a revolution, found at
+      // low resolution through a frustum widened to `reach` times the
+      // viewport, widening again if the sweep still touches its border.
+      let reach = 3;
+      let box: number[] = [];
+      let probeScale = 1;
+      for (;;) {
+        probeScale = TURNTABLE_PROBE_EDGE / (reach * Math.max(viewW, viewH));
+        const probeW = Math.max(1, Math.round(reach * viewW * probeScale));
+        const probeH = Math.max(1, Math.round(reach * viewH * probeScale));
+        const probe = renderTarget(probeW, probeH, 0);
+        const probeRaw = new Uint8Array(probeW * probeH * 4);
+        box = [probeW, probeH, -1, -1];
+        const margin = (reach - 1) / 2;
+        camera.setViewOffset(viewW, viewH, -margin * viewW, -margin * viewH, reach * viewW, reach * viewH);
+        setParticlePointScale(viewH * probeScale);
+        this.renderer.setRenderTarget(probe);
+        for (let i = 0; i < TURNTABLE_PROBE_STEPS; i++) {
+          this.controls.rotateYaw((Math.PI * 2) / TURNTABLE_PROBE_STEPS);
+          this.renderer.render(this.scene, camera);
+          this.renderer.readRenderTargetPixels(probe, 0, 0, probeW, probeH, probeRaw);
+          unionContentBounds(probeRaw, probeW, probeH, box);
+        }
+        if (box[2] < 0) throw new Error('Nothing to capture');
+        const touches = box[0] === 0 || box[1] === 0 || box[2] === probeW - 1 || box[3] === probeH - 1;
+        // Viewport pixels; the sweep may start left of or above the viewport.
+        const x = (px: number) => px / probeScale - margin * viewW;
+        const y = (px: number) => px / probeScale - margin * viewH;
+        box = [x(box[0]), y(box[1]), x(box[2] + 1), y(box[3] + 1)];
+        if (!touches || reach >= TURNTABLE_MAX_REACH) break;
+        reach *= 3;
+      }
+
+      // Crop in viewport pixels, padded for probe resolution and for anything
+      // (particles, the angles between probe steps) that strays a little.
+      const pad = 0.05 * Math.max(box[2] - box[0], box[3] - box[1]) + 1 / probeScale;
+      const cropX = box[0] - pad;
+      const cropY = box[1] - pad;
+      const cropW = box[2] - box[0] + 2 * pad;
+      const cropH = box[3] - box[1] + 2 * pad;
+
+      const outScale = maxEdge / Math.max(cropW, cropH);
+      const width = Math.max(1, Math.round(cropW * outScale));
+      const height = Math.max(1, Math.round(cropH * outScale));
+      // As many samples per pixel as the GPU budget allows. The paint has no
+      // mipmaps (TF2's inspect panel composites without them), so only real
+      // subsamples average a minified pattern instead of letting it sparkle;
+      // MSAA on top still halves the remaining edge error.
+      const msaa = Math.min(4, this.renderer.capabilities.maxSamples);
+      const ss = Math.max(1, Math.min(
+        TURNTABLE_MAX_SUPERSAMPLE,
+        Math.floor(Math.sqrt(TURNTABLE_SAMPLE_BUDGET / (width * height * Math.max(1, msaa)))),
+        Math.floor(this.renderer.capabilities.maxTextureSize / Math.max(width, height)),
+      ));
+      const target = renderTarget(width * ss, height * ss, msaa);
+      const resolver = new TurntableFrameResolver(width, height, ss, background, alpha);
+      disposables.push(resolver);
+      const renderScale = outScale * ss;
+      camera.setViewOffset(viewW * renderScale, viewH * renderScale, cropX * renderScale, cropY * renderScale, width * ss, height * ss);
+      // Seam frames are held on the GPU (half float, 8 bytes per output pixel)
+      // until the overrun reaches them; large captures get a shorter crossfade
+      // instead of more memory.
+      const seamFrames = animated
+        ? Math.min(Math.round(TURNTABLE_SEAM_SECONDS * fps), Math.floor(frameCount / 4), Math.floor(TURNTABLE_SEAM_BUDGET_BYTES / (width * height * 8)))
+        : 0;
+      const render = () => {
+        // Other viewers share the particle scale uniform and may have drawn
+        // while we awaited the sink. three r185 also only re-resolves a
+        // multisampled target after it is bound again; repeated renders
+        // without the rebind read back the first frame.
+        setParticlePointScale(viewH * renderScale);
+        this.renderer.setRenderTarget(target);
+        this.renderer.render(this.scene, camera);
+      };
+
+      const advance = () => {
+        this.controls.rotateYaw((Math.PI * 2) / frameCount);
+        this.updateSheenAnimation(dt);
+        this.stepEmissive(dt);
+        if (this.activeUnusual) {
+          this.centerGroup.updateWorldMatrix(true, false);
+          this.activeUnusual.updateAnchor(this.centerGroup.matrixWorld);
+          this.activeUnusual.update(dt);
+        }
+      };
+
+      // Palette samples: a rehearsal turn, simulated at full rate but only
+      // rendered every few frames, so the samples see the same poses, sheen,
+      // emissive and particle evolution as the capture that follows. Frames
+      // stream out as they render, so the palette must exist before them.
+      const samples: Uint8Array[] = [];
+      const sampleCount = Math.min(TURNTABLE_PALETTE_SAMPLES, frameCount);
+      for (let f = 0, next = 0; paletteSamples && f < frameCount; f++) {
+        if (f === Math.floor((next * frameCount) / sampleCount)) {
+          render();
+          samples.push(resolver.resolve(this.renderer, target.texture));
+          next++;
+        }
+        advance();
+      }
+      sink.start({ width, height, frames: frameCount, fps }, samples);
+
+      // Output order: the turn from `seamFrames` onward, then the overrun
+      // frames blended into the held opening frames (same poses), ramping from
+      // the overrun toward the opening so both loop joins are continuous.
+      for (let f = 0; f < frameCount + seamFrames; f++) {
+        checkInterrupted();
+        render();
+        if (f < seamFrames) {
+          resolver.hold(this.renderer, target.texture, f);
+        } else {
+          const blend = f >= frameCount ? { slot: f - frameCount, t: (f - frameCount + 1) / (seamFrames + 1) } : undefined;
+          await sink.frame(resolver.resolve(this.renderer, target.texture, blend));
+        }
+        advance();
+      }
+    } finally {
+      camera.clearViewOffset();
+      this.controls.setDistance(distance.current);
+      this.scene.background = prevBackground;
+      this.renderer.setRenderTarget(prevTarget);
+      this.lightEditor.setCaptureMode(false);
+      setParticlePointScale(viewH * this.renderer.getPixelRatio());
+      for (const disposable of disposables) disposable.dispose();
+      this.canvas.style.pointerEvents = prevPointerEvents;
+      this.turntableCapturing = false;
+      this.invalidate();
+    }
   }
 
   private installTf2Shader() {
