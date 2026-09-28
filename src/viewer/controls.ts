@@ -26,6 +26,20 @@ export function saveCustomLighting(rig: CustomLightingRig): void {
   }
 }
 
+/** One inspect-panel revolution: tf_item_inspect_model_spin_rate is 30 deg/s. */
+export const TURNTABLE_SECONDS = 12;
+
+export type TurntableFormat = 'gif' | 'webp' | 'apng' | 'mp4';
+/** Encoder effort: WebP quality or MP4 bitrate level; GIF and APNG have none. */
+export type TurntableQuality = 'standard' | 'high' | 'maximum';
+
+export interface TurntableProfile {
+  /** Output long edge in pixels. */
+  maxEdge: number;
+  fps: number;
+  quality: TurntableQuality;
+}
+
 export interface ControlsState {
   weaponKey: string;
   wearIndex: number;

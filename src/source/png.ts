@@ -1,21 +1,17 @@
+import { crc32 } from './crc32';
+
 /**
  * PNG encoder for decoded Source textures. Canvas serialisation premultiplies
  * RGB by alpha, which is incorrect for texture data where the two channels
  * are intentionally independent.
  */
-function pngChunk(type: string, data: Uint8Array): Uint8Array {
+export function pngChunk(type: string, data: Uint8Array): Uint8Array {
   const chunk = new Uint8Array(data.length + 12);
   const view = new DataView(chunk.buffer);
   view.setUint32(0, data.length);
   for (let i = 0; i < 4; i += 1) chunk[4 + i] = type.charCodeAt(i);
   chunk.set(data, 8);
-
-  let crc = 0xffffffff;
-  for (let i = 4; i < data.length + 8; i += 1) {
-    crc ^= chunk[i];
-    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-  }
-  view.setUint32(data.length + 8, (crc ^ 0xffffffff) >>> 0);
+  view.setUint32(data.length + 8, crc32(chunk.subarray(4, data.length + 8)));
   return chunk;
 }
 
@@ -43,16 +39,20 @@ function zlibStore(data: Uint8Array): Uint8Array {
   return out;
 }
 
+/** zlib-wrapped deflate, stored blocks where CompressionStream is missing. */
+export async function zlibCompress(data: Uint8Array): Promise<Uint8Array> {
+  if (typeof CompressionStream === 'undefined') return zlibStore(data);
+  return new Uint8Array(await new Response(
+    new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new CompressionStream('deflate')),
+  ).arrayBuffer());
+}
+
 export async function encodeRgbaPng(data: Uint8Array, width: number, height: number): Promise<ArrayBuffer> {
   const scanlines = new Uint8Array(height * (width * 4 + 1));
   for (let y = 0; y < height; y += 1) {
     scanlines.set(data.subarray(y * width * 4, (y + 1) * width * 4), y * (width * 4 + 1) + 1);
   }
-  const compressed = typeof CompressionStream === 'undefined'
-    ? zlibStore(scanlines)
-    : new Uint8Array(await new Response(
-      new Blob([scanlines]).stream().pipeThrough(new CompressionStream('deflate')),
-    ).arrayBuffer());
+  const compressed = await zlibCompress(scanlines);
   const header = new Uint8Array(13);
   const view = new DataView(header.buffer);
   view.setUint32(0, width);
