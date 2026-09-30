@@ -1,9 +1,10 @@
 # <img src="public/favicon.svg" alt="" width="36" height="36" align="absmiddle"> TF2 Warpaint Viewer
 
 Preview TF2 war paints in your browser, rendered by a 1:1 recreation of the game's paint compositor and lighting.
-**[Open the viewer](https://rhgx.github.io/warpaint-viewer/)**
 
 <a href="https://rhgx.github.io/warpaint-viewer/?kit=223&weapon=c_rocketlauncher&sheen=hot_rod"><img src="docs/assets/turntable.webp" alt="Hana war paint on the Rocket Launcher with the Hot Rod sheen, turning in the viewer" width="480"></a>
+
+**[Open the viewer](https://rhgx.github.io/warpaint-viewer/)**
 
 ## Features
 
@@ -29,7 +30,7 @@ npm run dev
 
 ## Support
 
-If you find the viewer useful, you can support it on <a href="https://boosty.to/rhgx/donate"><img src="docs/assets/boosty.svg" alt="" width="16" height="16" align="absmiddle"> <b>Boosty</b></a>.
+If you find the viewer useful, you can support it on <a href="https://boosty.to/rhgx/donate"><img src="docs/assets/boosty.svg" alt="" width="16" height="16" align="absmiddle"></a> <a href="https://boosty.to/rhgx/donate"><b>Boosty</b></a>.
 
 ## Credits
 
