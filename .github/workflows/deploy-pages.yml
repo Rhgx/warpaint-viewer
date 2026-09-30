@@ -41,6 +41,21 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+          VITE_TEXTURE_URL: ${{ vars.TEXTURE_URL }}
+
+      # GitHub Pages caps a site at 1 GB, so textures go to Cloudflare Pages
+      # (served at <TEXTURE_URL>/textures/...) and leave the Pages artifact.
+      # Wrangler only uploads files whose hashes changed.
+      - name: Deploy textures to Cloudflare Pages
+        if: vars.TEXTURE_URL != ''
+        run: |
+          mkdir -p cf-textures
+          mv dist/data/textures cf-textures/textures
+          printf '/*\n  Access-Control-Allow-Origin: *\n' > cf-textures/_headers
+          npx --yes wrangler@4 pages deploy cf-textures --project-name=warpaint-textures --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5

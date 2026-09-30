@@ -35,6 +35,7 @@ import { installTf2VertexLit, TF2_VERTEXLIT_CACHE_KEY } from './shaders/vertexli
 import { createUnusualEffect, setParticlePointScale } from './particles';
 import type { UnusualEffect } from './particles';
 import type { WeaponAttachment, WeaponMaterial } from '../data/types';
+import { joinData } from '../data/loader';
 import {
   fitScreenshotCapture,
   resolveScreenshotCapture,
@@ -665,7 +666,7 @@ export class Viewer {
     });
     this.installTf2Shader();
 
-    this.texLoader.loadAsync('/data/textures/models/workshop/weapons/c_models/c_bazaar_sniper/c_bazaar_sniper_lens.webp').then((texture) => {
+    this.texLoader.loadAsync(joinData('textures/models/workshop/weapons/c_models/c_bazaar_sniper/c_bazaar_sniper_lens.webp')).then((texture) => {
       if (this.disposed) { texture.dispose(); return; }
       texture.colorSpace = THREE.NoColorSpace;
       texture.flipY = false;
@@ -3338,7 +3339,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
   private async loadAttachment({ model, material: params }: WeaponAttachment): Promise<LoadedAttachment | null> {
     const loadTexture = async (ref: string | null | undefined) => {
       if (!ref) return null;
-      const texture = await this.texLoader.loadAsync(`${import.meta.env.BASE_URL}data/${ref}`);
+      const texture = await this.texLoader.loadAsync(joinData(ref));
       // Sampled like the viewmodel's copy in FirstPersonPreview.
       texture.flipY = false;
       texture.colorSpace = THREE.NoColorSpace;

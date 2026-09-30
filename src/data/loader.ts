@@ -17,11 +17,15 @@ export interface DataSource {
 }
 
 const DATA_ROOT = `${import.meta.env.BASE_URL}data`;
+// Production serves textures/ from Cloudflare Pages: GitHub Pages caps a site
+// at 1 GB. Unset (local dev, forks), they load from DATA_ROOT like the rest.
+const TEXTURE_ROOT = import.meta.env.VITE_TEXTURE_URL?.replace(/\/+$/, '') || DATA_ROOT;
 const RECIPE_BUNDLE_CACHE_LIMIT = 8;
 
-function joinData(rel: string): string {
+export function joinData(rel: string): string {
   if (rel.startsWith('data:') || rel.startsWith('http')) return rel;
-  return `${DATA_ROOT}/${rel.replace(/^\/+/, '')}`;
+  rel = rel.replace(/^\/+/, '');
+  return `${rel.startsWith('textures/') ? TEXTURE_ROOT : DATA_ROOT}/${rel}`;
 }
 
 // One per-kit recipe file: every variant's stage tree, deduplicated, plus a
