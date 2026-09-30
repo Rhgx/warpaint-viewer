@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   Camera, ChevronDown, Crosshair, Dices, Droplets, Flame, Hash, Sparkles, Sun, Undo2, Users,
@@ -169,7 +169,7 @@ function TurntableColorHexField({ value, onChange }: { value: string; onChange: 
   );
 }
 
-export function Inspector({
+export const Inspector = memo(function Inspector({
   previewControls,
   firstPersonActive = false,
   manifest,
@@ -493,4 +493,4 @@ export function Inspector({
       </InspectorSection>
     </>
   );
-}
+});

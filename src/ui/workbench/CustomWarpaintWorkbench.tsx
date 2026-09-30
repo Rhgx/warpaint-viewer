@@ -1260,7 +1260,6 @@ export function CustomWarpaintWorkbench({
             <VisualWarpaintEditorPanel
               enabled={false}
               unavailableReason="Choose a war paint to edit."
-              sample={null}
               selectedGroupIds={[]}
               onToggleGroup={() => undefined}
               onClearSelection={() => undefined}

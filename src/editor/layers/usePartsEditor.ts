@@ -36,7 +36,6 @@ export type WorkbenchEditorProps = NonNullable<ComponentProps<typeof CustomWarpa
 type PartsEditorProps = Pick<WorkbenchEditorProps,
   | 'enabled'
   | 'unavailableReason'
-  | 'sample'
   | 'selectedGroupIds'
   | 'selectionContextId'
   | 'groupLabels'
@@ -198,12 +197,9 @@ export function usePartsEditor({
   const layerThumbnailGenerationRef = useRef('');
   const [panelPreviewGroup, setPanelPreviewGroup] = useState<number | null>(null);
   const groupPointerRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  const [editorSample, setEditorSample] = useState<{
-    rawRed: number;
-    bucket: number;
-    uv: { u: number; v: number };
-    texel: { x: number; y: number };
-  } | null>(null);
+  // Only the bucket under the pointer is kept: a per-texel sample would render
+  // the whole app on every pointer move, and nothing reads it.
+  const [hoverBucket, setHoverBucket] = useState<number | null>(null);
 
   useEffect(() => {
     if (!editorAssignmentNotice) return;
@@ -437,12 +433,16 @@ export function usePartsEditor({
     [editorLayerColors],
   );
 
+  // Cache entries are keyed by the override they resolved, so a new overrides
+  // object with the same paths (every edit builds one) must not flush the
+  // decoded group images; only a change in the paths does.
+  const activeTextureOverridesKey = useMemo(() => JSON.stringify(activeTextureOverrides), [activeTextureOverrides]);
   useEffect(() => {
     groupImageCacheRef.current.clear();
-  }, [activeTextureOverrides, packageGeneration]);
+  }, [activeTextureOverridesKey, packageGeneration]);
 
   useEffect(() => {
-    setEditorSample(null);
+    setHoverBucket(null);
     setGroupImageError(null);
     if (!displayedGroupRef) {
       setGroupImage(null);
@@ -505,7 +505,7 @@ export function usePartsEditor({
   useEffect(() => {
     const viewer = viewerRef.current;
     const pixels = groupImage?.data;
-    const bucket = panelPreviewGroup ?? editorSample?.bucket ?? null;
+    const bucket = panelPreviewGroup ?? hoverBucket;
     if (!viewer) return;
     if (groupAssignActive
       && bucket !== null && bucket > 0
@@ -526,7 +526,7 @@ export function usePartsEditor({
     engineReady,
     groupAssignActive,
     groupImage,
-    editorSample?.bucket,
+    hoverBucket,
     panelPreviewGroup,
     viewerRef,
   ]);
@@ -572,7 +572,7 @@ export function usePartsEditor({
   useEffect(() => {
     if (groupAssignActive) return;
     groupPointerRef.current = null;
-    setEditorSample(null);
+    setHoverBucket(null);
     setPanelPreviewGroup(null);
   }, [groupAssignActive]);
   const editorUnavailableReason = useMemo(() => {
@@ -600,7 +600,7 @@ export function usePartsEditor({
       );
       if (ownedIds.length === 0 || !clearSessionGroups(owner.target, ownedIds)) return;
       const part = formatGroupNameForDisplay(activeGroupLabels[bucket] ?? 'Part');
-      setEditorSample(null);
+      setHoverBucket(null);
       setPanelPreviewGroup(null);
       setEditorAssignmentNotice(`${part} moved to ${baseTextureTransform?.label ?? 'the base texture'}.`);
       return;
@@ -629,7 +629,7 @@ export function usePartsEditor({
       // the recomposed paint itself is immediately readable. This also covers
       // a chip being clicked while hovered: its unmount does not reliably
       // produce a mouse-leave event for the preview callback.
-      setEditorSample(null);
+      setHoverBucket(null);
       setPanelPreviewGroup(null);
       setEditorAssignmentNotice(moveNotice);
     }
@@ -638,7 +638,7 @@ export function usePartsEditor({
   const clearEditorGroups = useCallback(() => {
     if (weaponBaseLayerActive || !activeGroupEditTarget) return;
     if (clearSessionGroups(activeGroupEditTarget, activeSelectedRawGroupIds)) {
-      setEditorSample(null);
+      setHoverBucket(null);
       setPanelPreviewGroup(null);
       setEditorAssignmentNotice(null);
     }
@@ -648,31 +648,21 @@ export function usePartsEditor({
     if (!groupAssignActive || !groupImage) return null;
     const hit = viewerRef.current?.pickWeaponUv(clientX, clientY);
     if (!hit) {
-      setEditorSample(null);
+      setHoverBucket(null);
       return null;
     }
     const sampled = sampleGroupAtUv(groupImage, hit.uv[0], hit.uv[1]);
     if (!sampled) {
-      setEditorSample(null);
+      setHoverBucket(null);
       return null;
     }
-    setEditorSample((current) => (
-      current?.texel.x === sampled.x && current.texel.y === sampled.y
-        ? current
-        : {
-            rawRed: sampled.red,
-            bucket: sampled.bucket,
-            uv: { u: hit.uv[0], v: hit.uv[1] },
-            texel: { x: sampled.x, y: sampled.y },
-          }
-    ));
+    setHoverBucket(sampled.bucket);
     return sampled;
   }, [groupAssignActive, groupImage, viewerRef]);
 
   const props: PartsEditorProps = {
     enabled: editorEnabled,
     unavailableReason: editorUnavailableReason,
-    sample: editorSample,
     selectedGroupIds: activeSelectedGroupBuckets,
     selectionContextId: weaponBaseLayerActive ? 'weapon-base' : String(activeEditorSelector),
     groupLabels: activeGroupLabels,
@@ -720,7 +710,7 @@ export function usePartsEditor({
         groupIds: defaultIds,
       } : undefined;
       if (setSessionGroupTexture(groupTextureTarget, ref, defaultAssignment)) {
-        setEditorSample(null);
+        setHoverBucket(null);
         setPanelPreviewGroup(null);
       } else {
         setRequestedGroupTextureRef(null);
@@ -741,7 +731,7 @@ export function usePartsEditor({
     activeSelectedGroupBuckets,
     groupAssignActive,
     groupPointerRef,
-    setEditorSample,
+    setHoverBucket,
     setPanelPreviewGroup,
     sampleEditorSurface,
     toggleEditorGroup,

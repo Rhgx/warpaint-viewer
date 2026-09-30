@@ -8,18 +8,10 @@ import './VisualWarpaintEditorPanel.css';
 
 const CLEAR_CONFIRM_MS = 3000;
 
-export interface VisualWarpaintEditorSample {
-  readonly rawRed: number;
-  readonly bucket: number;
-  readonly uv: Readonly<{ readonly u: number; readonly v: number }>;
-  readonly texel?: Readonly<{ readonly x: number; readonly y: number }>;
-}
-
 export interface VisualWarpaintEditorPanelProps {
   readonly enabled: boolean;
   readonly unavailableReason?: string;
   readonly notice?: string | null;
-  readonly sample: VisualWarpaintEditorSample | null;
   readonly selectedGroupIds: readonly number[];
   /** Changes whenever the active paint layer changes, even if its parts match. */
   readonly selectionContextId?: string;
