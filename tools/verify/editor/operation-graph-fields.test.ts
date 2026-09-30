@@ -12,7 +12,7 @@ import {
   varFieldLiteralText,
   varFieldSupportsRange,
   type GraphComboboxOption,
-} from '../../../src/ui/workbench/operationGraphFieldValues';
+} from '../../../src/ui/editor/operationGraphFieldValues';
 
 test('reads the scalar slot and literal text a field actually occupies', () => {
   assert.equal(operationGraphVarFieldScalarKey(undefined), undefined);

@@ -11,9 +11,9 @@ import {
   setTextureTransformRange,
   type TextureTransformTarget,
 } from '../../../src/editor/mutations';
-import { serializeProtoDefKitMessages } from '../../../src/editor/jsonExport';
+import { serializeProtoDefKitMessages } from '../../../src/editor/export/jsonExport';
 import { normalizeProtoDefFragments } from '../../../src/protodefs/jsonFragments';
-import { discoverBaseTextureTransformTarget, discoverTextureTransformTargets } from '../../../src/editor/transformTargets';
+import { discoverBaseTextureTransformTarget, discoverTextureTransformTargets } from '../../../src/editor/transform/transformTargets';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
 import {
   decodeProtoDefs,

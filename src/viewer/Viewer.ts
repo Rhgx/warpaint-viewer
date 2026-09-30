@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import type { FirstPersonPreview, ViewmodelAsset, ViewmodelWeapon } from './firstPerson';
-import { getPreset, LEGACY_PAINTKIT_ICON_LIGHTING_ID } from './lighting';
+import { getPreset, LEGACY_PAINTKIT_ICON_LIGHTING_ID } from './lighting/lighting';
 import {
   CUSTOM_LIGHTING_ID,
   CUSTOM_LIGHT_POSITION_LIMIT,
   createDefaultCustomLightingRig,
   validateCustomLightingRig,
   type CustomLightingRig,
-} from './customLighting';
-import { LightEditor } from './lightEditor';
+} from './lighting/customLighting';
+import { LightEditor } from './lighting/lightEditor';
 import { loadEditorEnvCube, makeEnvCube } from './env';
 import { InspectControls, INSPECT_MAX_DISTANCE_FACTOR } from './inspectControls';
 import type { CameraMode } from './inspectControls';
@@ -73,13 +73,13 @@ export interface TurntableSink {
 import { computeModelBounds, ModelLoader, type ModelPart } from './modelLoader';
 import { CullableGeometry } from './modelCulling';
 import { configureTf2Material, createTf2Uniforms, type Tf2Uniforms } from './materialConfig';
-import { EDITOR_LAYER_MAP_COLORS } from '../editor/layerMap';
+import { EDITOR_LAYER_MAP_COLORS } from '../editor/layers/layerMap';
 import {
   moveStickerQuadToUv,
   stickerQuadCenter,
   type StickerPlacementQuad,
-} from '../editor/viewerStickerPlacement';
-import { stickerCoverageQuad } from '../editor/stickerGeometry';
+} from '../editor/sticker/viewerStickerPlacement';
+import { stickerCoverageQuad } from '../editor/sticker/stickerGeometry';
 import {
   deriveStickerGizmoScreenCentre,
   hasUsableStickerGizmoScaleDirection,
@@ -96,13 +96,13 @@ import {
   type StickerGizmoScreenPoint,
   type StickerGizmoTool,
   stickerGizmoTurnHandle,
-} from '../editor/stickerGizmo';
+} from '../editor/sticker/stickerGizmo';
 import {
   buildStickerUvTopology,
   type StickerUvCandidate,
   type StickerUvTopology,
   type StickerUvTopologyTriangle,
-} from '../editor/stickerUvTopology';
+} from '../editor/sticker/stickerUvTopology';
 import { visibleStickerEditorMap } from './stickerEditorMap';
 
 /** A single, subtle tint assigned to one compositor group bucket. */

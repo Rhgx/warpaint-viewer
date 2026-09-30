@@ -10,7 +10,7 @@ import {
   recipeWithoutStickerOccurrence,
   recipeWithoutStickerOccurrences,
   resolvedGroupStickerContext,
-} from '../../../src/editor/stickerSurface';
+} from '../../../src/editor/sticker/stickerSurface';
 import { visibleStickerEditorMap } from '../../../src/viewer/stickerEditorMap';
 import type { CombineNode, ApplyStickerNode } from '../../../src/compositor/types';
 import type { ResolvedCombine, ResolvedNode, ResolvedSelect, ResolvedSticker } from '../../../src/compositor/resolve';
@@ -115,7 +115,7 @@ test('sticker surface preview source contract', () => {
   assert.equal(visibleStickerEditorMap(fullMap, editorBase), editorBase, 'the live editor base wins over a late normal compose');
   assert.equal(visibleStickerEditorMap(fullMap, null), fullMap, 'clearing the editor base restores the newest normal compose');
 
-  const stickerHookSource = fs.readFileSync(path.join(ROOT, 'src', 'editor', 'useStickerEditor.ts'), 'utf8');
+  const stickerHookSource = fs.readFileSync(path.join(ROOT, 'src', 'editor', 'sticker', 'useStickerEditor.ts'), 'utf8');
   assert.match(
     stickerHookSource,
     /const undoEditorSynced = useCallback\(\(\) => \{\s*discardStickerDraft\(\);\s*undoEditor\(\);/,

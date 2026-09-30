@@ -4,7 +4,7 @@ import type { ResolvedNode, ResolvedSelect, ResolvedTexture } from '../../../src
 import {
   collectResolvedLayerIsolationNodes,
   preferredLayerOccurrenceIndex,
-} from '../../../src/editor/transformIsolation';
+} from '../../../src/editor/transform/transformIsolation';
 
 function texture(texture: string, rotationDeg: number): ResolvedTexture {
   return {

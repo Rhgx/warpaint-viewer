@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import type { RecipeNode } from '../../../src/compositor/types';
-import { protoTextureReference } from '../../../src/editor/stickerTargets';
+import { protoTextureReference } from '../../../src/editor/sticker/stickerTargets';
 import { collectTextureRefs } from '../../../src/export/plan';
 
 test('an unset texture ref names nothing to export or compare', () => {

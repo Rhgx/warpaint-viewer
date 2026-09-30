@@ -6,8 +6,8 @@ import { TextureCache, textureCacheBudgetBytes } from './textureCache';
 import type { TextureMetadata } from '../data/types';
 export { textureUvMatrix } from './transforms';
 import { textureUvMatrix } from './transforms';
-import { compositorReadbackToEditorPixels } from '../editor/stickerSurface';
-import { stickerCoverageQuad } from '../editor/stickerGeometry';
+import { compositorReadbackToEditorPixels } from '../editor/sticker/stickerSurface';
+import { stickerCoverageQuad } from '../editor/sticker/stickerGeometry';
 import {
   FRAG,
   VERT,

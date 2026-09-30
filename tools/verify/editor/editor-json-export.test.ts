@@ -1,4 +1,4 @@
-// Contract verification for src/editor/jsonExport.ts.
+// Contract verification for src/editor/export/jsonExport.ts.
 //
 // This intentionally uses the current JSON-fragment normalizer, rather than a
 // second parser, so it catches export/import contract drift at the boundary the
@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { serializeProtoDefKitMessages } from '../../../src/editor/jsonExport';
+import { serializeProtoDefKitMessages } from '../../../src/editor/export/jsonExport';
 import { normalizeProtoDefFragments } from '../../../src/protodefs/jsonFragments';
 
 test('editor JSON export round-trip', () => {

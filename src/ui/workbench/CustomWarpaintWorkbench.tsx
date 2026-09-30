@@ -41,11 +41,11 @@ import type { AssetSlot } from '../../workbench/assetSlots';
 import { revokeReleasedAssetUrls, revokeTextureUrl } from '../../workbench/assetUrls';
 import { loadImage, mergeAlpha, readTexture } from '../../workbench/textureImport';
 import type { ExportDefinitionsContext, ExportItem } from './ExportPanel';
-import type { EditorDownloadFormat } from '../../editor/definitionExport';
+import type { EditorDownloadFormat } from '../../editor/export/definitionExport';
 import type { EditorDraftState, EditorDraftStatus } from '../../editor/useEditorDraft';
-import type { OperationGraphEditorProps } from './OperationGraphEditor';
+import type { OperationGraphEditorProps } from '../editor/OperationGraphEditor';
 import { AssetFilesPanel } from './AssetFilesPanel';
-import { EditorDraftBanner } from './EditorDraftBanner';
+import { EditorDraftBanner } from '../editor/EditorDraftBanner';
 import './CustomWarpaintWorkbench.css';
 
 // Tabs.Panel mounts its children only after they become active. Keeping the
@@ -61,19 +61,19 @@ const DefinitionsPanel = lazy(() =>
   import('./DefinitionsPanel').then(({ DefinitionsPanel: panel }) => ({ default: panel })),
 );
 const VisualWarpaintEditorPanel = lazy(() =>
-  import('./VisualWarpaintEditorPanel').then(({ VisualWarpaintEditorPanel: panel }) => ({ default: panel })),
+  import('../editor/VisualWarpaintEditorPanel').then(({ VisualWarpaintEditorPanel: panel }) => ({ default: panel })),
 );
 const StickerPlacementEditor = lazy(() =>
-  import('./StickerPlacementEditor').then(({ StickerPlacementEditor: panel }) => ({ default: panel })),
+  import('../editor/StickerPlacementEditor').then(({ StickerPlacementEditor: panel }) => ({ default: panel })),
 );
 const TextureTransformPanel = lazy(() =>
-  import('./TextureTransformPanel').then(({ TextureTransformPanel: panel }) => ({ default: panel })),
+  import('../editor/TextureTransformPanel').then(({ TextureTransformPanel: panel }) => ({ default: panel })),
 );
 const MaterialOverridesPanel = lazy(() =>
-  import('./MaterialOverridesPanel').then(({ MaterialOverridesPanel: panel }) => ({ default: panel })),
+  import('../editor/MaterialOverridesPanel').then(({ MaterialOverridesPanel: panel }) => ({ default: panel })),
 );
 const OperationGraphEditor = lazy(() =>
-  import('./OperationGraphEditor').then(({ OperationGraphEditor: panel }) => ({ default: panel })),
+  import('../editor/OperationGraphEditor').then(({ OperationGraphEditor: panel }) => ({ default: panel })),
 );
 
 type VisualWarpaintEditorPanelProps = ComponentProps<typeof VisualWarpaintEditorPanel>;

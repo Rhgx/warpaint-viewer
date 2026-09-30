@@ -8,9 +8,9 @@ import type { SourceTextureProvider } from '../source/provider';
 import { downloadBlob } from '../ui/common/download';
 import { shortcutTargetsEditableContent } from '../ui/common/shortcuts';
 import type { ControlsState } from '../viewer/controls';
-import { CUSTOM_LIGHTING_ID } from '../viewer/customLighting';
+import { CUSTOM_LIGHTING_ID } from '../viewer/lighting/customLighting';
 import type { WorkbenchTab } from '../workbench/types';
-import type { EditorDownloadFormat } from './definitionExport';
+import type { EditorDownloadFormat } from './export/definitionExport';
 import { useEditorDraft } from './useEditorDraft';
 import { useProtoDefEditorSession } from './useProtoDefEditorSession';
 
@@ -78,8 +78,8 @@ export function useEditorCore({
   useEffect(() => {
     if (!workbenchOpen || workbenchTab !== 'editor') return;
     void Promise.all([
-      import('./packageExport'),
-      import('./definitionExport'),
+      import('./export/packageExport'),
+      import('./export/definitionExport'),
     ]).catch(() => undefined);
   }, [workbenchOpen, workbenchTab]);
 
@@ -136,7 +136,7 @@ export function useEditorCore({
   // The definition/operation messages the editor session holds carry no
   // items_game defindex table, so the weapon each authored slot paints (and
   // where that slot lives) is resolved separately, off the decoded source,
-  // whenever the editable kit changes. See src/editor/materialTargets.ts.
+  // whenever the editable kit changes. See src/editor/materials/materialTargets.ts.
   const [weaponSlots, setWeaponSlots] = useState<ProtoDefKitWeaponSlot[]>([]);
   useEffect(() => {
     if (editableKitId === null) {
@@ -264,11 +264,11 @@ export function useEditorCore({
     setEditorPackageExportError(null);
     setEditorPackageExporting(true);
     const pending = format === 'zip'
-      ? import('./packageExport').then(({ exportEditedPackage }) => exportEditedPackage(messages, {
+      ? import('./export/packageExport').then(({ exportEditedPackage }) => exportEditedPackage(messages, {
           package: sourceProvider.package,
           name: selectedKit?.name,
         }))
-      : import('./definitionExport').then(({ exportEditorDefinition }) => exportEditorDefinition(
+      : import('./export/definitionExport').then(({ exportEditorDefinition }) => exportEditorDefinition(
           messages,
           format,
           isCustomKitId(editableKitId) ? customKitDefindex(editableKitId) : editableKitId,

@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
-import { chooseBestSelectTargetForBucket, discoverGroupSelectTargets } from '../../../src/editor/groupTargets';
+import { chooseBestSelectTargetForBucket, discoverGroupSelectTargets } from '../../../src/editor/layers/groupTargets';
 import { toggleSelectGroupId } from '../../../src/editor/mutations';
 import {
   decodeProtoDefs,

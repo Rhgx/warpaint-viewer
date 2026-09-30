@@ -1,4 +1,4 @@
-import type { BootState } from '../../app/types';
+import type { BootState } from '../../hooks/useBootData';
 
 export function BootLoader({ boot }: { boot: BootState }) {
   return (

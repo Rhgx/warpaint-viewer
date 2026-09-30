@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { RefObject } from 'react';
 import { useStore } from 'zustand';
-import { createLightingStore } from '../editor/lightingStore';
-import { bindLightingStore } from '../viewer/bindLightingStore';
+import { createLightingStore } from '../viewer/lighting/lightingStore';
+import { bindLightingStore } from '../viewer/lighting/bindLightingStore';
 import { loadCustomLighting, saveCustomLighting } from '../viewer/controls';
-import { CUSTOM_LIGHTING_ID, MAX_CUSTOM_LIGHTS } from '../viewer/customLighting';
-import { LEGACY_PAINTKIT_ICON_LIGHTING_ID, PAINTKIT_ICON_LIGHTING_ID } from '../viewer/lighting';
+import { CUSTOM_LIGHTING_ID, MAX_CUSTOM_LIGHTS } from '../viewer/lighting/customLighting';
+import { LEGACY_PAINTKIT_ICON_LIGHTING_ID, PAINTKIT_ICON_LIGHTING_ID } from '../viewer/lighting/lighting';
 import type { Viewer } from '../viewer/Viewer';
 import { shortcutTargetsEditableContent } from '../ui/common/shortcuts';
 

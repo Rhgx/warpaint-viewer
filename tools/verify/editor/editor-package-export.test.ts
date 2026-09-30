@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BlobReader, TextWriter, Uint8ArrayWriter, ZipReader } from '@zip.js/zip.js';
 import { test } from 'vitest';
-import { exportEditedPackage } from '../../../src/editor/packageExport';
+import { exportEditedPackage } from '../../../src/editor/export/packageExport';
 import { decodeProtoDefs, extractKitMessages } from '../../../src/protodefs/decoder';
 import { normalizeProtoDefFragments } from '../../../src/protodefs/jsonFragments';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';

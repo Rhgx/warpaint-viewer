@@ -2,9 +2,9 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import * as geometry from '../../../src/editor/stickerGeometry';
-import * as rows from '../../../src/editor/stickerSurface';
-import * as viewport from '../../../src/editor/stickerViewport';
+import * as geometry from '../../../src/editor/sticker/stickerGeometry';
+import * as rows from '../../../src/editor/sticker/stickerSurface';
+import * as viewport from '../../../src/editor/sticker/stickerViewport';
 
 function close(actual: number, expected: number, message: string): void {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: expected ${expected}, got ${actual}`);

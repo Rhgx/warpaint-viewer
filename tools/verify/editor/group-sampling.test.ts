@@ -9,7 +9,7 @@ import {
   rawGroupIdForBucket,
   sampleGroupAtUv,
   sampleGroupRedAtUv,
-} from '../../../src/editor/groupSampling';
+} from '../../../src/editor/layers/groupSampling';
 
 test('CPU group-map sampling parity', () => {
   // Deliberately asymmetric rows prove V is source-image-down, not flipped.

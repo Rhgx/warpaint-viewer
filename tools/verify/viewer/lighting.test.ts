@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import * as THREE from 'three';
-import { getPreset } from '../../../src/viewer/lighting';
+import { getPreset } from '../../../src/viewer/lighting/lighting';
 
 const EPSILON = 1e-6;
 

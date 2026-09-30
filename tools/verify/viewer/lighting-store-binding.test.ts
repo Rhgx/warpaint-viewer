@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { createLightingStore } from '../../../src/editor/lightingStore';
-import { bindLightingStore } from '../../../src/viewer/bindLightingStore';
+import { createLightingStore } from '../../../src/viewer/lighting/lightingStore';
+import { bindLightingStore } from '../../../src/viewer/lighting/bindLightingStore';
 import {
   CUSTOM_LIGHTING_ID,
   createDefaultCustomLightingRig,
   validateCustomLightingRig,
   type CustomLightingRig,
-} from '../../../src/viewer/customLighting';
+} from '../../../src/viewer/lighting/customLighting';
 import type { Viewer } from '../../../src/viewer/Viewer';
 
 type LightingViewer = Pick<Viewer,

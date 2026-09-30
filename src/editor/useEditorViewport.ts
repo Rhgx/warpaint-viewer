@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Dispatch, PointerEvent as ReactPointerEvent, SetStateAction } from 'react';
 import type { Viewer } from '../viewer/Viewer';
-import { snapStickerRotationToCardinal, stickerPlacementFromQuad, stickerPlacementToQuad } from './stickerGeometry';
-import { showStickerPreview } from './stickerPreview';
-import { stickerQuadsEqual, type StickerPlacementQuad } from './viewerStickerPlacement';
+import { snapStickerRotationToCardinal, stickerPlacementFromQuad, stickerPlacementToQuad } from './sticker/stickerGeometry';
+import { showStickerPreview } from './sticker/stickerPreview';
+import { stickerQuadsEqual, type StickerPlacementQuad } from './sticker/viewerStickerPlacement';
 import type { EditorCore } from './useEditorCore';
-import type { PartsEditor } from './usePartsEditor';
-import type { StickerEditor } from './useStickerEditor';
+import type { PartsEditor } from './layers/usePartsEditor';
+import type { StickerEditor } from './sticker/useStickerEditor';
 
 interface UseEditorViewportOptions extends
   Pick<EditorCore, 'editorPreviewPending' | 'editorDefinitionGeneration' | 'setSessionStickerQuad'>,

@@ -3,7 +3,7 @@ import type { Compositor } from '../compositor/compositor';
 import type { RecipeNode } from '../compositor/types';
 import type { PaintkitEntry, Team, WeaponEntry } from '../data/types';
 import { PAINTKIT_TOOL_VIEW, TF2_ITEM_PANEL_FOV, weaponIconView } from '../viewer/presets';
-import { PAINTKIT_ICON_LIGHTING_ID } from '../viewer/lighting';
+import { PAINTKIT_ICON_LIGHTING_ID } from '../viewer/lighting/lighting';
 
 interface IdleDeadlineLike {
   didTimeout: boolean;

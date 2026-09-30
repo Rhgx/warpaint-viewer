@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
-import * as viewport from '../../../src/editor/stickerViewport';
+import * as viewport from '../../../src/editor/sticker/stickerViewport';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -42,7 +42,7 @@ test('sticker viewport UV contract', () => {
   const fit = viewport.normalizeStickerViewport({ zoom: 1, panX: 99, panY: -99 }, size);
   assert.deepEqual(fit, { zoom: 1, panX: 0, panY: 0 }, 'fit view is an untransformed UV canvas');
 
-  const editorSource = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'workbench', 'StickerPlacementEditor.tsx'), 'utf8');
+  const editorSource = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'editor', 'StickerPlacementEditor.tsx'), 'utf8');
   assert.match(editorSource, /if \(event\.button !== 2\) return;/, 'UV panning is reserved for right drag');
   assert.match(editorSource, /onContextMenu=\{\(event\) => event\.preventDefault\(\)\}/, 'right drag suppresses the context menu');
   assert.match(

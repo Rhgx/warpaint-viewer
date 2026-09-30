@@ -7,13 +7,13 @@ import {
   Control, IconSelectField, SelectField, SliderField, SwatchSelectField, TeamToggle, WearSliderField,
 } from '../common/controls';
 import type { IconOption, SwatchOption } from '../common/controls';
-import { LIGHTING_PRESETS } from '../../viewer/lighting';
+import { LIGHTING_PRESETS } from '../../viewer/lighting/lighting';
 import { SHEEN_PRESETS, UNUSUAL_PRESETS, VIEW_ANGLES } from '../../viewer/presets';
 import type { Manifest } from '../../data/types';
 import { TURNTABLE_SECONDS, type ControlsState, type TurntableFormat, type TurntableProfile, type TurntableQuality } from '../../viewer/controls';
-import type { LightingStore } from '../../editor/lightingStore';
-import { CUSTOM_LIGHTING_ID } from '../../viewer/customLighting';
-import { LightingRigSummary } from './LightingRigSummary';
+import type { LightingStore } from '../../viewer/lighting/lightingStore';
+import { CUSTOM_LIGHTING_ID } from '../../viewer/lighting/customLighting';
+import { LightingRigSummary } from '../lighting/LightingRigSummary';
 import { TURNTABLE_FORMATS, turntablePlaybackFps } from '../../hooks/useScreenshotActions';
 
 const rgbCss = ([r, g, b]: [number, number, number]) =>

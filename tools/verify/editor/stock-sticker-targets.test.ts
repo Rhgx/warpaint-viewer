@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
-import { discoverStickerPlacementTargets } from '../../../src/editor/stickerTargets';
-import { stickerPlacementFromQuad } from '../../../src/editor/stickerGeometry';
+import { discoverStickerPlacementTargets } from '../../../src/editor/sticker/stickerTargets';
+import { stickerPlacementFromQuad } from '../../../src/editor/sticker/stickerGeometry';
 import {
   decodeProtoDefs,
   extractKitMessages,

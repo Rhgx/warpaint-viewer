@@ -2,8 +2,8 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import * as gizmo from '../../../src/editor/stickerGizmo';
-import type { StickerPlacementQuad, StickerUv } from '../../../src/editor/viewerStickerPlacement';
+import * as gizmo from '../../../src/editor/sticker/stickerGizmo';
+import type { StickerPlacementQuad, StickerUv } from '../../../src/editor/sticker/viewerStickerPlacement';
 
 function close(actual: number, expected: number, message: string): void {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: expected ${expected}, got ${actual}`);
