@@ -166,6 +166,13 @@ interface FlowNodeData extends Record<string, unknown> {
 
 type FlowNode = Node<FlowNodeData, 'operation'>;
 
+const NO_ITEMS: readonly never[] = Object.freeze([]);
+
+function sameFlowNodeData(a: FlowNodeData, b: FlowNodeData): boolean {
+  const keys = Object.keys(b);
+  return keys.length === Object.keys(a).length && keys.every((key) => a[key] === b[key]);
+}
+
 interface FlowEdgeData extends Record<string, unknown> {
   readonly portType: OperationPortType;
   readonly sourceLabel: string;
@@ -1242,28 +1249,31 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
     }
   };
 
-  const flowNodes = useMemo((): FlowNode[] => graph.nodes.map((node) => {
-    const defaultPosition = layout[node.id] ?? { x: 0, y: 0 };
-    const isActive = activeNodeId === node.id;
-    const emphasis: FlowNodeData['emphasis'] = isActive
-      ? 'active'
-      // A stage with no connections traces only itself, and greying the whole
-      // canvas to say so would read as a fault rather than an answer.
-      : relatedNodes.size > 1
-        ? relatedNodes.has(node.id) ? 'related' : 'dimmed'
-        : 'normal';
-    return {
-      id: node.id,
-      type: 'operation',
-      position: positions[node.id] ?? { x: defaultPosition.x, y: defaultPosition.y },
-      ...(measurements[node.id] ? { measured: measurements[node.id] } : {}),
-      data: {
+  // A node's data keeps its identity while its contents do not change, so the
+  // memoized cards skip their render while a neighbour is dragged. The node
+  // objects themselves stay new each time: React Flow mutates its internal
+  // selection state and relies on getting fresh nodes back to resync it.
+  const flowNodeDataRef = useRef(new Map<string, FlowNodeData>());
+  const flowNodes = useMemo((): FlowNode[] => {
+    const previousData = flowNodeDataRef.current;
+    const nextData = new Map<string, FlowNodeData>();
+    const nodes = graph.nodes.map((node): FlowNode => {
+      const defaultPosition = layout[node.id] ?? { x: 0, y: 0 };
+      const isActive = activeNodeId === node.id;
+      const emphasis: FlowNodeData['emphasis'] = isActive
+        ? 'active'
+        // A stage with no connections traces only itself, and greying the whole
+        // canvas to say so would read as a fault rather than an answer.
+        : relatedNodes.size > 1
+          ? relatedNodes.has(node.id) ? 'related' : 'dimmed'
+          : 'normal';
+      const data: FlowNodeData = {
         graphNode: node,
         nodesById,
-        connectedEdges: connectedEdgesByTarget.get(node.id) ?? [],
-        diagnostics: diagnosticsByNode.get(node.id) ?? [],
+        connectedEdges: connectedEdgesByTarget.get(node.id) ?? NO_ITEMS,
+        diagnostics: diagnosticsByNode.get(node.id) ?? NO_ITEMS,
         variables,
-        textureOptions: textureOptions ?? [],
+        textureOptions: textureOptions ?? NO_ITEMS,
         ...(onPreviewNode ? (() => {
           const previewUrl = onPreviewNode(node.id);
           return previewUrl ? { previewUrl } : {};
@@ -1279,15 +1289,27 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
         onExportNode,
         emphasis,
         searchMatch: !normalizedQuery || searchMatches.has(node.id),
-      },
-      className: `${operationNodeClass(node)} operation-graph-emphasis-${emphasis}`,
-      selected: isActive,
-      // A selected card grows an editor and opens dropdowns, both of which have
-      // to draw over its neighbours rather than be clipped behind them.
-      ...(isActive ? { zIndex: SELECTED_NODE_Z_INDEX } : {}),
-      draggable: !readOnly && node.kind !== 'output',
-    };
-  }), [activeNodeId, connectedEdgesByTarget, diagnosticsByNode, graph.nodes, layout, measurements, nodesById, normalizedQuery, onExportNode, onGraphChange, onOpenSelectEditor, onOpenStickerEditor, onOpenTextureEditor, onPreviewNode, onReorderInput, onUpdateParameter, positions, readOnly, relatedNodes, searchMatches, selectNode, textureOptions, variables]);
+      };
+      const previous = previousData.get(node.id);
+      const stableData = previous && sameFlowNodeData(previous, data) ? previous : data;
+      nextData.set(node.id, stableData);
+      return {
+        id: node.id,
+        type: 'operation',
+        position: positions[node.id] ?? { x: defaultPosition.x, y: defaultPosition.y },
+        ...(measurements[node.id] ? { measured: measurements[node.id] } : {}),
+        data: stableData,
+        className: `${operationNodeClass(node)} operation-graph-emphasis-${emphasis}`,
+        selected: isActive,
+        // A selected card grows an editor and opens dropdowns, both of which have
+        // to draw over its neighbours rather than be clipped behind them.
+        ...(isActive ? { zIndex: SELECTED_NODE_Z_INDEX } : {}),
+        draggable: !readOnly && node.kind !== 'output',
+      };
+    });
+    flowNodeDataRef.current = nextData;
+    return nodes;
+  }, [activeNodeId, connectedEdgesByTarget, diagnosticsByNode, graph.nodes, layout, measurements, nodesById, normalizedQuery, onExportNode, onGraphChange, onOpenSelectEditor, onOpenStickerEditor, onOpenTextureEditor, onPreviewNode, onReorderInput, onUpdateParameter, positions, readOnly, relatedNodes, searchMatches, selectNode, textureOptions, variables]);
 
   const flowEdges = useMemo((): FlowEdge[] => graph.edges.map((edge) => {
     const onPath = relatedNodes.has(edge.source) && relatedNodes.has(edge.target);

@@ -129,7 +129,7 @@ function countGridColumns(group: Element | null): number {
 // (proxy: ascending minimum paintkit id, which tracks release order).
 // Typing in the filter searches every paintkit and collection name, ignoring
 // whichever collection is selected. ?sortdesc=1 presets descending order.
-export function WarpaintList({
+export const WarpaintList = memo(function WarpaintList({
   paintkits,
   selectedId,
   onSelect,
@@ -444,4 +444,4 @@ export function WarpaintList({
       </ScrollArea.Root>
     </div>
   );
-}
+});

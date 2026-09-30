@@ -10,7 +10,7 @@ import type { StickerEditor } from './sticker/useStickerEditor';
 
 interface UseEditorViewportOptions extends
   Pick<EditorCore, 'editorPreviewPending' | 'editorDefinitionGeneration' | 'setSessionStickerQuad'>,
-  Pick<PartsEditor, 'groupAssignActive' | 'groupPointerRef' | 'setEditorSample' | 'sampleEditorSurface' | 'toggleEditorGroup'> {
+  Pick<PartsEditor, 'groupAssignActive' | 'groupPointerRef' | 'setHoverBucket' | 'sampleEditorSurface' | 'toggleEditorGroup'> {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   viewerRef: React.RefObject<Viewer | null>;
   engineReady: boolean;
@@ -57,7 +57,7 @@ export function useEditorViewport({
   setSessionStickerQuad,
   groupAssignActive,
   groupPointerRef,
-  setEditorSample,
+  setHoverBucket,
   sampleEditorSurface,
   toggleEditorGroup,
   canvasRef,
@@ -125,8 +125,8 @@ export function useEditorViewport({
   }, [editorInteractionActive, editorTabActive, engineReady, stickerPlacementActive, viewerRef]);
 
   useEffect(() => {
-    if (!editorSelectionHeld) setEditorSample(null);
-  }, [editorSelectionHeld, setEditorSample]);
+    if (!editorSelectionHeld) setHoverBucket(null);
+  }, [editorSelectionHeld, setHoverBucket]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -191,7 +191,7 @@ export function useEditorViewport({
       stickerGestureRef.current = null;
       stickerGizmoGestureRef.current = null;
       updateStickerDraft(null);
-      setEditorSample(null);
+      setHoverBucket(null);
       setHintDismissed(true);
       const pick = viewerRef.current?.pickModelPartAt(event.clientX, event.clientY) ?? null;
       viewerRef.current?.setModelPartHover(pick);
@@ -248,7 +248,7 @@ export function useEditorViewport({
     }
     if (!groupAssignActive || !event.shiftKey || event.button !== 0 || event.target !== canvasRef.current) return;
     groupPointerRef.current = { x: event.clientX, y: event.clientY, moved: false };
-  }, [authoredStickerQuad, beginStickerInteraction, groupAssignActive, groupPointerRef, modelPartPointerRef, previewStickerDraft, setEditorSample, stickerAspectLocked, stickerGestureRef, stickerGizmoGestureRef, stickerPartPickingActive, stickerPlacementActive, updateStickerDraft, canvasRef, setHintDismissed, viewerRef]);
+  }, [authoredStickerQuad, beginStickerInteraction, groupAssignActive, groupPointerRef, modelPartPointerRef, previewStickerDraft, setHoverBucket, stickerAspectLocked, stickerGestureRef, stickerGizmoGestureRef, stickerPartPickingActive, stickerPlacementActive, updateStickerDraft, canvasRef, setHintDismissed, viewerRef]);
 
   const previewEditorSurface = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const modelPartGesture = modelPartPointerRef.current;
@@ -307,13 +307,13 @@ export function useEditorViewport({
     if (!groupAssignActive || event.target !== canvasRef.current) return;
     if (!event.shiftKey) {
       groupPointerRef.current = null;
-      setEditorSample(null);
+      setHoverBucket(null);
       return;
     }
     const start = groupPointerRef.current;
     if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) start.moved = true;
     sampleEditorSurface(event.clientX, event.clientY);
-  }, [groupAssignActive, groupPointerRef, modelPartPointerRef, previewStickerDraft, sampleEditorSurface, setEditorSample, stickerGestureRef, stickerGizmoGestureRef, stickerPartPickingActive, updateStickerDraft, canvasRef, viewerRef]);
+  }, [groupAssignActive, groupPointerRef, modelPartPointerRef, previewStickerDraft, sampleEditorSurface, setHoverBucket, stickerGestureRef, stickerGizmoGestureRef, stickerPartPickingActive, updateStickerDraft, canvasRef, viewerRef]);
 
   // Ends a sticker drag: release the pointer, then commit its quad when it
   // moved and the target is editable, otherwise drop the local draft.
@@ -396,7 +396,7 @@ export function useEditorViewport({
     onPointerLeave: () => {
       groupPointerRef.current = null;
       if (!modelPartPointerRef.current) viewerRef.current?.clearModelPartHover();
-      if (groupAssignActive) setEditorSample(null);
+      if (groupAssignActive) setHoverBucket(null);
     },
   };
 

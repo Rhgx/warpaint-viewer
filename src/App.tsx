@@ -34,6 +34,7 @@ import { useWorkspace } from './hooks/useWorkspace';
 import { useViewerEngine } from './hooks/useViewerEngine';
 import { useExportDefinitions, useWorkbenchRecipes } from './hooks/useWorkbenchRecipes';
 import { useSeedHistory } from './hooks/useSeedHistory';
+import { useStableCallback } from './hooks/useStableCallback';
 import { useTurntableCapture } from './hooks/useTurntableCapture';
 import { useSourcePackage } from './hooks/useSourcePackage';
 import { useCustomDefinitions } from './hooks/useCustomDefinitions';
@@ -423,7 +424,7 @@ function MainApp() {
     activeSelectedGroupBuckets,
     groupAssignActive,
     groupPointerRef,
-    setEditorSample,
+    setHoverBucket,
     setPanelPreviewGroup,
     sampleEditorSurface,
     toggleEditorGroup,
@@ -610,7 +611,7 @@ function MainApp() {
     setSessionStickerQuad,
     groupAssignActive,
     groupPointerRef,
-    setEditorSample,
+    setHoverBucket,
     sampleEditorSurface,
     toggleEditorGroup,
     canvasRef,
@@ -680,23 +681,22 @@ function MainApp() {
     setError,
   });
 
-  const onSelectKit = useCallback(
-    (id: number) => {
-      if (id !== selectedKitId && editorDirty && !window.confirm('Discard unsaved edits and open another war paint?')) return;
-      setSelectedKitId(id);
-      const kit = paintkits.find((p) => p.id === id);
-      const next: Partial<ControlsState> = {};
-      if (kit && !kit.weapons.includes(state.weaponKey)) {
-        next.weaponKey = kit.weapons[0] ?? state.weaponKey;
-      }
-      // Team Shine is the one sheen with a per-team color, so the team choice
-      // stays meaningful (and selectable) even on single-team warpaints, as
-      // it does in First Person, where the arms follow the team.
-      if (kit && !kit.hasTeamTextures && state.sheen !== 'team_shine' && !firstPersonActive) next.team = 'red';
-      patch(next);
-    },
-    [editorDirty, paintkits, selectedKitId, state.weaponKey, state.sheen, firstPersonActive, patch],
-  );
+  // Stable so the catalog rows do not re-render every time the seed or a
+  // selection changes what this closes over.
+  const onSelectKit = useStableCallback((id: number) => {
+    if (id !== selectedKitId && editorDirty && !window.confirm('Discard unsaved edits and open another war paint?')) return;
+    setSelectedKitId(id);
+    const kit = paintkits.find((p) => p.id === id);
+    const next: Partial<ControlsState> = {};
+    if (kit && !kit.weapons.includes(state.weaponKey)) {
+      next.weaponKey = kit.weapons[0] ?? state.weaponKey;
+    }
+    // Team Shine is the one sheen with a per-team color, so the team choice
+    // stays meaningful (and selectable) even on single-team warpaints, as
+    // it does in First Person, where the arms follow the team.
+    if (kit && !kit.hasTeamTextures && state.sheen !== 'team_shine' && !firstPersonActive) next.team = 'red';
+    patch(next);
+  });
 
   // Selecting a kit belongs to the app, so the hook leaves that hole for it.
   const definitionsState = useMemo<CustomDefinitionsState>(() => ({
@@ -793,33 +793,52 @@ function MainApp() {
     mountedMaterialPaths,
   });
 
-  if (error) return <div className="fatal">Failed to start: {error}</div>;
-  if (!data) return <BootLoader boot={boot} />;
+  const selectedKitWeapons = selectedKit?.weapons;
+  const weaponOptions = useMemo(() => {
+    if (!data) return [];
+    return (selectedKitWeapons ?? data.manifest.weapons.map((w) => w.key)).map((key) => {
+      const weapon = data.manifest.weapons.find((w) => w.key === key);
+      return {
+        value: key,
+        label: weapon?.name ?? key,
+        icon: weapon?.icon ? data.getAssetUrl(weapon.icon) : null,
+      };
+    });
+  }, [data, selectedKitWeapons]);
 
-  const weaponOptions = (selectedKit?.weapons ?? data.manifest.weapons.map((w) => w.key)).map((key) => {
-    const weapon = data.manifest.weapons.find((w) => w.key === key);
-    return {
-      value: key,
-      label: weapon?.name ?? key,
-      icon: weapon?.icon ? data.getAssetUrl(weapon.icon) : null,
-    };
-  });
-
-  const collectionIcons: Record<string, string> = {};
-  if (data.manifest.collectionIcons) {
-    for (const [name, rel] of Object.entries(data.manifest.collectionIcons)) {
-      const url = data.getAssetUrl(rel);
-      if (url) collectionIcons[name] = url;
+  const collectionIcons = useMemo(() => {
+    const icons: Record<string, string> = {};
+    for (const [name, rel] of Object.entries(data?.manifest.collectionIcons ?? {})) {
+      const url = data?.getAssetUrl(rel);
+      if (url) icons[name] = url;
     }
-  }
+    return icons;
+  }, [data]);
 
   // Imported kits have no shipped thumbnail; theirs is resolved from the
   // pattern texture the definition names, through the mounted package.
-  const paintIcons: Record<number, string> = { ...definitions.icons, ...renderedCustomIcons };
-  for (const kit of data.manifest.paintkits) {
-    const url = kit.icon ? data.getAssetUrl(kit.icon) : null;
-    if (url) paintIcons[kit.id] = url;
-  }
+  const paintIcons = useMemo(() => {
+    const icons: Record<number, string> = { ...definitions.icons, ...renderedCustomIcons };
+    for (const kit of data?.manifest.paintkits ?? []) {
+      const url = kit.icon ? data?.getAssetUrl(kit.icon) : null;
+      if (url) icons[kit.id] = url;
+    }
+    return icons;
+  }, [data, definitions.icons, renderedCustomIcons]);
+
+  const hasSelectedKit = !!selectedKit;
+  // A fresh element every render would defeat the memoized Inspector.
+  const previewControls = useMemo(() => engineReady && viewerRef.current && <FirstPersonControls
+    viewer={viewerRef.current}
+    weaponKey={state.weaponKey}
+    team={state.team}
+    enabled={firstPersonActive}
+    onEnabledChange={setFirstPersonEnabled}
+    disabled={!hasSelectedKit || !state.weaponKey || editorTabActive || lightingPanelOpen}
+  />, [editorTabActive, engineReady, firstPersonActive, hasSelectedKit, lightingPanelOpen, state.team, state.weaponKey]);
+
+  if (error) return <div className="fatal">Failed to start: {error}</div>;
+  if (!data) return <BootLoader boot={boot} />;
 
   // selectedKit is set well before boot finishes (it drives the first model
   // load), so the header also waits on the boot overlay itself; otherwise
@@ -953,7 +972,7 @@ function MainApp() {
                   onModeChange: (mode) => {
                     setEditorTool(mode);
                     updateStickerDraft(null);
-                    setEditorSample(null);
+                    setHoverBucket(null);
                     setPanelPreviewGroup(null);
                   },
                   ...(sticker.props ? { sticker: sticker.props } : {}),
@@ -1015,14 +1034,7 @@ function MainApp() {
       <aside className="inspector" id="viewer-controls-panel">
         <Inspector
           firstPersonActive={firstPersonActive}
-          previewControls={engineReady && viewerRef.current && <FirstPersonControls
-            viewer={viewerRef.current}
-            weaponKey={state.weaponKey}
-            team={state.team}
-            enabled={firstPersonActive}
-            onEnabledChange={setFirstPersonEnabled}
-            disabled={!selectedKit || !state.weaponKey || editorTabActive || lightingPanelOpen}
-          />}
+          previewControls={previewControls}
           manifest={data.manifest}
           weaponOptions={weaponOptions}
           hasTeamTextures={firstPersonActive || kitHasTeamTextures}
