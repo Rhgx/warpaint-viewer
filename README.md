@@ -1,7 +1,9 @@
-# TF2 Warpaint Viewer
+# <img src="public/favicon.svg" alt="" width="36" height="36" align="absmiddle"> TF2 Warpaint Viewer
 
-A 1:1 recreation of the Team Fortress 2 lighting engine in Three.js, presented as
-an interactive viewer. **[Open the viewer](https://rhgx.github.io/warpaint-viewer/)**
+Preview TF2 war paints in your browser, rendered by a 1:1 recreation of the game's paint compositor and lighting.
+**[Open the viewer](https://rhgx.github.io/warpaint-viewer/)**
+
+<a href="https://rhgx.github.io/warpaint-viewer/?kit=223&weapon=c_rocketlauncher&sheen=hot_rod"><img src="docs/assets/turntable.webp" alt="Hana war paint on the Rocket Launcher with the Hot Rod sheen, turning in the viewer" width="480"></a>
 
 ## Features
 
@@ -16,7 +18,7 @@ an interactive viewer. **[Open the viewer](https://rhgx.github.io/warpaint-viewe
 - [Custom war paints](docs/custom-war-paints.md): importing and exporting paints
 - [Development](docs/development.md): scripts, game data, and verification
 
-## Development
+## Running locally
 
 Requires Node 22+.
 
@@ -27,13 +29,11 @@ npm run dev
 
 ## Support
 
-If the viewer is useful to you, you can support its development:
-
-<a href="https://boosty.to/rhgx/donate"><img src="docs/assets/boosty.svg" alt="" width="16" height="16"> <b>Support me on Boosty</b></a>
+If you find the viewer useful, you can support it on <a href="https://boosty.to/rhgx/donate"><img src="docs/assets/boosty.svg" alt="" width="16" height="16" align="absmiddle"> <b>Boosty</b></a>.
 
 ## Credits
 
-Team Fortress 2 and its weapon models, war-paint artwork, textures, effects,
+Team Fortress 2 and its weapon models, war paint artwork, textures, effects,
 names, and other game assets are the property of Valve Corporation. Parts of
 this project are based on the [Source SDK](https://github.com/valvesoftware/source-sdk-2013).
 This is an independent community project and is not affiliated with, sponsored
