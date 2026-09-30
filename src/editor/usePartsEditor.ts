@@ -13,6 +13,7 @@ import {
   formatGroupNameForDisplay,
   loadGroupNameReference,
   lookupGroupNameForBucket,
+  groupTextureLoadRef,
   normalizeGroupTextureReference,
   preferredAlbedoGroupIds,
 } from './groupNames';
@@ -214,7 +215,8 @@ export function usePartsEditor({
 
   const resolvedGroupTextureValue = activeGroupRef ? normalizeGroupTextureReference(activeGroupRef) : undefined;
   const activeGroupTextureValue = requestedGroupTextureRef ?? resolvedGroupTextureValue;
-  const displayedGroupRef = requestedGroupTextureRef ?? activeGroupRef;
+  // The requested value is the list's normalized path; load it in the spelling the resolver knows.
+  const displayedGroupRef = requestedGroupTextureRef ? groupTextureLoadRef(requestedGroupTextureRef) : activeGroupRef;
   const groupTextureChoices = useMemo(
     () => {
       if (!displayedGroupRef) return [];

@@ -13,6 +13,7 @@ import {
   lookupGroupNameWeapon,
   normalizeGroupTextureReference,
   formatGroupNameForDisplay,
+  groupTextureLoadRef,
 } from '../../../src/editor/groupNames';
 
 test('curated group names', async () => {
@@ -110,4 +111,12 @@ test('curated group names', async () => {
     'Trigger',
   );
   assert.deepEqual(compatibleGroupTextures('models/not-in-reference/p_groups'), []);
+});
+
+test('a group texture picked from the layout list loads by its public texture path', () => {
+  // The list values are normalized material paths, which name no file.
+  assert.equal(
+    groupTextureLoadRef('models/weapons/c_models/c_rocketlauncher/p_rocketlauncher_groups_02'),
+    'textures/models/weapons/c_models/c_rocketlauncher/p_rocketlauncher_groups_02.webp',
+  );
 });

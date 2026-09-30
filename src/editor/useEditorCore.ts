@@ -18,6 +18,18 @@ function downloadText(text: string, fileName: string): void {
   downloadBlob(new Blob([text], { type: 'application/json' }), fileName);
 }
 
+/**
+ * A selected id can outlive its kit (removed or unloaded definitions), so the
+ * kit must still be in the catalog for the editor to keep working on it.
+ */
+export function resolveEditableKitId(
+  selectedKitId: number | null,
+  requestedKitId: number | null,
+  selectedKit: PaintkitEntry | null,
+): number | null {
+  return selectedKit && selectedKitId === requestedKitId ? selectedKitId : null;
+}
+
 interface UseEditorCoreOptions {
   selectedKitId: number | null;
   workbenchOpen: boolean;
@@ -76,7 +88,7 @@ export function useEditorCore({
       setEditorRequestedKitId(selectedKitId);
     }
   }, [selectedKitId, workbenchOpen, workbenchTab]);
-  const editableKitId = selectedKitId === editorRequestedKitId ? selectedKitId : null;
+  const editableKitId = resolveEditableKitId(selectedKitId, editorRequestedKitId, selectedKit);
   const loadEditorKit = useCallback((kitId: number) => (
     isCustomKitId(kitId) ? exportImportedKit(kitId) : exportStockKit(kitId)
   ), [exportImportedKit, exportStockKit]);
