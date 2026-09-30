@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ExportCompression } from '../export/plan';
 import type { WarpaintExportInputs } from '../workbench/exportTypes';
+import { downloadBlob } from '../ui/common/download';
 import { formatSize } from '../ui/common/formatSize';
 
 export function useWarpaintExport(inputs: WarpaintExportInputs) {
@@ -103,14 +104,7 @@ export function useWarpaintExport(inputs: WarpaintExportInputs) {
         extras,
       );
       setBuildNotes(notes);
-      const url = URL.createObjectURL(result.blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = result.fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      downloadBlob(result.blob, result.fileName);
       setDone(`${result.fileName} (${formatSize(result.blob.size)})`);
     } catch (cause) {
       setError(

@@ -34,7 +34,7 @@ type TextureTransformTargetBlocker =
   | 'ambiguous-source-stage'
   | TextureTransformFieldBlocker;
 
-interface TextureTransformTargetInfo {
+export interface TextureTransformTargetInfo {
   readonly target: TextureTransformTarget;
   /** The authored texture this stage samples, when it resolves to a single literal. */
   readonly textureRef?: string;
@@ -469,4 +469,15 @@ export function discoverTextureTransformTargets(
     targets.push(buildTarget(messages, precedingNode, precedingPath, variables, provenance, weaponOverridePath));
   });
   return { targets };
+}
+
+/** Both discoveries for one definition, so callers memoize them together. */
+export function discoverLayerTransforms(
+  messages: ProtoDefKitMessages,
+  provenance?: readonly ProtoDefValueTrace[],
+) {
+  return {
+    layers: discoverTextureTransformTargets(messages, provenance),
+    base: discoverBaseTextureTransformTarget(messages, provenance),
+  };
 }

@@ -3,6 +3,7 @@ import type { RefObject } from 'react';
 import { TurntableStoppedError, type TurntableSink, type Viewer } from '../viewer/Viewer';
 import { TURNTABLE_SECONDS, type ControlsState, type TurntableFormat, type TurntableProfile } from '../viewer/controls';
 import type { TurntableWorkerRequest, TurntableWorkerResponse } from '../export/turntable.worker';
+import { downloadBlob } from '../ui/common/download';
 import { canEncodeMp4, canEncodeWebp, WebpEncoder } from '../export/animated';
 
 export type TurntableSettings = Pick<
@@ -169,17 +170,6 @@ function createTurntableSession(
   };
 }
 
-function download(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
 export function useScreenshotActions({
   viewerRef,
   paintName,
@@ -206,7 +196,7 @@ export function useScreenshotActions({
   const saveImage = useCallback(async () => {
     const viewer = viewerRef.current;
     if (!viewer) throw new Error('Viewer not ready');
-    download(await viewer.captureScreenshot({ maxEdge }), `${baseName}.png`);
+    downloadBlob(await viewer.captureScreenshot({ maxEdge }), `${baseName}.png`);
   }, [viewerRef, baseName, maxEdge]);
 
   const { turntableFormat, turntableProfiles, turntableTransparent, turntableColor } = turntable;
@@ -250,7 +240,7 @@ export function useScreenshotActions({
       }, signal);
       onStatus({ phase: 'finishing', format: turntableFormat });
       const file = await session.finish();
-      download(file, `${baseName}_turntable.${format.extension}`);
+      downloadBlob(file, `${baseName}_turntable.${format.extension}`);
       // MP4 frames are padded to even dimensions for H.264.
       const pad = (value: number) => turntableFormat === 'mp4' ? value + (value & 1) : value;
       onStatus({ phase: 'saved', format: turntableFormat, bytes: file.size, width: pad(size.width), height: pad(size.height) });

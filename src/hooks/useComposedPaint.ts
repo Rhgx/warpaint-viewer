@@ -81,6 +81,19 @@ function allowSpeculativeCompose(): boolean {
     && nav.hardwareConcurrency > 4;
 }
 
+/** The children with overrides applied, or null when none of them changed. */
+function applyTextureOverridesToChildren(children: readonly RecipeNode[], textures: Record<string, string>): RecipeNode[] | null {
+  let childrenChanged = false;
+  const nodes = new Array<RecipeNode>(children.length);
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index];
+    const next = applyTextureOverridesInTree(child, textures);
+    if (next !== child) childrenChanged = true;
+    nodes[index] = next;
+  }
+  return childrenChanged ? nodes : null;
+}
+
 function applyTextureOverridesInTree(node: RecipeNode, textures: Record<string, string>): RecipeNode {
   switch (node.type) {
     case 'texture_lookup': {
@@ -114,28 +127,14 @@ function applyTextureOverridesInTree(node: RecipeNode, textures: Record<string, 
           stickers[index] = sticker;
         }
       }
-      let childrenChanged = false;
-      const nodes = new Array<RecipeNode>(node.nodes.length);
-      for (let index = 0; index < node.nodes.length; index += 1) {
-        const child = node.nodes[index];
-        const next = applyTextureOverridesInTree(child, textures);
-        if (next !== child) childrenChanged = true;
-        nodes[index] = next;
-      }
-      return stickersChanged || childrenChanged
-        ? { ...node, stickers: stickersChanged ? stickers : node.stickers, nodes: childrenChanged ? nodes : node.nodes }
+      const nodes = applyTextureOverridesToChildren(node.nodes, textures);
+      return stickersChanged || nodes
+        ? { ...node, stickers: stickersChanged ? stickers : node.stickers, nodes: nodes ?? node.nodes }
         : node;
     }
     default: {
-      let childrenChanged = false;
-      const nodes = new Array<RecipeNode>(node.nodes.length);
-      for (let index = 0; index < node.nodes.length; index += 1) {
-        const child = node.nodes[index];
-        const next = applyTextureOverridesInTree(child, textures);
-        if (next !== child) childrenChanged = true;
-        nodes[index] = next;
-      }
-      return childrenChanged ? { ...node, nodes } : node;
+      const nodes = applyTextureOverridesToChildren(node.nodes, textures);
+      return nodes ? { ...node, nodes } : node;
     }
   }
 }
@@ -145,7 +144,62 @@ export function applyTextureOverrides(node: RecipeNode, textures: Record<string,
   return applyTextureOverridesInTree(node, textures);
 }
 
+/**
+ * The retained-result refs and their invalidation callbacks. These are needed
+ * by the renderer lifecycle before the compose effect's own inputs exist, so
+ * they are created first and handed to useComposedPaint.
+ */
+export function useComposeCache(compositorRef: React.RefObject<Compositor | null>) {
+  const lastResultRef = useRef<ComposeResult | null>(null);
+  const interactiveResultRef = useRef<ComposeResult | null>(null);
+  const composeCacheRef = useRef(new Map<string, ComposeResult>());
+  const lastComposeKeyRef = useRef<string>('');
+  const lastRequestKeyRef = useRef<string>('');
+  const firstPaintLoggedRef = useRef(false);
+
+  const resetComposeKey = useCallback(() => {
+    lastComposeKeyRef.current = '';
+    lastRequestKeyRef.current = '';
+  }, []);
+
+  const disposeCache = useCallback(() => {
+    const composeCache = composeCacheRef.current;
+    lastComposeKeyRef.current = '';
+    lastRequestKeyRef.current = '';
+    for (const result of new Set(composeCache.values())) result.target.dispose();
+    composeCache.clear();
+    if (interactiveResultRef.current) {
+      compositorRef.current?.releaseResult(interactiveResultRef.current);
+      interactiveResultRef.current = null;
+    }
+    lastResultRef.current = null;
+  }, [compositorRef]);
+
+  return {
+    lastResultRef,
+    interactiveResultRef,
+    composeCacheRef,
+    lastComposeKeyRef,
+    lastRequestKeyRef,
+    firstPaintLoggedRef,
+    resetComposeKey,
+    disposeCache,
+  };
+}
+
+/**
+ * Recipe lookup for the selected kit. Built-in kits fetch a shipped bundle
+ * and imported definitions resolve out of memory, so the caller decides.
+ */
+export type ResolveRecipe = (
+  kit: PaintkitEntry,
+  weaponKey: string,
+  team: ControlsState['team'],
+  wearIndex: number,
+) => Promise<RecipeNode | null>;
+
 interface UseComposedPaintOptions {
+  cache: ReturnType<typeof useComposeCache>;
   /** Another editor-owned composition is currently supplying the visible map. */
   suspended?: boolean;
   /** Prefer a fast, lower-resolution map while a continuous edit is active. */
@@ -159,16 +213,7 @@ interface UseComposedPaintOptions {
   engineReady: boolean;
   data: DataSource | null;
   selectedKit: PaintkitEntry | null;
-  /**
-   * Recipe lookup for the selected kit. Built-in kits fetch a shipped bundle
-   * and imported definitions resolve out of memory, so the caller decides.
-   */
-  resolveRecipe: (
-    kit: PaintkitEntry,
-    weaponKey: string,
-    team: ControlsState['team'],
-    wearIndex: number,
-  ) => Promise<RecipeNode | null>;
+  resolveRecipe: ResolveRecipe;
   selectedAssetKey: string;
   loadedAssetKey: string;
   state: ControlsState;
@@ -184,6 +229,7 @@ interface UseComposedPaintOptions {
 }
 
 export function useComposedPaint({
+  cache,
   suspended = false,
   interactive = false,
   interactiveRecipe = null,
@@ -206,33 +252,17 @@ export function useComposedPaint({
   setError,
   setState,
 }: UseComposedPaintOptions) {
-  const lastResultRef = useRef<ComposeResult | null>(null);
-  const interactiveResultRef = useRef<ComposeResult | null>(null);
-  const composeCacheRef = useRef(new Map<string, ComposeResult>());
-  const lastComposeKeyRef = useRef<string>('');
-  const lastRequestKeyRef = useRef<string>('');
-  const firstPaintLoggedRef = useRef(false);
+  const {
+    lastResultRef,
+    interactiveResultRef,
+    composeCacheRef,
+    lastComposeKeyRef,
+    lastRequestKeyRef,
+    firstPaintLoggedRef,
+  } = cache;
 
   const [composing, setComposing] = useState(false);
   const [visibleDefinitionGeneration, setVisibleDefinitionGeneration] = useState(-1);
-
-  const resetComposeKey = useCallback(() => {
-    lastComposeKeyRef.current = '';
-    lastRequestKeyRef.current = '';
-  }, []);
-
-  const disposeCache = useCallback(() => {
-    const composeCache = composeCacheRef.current;
-    lastComposeKeyRef.current = '';
-    lastRequestKeyRef.current = '';
-    for (const result of new Set(composeCache.values())) result.target.dispose();
-    composeCache.clear();
-    if (interactiveResultRef.current) {
-      compositorRef.current?.releaseResult(interactiveResultRef.current);
-      interactiveResultRef.current = null;
-    }
-    lastResultRef.current = null;
-  }, [compositorRef]);
 
   // Recompose when recipe inputs change: debounced, deduped, and the previous
   // texture stays on the mesh until the new one is ready (no untextured flash).
@@ -496,7 +526,7 @@ export function useComposedPaint({
       window.clearTimeout(badgeTimer);
       cancelPendingIdle?.();
     };
-  }, [suspended, interactive, interactiveRecipe, interactiveKey, onVisibleResult, engineReady, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState]);
+  }, [suspended, interactive, interactiveRecipe, interactiveKey, onVisibleResult, engineReady, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState, lastResultRef, interactiveResultRef, composeCacheRef, lastComposeKeyRef, lastRequestKeyRef, firstPaintLoggedRef]);
 
-  return { composing, visibleDefinitionGeneration, resetComposeKey, disposeCache };
+  return { composing, visibleDefinitionGeneration };
 }

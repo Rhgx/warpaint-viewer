@@ -1262,8 +1262,6 @@ export function CustomWarpaintWorkbench({
               unavailableReason="Choose a war paint to edit."
               sample={null}
               selectedGroupIds={[]}
-              inspectOnClick={false}
-              onInspectOnClickChange={() => undefined}
               onToggleGroup={() => undefined}
               onClearSelection={() => undefined}
             />
