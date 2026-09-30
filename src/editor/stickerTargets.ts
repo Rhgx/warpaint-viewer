@@ -11,6 +11,7 @@ import {
   type VarDefMsg,
   type VarFieldMsg,
 } from '../protodefs/messages';
+import { sourceTextureIdentity } from '../source/paths';
 import type { StickerQuad, StickerTarget } from './mutations';
 import { EditorMutationAmbiguityError, setStickerDestQuad } from './mutations';
 
@@ -313,4 +314,54 @@ export function discoverStickerPlacementTargets(
     ['operation', 'operation_node'],
   );
   return coalesceLogicalStickerTargets(output);
+}
+
+export function protoTextureReference(reference: string): string {
+  return sourceTextureIdentity(reference).replace(/^materials\//, '');
+}
+
+/**
+ * Source texture names are inconsistent and sometimes actively misleading, so
+ * only genuinely descriptive ones become labels. Everything else falls back to
+ * a plain ordinal rather than telling the user about `displaynull`.
+ */
+const UNINFORMATIVE_STICKER_TOKENS = new Set([
+  'sticker', 'stickers', 'group', 'groupsticker', 'decal', 'display', 'displaynull',
+  'texture', 'tex', 'img', 'image', 'square', 'squares', 'rect', 'box', 'blank',
+  'null', 'none', 'empty', 'default', 'placeholder', 'black', 'white', 'grey', 'gray',
+]);
+
+export function stickerTargetLabel(baseRef: string | undefined, index: number): string {
+  const ordinal = `Sticker ${index + 1}`;
+  const source = baseRef?.split(/[\\/]/).pop()?.replace(/\.[a-z0-9]+$/i, '') ?? '';
+  if (!source) return ordinal;
+  const words: string[] = [];
+  // `tf2logo` is one token but two words; keep the brand readable and intact.
+  for (const raw of source.replace(/tf2/gi, ' TF2 ').split(/[_\-\s]+/)) {
+    if (raw === 'TF2') {
+      words.push('TF2');
+      continue;
+    }
+    // Trailing digits are a variant counter, not part of the name.
+    const [, stem, digits] = /^(.*?)(\d*)$/.exec(raw) ?? [];
+    const token = (stem || raw).toLowerCase();
+    if (!token || UNINFORMATIVE_STICKER_TOKENS.has(token)) continue;
+    const cased = token[0].toUpperCase() + token.slice(1);
+    words.push(digits ? `${cased} ${Number(digits)}` : cased);
+  }
+  if (words.length === 0) return ordinal;
+  const name = words.join(' ');
+  return name.length > 24 ? `${name.slice(0, 23)}…` : name;
+}
+
+export function isStickerArtworkReference(reference: string): boolean {
+  const lower = reference.toLowerCase();
+  if (!lower.includes('sticker') && !lower.includes('/stickers/')) return false;
+  const stem = lower.replace(/\.(?:webp|vtf|png|tga|jpg|jpeg)$/, '');
+  return !stem.endsWith('_s') && !stem.endsWith('_n');
+}
+
+export function textureChoiceLabel(reference: string): string {
+  const name = reference.split('/').at(-1) ?? reference;
+  return name.replace(/\.[^.]+$/, '').replaceAll('_', ' ');
 }

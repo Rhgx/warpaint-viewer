@@ -31,9 +31,6 @@ export interface VisualWarpaintEditorPanelProps {
   readonly groupTextureChoices?: readonly CompatibleGroupTexture[];
   readonly activeGroupTextureRef?: string;
   readonly onGroupTextureChange?: (ref: string) => void;
-  /** Retained for the workbench contract; assignment is implicit while Edit is open. */
-  readonly inspectOnClick: boolean;
-  readonly onInspectOnClickChange: (active: boolean) => void;
   /** When enabled, the viewer softly distinguishes parts assigned to each layer. */
   readonly showLayerMap?: boolean;
   readonly onShowLayerMapChange?: (active: boolean) => void;

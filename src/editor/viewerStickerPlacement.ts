@@ -107,3 +107,10 @@ export function moveStickerQuadToUv(quad: StickerPlacementQuad, hitUv: StickerUv
     bl: [quad.bl[0] + dx, quad.bl[1] + dy],
   });
 }
+
+export function stickerQuadsEqual(first: StickerPlacementQuad, second: StickerPlacementQuad): boolean {
+  return (['tl', 'tr', 'bl'] as const).every((corner) => (
+    Math.abs(first[corner][0] - second[corner][0]) < 1e-9
+    && Math.abs(first[corner][1] - second[corner][1]) < 1e-9
+  ));
+}

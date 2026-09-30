@@ -52,3 +52,9 @@ export function discoverWeaponMaterialTargets(
   }
   return targets;
 }
+
+/** Preset material paths follow models/paintkits/<preset>/<weapon-key>. */
+export function materialPresetPath(presetId: string, weaponKey: string): string {
+  const presetDirectory = presetId === 'macaw-metallic' ? 'macaw' : presetId;
+  return `models/paintkits/${presetDirectory}/${weaponKey}`;
+}

@@ -115,19 +115,19 @@ test('sticker surface preview source contract', () => {
   assert.equal(visibleStickerEditorMap(fullMap, editorBase), editorBase, 'the live editor base wins over a late normal compose');
   assert.equal(visibleStickerEditorMap(fullMap, null), fullMap, 'clearing the editor base restores the newest normal compose');
 
-  const appSource = fs.readFileSync(path.join(ROOT, 'src', 'App.tsx'), 'utf8');
+  const stickerHookSource = fs.readFileSync(path.join(ROOT, 'src', 'editor', 'useStickerEditor.ts'), 'utf8');
   assert.match(
-    appSource,
+    stickerHookSource,
     /const undoEditorSynced = useCallback\(\(\) => \{\s*discardStickerDraft\(\);\s*undoEditor\(\);/,
     'undo discards the transient sticker draft before restoring authored coordinates',
   );
   assert.match(
-    appSource,
+    stickerHookSource,
     /const resetEditorSynced = useCallback\(\(\) => \{\s*discardStickerDraft\(\);\s*resetEditor\(\);/,
     'revert discards the transient sticker draft before restoring the baseline',
   );
   assert.match(
-    appSource,
+    stickerHookSource,
     /const draft = stickerDraftRef\.current;\s*if \(draft && authoredStickerQuad && stickerQuadsEqual\(draft, authoredStickerQuad\)\) \{\s*discardStickerDraft\(\);\s*\}/,
     'a settled local sticker draft remains visible until authored state catches up',
   );
