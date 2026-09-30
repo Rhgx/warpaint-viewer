@@ -22,21 +22,25 @@ export type ExportTextureKind = 'texture' | 'mask' | 'sticker' | 'sticker-mask';
  * renderer resolves textures, so it depends on whether the paint finished
  * compositing before the tab was opened; the recipe is the same answer whether
  * or not anything has been drawn yet.
+ *
+ * A stage nobody has picked a texture for yet (one fresh from the graph's Add
+ * menu) carries an empty ref, which names nothing to pack.
  */
 export function collectTextureRefs(recipes: readonly RecipeNode[]): string[] {
   const refs = new Set<string>();
+  const add = (ref: string | undefined) => { if (ref) refs.add(ref); };
   const visit = (node: RecipeNode) => {
     switch (node.type) {
       case 'texture_lookup':
-        refs.add(node.texture);
+        add(node.texture);
         break;
       case 'select':
-        refs.add(node.groups);
+        add(node.groups);
         break;
       case 'apply_sticker':
         for (const sticker of node.stickers ?? []) {
-          if (sticker.base) refs.add(sticker.base);
-          if (sticker.spec) refs.add(sticker.spec);
+          add(sticker.base);
+          add(sticker.spec);
         }
         node.nodes.forEach(visit);
         break;

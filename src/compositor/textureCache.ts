@@ -163,7 +163,8 @@ export class TextureCache {
       settled: false,
       failed: false,
     };
-    entry.promise = Promise.resolve(this.resolve(ref)).then((url) => new Promise<THREE.Texture>((resolve) => {
+    // An empty ref is a stage nobody has picked a texture for yet: white, without a fetch or a warning.
+    entry.promise = Promise.resolve(ref ? this.resolve(ref) : '').then((url) => new Promise<THREE.Texture>((resolve) => {
       const onLoad = (tex: THREE.Texture) => {
         tex.colorSpace = THREE.NoColorSpace;
         // CRITICAL orientation contract: the composited render target is
@@ -208,8 +209,8 @@ export class TextureCache {
         // stand in white: the neutral element of the multiply chains that
         // dominate these recipes, which leaves the rest of the paint intact
         // instead of blacking out the weapon or failing the app outright.
-        this.missing.add(ref);
-        if (!reportedMissing.has(ref)) {
+        if (ref) this.missing.add(ref);
+        if (ref && !reportedMissing.has(ref)) {
           reportedMissing.add(ref);
           console.warn(`[warpaint-viewer] missing texture, substituting white: ${ref} (${url})`);
         }
@@ -220,7 +221,9 @@ export class TextureCache {
         this.totalBytes += entry.bytes;
         resolve(placeholder);
       };
-      if (this.loader) {
+      if (!ref) {
+        onError();
+      } else if (this.loader) {
         this.loader.load(url, (bitmap) => {
           onLoad(new THREE.Texture(bitmap));
         }, undefined, onError);

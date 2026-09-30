@@ -1,3 +1,5 @@
+import { texturePublicPath } from '../protodefs/values';
+
 interface GroupNameEntry {
   readonly weapon: string;
   readonly groups: Readonly<Record<string, string>>;
@@ -127,6 +129,15 @@ export function normalizeGroupTextureReference(value: string): string {
     .replace(/\.(?:vmt|vtf|webp|png)$/i, '')
     .replace(/^\/+/, '')
     .toLowerCase();
+}
+
+/**
+ * The loadable spelling of a group texture picked from the layout list. The
+ * list carries normalized material paths, which name no file; the recipe and
+ * the texture resolver address the public `textures/....webp` form.
+ */
+export function groupTextureLoadRef(value: string): string {
+  return texturePublicPath(value) ?? value;
 }
 
 /**

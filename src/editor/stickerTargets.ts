@@ -317,6 +317,8 @@ export function discoverStickerPlacementTargets(
 }
 
 export function protoTextureReference(reference: string): string {
+  // An unset texture has no identity; keep it distinct from every real one.
+  if (!reference) return '';
   return sourceTextureIdentity(reference).replace(/^materials\//, '');
 }
 
