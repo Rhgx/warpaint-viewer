@@ -7,7 +7,7 @@ import type {
   ProtoDefRecipeWithProvenance,
   ProtoDefSource,
 } from '../protodefs/types';
-import { serializeProtoDefKitMessages } from '../editor/jsonExport';
+import { serializeProtoDefKitMessages } from '../editor/export/jsonExport';
 import { loadSnapshotContainer } from '../export/snapshot';
 
 interface EditedKit {

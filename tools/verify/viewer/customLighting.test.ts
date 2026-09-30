@@ -9,7 +9,7 @@ import {
   updateCustomLightRuntime,
   validateCustomLightingRig,
   worldPositionToFrame,
-} from '../../../src/viewer/customLighting';
+} from '../../../src/viewer/lighting/customLighting';
 
 test('custom lighting validation clamps persisted values and caps lights', () => {
   const rig = validateCustomLightingRig({

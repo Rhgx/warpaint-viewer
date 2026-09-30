@@ -1,4 +1,4 @@
-import type { StickerTransformTool } from '../workbench/StickerPlacementEditor';
+import type { StickerTransformTool } from '../editor/StickerPlacementEditor';
 
 interface CanvasHintProps {
   dismissed: boolean;

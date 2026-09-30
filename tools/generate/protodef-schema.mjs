@@ -5,7 +5,7 @@
 //   node tools/generate/protodef-schema.mjs
 //
 // The .proto file stays the source of truth; this JSON is a checked-in generated
-// artifact (same idea as tools/extract/map-lighting.mjs -> mapLighting.generated.ts).
+// artifact (same idea as tools/extract/map-lighting.mjs -> src/viewer/lighting/mapLighting.generated.ts).
 
 import fs from 'node:fs';
 import path from 'node:path';

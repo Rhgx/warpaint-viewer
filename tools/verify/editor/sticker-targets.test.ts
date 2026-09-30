@@ -15,7 +15,7 @@ import {
   setStickerDestQuad,
   type StickerQuad,
 } from '../../../src/editor/mutations';
-import { discoverStickerPlacementTargets } from '../../../src/editor/stickerTargets';
+import { discoverStickerPlacementTargets } from '../../../src/editor/sticker/stickerTargets';
 import {
   decodeProtoDefs,
   extractKitMessages,

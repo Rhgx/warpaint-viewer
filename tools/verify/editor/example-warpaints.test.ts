@@ -6,8 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
-import { discoverGroupSelectTargets } from '../../../src/editor/groupTargets';
-import { discoverStickerPlacementTargets } from '../../../src/editor/stickerTargets';
+import { discoverGroupSelectTargets } from '../../../src/editor/layers/groupTargets';
+import { discoverStickerPlacementTargets } from '../../../src/editor/sticker/stickerTargets';
 import { decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipeWithProvenance } from '../../../src/protodefs/decoder';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');

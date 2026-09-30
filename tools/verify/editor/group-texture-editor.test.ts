@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { discoverGroupTextureTarget } from '../../../src/editor/groupTargets';
+import { discoverGroupTextureTarget } from '../../../src/editor/layers/groupTargets';
 import { setGroupTextureReference } from '../../../src/editor/mutations';
 import type { ProtoDefKitMessages, ProtoDefValueTrace } from '../../../src/protodefs/types';
 

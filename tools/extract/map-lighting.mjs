@@ -29,7 +29,7 @@ const VMF_DIR = path.join(WORK_DIR, 'vmf');
 const VTF_DIR = path.join(WORK_DIR, 'vtf');
 const SKYBOX_OUT = path.join(ROOT, 'public', 'data', 'env', 'maps');
 const MAP_CUBEMAP_OUT = path.join(ROOT, 'public', 'data', 'env', 'map-cubemaps');
-const GENERATED_OUT = path.join(ROOT, 'src', 'viewer', 'mapLighting.generated.ts');
+const GENERATED_OUT = path.join(ROOT, 'src', 'viewer', 'lighting', 'mapLighting.generated.ts');
 
 const PRESETS = [
   { id: 'daylight', label: 'Badlands', map: 'cp_badlands', sampleOrigin: [0, 0, 364], captureAngles: [0, 45, 0] },

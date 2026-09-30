@@ -2,9 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadDataSource } from '../data/loader';
 import type { DataSource } from '../data/loader';
 import type { ControlsState } from '../viewer/controls';
-import type { BootState } from '../app/types';
 import { parseUrlState, serializeUrlState } from '../urlState';
 import { isCustomKitId } from '../protodefs/types';
+
+export interface BootState {
+  progress: number;
+  label: string;
+}
 
 const DEFAULT_WEAPON_KEY = 'c_rocketlauncher';
 const URL_SYNC_DEBOUNCE_MS = 300;

@@ -8,8 +8,8 @@ import {
   matchResolvedStickerArtworkGroups,
   stickerArtworkNeedsComposedPreview,
   stickerLevelsAreIdentity,
-} from '../../../src/editor/stickerArtwork';
-import type { StickerArtworkCandidate, StickerArtworkTarget } from '../../../src/editor/stickerArtwork';
+} from '../../../src/editor/sticker/stickerArtwork';
+import type { StickerArtworkCandidate, StickerArtworkTarget } from '../../../src/editor/sticker/stickerArtwork';
 
 test('sticker artwork levels', () => {
   assert.equal(stickerLevelsAreIdentity({ black: 0, white: 1, gamma: 1 }), true);

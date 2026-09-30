@@ -14,7 +14,7 @@ import {
   normalizeGroupTextureReference,
   formatGroupNameForDisplay,
   groupTextureLoadRef,
-} from '../../../src/editor/groupNames';
+} from '../../../src/editor/layers/groupNames';
 
 test('curated group names', async () => {
   assert.equal(

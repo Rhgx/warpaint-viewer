@@ -8,8 +8,8 @@ import {
   nearestPeriodicUv,
   stickerQuadCenter,
   stickerQuadIsWithinTexture,
-} from '../../../src/editor/viewerStickerPlacement';
-import type { StickerPlacementQuad } from '../../../src/editor/viewerStickerPlacement';
+} from '../../../src/editor/sticker/viewerStickerPlacement';
+import type { StickerPlacementQuad } from '../../../src/editor/sticker/viewerStickerPlacement';
 
 function assertUv(actual: readonly number[], expected: readonly number[], message: string): void {
   assert.equal(actual.length, expected.length, message);

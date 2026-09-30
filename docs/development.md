@@ -30,7 +30,7 @@ compositor textures are lossless WebP.
   real assets required.
 - `tools/dev/selftest-driver.mjs` drives the selftest page in headless Edge
   over raw CDP (see its header comment for usage).
-- `npx vitest run tools/verify/protodefs.test.mjs` resolves every shipped recipe
+- `npx vitest run tools/verify/protodefs/protodefs.test.mjs` resolves every shipped recipe
   variant through the in-browser proto_defs decoder and compares it against
   both the recipe bundles and the extraction pipeline, so a porting difference
   is told apart from data that predates the installed game.
@@ -41,12 +41,12 @@ compositor textures are lossless WebP.
 - `npm run verify:vpk-interop` checks the VPK writer against TF2's own
   `bin/vpk.exe`, which catches a container Valve's tools read differently than
   this repository's reader.
-- `npx vitest run tools/verify/protodefs-write.test.mjs` asserts the proto_defs
+- `npx vitest run tools/verify/protodefs/protodefs-write.test.mjs` asserts the proto_defs
   writer reproduces the shipped container byte for byte when nothing is
   spliced, then checks both splice modes through two independent decoders.
-- `npx vitest run tools/verify/protodef-json.test.mjs` resolves community JSON
+- `npx vitest run tools/verify/protodefs/protodef-json.test.mjs` resolves community JSON
   war paint definitions.
-- `npx vitest run tools/verify/vmt-parity.test.mjs` compares the browser VMT
+- `npx vitest run tools/verify/source/vmt-parity.test.mjs` compares the browser VMT
   parser against the stock materials produced by the extraction pipeline.
 
 Optional verification fixtures can be selected with `TF2_PROTODEFS`,

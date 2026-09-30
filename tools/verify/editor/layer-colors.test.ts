@@ -2,8 +2,8 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { EDITOR_LAYER_MAP_COLORS, chooseEditorLayerColors } from '../../../src/editor/layerMap';
-import type { RgbaImageDataLike } from '../../../src/editor/groupSampling';
+import { EDITOR_LAYER_MAP_COLORS, chooseEditorLayerColors } from '../../../src/editor/layers/layerMap';
+import type { RgbaImageDataLike } from '../../../src/editor/layers/groupSampling';
 
 function thumbnail(red: number, green: number, blue: number, alpha = 255): RgbaImageDataLike {
   const data = new Uint8ClampedArray(16 * 16 * 4);

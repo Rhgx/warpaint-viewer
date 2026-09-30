@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { formatStickerValue } from '../../../src/ui/workbench/stickerValueFormat';
+import { formatStickerValue } from '../../../src/ui/editor/stickerValueFormat';
 
 test('simple sticker values keep useful precision without floating-point noise', () => {
   for (const [value, expected] of [

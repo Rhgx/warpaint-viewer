@@ -24,7 +24,7 @@ import type {
 } from '../protodefs/types';
 import { classifyProtoDefFragment } from '../protodefs/jsonFragments';
 import { appErrorDiagnostic, ERROR_CODES } from '../errors';
-import { serializeProtoDefKitMessages } from '../editor/jsonExport';
+import { serializeProtoDefKitMessages } from '../editor/export/jsonExport';
 import { applyImplicitStickerSpecs } from '../protodefs/implicitStickerSpecs';
 import { partitionResolvableKits } from '../protodefs/validation';
 import {

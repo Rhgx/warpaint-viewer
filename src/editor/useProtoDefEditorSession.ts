@@ -34,7 +34,7 @@ import {
   serializeProtoDefKitMessages,
   type ProtoDefKitJsonExport,
   type SerializeProtoDefKitOptions,
-} from './jsonExport';
+} from './export/jsonExport';
 import type { ProtoDefKitMessages } from '../protodefs/types';
 import type { VarDefMsg } from '../protodefs/messages';
 import {

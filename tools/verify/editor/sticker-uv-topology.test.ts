@@ -2,8 +2,8 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { buildStickerUvTopology } from '../../../src/editor/stickerUvTopology';
-import type { StickerUv, StickerUvTopologyAttribute, StickerUvTopologyGeometry, StickerUvTopologyIndex, StickerVec3 } from '../../../src/editor/stickerUvTopology';
+import { buildStickerUvTopology } from '../../../src/editor/sticker/stickerUvTopology';
+import type { StickerUv, StickerUvTopologyAttribute, StickerUvTopologyGeometry, StickerUvTopologyIndex, StickerVec3 } from '../../../src/editor/sticker/stickerUvTopology';
 
 function positionAttribute(points: readonly StickerVec3[]): StickerUvTopologyAttribute {
   return {

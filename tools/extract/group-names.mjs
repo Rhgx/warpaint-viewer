@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const OUTPUT = path.join(ROOT, 'src', 'editor', 'groupNames.generated.json');
+const OUTPUT = path.join(ROOT, 'src', 'editor', 'layers', 'groupNames.generated.json');
 const GUIDE_URL = 'https://steamcommunity.com/sharedfiles/filedetails/?id=3035470027&l=english';
 
 function decodeHtml(fragment) {
