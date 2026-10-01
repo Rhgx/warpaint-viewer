@@ -69,7 +69,7 @@ export interface WeaponEntry {
   model: string; // relative to public/data, e.g. "models/c_shotgun.glb"
   compositeWidth?: number;
   compositeHeight?: number;
-  icon?: string; // backpack icon PNG relative to public/data, e.g. "icons/weapons/c_shotgun.png"
+  icon?: string; // backpack icon WebP relative to public/data, e.g. "icons/weapons/c_shotgun.webp"
   /** Valve-authored inventory presentation attachment from the weapon MDL. */
   iconCamera?: {
     position: [number, number, number];
@@ -92,7 +92,7 @@ export interface PaintkitEntry {
   id: number;
   name: string;
   collection: string | null;
-  icon?: string; // pattern swatch PNG relative to public/data, e.g. "icons/paints/431.png"
+  icon?: string; // pattern swatch WebP relative to public/data, e.g. "icons/paints/431.webp"
   hasTeamTextures: boolean;
   weapons: string[]; // weapon keys this kit can render on
   perWear?: boolean; // if true, recipe files are split per wear level
@@ -112,7 +112,7 @@ export interface Manifest {
   weapons: WeaponEntry[];
   materials?: Record<string, WeaponMaterial>;
   textures?: Record<string, TextureMetadata>;
-  collectionIcons?: Record<string, string>; // collection display name -> icon PNG relative to public/data
+  collectionIcons?: Record<string, string>; // collection display name -> icon WebP relative to public/data
   wearLevels: number[];
   wearNames: string[];
 }

@@ -11,7 +11,7 @@
    "weapons": [
     "c_pistol"
    ],
-   "icon": "icons/paints/0.png"
+   "icon": "icons/paints/0.webp"
   },
   {
    "id": 1,
@@ -22,7 +22,7 @@
    "weapons": [
     "c_rocketlauncher"
    ],
-   "icon": "icons/paints/1.png"
+   "icon": "icons/paints/1.webp"
   },
   {
    "id": 2,
@@ -33,7 +33,7 @@
    "weapons": [
     "c_medigun"
    ],
-   "icon": "icons/paints/2.png"
+   "icon": "icons/paints/2.webp"
   },
   {
    "id": 3,
@@ -44,7 +44,7 @@
    "weapons": [
     "c_revolver"
    ],
-   "icon": "icons/paints/3.png"
+   "icon": "icons/paints/3.webp"
   },
   {
    "id": 4,
@@ -55,7 +55,7 @@
    "weapons": [
     "c_stickybomb_launcher"
    ],
-   "icon": "icons/paints/4.png"
+   "icon": "icons/paints/4.webp"
   },
   {
    "id": 5,
@@ -66,7 +66,7 @@
    "weapons": [
     "c_medigun"
    ],
-   "icon": "icons/paints/5.png"
+   "icon": "icons/paints/5.webp"
   },
   {
    "id": 6,
@@ -77,7 +77,7 @@
    "weapons": [
     "c_rocketlauncher"
    ],
-   "icon": "icons/paints/6.png"
+   "icon": "icons/paints/6.webp"
   },
   {
    "id": 7,
@@ -88,7 +88,7 @@
    "weapons": [
     "c_sniperrifle"
    ],
-   "icon": "icons/paints/7.png"
+   "icon": "icons/paints/7.webp"
   },
   {
    "id": 8,
@@ -99,7 +99,7 @@
    "weapons": [
     "c_stickybomb_launcher"
    ],
-   "icon": "icons/paints/8.png"
+   "icon": "icons/paints/8.webp"
   },
   {
    "id": 9,
@@ -110,7 +110,7 @@
    "weapons": [
     "c_flamethrower"
    ],
-   "icon": "icons/paints/9.png"
+   "icon": "icons/paints/9.webp"
   },
   {
    "id": 10,
@@ -121,7 +121,7 @@
    "weapons": [
     "c_minigun"
    ],
-   "icon": "icons/paints/10.png"
+   "icon": "icons/paints/10.webp"
   },
   {
    "id": 11,
@@ -132,7 +132,7 @@
    "weapons": [
     "c_scattergun"
    ],
-   "icon": "icons/paints/11.png"
+   "icon": "icons/paints/11.webp"
   },
   {
    "id": 12,
@@ -143,7 +143,7 @@
    "weapons": [
     "c_shotgun"
    ],
-   "icon": "icons/paints/12.png"
+   "icon": "icons/paints/12.webp"
   },
   {
    "id": 13,
@@ -154,7 +154,7 @@
    "weapons": [
     "c_smg"
    ],
-   "icon": "icons/paints/13.png"
+   "icon": "icons/paints/13.webp"
   },
   {
    "id": 14,
@@ -165,7 +165,7 @@
    "weapons": [
     "c_sniperrifle"
    ],
-   "icon": "icons/paints/14.png"
+   "icon": "icons/paints/14.webp"
   },
   {
    "id": 15,
@@ -176,7 +176,7 @@
    "weapons": [
     "c_scattergun"
    ],
-   "icon": "icons/paints/15.png"
+   "icon": "icons/paints/15.webp"
   },
   {
    "id": 16,
@@ -187,7 +187,7 @@
    "weapons": [
     "c_shotgun"
    ],
-   "icon": "icons/paints/16.png"
+   "icon": "icons/paints/16.webp"
   },
   {
    "id": 17,
@@ -198,7 +198,7 @@
    "weapons": [
     "c_flamethrower"
    ],
-   "icon": "icons/paints/17.png"
+   "icon": "icons/paints/17.webp"
   },
   {
    "id": 18,
@@ -209,7 +209,7 @@
    "weapons": [
     "c_pistol"
    ],
-   "icon": "icons/paints/18.png"
+   "icon": "icons/paints/18.webp"
   },
   {
    "id": 19,
@@ -220,7 +220,7 @@
    "weapons": [
     "c_sniperrifle"
    ],
-   "icon": "icons/paints/19.png"
+   "icon": "icons/paints/19.webp"
   },
   {
    "id": 20,
@@ -231,7 +231,7 @@
    "weapons": [
     "c_minigun"
    ],
-   "icon": "icons/paints/20.png"
+   "icon": "icons/paints/20.webp"
   },
   {
    "id": 21,
@@ -242,7 +242,7 @@
    "weapons": [
     "c_scattergun"
    ],
-   "icon": "icons/paints/21.png"
+   "icon": "icons/paints/21.webp"
   },
   {
    "id": 22,
@@ -253,7 +253,7 @@
    "weapons": [
     "c_smg"
    ],
-   "icon": "icons/paints/22.png"
+   "icon": "icons/paints/22.webp"
   },
   {
    "id": 23,
@@ -264,7 +264,7 @@
    "weapons": [
     "c_sniperrifle"
    ],
-   "icon": "icons/paints/23.png"
+   "icon": "icons/paints/23.webp"
   },
   {
    "id": 24,
@@ -275,7 +275,7 @@
    "weapons": [
     "c_stickybomb_launcher"
    ],
-   "icon": "icons/paints/24.png"
+   "icon": "icons/paints/24.webp"
   },
   {
    "id": 25,
@@ -286,7 +286,7 @@
    "weapons": [
     "c_medigun"
    ],
-   "icon": "icons/paints/25.png"
+   "icon": "icons/paints/25.webp"
   },
   {
    "id": 26,
@@ -297,7 +297,7 @@
    "weapons": [
     "c_minigun"
    ],
-   "icon": "icons/paints/26.png"
+   "icon": "icons/paints/26.webp"
   },
   {
    "id": 27,
@@ -308,7 +308,7 @@
    "weapons": [
     "c_revolver"
    ],
-   "icon": "icons/paints/27.png"
+   "icon": "icons/paints/27.webp"
   },
   {
    "id": 28,
@@ -319,7 +319,7 @@
    "weapons": [
     "c_rocketlauncher"
    ],
-   "icon": "icons/paints/28.png"
+   "icon": "icons/paints/28.webp"
   },
   {
    "id": 29,
@@ -330,7 +330,7 @@
    "weapons": [
     "c_scattergun"
    ],
-   "icon": "icons/paints/29.png"
+   "icon": "icons/paints/29.webp"
   },
   {
    "id": 30,
@@ -341,7 +341,7 @@
    "weapons": [
     "c_flamethrower"
    ],
-   "icon": "icons/paints/30.png"
+   "icon": "icons/paints/30.webp"
   },
   {
    "id": 31,
@@ -352,7 +352,7 @@
    "weapons": [
     "c_minigun"
    ],
-   "icon": "icons/paints/31.png"
+   "icon": "icons/paints/31.webp"
   },
   {
    "id": 32,
@@ -363,7 +363,7 @@
    "weapons": [
     "c_smg"
    ],
-   "icon": "icons/paints/32.png"
+   "icon": "icons/paints/32.webp"
   },
   {
    "id": 33,
@@ -374,7 +374,7 @@
    "weapons": [
     "c_sniperrifle"
    ],
-   "icon": "icons/paints/33.png"
+   "icon": "icons/paints/33.webp"
   },
   {
    "id": 34,
@@ -385,7 +385,7 @@
    "weapons": [
     "c_flamethrower"
    ],
-   "icon": "icons/paints/34.png"
+   "icon": "icons/paints/34.webp"
   },
   {
    "id": 35,
@@ -396,7 +396,7 @@
    "weapons": [
     "c_pistol"
    ],
-   "icon": "icons/paints/35.png"
+   "icon": "icons/paints/35.webp"
   },
   {
    "id": 36,
@@ -407,7 +407,7 @@
    "weapons": [
     "c_scattergun"
    ],
-   "icon": "icons/paints/36.png"
+   "icon": "icons/paints/36.webp"
   },
   {
    "id": 37,
@@ -418,7 +418,7 @@
    "weapons": [
     "c_smg"
    ],
-   "icon": "icons/paints/37.png"
+   "icon": "icons/paints/37.webp"
   },
   {
    "id": 38,
@@ -429,7 +429,7 @@
    "weapons": [
     "c_stickybomb_launcher"
    ],
-   "icon": "icons/paints/38.png"
+   "icon": "icons/paints/38.webp"
   },
   {
    "id": 39,
@@ -440,7 +440,7 @@
    "weapons": [
     "c_medigun"
    ],
-   "icon": "icons/paints/39.png"
+   "icon": "icons/paints/39.webp"
   },
   {
    "id": 40,
@@ -451,7 +451,7 @@
    "weapons": [
     "c_minigun"
    ],
-   "icon": "icons/paints/40.png"
+   "icon": "icons/paints/40.webp"
   },
   {
    "id": 41,
@@ -462,7 +462,7 @@
    "weapons": [
     "c_pistol"
    ],
-   "icon": "icons/paints/41.png"
+   "icon": "icons/paints/41.webp"
   },
   {
    "id": 42,
@@ -473,7 +473,7 @@
    "weapons": [
     "c_revolver"
    ],
-   "icon": "icons/paints/42.png"
+   "icon": "icons/paints/42.webp"
   },
   {
    "id": 43,
@@ -484,7 +484,7 @@
    "weapons": [
     "c_rocketlauncher"
    ],
-   "icon": "icons/paints/43.png"
+   "icon": "icons/paints/43.webp"
   },
   {
    "id": 44,
@@ -495,7 +495,7 @@
    "weapons": [
     "c_shotgun"
    ],
-   "icon": "icons/paints/44.png"
+   "icon": "icons/paints/44.webp"
   },
   {
    "id": 45,
@@ -506,7 +506,7 @@
    "weapons": [
     "c_stickybomb_launcher"
    ],
-   "icon": "icons/paints/45.png"
+   "icon": "icons/paints/45.webp"
   },
   {
    "id": 46,
@@ -517,7 +517,7 @@
    "weapons": [
     "c_pistol"
    ],
-   "icon": "icons/paints/46.png"
+   "icon": "icons/paints/46.webp"
   },
   {
    "id": 47,
@@ -528,7 +528,7 @@
    "weapons": [
     "c_shotgun"
    ],
-   "icon": "icons/paints/47.png"
+   "icon": "icons/paints/47.webp"
   },
   {
    "id": 48,
@@ -539,7 +539,7 @@
    "weapons": [
     "c_stickybomb_launcher"
    ],
-   "icon": "icons/paints/48.png"
+   "icon": "icons/paints/48.webp"
   },
   {
    "id": 49,
@@ -550,7 +550,7 @@
    "weapons": [
     "c_flamethrower"
    ],
-   "icon": "icons/paints/49.png"
+   "icon": "icons/paints/49.webp"
   },
   {
    "id": 50,
@@ -561,7 +561,7 @@
    "weapons": [
     "c_medigun"
    ],
-   "icon": "icons/paints/50.png"
+   "icon": "icons/paints/50.webp"
   },
   {
    "id": 51,
@@ -572,7 +572,7 @@
    "weapons": [
     "c_revolver"
    ],
-   "icon": "icons/paints/51.png"
+   "icon": "icons/paints/51.webp"
   },
   {
    "id": 52,
@@ -583,7 +583,7 @@
    "weapons": [
     "c_rocketlauncher"
    ],
-   "icon": "icons/paints/52.png"
+   "icon": "icons/paints/52.webp"
   },
   {
    "id": 53,
@@ -594,7 +594,7 @@
    "weapons": [
     "c_scattergun"
    ],
-   "icon": "icons/paints/53.png"
+   "icon": "icons/paints/53.webp"
   },
   {
    "id": 54,
@@ -605,7 +605,7 @@
    "weapons": [
     "c_flamethrower"
    ],
-   "icon": "icons/paints/54.png"
+   "icon": "icons/paints/54.webp"
   },
   {
    "id": 55,
@@ -616,7 +616,7 @@
    "weapons": [
     "c_minigun"
    ],
-   "icon": "icons/paints/55.png"
+   "icon": "icons/paints/55.webp"
   },
   {
    "id": 56,
@@ -627,7 +627,7 @@
    "weapons": [
     "c_pistol"
    ],
-   "icon": "icons/paints/56.png"
+   "icon": "icons/paints/56.webp"
   },
   {
    "id": 57,
@@ -638,7 +638,7 @@
    "weapons": [
     "c_rocketlauncher"
    ],
-   "icon": "icons/paints/57.png"
+   "icon": "icons/paints/57.webp"
   },
   {
    "id": 58,
@@ -649,7 +649,7 @@
    "weapons": [
     "c_smg"
    ],
-   "icon": "icons/paints/58.png"
+   "icon": "icons/paints/58.webp"
   },
   {
    "id": 59,
@@ -660,7 +660,7 @@
    "weapons": [
     "c_sniperrifle"
    ],
-   "icon": "icons/paints/59.png"
+   "icon": "icons/paints/59.webp"
   },
   {
    "id": 60,
@@ -676,7 +676,7 @@
     "c_stickybomb_launcher",
     "c_wrench"
    ],
-   "icon": "icons/paints/60.png"
+   "icon": "icons/paints/60.webp"
   },
   {
    "id": 61,
@@ -691,7 +691,7 @@
     "c_scattergun",
     "c_wrench"
    ],
-   "icon": "icons/paints/61.png"
+   "icon": "icons/paints/61.webp"
   },
   {
    "id": 62,
@@ -705,7 +705,7 @@
     "c_sniperrifle",
     "c_stickybomb_launcher"
    ],
-   "icon": "icons/paints/62.png"
+   "icon": "icons/paints/62.webp"
   },
   {
    "id": 63,
@@ -721,7 +721,7 @@
     "c_scattergun",
     "c_stickybomb_launcher"
    ],
-   "icon": "icons/paints/63.png"
+   "icon": "icons/paints/63.webp"
   },
   {
    "id": 64,
@@ -735,7 +735,7 @@
     "c_sniperrifle",
     "c_wrench"
    ],
-   "icon": "icons/paints/64.png"
+   "icon": "icons/paints/64.webp"
   },
   {
    "id": 65,
@@ -749,7 +749,7 @@
     "c_smg",
     "c_sniperrifle"
    ],
-   "icon": "icons/paints/65.png"
+   "icon": "icons/paints/65.webp"
   },
   {
    "id": 66,
@@ -761,7 +761,7 @@
     "c_flamethrower",
     "c_sniperrifle"
    ],
-   "icon": "icons/paints/66.png"
+   "icon": "icons/paints/66.webp"
   },
   {
    "id": 67,
@@ -774,7 +774,7 @@
     "c_grenadelauncher",
     "c_sniperrifle"
    ],
-   "icon": "icons/paints/67.png"
+   "icon": "icons/paints/67.webp"
   },
   {
    "id": 68,
@@ -786,7 +786,7 @@
     "c_grenadelauncher",
     "c_stickybomb_launcher"
    ],
-   "icon": "icons/paints/68.png"
+   "icon": "icons/paints/68.webp"
   },
   {
    "id": 69,
@@ -801,7 +801,7 @@
     "c_scattergun",
     "c_smg"
    ],
-   "icon": "icons/paints/69.png"
+   "icon": "icons/paints/69.webp"
   },
   {
    "id": 70,
@@ -815,7 +815,7 @@
     "c_pistol",
     "c_rocketlauncher"
    ],
-   "icon": "icons/paints/70.png"
+   "icon": "icons/paints/70.webp"
   },
   {
    "id": 71,
@@ -826,7 +826,7 @@
    "weapons": [
     "c_knife"
    ],
-   "icon": "icons/paints/71.png"
+   "icon": "icons/paints/71.webp"
   },
   {
    "id": 72,
@@ -840,7 +840,7 @@
     "c_scattergun",
     "c_shotgun"
    ],
-   "icon": "icons/paints/72.png"
+   "icon": "icons/paints/72.webp"
   },
   {
    "id": 73,
@@ -851,7 +851,7 @@
    "weapons": [
     "c_minigun"
    ],
-   "icon": "icons/paints/73.png"
+   "icon": "icons/paints/73.webp"
   },
   {
    "id": 74,
@@ -863,7 +863,7 @@
     "c_pistol",
     "c_scattergun"
    ],
-   "icon": "icons/paints/74.png"
+   "icon": "icons/paints/74.webp"
   },
   {
    "id": 75,
@@ -874,7 +874,7 @@
    "weapons": [
     "c_wrench"
    ],
-   "icon": "icons/paints/75.png"
+   "icon": "icons/paints/75.webp"
   },
   {
    "id": 76,
@@ -894,7 +894,7 @@
     "c_sniperrifle",
     "c_stickybomb_launcher"
    ],
-   "icon": "icons/paints/76.png"
+   "icon": "icons/paints/76.webp"
   },
   {
    "id": 77,
@@ -909,7 +909,7 @@
     "c_revolver",
     "c_wrench"
    ],
-   "icon": "icons/paints/77.png"
+   "icon": "icons/paints/77.webp"
   },
   {
    "id": 78,
@@ -927,7 +927,7 @@
     "c_stickybomb_launcher",
     "c_wrench"
    ],
-   "icon": "icons/paints/78.png"
+   "icon": "icons/paints/78.webp"
   },
   {
    "id": 79,
@@ -940,7 +940,7 @@
     "c_rocketlauncher",
     "c_smg"
    ],
-   "icon": "icons/paints/79.png"
+   "icon": "icons/paints/79.webp"
   },
   {
    "id": 80,
@@ -953,7 +953,7 @@
     "c_grenadelauncher",
     "c_rocketlauncher"
    ],
-   "icon": "icons/paints/80.png"
+   "icon": "icons/paints/80.webp"
   },
   {
    "id": 81,
@@ -969,7 +969,7 @@
     "c_smg",
     "c_stickybomb_launcher"
    ],
-   "icon": "icons/paints/81.png"
+   "icon": "icons/paints/81.webp"
   },
   {
    "id": 82,
@@ -982,7 +982,7 @@
     "c_sniperrifle",
     "c_wrench"
    ],
-   "icon": "icons/paints/82.png"
+   "icon": "icons/paints/82.webp"
   },
   {
    "id": 83,
@@ -994,7 +994,7 @@
     "c_medigun",
     "c_scattergun"
    ],
-   "icon": "icons/paints/83.png"
+   "icon": "icons/paints/83.webp"
   },
   {
    "id": 84,
@@ -1006,7 +1006,7 @@
     "c_grenadelauncher",
     "c_minigun"
    ],
-   "icon": "icons/paints/84.png"
+   "icon": "icons/paints/84.webp"
   },
   {
    "id": 85,
@@ -1017,7 +1017,7 @@
    "weapons": [
     "c_scattergun"
    ],
-   "icon": "icons/paints/85.png"
+   "icon": "icons/paints/85.webp"
   },
   {
    "id": 86,
@@ -1028,7 +1028,7 @@
    "weapons": [
     "c_shotgun"
    ],
-   "icon": "icons/paints/86.png"
+   "icon": "icons/paints/86.webp"
   },
   {
    "id": 102,
@@ -1083,7 +1083,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/102.png"
+   "icon": "icons/paints/102.webp"
   },
   {
    "id": 104,
@@ -1138,7 +1138,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/104.png"
+   "icon": "icons/paints/104.webp"
   },
   {
    "id": 105,
@@ -1193,7 +1193,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/105.png"
+   "icon": "icons/paints/105.webp"
   },
   {
    "id": 106,
@@ -1248,7 +1248,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/106.png"
+   "icon": "icons/paints/106.webp"
   },
   {
    "id": 109,
@@ -1303,7 +1303,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/109.png"
+   "icon": "icons/paints/109.webp"
   },
   {
    "id": 112,
@@ -1358,7 +1358,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/112.png"
+   "icon": "icons/paints/112.webp"
   },
   {
    "id": 113,
@@ -1413,7 +1413,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/113.png"
+   "icon": "icons/paints/113.webp"
   },
   {
    "id": 114,
@@ -1468,7 +1468,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/114.png"
+   "icon": "icons/paints/114.webp"
   },
   {
    "id": 120,
@@ -1523,7 +1523,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/120.png"
+   "icon": "icons/paints/120.webp"
   },
   {
    "id": 122,
@@ -1578,7 +1578,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/122.png"
+   "icon": "icons/paints/122.webp"
   },
   {
    "id": 130,
@@ -1633,7 +1633,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/130.png"
+   "icon": "icons/paints/130.webp"
   },
   {
    "id": 139,
@@ -1688,7 +1688,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/139.png"
+   "icon": "icons/paints/139.webp"
   },
   {
    "id": 143,
@@ -1743,7 +1743,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/143.png"
+   "icon": "icons/paints/143.webp"
   },
   {
    "id": 144,
@@ -1798,7 +1798,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/144.png"
+   "icon": "icons/paints/144.webp"
   },
   {
    "id": 151,
@@ -1853,7 +1853,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/151.png"
+   "icon": "icons/paints/151.webp"
   },
   {
    "id": 160,
@@ -1908,7 +1908,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/160.png"
+   "icon": "icons/paints/160.webp"
   },
   {
    "id": 161,
@@ -1963,7 +1963,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/161.png"
+   "icon": "icons/paints/161.webp"
   },
   {
    "id": 163,
@@ -2018,7 +2018,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/163.png"
+   "icon": "icons/paints/163.webp"
   },
   {
    "id": 200,
@@ -2073,7 +2073,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/200.png"
+   "icon": "icons/paints/200.webp"
   },
   {
    "id": 201,
@@ -2128,7 +2128,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/201.png"
+   "icon": "icons/paints/201.webp"
   },
   {
    "id": 202,
@@ -2183,7 +2183,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/202.png"
+   "icon": "icons/paints/202.webp"
   },
   {
    "id": 203,
@@ -2238,7 +2238,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/203.png"
+   "icon": "icons/paints/203.webp"
   },
   {
    "id": 204,
@@ -2293,7 +2293,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/204.png"
+   "icon": "icons/paints/204.webp"
   },
   {
    "id": 205,
@@ -2348,7 +2348,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/205.png"
+   "icon": "icons/paints/205.webp"
   },
   {
    "id": 206,
@@ -2403,7 +2403,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/206.png"
+   "icon": "icons/paints/206.webp"
   },
   {
    "id": 207,
@@ -2458,7 +2458,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/207.png"
+   "icon": "icons/paints/207.webp"
   },
   {
    "id": 208,
@@ -2513,7 +2513,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/208.png"
+   "icon": "icons/paints/208.webp"
   },
   {
    "id": 209,
@@ -2568,7 +2568,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/209.png"
+   "icon": "icons/paints/209.webp"
   },
   {
    "id": 210,
@@ -2623,7 +2623,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/210.png"
+   "icon": "icons/paints/210.webp"
   },
   {
    "id": 211,
@@ -2678,7 +2678,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/211.png"
+   "icon": "icons/paints/211.webp"
   },
   {
    "id": 212,
@@ -2733,7 +2733,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/212.png"
+   "icon": "icons/paints/212.webp"
   },
   {
    "id": 213,
@@ -2788,7 +2788,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/213.png"
+   "icon": "icons/paints/213.webp"
   },
   {
    "id": 214,
@@ -2843,7 +2843,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/214.png"
+   "icon": "icons/paints/214.webp"
   },
   {
    "id": 215,
@@ -2898,7 +2898,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/215.png"
+   "icon": "icons/paints/215.webp"
   },
   {
    "id": 217,
@@ -2953,7 +2953,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/217.png"
+   "icon": "icons/paints/217.webp"
   },
   {
    "id": 218,
@@ -3008,7 +3008,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/218.png"
+   "icon": "icons/paints/218.webp"
   },
   {
    "id": 220,
@@ -3063,7 +3063,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/220.png"
+   "icon": "icons/paints/220.webp"
   },
   {
    "id": 221,
@@ -3118,7 +3118,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/221.png"
+   "icon": "icons/paints/221.webp"
   },
   {
    "id": 223,
@@ -3173,7 +3173,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/223.png"
+   "icon": "icons/paints/223.webp"
   },
   {
    "id": 224,
@@ -3228,7 +3228,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/224.png"
+   "icon": "icons/paints/224.webp"
   },
   {
    "id": 225,
@@ -3283,7 +3283,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/225.png"
+   "icon": "icons/paints/225.webp"
   },
   {
    "id": 226,
@@ -3338,7 +3338,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/226.png"
+   "icon": "icons/paints/226.webp"
   },
   {
    "id": 228,
@@ -3393,7 +3393,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/228.png"
+   "icon": "icons/paints/228.webp"
   },
   {
    "id": 230,
@@ -3448,7 +3448,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/230.png"
+   "icon": "icons/paints/230.webp"
   },
   {
    "id": 232,
@@ -3503,7 +3503,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/232.png"
+   "icon": "icons/paints/232.webp"
   },
   {
    "id": 234,
@@ -3558,7 +3558,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/234.png"
+   "icon": "icons/paints/234.webp"
   },
   {
    "id": 235,
@@ -3613,7 +3613,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/235.png"
+   "icon": "icons/paints/235.webp"
   },
   {
    "id": 236,
@@ -3668,7 +3668,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/236.png"
+   "icon": "icons/paints/236.webp"
   },
   {
    "id": 237,
@@ -3723,7 +3723,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/237.png"
+   "icon": "icons/paints/237.webp"
   },
   {
    "id": 238,
@@ -3778,7 +3778,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/238.png"
+   "icon": "icons/paints/238.webp"
   },
   {
    "id": 239,
@@ -3833,7 +3833,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/239.png"
+   "icon": "icons/paints/239.webp"
   },
   {
    "id": 240,
@@ -3888,7 +3888,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/240.png"
+   "icon": "icons/paints/240.webp"
   },
   {
    "id": 241,
@@ -3943,7 +3943,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/241.png"
+   "icon": "icons/paints/241.webp"
   },
   {
    "id": 242,
@@ -3998,7 +3998,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/242.png"
+   "icon": "icons/paints/242.webp"
   },
   {
    "id": 243,
@@ -4053,7 +4053,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/243.png"
+   "icon": "icons/paints/243.webp"
   },
   {
    "id": 244,
@@ -4108,7 +4108,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/244.png"
+   "icon": "icons/paints/244.webp"
   },
   {
    "id": 245,
@@ -4163,7 +4163,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/245.png"
+   "icon": "icons/paints/245.webp"
   },
   {
    "id": 246,
@@ -4218,7 +4218,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/246.png"
+   "icon": "icons/paints/246.webp"
   },
   {
    "id": 247,
@@ -4273,7 +4273,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/247.png"
+   "icon": "icons/paints/247.webp"
   },
   {
    "id": 248,
@@ -4328,7 +4328,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/248.png"
+   "icon": "icons/paints/248.webp"
   },
   {
    "id": 249,
@@ -4383,7 +4383,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/249.png"
+   "icon": "icons/paints/249.webp"
   },
   {
    "id": 250,
@@ -4483,7 +4483,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/250.png"
+   "icon": "icons/paints/250.webp"
   },
   {
    "id": 251,
@@ -4538,7 +4538,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/251.png"
+   "icon": "icons/paints/251.webp"
   },
   {
    "id": 252,
@@ -4593,7 +4593,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/252.png"
+   "icon": "icons/paints/252.webp"
   },
   {
    "id": 253,
@@ -4648,7 +4648,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/253.png"
+   "icon": "icons/paints/253.webp"
   },
   {
    "id": 254,
@@ -4748,7 +4748,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/254.png"
+   "icon": "icons/paints/254.webp"
   },
   {
    "id": 255,
@@ -4848,7 +4848,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/255.png"
+   "icon": "icons/paints/255.webp"
   },
   {
    "id": 256,
@@ -4903,7 +4903,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/256.png"
+   "icon": "icons/paints/256.webp"
   },
   {
    "id": 257,
@@ -4958,7 +4958,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/257.png"
+   "icon": "icons/paints/257.webp"
   },
   {
    "id": 258,
@@ -5013,7 +5013,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/258.png"
+   "icon": "icons/paints/258.webp"
   },
   {
    "id": 259,
@@ -5068,7 +5068,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/259.png"
+   "icon": "icons/paints/259.webp"
   },
   {
    "id": 260,
@@ -5123,7 +5123,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/260.png"
+   "icon": "icons/paints/260.webp"
   },
   {
    "id": 261,
@@ -5178,7 +5178,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/261.png"
+   "icon": "icons/paints/261.webp"
   },
   {
    "id": 262,
@@ -5233,7 +5233,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/262.png"
+   "icon": "icons/paints/262.webp"
   },
   {
    "id": 263,
@@ -5288,7 +5288,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/263.png"
+   "icon": "icons/paints/263.webp"
   },
   {
    "id": 264,
@@ -5388,7 +5388,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/264.png"
+   "icon": "icons/paints/264.webp"
   },
   {
    "id": 265,
@@ -5443,7 +5443,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/265.png"
+   "icon": "icons/paints/265.webp"
   },
   {
    "id": 266,
@@ -5498,7 +5498,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/266.png"
+   "icon": "icons/paints/266.webp"
   },
   {
    "id": 267,
@@ -5553,7 +5553,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/267.png"
+   "icon": "icons/paints/267.webp"
   },
   {
    "id": 268,
@@ -5608,7 +5608,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/268.png"
+   "icon": "icons/paints/268.webp"
   },
   {
    "id": 269,
@@ -5663,7 +5663,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/269.png"
+   "icon": "icons/paints/269.webp"
   },
   {
    "id": 270,
@@ -5718,7 +5718,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/270.png"
+   "icon": "icons/paints/270.webp"
   },
   {
    "id": 271,
@@ -5818,7 +5818,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/271.png"
+   "icon": "icons/paints/271.webp"
   },
   {
    "id": 272,
@@ -5918,7 +5918,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/272.png"
+   "icon": "icons/paints/272.webp"
   },
   {
    "id": 273,
@@ -5973,7 +5973,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/273.png"
+   "icon": "icons/paints/273.webp"
   },
   {
    "id": 275,
@@ -6028,7 +6028,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/275.png"
+   "icon": "icons/paints/275.webp"
   },
   {
    "id": 276,
@@ -6083,7 +6083,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/276.png"
+   "icon": "icons/paints/276.webp"
   },
   {
    "id": 277,
@@ -6138,7 +6138,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/277.png"
+   "icon": "icons/paints/277.webp"
   },
   {
    "id": 278,
@@ -6193,7 +6193,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/278.png"
+   "icon": "icons/paints/278.webp"
   },
   {
    "id": 279,
@@ -6248,7 +6248,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/279.png"
+   "icon": "icons/paints/279.webp"
   },
   {
    "id": 280,
@@ -6348,7 +6348,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/280.png"
+   "icon": "icons/paints/280.webp"
   },
   {
    "id": 281,
@@ -6403,7 +6403,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/281.png"
+   "icon": "icons/paints/281.webp"
   },
   {
    "id": 282,
@@ -6458,7 +6458,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/282.png"
+   "icon": "icons/paints/282.webp"
   },
   {
    "id": 283,
@@ -6513,7 +6513,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/283.png"
+   "icon": "icons/paints/283.webp"
   },
   {
    "id": 284,
@@ -6568,7 +6568,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/284.png"
+   "icon": "icons/paints/284.webp"
   },
   {
    "id": 285,
@@ -6668,7 +6668,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/285.png"
+   "icon": "icons/paints/285.webp"
   },
   {
    "id": 286,
@@ -6723,7 +6723,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/286.png"
+   "icon": "icons/paints/286.webp"
   },
   {
    "id": 287,
@@ -6778,7 +6778,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/287.png"
+   "icon": "icons/paints/287.webp"
   },
   {
    "id": 289,
@@ -6833,7 +6833,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/289.png"
+   "icon": "icons/paints/289.webp"
   },
   {
    "id": 290,
@@ -6888,7 +6888,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/290.png"
+   "icon": "icons/paints/290.webp"
   },
   {
    "id": 291,
@@ -6988,7 +6988,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/291.png"
+   "icon": "icons/paints/291.webp"
   },
   {
    "id": 292,
@@ -7043,7 +7043,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/292.png"
+   "icon": "icons/paints/292.webp"
   },
   {
    "id": 293,
@@ -7098,7 +7098,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/293.png"
+   "icon": "icons/paints/293.webp"
   },
   {
    "id": 294,
@@ -7198,7 +7198,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/294.png"
+   "icon": "icons/paints/294.webp"
   },
   {
    "id": 295,
@@ -7298,7 +7298,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/295.png"
+   "icon": "icons/paints/295.webp"
   },
   {
    "id": 296,
@@ -7398,7 +7398,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/296.png"
+   "icon": "icons/paints/296.webp"
   },
   {
    "id": 297,
@@ -7498,7 +7498,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/297.png"
+   "icon": "icons/paints/297.webp"
   },
   {
    "id": 300,
@@ -7598,7 +7598,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/300.png"
+   "icon": "icons/paints/300.webp"
   },
   {
    "id": 301,
@@ -7653,7 +7653,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/301.png"
+   "icon": "icons/paints/301.webp"
   },
   {
    "id": 302,
@@ -7708,7 +7708,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/302.png"
+   "icon": "icons/paints/302.webp"
   },
   {
    "id": 303,
@@ -7808,7 +7808,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/303.png"
+   "icon": "icons/paints/303.webp"
   },
   {
    "id": 304,
@@ -7863,7 +7863,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/304.png"
+   "icon": "icons/paints/304.webp"
   },
   {
    "id": 305,
@@ -7918,7 +7918,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/305.png"
+   "icon": "icons/paints/305.webp"
   },
   {
    "id": 306,
@@ -7973,7 +7973,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/306.png"
+   "icon": "icons/paints/306.webp"
   },
   {
    "id": 307,
@@ -8032,7 +8032,7 @@
     "c_grenadelauncher": "models\\paintkits\\c_grenadelauncher\\c_grenadelauncher_sheen",
     "c_demo_cannon": "models\\paintkits\\workshop\\demo_cannon\\c_demo_cannon_sheen"
    },
-   "icon": "icons/paints/307.png"
+   "icon": "icons/paints/307.webp"
   },
   {
    "id": 308,
@@ -8087,7 +8087,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/308.png"
+   "icon": "icons/paints/308.webp"
   },
   {
    "id": 309,
@@ -8142,7 +8142,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/309.png"
+   "icon": "icons/paints/309.webp"
   },
   {
    "id": 310,
@@ -8201,7 +8201,7 @@
     "c_grenadelauncher": "models\\paintkits\\c_grenadelauncher\\c_grenadelauncher_sheen",
     "c_demo_cannon": "models\\paintkits\\workshop\\demo_cannon\\c_demo_cannon_sheen"
    },
-   "icon": "icons/paints/310.png"
+   "icon": "icons/paints/310.webp"
   },
   {
    "id": 390,
@@ -8232,7 +8232,7 @@
     "c_sniperrifle": "models\\paintkits\\c_dragons_fury\\c_sniperrifle_gold",
     "c_flameball": "models\\paintkits\\c_dragons_fury\\c_flameball_gold"
    },
-   "icon": "icons/paints/390.png"
+   "icon": "icons/paints/390.webp"
   },
   {
    "id": 391,
@@ -8287,7 +8287,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/391.png"
+   "icon": "icons/paints/391.webp"
   },
   {
    "id": 400,
@@ -8342,7 +8342,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/400.png"
+   "icon": "icons/paints/400.webp"
   },
   {
    "id": 401,
@@ -8397,7 +8397,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/401.png"
+   "icon": "icons/paints/401.webp"
   },
   {
    "id": 402,
@@ -8497,7 +8497,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/402.png"
+   "icon": "icons/paints/402.webp"
   },
   {
    "id": 403,
@@ -8597,7 +8597,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/403.png"
+   "icon": "icons/paints/403.webp"
   },
   {
    "id": 404,
@@ -8652,7 +8652,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/404.png"
+   "icon": "icons/paints/404.webp"
   },
   {
    "id": 405,
@@ -8752,7 +8752,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/405.png"
+   "icon": "icons/paints/405.webp"
   },
   {
    "id": 406,
@@ -8807,7 +8807,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/406.png"
+   "icon": "icons/paints/406.webp"
   },
   {
    "id": 407,
@@ -8862,7 +8862,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/407.png"
+   "icon": "icons/paints/407.webp"
   },
   {
    "id": 408,
@@ -8917,7 +8917,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/408.png"
+   "icon": "icons/paints/408.webp"
   },
   {
    "id": 409,
@@ -8972,7 +8972,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/409.png"
+   "icon": "icons/paints/409.webp"
   },
   {
    "id": 410,
@@ -9027,7 +9027,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/410.png"
+   "icon": "icons/paints/410.webp"
   },
   {
    "id": 411,
@@ -9127,7 +9127,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/411.png"
+   "icon": "icons/paints/411.webp"
   },
   {
    "id": 412,
@@ -9182,7 +9182,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/412.png"
+   "icon": "icons/paints/412.webp"
   },
   {
    "id": 413,
@@ -9237,7 +9237,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/413.png"
+   "icon": "icons/paints/413.webp"
   },
   {
    "id": 414,
@@ -9337,7 +9337,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/414.png"
+   "icon": "icons/paints/414.webp"
   },
   {
    "id": 415,
@@ -9437,7 +9437,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/415.png"
+   "icon": "icons/paints/415.webp"
   },
   {
    "id": 416,
@@ -9537,7 +9537,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/416.png"
+   "icon": "icons/paints/416.webp"
   },
   {
    "id": 417,
@@ -9592,7 +9592,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/417.png"
+   "icon": "icons/paints/417.webp"
   },
   {
    "id": 418,
@@ -9692,7 +9692,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/418.png"
+   "icon": "icons/paints/418.webp"
   },
   {
    "id": 419,
@@ -9747,7 +9747,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/419.png"
+   "icon": "icons/paints/419.webp"
   },
   {
    "id": 420,
@@ -9802,7 +9802,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/420.png"
+   "icon": "icons/paints/420.webp"
   },
   {
    "id": 421,
@@ -9857,7 +9857,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/421.png"
+   "icon": "icons/paints/421.webp"
   },
   {
    "id": 422,
@@ -9957,7 +9957,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/422.png"
+   "icon": "icons/paints/422.webp"
   },
   {
    "id": 423,
@@ -10057,7 +10057,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/423.png"
+   "icon": "icons/paints/423.webp"
   },
   {
    "id": 424,
@@ -10112,7 +10112,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/424.png"
+   "icon": "icons/paints/424.webp"
   },
   {
    "id": 425,
@@ -10167,7 +10167,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/425.png"
+   "icon": "icons/paints/425.webp"
   },
   {
    "id": 426,
@@ -10267,7 +10267,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/426.png"
+   "icon": "icons/paints/426.webp"
   },
   {
    "id": 427,
@@ -10322,7 +10322,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/427.png"
+   "icon": "icons/paints/427.webp"
   },
   {
    "id": 428,
@@ -10422,7 +10422,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/428.png"
+   "icon": "icons/paints/428.webp"
   },
   {
    "id": 429,
@@ -10477,7 +10477,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/429.png"
+   "icon": "icons/paints/429.webp"
   },
   {
    "id": 430,
@@ -10532,7 +10532,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/430.png"
+   "icon": "icons/paints/430.webp"
   },
   {
    "id": 431,
@@ -10632,7 +10632,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/431.png"
+   "icon": "icons/paints/431.webp"
   },
   {
    "id": 432,
@@ -10687,7 +10687,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/432.png"
+   "icon": "icons/paints/432.webp"
   },
   {
    "id": 433,
@@ -10787,7 +10787,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/433.png"
+   "icon": "icons/paints/433.webp"
   },
   {
    "id": 434,
@@ -10887,7 +10887,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/434.png"
+   "icon": "icons/paints/434.webp"
   },
   {
    "id": 435,
@@ -10942,7 +10942,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/435.png"
+   "icon": "icons/paints/435.webp"
   },
   {
    "id": 436,
@@ -10997,7 +10997,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/436.png"
+   "icon": "icons/paints/436.webp"
   },
   {
    "id": 437,
@@ -11097,7 +11097,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/437.png"
+   "icon": "icons/paints/437.webp"
   },
   {
    "id": 438,
@@ -11197,7 +11197,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/438.png"
+   "icon": "icons/paints/438.webp"
   },
   {
    "id": 439,
@@ -11297,7 +11297,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/439.png"
+   "icon": "icons/paints/439.webp"
   },
   {
    "id": 440,
@@ -11397,7 +11397,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/440.png"
+   "icon": "icons/paints/440.webp"
   },
   {
    "id": 441,
@@ -11452,7 +11452,7 @@
     "c_wrench",
     "paintkit_tool"
    ],
-   "icon": "icons/paints/441.png"
+   "icon": "icons/paints/441.webp"
   },
   {
    "id": 442,
@@ -11552,7 +11552,7 @@
     "c_trenchgun": "models/paintkits/macaw/c_trenchgun",
     "c_winger_pistol": "models/paintkits/macaw/c_winger_pistol"
    },
-   "icon": "icons/paints/442.png"
+   "icon": "icons/paints/442.webp"
   }
  ],
  "weapons": [
@@ -11562,7 +11562,7 @@
    "model": "models/c_amputator.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_amputator.png",
+   "icon": "icons/weapons/c_amputator.webp",
    "iconCamera": {
     "position": [
      26.11006,
@@ -11616,7 +11616,7 @@
    "model": "models/c_atom_launcher.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_atom_launcher.png",
+   "icon": "icons/weapons/c_atom_launcher.webp",
    "iconCamera": {
     "position": [
      28.173008,
@@ -11674,7 +11674,7 @@
    "model": "models/c_back_scratcher.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_back_scratcher.png",
+   "icon": "icons/weapons/c_back_scratcher.webp",
    "iconCamera": {
     "position": [
      -22.746035,
@@ -11728,7 +11728,7 @@
    "model": "models/c_battleaxe.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_battleaxe.png",
+   "icon": "icons/weapons/c_battleaxe.webp",
    "iconCamera": {
     "position": [
      13.758595,
@@ -11782,7 +11782,7 @@
    "model": "models/c_bazaar_sniper.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_bazaar_sniper.png",
+   "icon": "icons/weapons/c_bazaar_sniper.webp",
    "iconCamera": {
     "position": [
      52.455555,
@@ -11836,7 +11836,7 @@
    "model": "models/c_blackbox.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_blackbox.png",
+   "icon": "icons/weapons/c_blackbox.webp",
    "iconCamera": {
     "position": [
      35.624546,
@@ -11890,7 +11890,7 @@
    "model": "models/c_claidheamohmor.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_claidheamohmor.png",
+   "icon": "icons/weapons/c_claidheamohmor.webp",
    "iconCamera": {
     "position": [
      19.526031,
@@ -11944,7 +11944,7 @@
    "model": "models/c_crusaders_crossbow.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_crusaders_crossbow.png",
+   "icon": "icons/weapons/c_crusaders_crossbow.webp",
    "iconCamera": {
     "position": [
      -19.331836,
@@ -11998,7 +11998,7 @@
    "model": "models/c_degreaser.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_degreaser.png",
+   "icon": "icons/weapons/c_degreaser.webp",
    "iconCamera": {
     "position": [
      42.772156,
@@ -12052,7 +12052,7 @@
    "model": "models/c_demo_cannon.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_demo_cannon.png",
+   "icon": "icons/weapons/c_demo_cannon.webp",
    "iconCamera": {
     "position": [
      26.783497,
@@ -12106,7 +12106,7 @@
    "model": "models/c_demo_sultan_sword.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_demo_sultan_sword.png",
+   "icon": "icons/weapons/c_demo_sultan_sword.webp",
    "iconCamera": {
     "position": [
      -49.357234,
@@ -12160,7 +12160,7 @@
    "model": "models/c_detonator.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_detonator.png",
+   "icon": "icons/weapons/c_detonator.webp",
    "iconCamera": {
     "position": [
      21.023468,
@@ -12214,7 +12214,7 @@
    "model": "models/c_flameball.glb",
    "compositeWidth": 1024,
    "compositeHeight": 1024,
-   "icon": "icons/weapons/c_flameball.png",
+   "icon": "icons/weapons/c_flameball.webp",
    "iconCamera": {
     "position": [
      44.336792,
@@ -12268,7 +12268,7 @@
    "model": "models/c_flamethrower.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_flamethrower.png",
+   "icon": "icons/weapons/c_flamethrower.webp",
    "iconCamera": {
     "position": [
      54.638538,
@@ -12322,7 +12322,7 @@
    "model": "models/c_gatling_gun.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_gatling_gun.png",
+   "icon": "icons/weapons/c_gatling_gun.webp",
    "iconCamera": {
     "position": [
      64.404915,
@@ -12380,7 +12380,7 @@
    "model": "models/c_grenadelauncher.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_grenadelauncher.png",
+   "icon": "icons/weapons/c_grenadelauncher.webp",
    "iconCamera": {
     "position": [
      29.986479,
@@ -12434,7 +12434,7 @@
    "model": "models/c_holymackerel.glb",
    "compositeWidth": 1024,
    "compositeHeight": 1024,
-   "icon": "icons/weapons/c_holymackerel.png",
+   "icon": "icons/weapons/c_holymackerel.webp",
    "iconCamera": {
     "position": [
      8.960179,
@@ -12488,7 +12488,7 @@
    "model": "models/c_jag.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_jag.png",
+   "icon": "icons/weapons/c_jag.webp",
    "iconCamera": {
     "position": [
      19.774393,
@@ -12542,7 +12542,7 @@
    "model": "models/c_knife.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_knife.png",
+   "icon": "icons/weapons/c_knife.webp",
    "iconCamera": {
     "position": [
      12.494589,
@@ -12596,7 +12596,7 @@
    "model": "models/c_lochnload.glb",
    "compositeWidth": 1024,
    "compositeHeight": 1024,
-   "icon": "icons/weapons/c_lochnload.png",
+   "icon": "icons/weapons/c_lochnload.webp",
    "iconCamera": {
     "position": [
      40.007195,
@@ -12650,7 +12650,7 @@
    "model": "models/c_medigun.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_medigun.png",
+   "icon": "icons/weapons/c_medigun.webp",
    "iconCamera": {
     "position": [
      26.150967,
@@ -12704,7 +12704,7 @@
    "model": "models/c_minigun.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_minigun.png",
+   "icon": "icons/weapons/c_minigun.webp",
    "iconCamera": {
     "position": [
      52.746048,
@@ -12758,7 +12758,7 @@
    "model": "models/c_pistol.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_pistol.png",
+   "icon": "icons/weapons/c_pistol.webp",
    "iconCamera": {
     "position": [
      13.056375,
@@ -12812,7 +12812,7 @@
    "model": "models/c_powerjack.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_powerjack.png",
+   "icon": "icons/weapons/c_powerjack.webp",
    "iconCamera": {
     "position": [
      45.135433,
@@ -12866,7 +12866,7 @@
    "model": "models/c_quadball.glb",
    "compositeWidth": 1024,
    "compositeHeight": 1024,
-   "icon": "icons/weapons/c_quadball.png",
+   "icon": "icons/weapons/c_quadball.webp",
    "iconCamera": {
     "position": [
      30.291611,
@@ -12920,7 +12920,7 @@
    "model": "models/c_reserve_shooter.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_reserve_shooter.png",
+   "icon": "icons/weapons/c_reserve_shooter.webp",
    "iconCamera": {
     "position": [
      39.540775,
@@ -12974,7 +12974,7 @@
    "model": "models/c_revolver.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_revolver.png",
+   "icon": "icons/weapons/c_revolver.webp",
    "iconCamera": {
     "position": [
      15.376948,
@@ -13028,7 +13028,7 @@
    "model": "models/c_riding_crop.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_riding_crop.png",
+   "icon": "icons/weapons/c_riding_crop.webp",
    "iconCamera": {
     "position": [
      -8.614601,
@@ -13082,7 +13082,7 @@
    "model": "models/c_rocketlauncher.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_rocketlauncher.png",
+   "icon": "icons/weapons/c_rocketlauncher.webp",
    "iconCamera": {
     "position": [
      38.266022,
@@ -13136,7 +13136,7 @@
    "model": "models/c_russian_riot.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_russian_riot.png",
+   "icon": "icons/weapons/c_russian_riot.webp",
    "iconCamera": {
     "position": [
      47.703014,
@@ -13190,7 +13190,7 @@
    "model": "models/c_scattergun.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_scattergun.png",
+   "icon": "icons/weapons/c_scattergun.webp",
    "iconCamera": {
     "position": [
      14.487176,
@@ -13244,7 +13244,7 @@
    "model": "models/c_scimitar.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_scimitar.png",
+   "icon": "icons/weapons/c_scimitar.webp",
    "iconCamera": {
     "position": [
      -38.356449,
@@ -13298,7 +13298,7 @@
    "model": "models/c_scorch_shot.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_scorch_shot.png",
+   "icon": "icons/weapons/c_scorch_shot.webp",
    "iconCamera": {
     "position": [
      16.011847,
@@ -13352,7 +13352,7 @@
    "model": "models/c_shortstop.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_shortstop.png",
+   "icon": "icons/weapons/c_shortstop.webp",
    "iconCamera": {
     "position": [
      14.121148,
@@ -13406,7 +13406,7 @@
    "model": "models/c_shotgun.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_shotgun.png",
+   "icon": "icons/weapons/c_shotgun.webp",
    "iconCamera": {
     "position": [
      35.081215,
@@ -13460,7 +13460,7 @@
    "model": "models/c_smg.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_smg.png",
+   "icon": "icons/weapons/c_smg.webp",
    "iconCamera": {
     "position": [
      27.129333,
@@ -13514,7 +13514,7 @@
    "model": "models/c_sniperrifle.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_sniperrifle.png",
+   "icon": "icons/weapons/c_sniperrifle.webp",
    "iconCamera": {
     "position": [
      28.57423,
@@ -13568,7 +13568,7 @@
    "model": "models/c_soda_popper.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_soda_popper.png",
+   "icon": "icons/weapons/c_soda_popper.webp",
    "iconCamera": {
     "position": [
      19.152578,
@@ -13622,7 +13622,7 @@
    "model": "models/c_stickybomb_launcher.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_stickybomb_launcher.png",
+   "icon": "icons/weapons/c_stickybomb_launcher.webp",
    "iconCamera": {
     "position": [
      29.389162,
@@ -13702,7 +13702,7 @@
    ],
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_tele_shotgun.png",
+   "icon": "icons/weapons/c_tele_shotgun.webp",
    "iconCamera": {
     "position": [
      23.987225,
@@ -13770,7 +13770,7 @@
    "model": "models/c_tomislav.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_tomislav.png",
+   "icon": "icons/weapons/c_tomislav.webp",
    "iconCamera": {
     "position": [
      44.10865,
@@ -13824,7 +13824,7 @@
    "model": "models/c_trenchgun.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_trenchgun.png",
+   "icon": "icons/weapons/c_trenchgun.webp",
    "iconCamera": {
     "position": [
      21.514887,
@@ -13878,7 +13878,7 @@
    "model": "models/c_ubersaw.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_ubersaw.png",
+   "icon": "icons/weapons/c_ubersaw.webp",
    "iconCamera": {
     "position": [
      21.340527,
@@ -13946,7 +13946,7 @@
    "model": "models/c_winger_pistol.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_winger_pistol.png",
+   "icon": "icons/weapons/c_winger_pistol.webp",
    "iconCamera": {
     "position": [
      13.056375,
@@ -14000,7 +14000,7 @@
    "model": "models/c_wrench.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/c_wrench.png",
+   "icon": "icons/weapons/c_wrench.webp",
    "iconCamera": {
     "position": [
      24.971699,
@@ -14054,7 +14054,7 @@
    "model": "models/paintkit_tool.glb",
    "compositeWidth": 2048,
    "compositeHeight": 2048,
-   "icon": "icons/weapons/paintkit_tool.png",
+   "icon": "icons/weapons/paintkit_tool.webp",
    "iconCamera": {
     "position": [
      52.889687,
@@ -30673,65 +30673,65 @@
   }
  },
  "collectionIcons": {
-  "Concealed Killer Collection": "icons/collections/concealed_killer_collection.png",
-  "Craftsmann Collection": "icons/collections/craftsmann_collection.png",
-  "Teufort Collection": "icons/collections/teufort_collection.png",
-  "Powerhouse Collection": "icons/collections/powerhouse_collection.png",
-  "Gun Mettle Cosmetics Collection": "icons/collections/gunmettlecosmetics_collection.png",
-  "Quarantined Collection": "icons/collections/invasion_collection_01_lootlist.png",
-  "Confidential Collection": "icons/collections/invasion_collection_02_lootlist.png",
-  "Gargoyle Collection": "icons/collections/halloween2015_collection_lootlist.png",
-  "Harvest Collection": "icons/collections/tough_break_drop_collection_01.png",
-  "Gentlemanne's Collection": "icons/collections/tough_break_drop_collection_02.png",
-  "Pyroland Collection": "icons/collections/tough_break_case_collection_01_pyroland.png",
-  "Warbird Collection": "icons/collections/tough_break_case_collection_02_warbirds.png",
-  "Tough Break Cosmetics Collection": "icons/collections/toughbreakcosmetics_collection.png",
-  "Mayflower Cosmetics Collection": "icons/collections/mayflowercosmetics_collection.png",
-  "Creepy Crawly Collection": "icons/collections/halloween2016_collection_lootlist.png",
-  "Winter 2016 Cosmetics Collection": "icons/collections/winter2016_cosmetics_collection.png",
-  "Rainy Day Cosmetics Collection": "icons/collections/rainydaycosmetics_collection.png",
-  "Abominable Cosmetic Collection": "icons/collections/campaign3cosmetics_case1_collection.png",
-  "Unleash the Beast Cosmetic Collection": "icons/collections/campaign3cosmetics_case2_collection.png",
-  "Decorated War Hero Collection": "icons/collections/campaign3paintkits_contract1_collection.png",
-  "Contract Campaigner Collection": "icons/collections/campaign3paintkits_contract2_collection.png",
-  "Jungle Jackpot Collection": "icons/collections/campaign3paintkits_case1_collection.png",
-  "Infernal Reward Collection": "icons/collections/campaign3paintkits_case2_collection.png",
-  "Winter 2017 Collection": "icons/collections/winter2017paintkits_collection.png",
-  "Winter 2017 Cosmetics Collection": "icons/collections/winter2017cosmetics_collection.png",
-  "Blue Moon Cosmetics Collection": "icons/collections/bluemooncosmetics_collection.png",
-  "Violet Vermin Collection": "icons/collections/halloween2018_collection.png",
-  "Scream Fortress X Collection": "icons/collections/halloween2018paintkits_collection.png",
-  "Winter 2018 Cosmetics Collection": "icons/collections/winter2018cosmetics_collection.png",
-  "Summer 2019 Cosmetics Collection": "icons/collections/summer2019cosmetics_collection.png",
-  "Spooky Spoils Collection": "icons/collections/halloween2019_collection.png",
-  "Winter 2019 Cosmetics Collection": "icons/collections/winter2019cosmetics_collection.png",
-  "Winter 2019 Collection": "icons/collections/winter2019paintkits_collection.png",
-  "Summer 2020 Cosmetics Collection": "icons/collections/summer2020cosmetics_collection.png",
-  "Wicked Windfall Collection": "icons/collections/halloween2020_collection.png",
-  "Scream Fortress XII Collection": "icons/collections/halloween2020paintkits_collection.png",
-  "Winter 2020 Cosmetics Collection": "icons/collections/winter2020cosmetics_collection.png",
-  "Winter 2020 Collection": "icons/collections/winter2020paintkits_collection.png",
-  "Summer 2021 Cosmetics Collection": "icons/collections/summer2021cosmetics_collection.png",
-  "Crimson Cache Collection": "icons/collections/halloween2021_collection.png",
-  "Scream Fortress XIII Collection": "icons/collections/halloween2021paintkits_collection.png",
-  "Winter 2021 Cosmetics Collection": "icons/collections/winter2021cosmetics_collection.png",
-  "Summer 2022 Cosmetics Collection": "icons/collections/summer2022cosmetics_collection.png",
-  "Ghoulish Gains Collection": "icons/collections/halloween2022_collection.png",
-  "Scream Fortress XIV Collection": "icons/collections/halloween2022paintkits_collection.png",
-  "Winter 2022 Cosmetics Collection": "icons/collections/winter2022cosmetics_collection.png",
-  "Summer 2023 Cosmetics Collection": "icons/collections/summer2023cosmetics_collection.png",
-  "Summer 2023 Collection": "icons/collections/summer2023paintkits_collection.png",
-  "Bone-Chilling Bonanza Collection": "icons/collections/halloween2023_collection.png",
-  "Winter 2023 Cosmetics Collection": "icons/collections/winter2023cosmetics_collection.png",
-  "Summer 2024 Cosmetics Collection": "icons/collections/summer2024cosmetics_collection.png",
-  "Terrifying Trove Collection": "icons/collections/halloween2024_collection.png",
-  "Scream Fortress XVI Collection": "icons/collections/halloween2024paintkits_collection.png",
-  "Winter 2024 Cosmetics Collection": "icons/collections/winter2024cosmetics_collection.png",
-  "Summer 2025 Cosmetics Collection": "icons/collections/summer2025cosmetics_collection.png",
-  "Spectral Stash Collection": "icons/collections/halloween2025_collection.png",
-  "Winter 2025 Cosmetics Collection": "icons/collections/winter2025cosmetics_collection.png",
-  "Summer 2026 Cosmetics Collection": "icons/collections/summer2026cosmetics_collection.png",
-  "Summer 2026 Collection": "icons/collections/summer2026paintkits_collection.png"
+  "Concealed Killer Collection": "icons/collections/concealed_killer_collection.webp",
+  "Craftsmann Collection": "icons/collections/craftsmann_collection.webp",
+  "Teufort Collection": "icons/collections/teufort_collection.webp",
+  "Powerhouse Collection": "icons/collections/powerhouse_collection.webp",
+  "Gun Mettle Cosmetics Collection": "icons/collections/gunmettlecosmetics_collection.webp",
+  "Quarantined Collection": "icons/collections/invasion_collection_01_lootlist.webp",
+  "Confidential Collection": "icons/collections/invasion_collection_02_lootlist.webp",
+  "Gargoyle Collection": "icons/collections/halloween2015_collection_lootlist.webp",
+  "Harvest Collection": "icons/collections/tough_break_drop_collection_01.webp",
+  "Gentlemanne's Collection": "icons/collections/tough_break_drop_collection_02.webp",
+  "Pyroland Collection": "icons/collections/tough_break_case_collection_01_pyroland.webp",
+  "Warbird Collection": "icons/collections/tough_break_case_collection_02_warbirds.webp",
+  "Tough Break Cosmetics Collection": "icons/collections/toughbreakcosmetics_collection.webp",
+  "Mayflower Cosmetics Collection": "icons/collections/mayflowercosmetics_collection.webp",
+  "Creepy Crawly Collection": "icons/collections/halloween2016_collection_lootlist.webp",
+  "Winter 2016 Cosmetics Collection": "icons/collections/winter2016_cosmetics_collection.webp",
+  "Rainy Day Cosmetics Collection": "icons/collections/rainydaycosmetics_collection.webp",
+  "Abominable Cosmetic Collection": "icons/collections/campaign3cosmetics_case1_collection.webp",
+  "Unleash the Beast Cosmetic Collection": "icons/collections/campaign3cosmetics_case2_collection.webp",
+  "Decorated War Hero Collection": "icons/collections/campaign3paintkits_contract1_collection.webp",
+  "Contract Campaigner Collection": "icons/collections/campaign3paintkits_contract2_collection.webp",
+  "Jungle Jackpot Collection": "icons/collections/campaign3paintkits_case1_collection.webp",
+  "Infernal Reward Collection": "icons/collections/campaign3paintkits_case2_collection.webp",
+  "Winter 2017 Collection": "icons/collections/winter2017paintkits_collection.webp",
+  "Winter 2017 Cosmetics Collection": "icons/collections/winter2017cosmetics_collection.webp",
+  "Blue Moon Cosmetics Collection": "icons/collections/bluemooncosmetics_collection.webp",
+  "Violet Vermin Collection": "icons/collections/halloween2018_collection.webp",
+  "Scream Fortress X Collection": "icons/collections/halloween2018paintkits_collection.webp",
+  "Winter 2018 Cosmetics Collection": "icons/collections/winter2018cosmetics_collection.webp",
+  "Summer 2019 Cosmetics Collection": "icons/collections/summer2019cosmetics_collection.webp",
+  "Spooky Spoils Collection": "icons/collections/halloween2019_collection.webp",
+  "Winter 2019 Cosmetics Collection": "icons/collections/winter2019cosmetics_collection.webp",
+  "Winter 2019 Collection": "icons/collections/winter2019paintkits_collection.webp",
+  "Summer 2020 Cosmetics Collection": "icons/collections/summer2020cosmetics_collection.webp",
+  "Wicked Windfall Collection": "icons/collections/halloween2020_collection.webp",
+  "Scream Fortress XII Collection": "icons/collections/halloween2020paintkits_collection.webp",
+  "Winter 2020 Cosmetics Collection": "icons/collections/winter2020cosmetics_collection.webp",
+  "Winter 2020 Collection": "icons/collections/winter2020paintkits_collection.webp",
+  "Summer 2021 Cosmetics Collection": "icons/collections/summer2021cosmetics_collection.webp",
+  "Crimson Cache Collection": "icons/collections/halloween2021_collection.webp",
+  "Scream Fortress XIII Collection": "icons/collections/halloween2021paintkits_collection.webp",
+  "Winter 2021 Cosmetics Collection": "icons/collections/winter2021cosmetics_collection.webp",
+  "Summer 2022 Cosmetics Collection": "icons/collections/summer2022cosmetics_collection.webp",
+  "Ghoulish Gains Collection": "icons/collections/halloween2022_collection.webp",
+  "Scream Fortress XIV Collection": "icons/collections/halloween2022paintkits_collection.webp",
+  "Winter 2022 Cosmetics Collection": "icons/collections/winter2022cosmetics_collection.webp",
+  "Summer 2023 Cosmetics Collection": "icons/collections/summer2023cosmetics_collection.webp",
+  "Summer 2023 Collection": "icons/collections/summer2023paintkits_collection.webp",
+  "Bone-Chilling Bonanza Collection": "icons/collections/halloween2023_collection.webp",
+  "Winter 2023 Cosmetics Collection": "icons/collections/winter2023cosmetics_collection.webp",
+  "Summer 2024 Cosmetics Collection": "icons/collections/summer2024cosmetics_collection.webp",
+  "Terrifying Trove Collection": "icons/collections/halloween2024_collection.webp",
+  "Scream Fortress XVI Collection": "icons/collections/halloween2024paintkits_collection.webp",
+  "Winter 2024 Cosmetics Collection": "icons/collections/winter2024cosmetics_collection.webp",
+  "Summer 2025 Cosmetics Collection": "icons/collections/summer2025cosmetics_collection.webp",
+  "Spectral Stash Collection": "icons/collections/halloween2025_collection.webp",
+  "Winter 2025 Cosmetics Collection": "icons/collections/winter2025cosmetics_collection.webp",
+  "Summer 2026 Cosmetics Collection": "icons/collections/summer2026cosmetics_collection.webp",
+  "Summer 2026 Collection": "icons/collections/summer2026paintkits_collection.webp"
  },
  "wearLevels": [
   0.2,

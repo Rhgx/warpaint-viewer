@@ -6,6 +6,7 @@
 // By default only fetches kits that need it: no icon file on disk at all, or
 // one warpaints.mjs's staging/swatch_icons.json says is still a generated
 // swatch rather than a real wiki render. Pass --force to refetch every kit.
+// The wiki serves PNG thumbnails; each is transcoded to lossless WebP on write.
 //   node tools/extract/warpaint-icons.mjs [--force]
 //
 // This hits the network from update:warpaints, so it must never fail that
@@ -15,6 +16,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import sharp from 'sharp';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
@@ -98,7 +101,7 @@ async function main() {
   const swatchedIds = loadSwatchedIds();
   const needsFetch = (kit) => {
     if (FORCE) return true;
-    const iconPath = path.join(PUBLIC_DATA, `icons/paints/${kit.id}.png`);
+    const iconPath = path.join(PUBLIC_DATA, `icons/paints/${kit.id}.webp`);
     return !fs.existsSync(iconPath) || swatchedIds.has(kit.id);
   };
   const candidates = kits.filter(needsFetch);
@@ -121,7 +124,11 @@ async function main() {
     const res = await fetch(thumb, { headers: { 'user-agent': UA } });
     if (!res.ok) { misses.push(`${kit.name} (http ${res.status})`); continue; }
     const buf = Buffer.from(await res.arrayBuffer());
-    await writeIcon(path.join(PUBLIC_DATA, `icons/paints/${kit.id}.png`), buf);
+    let webp;
+    try {
+      webp = await sharp(buf).webp({ lossless: true, effort: 6, exact: true }).toBuffer();
+    } catch (error) { misses.push(`${kit.name} (${error.message})`); continue; }
+    await writeIcon(path.join(PUBLIC_DATA, `icons/paints/${kit.id}.webp`), webp);
     swatchedIds.delete(kit.id); // now a real wiki render, not a placeholder swatch
     ok++;
     if (ok % 50 === 0) console.log(`[wiki-icons] downloaded ${ok}...`);

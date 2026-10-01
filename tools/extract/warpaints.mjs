@@ -532,7 +532,7 @@ async function main() {
   // Backpack icons ------------------------------------------------------------
   let collectionIcons = {};
   if (run('icons') || run('manifest')) {
-    const iconResult = extractInventoryIcons({
+    const iconResult = await extractInventoryIcons({
       itemsGame,
       weaponRegistry,
       machineByDisplay,
@@ -548,7 +548,7 @@ async function main() {
     extractState.iconHashes = iconResult.hashes;
     extractState.vpkFingerprint = currentVpkFingerprint;
     saveExtractState(EXTRACT_STATE_PATH, extractState);
-    generatePaintIcons({
+    await generatePaintIcons({
       manifestPaintkits, paintIconRefByKit, publicDataPath: PUBLIC_DATA, stagingPath: STAGING, force: FORCE, log,
     });
   }

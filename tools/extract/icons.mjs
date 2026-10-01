@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+import sharp from 'sharp';
+
 import { kvGet } from '../lib/kv.mjs';
-import { encodePNG } from '../lib/png.mjs';
 import { decodeVTF } from '../lib/vtf.mjs';
 import { extractBatch, listVPK, MISC_VPK, TEXTURES_VPK } from '../lib/vpk.mjs';
 import { sha1 } from './state.mjs';
@@ -52,7 +53,7 @@ export function pickPaintIconRef(tree) {
   return patterns.find((ref) => !/\/solid_/.test(ref)) || patterns[0] || null;
 }
 
-export function generatePaintIcons({
+export async function generatePaintIcons({
   manifestPaintkits, paintIconRefByKit, publicDataPath, stagingPath, force = false, log = console.log,
 }) {
   const magick = spawnSync('magick', ['-version'], { stdio: 'ignore', shell: false });
@@ -67,7 +68,7 @@ export function generatePaintIcons({
   let swatched = 0;
   let missing = 0;
   for (const paintkit of manifestPaintkits) {
-    const outputRef = `icons/paints/${paintkit.id}.png`;
+    const outputRef = `icons/paints/${paintkit.id}.webp`;
     const outputPath = path.join(publicDataPath, outputRef);
     if (fs.existsSync(outputPath) && !(force && swatchedIds.has(paintkit.id))) {
       paintkit.icon = outputRef;
@@ -80,8 +81,10 @@ export function generatePaintIcons({
       missing++;
       continue;
     }
-    const result = spawnSync('magick', [sourcePath, '-resize', '96x96^', '-gravity', 'center', '-extent', '96x96', outputPath], { stdio: 'ignore', shell: false });
+    // magick only resizes (PNG on stdout); sharp writes the lossless WebP so every icon shares one encoder.
+    const result = spawnSync('magick', [sourcePath, '-resize', '96x96^', '-gravity', 'center', '-extent', '96x96', 'png:-'], { stdio: ['ignore', 'pipe', 'ignore'], shell: false });
     if (result.status === 0) {
+      await sharp(result.stdout).webp({ lossless: true, effort: 6, exact: true }).toFile(outputPath);
       paintkit.icon = outputRef;
       swatchedIds.add(paintkit.id);
       swatched++;
@@ -94,7 +97,7 @@ export function generatePaintIcons({
   log(`[icons] paintkit thumbnails: ${kept} kept, ${swatched} swatched, ${missing} without one`);
 }
 
-export function extractInventoryIcons({
+export async function extractInventoryIcons({
   itemsGame, weaponRegistry, machineByDisplay, resolveItemField,
   publicDataPath, stagingPath, vpkChanged = true, force = false, prevHashes = {}, log = console.log,
 }) {
@@ -109,7 +112,7 @@ export function extractInventoryIcons({
     if (!image) continue;
     const base = String(image).replace(/\\/g, '/').toLowerCase();
     jobs.push({
-      outRel: `icons/weapons/${weapon.key}.png`,
+      outRel: `icons/weapons/${weapon.key}.webp`,
       candidates: [`materials/${base}_large.vtf`, `materials/${base}.vtf`],
       assign: (ref) => { weapon.icon = ref; },
     });
@@ -129,7 +132,7 @@ export function extractInventoryIcons({
     const image = machineToImage.get(String(machineName).toLowerCase());
     if (!image) continue;
     jobs.push({
-      outRel: `icons/collections/${slugify(machineName)}.png`,
+      outRel: `icons/collections/${slugify(machineName)}.webp`,
       candidates: [`materials/${image}_large.vtf`, `materials/${image}.vtf`],
       assign: (ref) => { collectionIcons[displayName] = ref; },
     });
@@ -176,7 +179,9 @@ export function extractInventoryIcons({
       const decoded = decodeVTF(buffer);
       const icon = downscaleRGBA(decoded.rgba, decoded.width, decoded.height, INVENTORY_ICON_MAX);
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-      fs.writeFileSync(outputPath, encodePNG(icon.rgba, icon.width, icon.height));
+      await sharp(icon.rgba, { raw: { width: icon.width, height: icon.height, channels: 4 } })
+        .webp({ lossless: true, effort: 6, exact: true })
+        .toFile(outputPath);
       job.assign(job.outRel);
       hashes[job.outRel] = hash;
       rebuilt++;
