@@ -1,0 +1,45 @@
+name: Deploy textures to Cloudflare Pages
+
+# GitHub Pages caps a site at 1 GB, so production serves public/data/textures
+# from Cloudflare Pages at <TEXTURE_URL>/textures/... (see src/data/loader.ts).
+# Textures rarely change, so this runs only when they do instead of on every
+# site deploy.
+on:
+  push:
+    branches: [main]
+    paths: ['public/data/textures/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-textures
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: vars.TEXTURE_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out textures
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          filter: blob:none
+          sparse-checkout: public/data/textures
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+
+      # Wrangler only uploads files whose hashes changed.
+      - name: Deploy to Cloudflare Pages
+        run: |
+          mkdir -p cf-textures
+          mv public/data/textures cf-textures/textures
+          printf '/*\n  Access-Control-Allow-Origin: *\n' > cf-textures/_headers
+          npx --yes wrangler@4 pages deploy cf-textures --project-name=warpaint-textures --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
