@@ -743,6 +743,7 @@ function MainApp() {
     turntableFormat: state.turntableFormat,
     patch,
     onSaveTurntable,
+    bootReady: boot.progress >= 100,
     selectedKitId,
     weaponKey: state.weaponKey,
     team: state.team,

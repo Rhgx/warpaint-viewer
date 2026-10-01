@@ -102,6 +102,8 @@ export class Compositor {
   // requests prevents rapid wear/seed changes from interleaving GPU passes.
   private composeQueue: Promise<void> = Promise.resolve();
   private latestComposeChannels = new Map<string, LatestComposeChannel>();
+  // Source textures already uploaded, so warm composes skip the upload yields.
+  private uploaded = new WeakSet<THREE.Texture>();
 
   constructor(resolver: TextureResolver, opts: CompositorOptions & { renderer?: THREE.WebGLRenderer } = {}) {
     this.width = this.height = opts.size ?? 1024;
@@ -154,6 +156,10 @@ export class Compositor {
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.material);
     this.quad.frustumCulled = false;
     this.scene.add(this.quad);
+    // Link the shader while the first textures download, instead of stalling
+    // the first compose on it (KHR_parallel_shader_compile keeps it off the
+    // main thread where available).
+    void this.renderer.compileAsync(this.scene, this.camera);
   }
 
   private makeTarget(width = this.width, height = this.height): THREE.WebGLRenderTarget {
@@ -262,6 +268,7 @@ export class Compositor {
         await waitForIdle();
         if (cancelled()) return;
         this.renderer.initTexture(texture);
+        this.uploaded.add(texture);
       } finally {
         unpin();
       }
@@ -619,9 +626,18 @@ export class Compositor {
     // the duration of this compose.
     const unpin = this.textures.pin(uniqueRefs.map((r) => this.textures.keyFor(r.ref, { nearest: r.nearest })));
     try {
-      await Promise.all(uniqueRefs.map((r) => this.textures.load(r.ref, { nearest: r.nearest }).catch(() => null)));
+      const loaded = await Promise.all(uniqueRefs.map((r) => this.textures.load(r.ref, { nearest: r.nearest }).catch(() => null)));
       // A newer input may have arrived while the textures were loading.
       if (cancelled?.()) return null;
+      // Upload new inputs one task at a time. Left to the first draw, a cold
+      // paint uploads them all in one 70-100 ms block that freezes the page.
+      for (const texture of loaded) {
+        if (!texture || this.uploaded.has(texture)) continue;
+        this.renderer.initTexture(texture);
+        this.uploaded.add(texture);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (cancelled?.()) return null;
+      }
       const result = await this.evaluate(resolved);
       let target = result.target;
       // Nested stages apply their transform when sampled by their parent.

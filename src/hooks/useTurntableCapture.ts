@@ -52,6 +52,8 @@ interface UseTurntableCaptureOptions {
   turntableFormat: TurntableFormat;
   patch: (p: Partial<ControlsState>) => void;
   onSaveTurntable: (onStatus: (status: TurntableStatus) => void, signal?: AbortSignal) => Promise<void>;
+  /** The first weapon has painted (or boot finished without one). */
+  bootReady: boolean;
   // The rest only feed the abort-on-change effect below.
   selectedKitId: number | null;
   weaponKey: string;
@@ -77,6 +79,7 @@ export function useTurntableCapture({
   turntableFormat,
   patch,
   onSaveTurntable,
+  bootReady,
   selectedKitId,
   weaponKey,
   team,
@@ -98,7 +101,10 @@ export function useTurntableCapture({
   const [turntableFormats, setTurntableFormats] = useState<TurntableFormat[]>(['gif', 'apng']);
   // Probed once: GIF and APNG always work, WebP/MP4 depend on this browser's
   // encoders. If the stored choice turns out unsupported, fall back to GIF.
+  // Waits for boot: the canvas probe stalls on the GPU process while it
+  // compiles the first shaders, which delayed the first paint.
   useEffect(() => {
+    if (!bootReady) return;
     let cancelled = false;
     void supportedTurntableFormats().then((formats) => {
       if (cancelled) return;
@@ -107,7 +113,7 @@ export function useTurntableCapture({
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [bootReady]);
 
   const [turntableStatus, setTurntableStatus] = useState<TurntableStatus | null>(null);
   const turntableCaptureControllerRef = useRef<AbortController | null>(null);

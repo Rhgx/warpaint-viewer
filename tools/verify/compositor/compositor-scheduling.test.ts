@@ -12,6 +12,7 @@ const gpu = vi.hoisted(() => ({
   setRenderTarget: vi.fn(),
   render: vi.fn(),
   initTexture: vi.fn(),
+  compileAsync: vi.fn(async () => undefined),
   dispose: vi.fn(),
 }));
 vi.mock('three', async (importOriginal) => ({

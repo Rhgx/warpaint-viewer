@@ -63,7 +63,7 @@ type ResourceAwareNavigator = Navigator & {
   };
 };
 
-// A composite can occupy several MB of GPU memory. Retain the fast-path LRU on
+// A 2048 px composite occupies 16 MiB of GPU memory. Retain the fast-path LRU on
 // desktop machines, but do not reserve eight render targets on constrained
 // devices simply to make infrequently-used wear variants instantaneous.
 function composeCacheLimit(): number {
@@ -315,7 +315,9 @@ export function useComposedPaint({
       if (old && old !== result) comp.releaseResult(old);
       cache.delete(key);
       cache.set(key, result);
-      const byteBudget = composeCacheLimit() * 1024 * 1024 * 4;
+      // Sized for 2048 px composites (16 MiB each), which most weapons use, so
+      // the count limit is what binds; a 4 MiB slot only ever fit two of them.
+      const byteBudget = composeCacheLimit() * 2048 * 2048 * 4;
       let bytes = [...cache.values()].reduce((sum, entry) => sum + entry.target.width * entry.target.height * 4, 0);
       while (cache.size > composeCacheLimit() || bytes > byteBudget) {
         const victim = [...cache.keys()].find((candidate) => candidate !== lastComposeKeyRef.current && candidate !== key);
