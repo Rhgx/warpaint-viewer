@@ -293,7 +293,7 @@ export async function openZipSourcePackage(
         path: canonicalPath,
         size,
         compressedSize,
-        crc32: entry.signature >>> 0,
+        crc32: (entry.crc32 ?? 0) >>> 0,
       };
       if (normalizedPaths.has(canonicalPath)) {
         const existing = sourceEntries.get(canonicalPath);
