@@ -1,6 +1,6 @@
 {
- "generatedAt": "2026-08-10T18:25:36.840Z",
- "gameBuild": "10828683",
+ "generatedAt": "2026-10-02T23:08:15.614Z",
+ "gameBuild": "11076587",
  "paintkits": [
   {
    "id": 0,
@@ -30731,7 +30731,8 @@
   "Spectral Stash Collection": "icons/collections/halloween2025_collection.webp",
   "Winter 2025 Cosmetics Collection": "icons/collections/winter2025cosmetics_collection.webp",
   "Summer 2026 Cosmetics Collection": "icons/collections/summer2026cosmetics_collection.webp",
-  "Summer 2026 Collection": "icons/collections/summer2026paintkits_collection.webp"
+  "Summer 2026 Collection": "icons/collections/summer2026paintkits_collection.webp",
+  "Haunted Hoard Collection": "icons/collections/halloween2026_collection.webp"
  },
  "wearLevels": [
   0.2,
