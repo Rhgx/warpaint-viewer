@@ -3,6 +3,7 @@ import type { KeyboardEvent } from 'react';
 import { ScrollArea } from '@base-ui/react/scroll-area';
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, LayoutGrid, List, Search, X } from 'lucide-react';
 import { AssetIcon, SelectField, TextField } from '../common/controls';
+import { preloadIntent, type PreloadIntent } from '../../hooks/useIntentPreload';
 import type { PaintkitEntry } from '../../data/types';
 
 interface CollectionRow {
@@ -45,12 +46,14 @@ const PaintTile = memo(function PaintTile({
   icon,
   prioritizeIcon,
   onSelect,
+  onPreload,
 }: {
   kit: PaintkitEntry;
   selected: boolean;
   icon: string | undefined;
   prioritizeIcon: boolean;
   onSelect: (id: number) => void;
+  onPreload?: PreloadIntent;
 }) {
   const select = useCallback(() => onSelect(kit.id), [kit.id, onSelect]);
   return (
@@ -58,6 +61,7 @@ const PaintTile = memo(function PaintTile({
       type="button"
       data-kit-id={kit.id}
       className={`warpaint-tile${selected ? ' selected' : ''}`}
+      {...preloadIntent(`kit:${kit.id}`, onPreload)}
       onClick={select}
       data-grade={kit.grade}
       title={kit.name}
@@ -79,12 +83,14 @@ const PaintListItem = memo(function PaintListItem({
   icon,
   prioritizeIcon,
   onSelect,
+  onPreload,
 }: {
   kit: PaintkitEntry;
   selected: boolean;
   icon: string | undefined;
   prioritizeIcon: boolean;
   onSelect: (id: number) => void;
+  onPreload?: PreloadIntent;
 }) {
   const select = useCallback(() => onSelect(kit.id), [kit.id, onSelect]);
   return (
@@ -92,6 +98,7 @@ const PaintListItem = memo(function PaintListItem({
       type="button"
       data-kit-id={kit.id}
       className={`warpaint-item${selected ? ' selected' : ''}`}
+      {...preloadIntent(`kit:${kit.id}`, onPreload)}
       onClick={select}
       data-grade={kit.grade}
     >
@@ -133,6 +140,7 @@ export const WarpaintList = memo(function WarpaintList({
   paintkits,
   selectedId,
   onSelect,
+  onPreload,
   collectionIcons,
   paintIcons,
   visibilityTrackedKitIds = [],
@@ -141,6 +149,7 @@ export const WarpaintList = memo(function WarpaintList({
   paintkits: PaintkitEntry[];
   selectedId: number | null;
   onSelect: (id: number) => void;
+  onPreload?: PreloadIntent;
   collectionIcons: Record<string, string>;
   paintIcons: Record<number, string>;
   /** Restricts visibility observation to entries with deferred work. */
@@ -419,6 +428,7 @@ export const WarpaintList = memo(function WarpaintList({
                         icon={paintIcons[kit.id]}
                         prioritizeIcon={prioritizePaintIcons}
                         onSelect={onSelect}
+                      onPreload={onPreload}
                       />
                     ))}
                   </div>
@@ -431,6 +441,7 @@ export const WarpaintList = memo(function WarpaintList({
                       icon={paintIcons[kit.id]}
                       prioritizeIcon={prioritizePaintIcons}
                       onSelect={onSelect}
+                      onPreload={onPreload}
                     />
                   ))
                 )}

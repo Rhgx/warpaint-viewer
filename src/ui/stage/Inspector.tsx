@@ -1,4 +1,5 @@
 import { memo, useEffect, useState } from 'react';
+import type { PreloadIntent } from '../../hooks/useIntentPreload';
 import type { ReactNode } from 'react';
 import {
   Camera, ChevronDown, Crosshair, Dices, Droplets, Flame, Hash, Sparkles, Sun, Undo2, Users,
@@ -174,6 +175,7 @@ export const Inspector = memo(function Inspector({
   firstPersonActive = false,
   manifest,
   weaponOptions,
+  onPreloadWeapon,
   hasTeamTextures,
   state,
   turntableFormats,
@@ -191,6 +193,7 @@ export const Inspector = memo(function Inspector({
   firstPersonActive?: boolean;
   manifest: Manifest;
   weaponOptions: IconOption[];
+  onPreloadWeapon?: PreloadIntent;
   hasTeamTextures: boolean;
   state: ControlsState;
   turntableFormats: TurntableFormat[];
@@ -241,6 +244,7 @@ export const Inspector = memo(function Inspector({
             value={state.weaponKey}
             onChange={(v) => onChange({ weaponKey: v })}
             options={weaponOptions}
+            onPreload={onPreloadWeapon}
             ariaLabel="Weapon"
             stepLabels={{ previous: 'Previous weapon', next: 'Next weapon' }}
             searchPlaceholder="Filter weapons..."

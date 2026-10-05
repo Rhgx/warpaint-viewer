@@ -16,7 +16,7 @@ export class ModelLoader {
   readonly #loader = new GLTFLoader();
   readonly #cache = new Map<string, Promise<ModelPart[]>>();
 
-  load(url: string): Promise<ModelPart[]> {
+  load(url: string, protectedUrl?: string | null): Promise<ModelPart[]> {
     let pending = this.#cache.get(url);
     if (pending) {
       this.#cache.delete(url);
@@ -41,7 +41,8 @@ export class ModelLoader {
       });
       this.#cache.set(url, pending);
       while (this.#cache.size > MODEL_CACHE_LIMIT) {
-        const oldestUrl = this.#cache.keys().next().value;
+        // Hover warmups must not evict geometry still displayed by the viewer.
+        const oldestUrl = [...this.#cache.keys()].find((candidate) => candidate !== protectedUrl && candidate !== url);
         if (oldestUrl === undefined) break;
         const oldestPending = this.#cache.get(oldestUrl);
         this.#cache.delete(oldestUrl);

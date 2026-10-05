@@ -147,3 +147,29 @@ test('sticker levels apply after the blend', async () => {
     comp.releaseResult(adjusted);
   } finally { comp.dispose(); }
 });
+
+
+test('intent warmup loads only the seed-selected sticker, while idle warmup retains alternatives', async () => {
+  vi.spyOn(THREE.TextureLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
+    const texture = new THREE.Texture<HTMLImageElement>();
+    queueMicrotask(() => onLoad?.(texture));
+    return texture;
+  });
+  const resolve = vi.fn((ref: string) => ref);
+  const comp = new Compositor(resolve);
+  const stickerRecipe: RecipeNode = {
+    type: 'apply_sticker',
+    stickers: [{ base: 'first' }, { base: 'second' }],
+    nodes: [{ type: 'texture_lookup', texture: 'surface' }],
+  };
+  try {
+    await comp.preload(stickerRecipe, async () => undefined, () => false, '42');
+    const refs = resolve.mock.calls.map(([ref]) => ref);
+    assert.ok(refs.includes('surface'));
+    assert.equal(refs.filter((ref) => ref === 'first' || ref === 'second').length, 1);
+    assert.equal(gpu.render.mock.calls.length, 0, 'warmup must not compose or change visible paint');
+    await comp.preload(stickerRecipe, async () => undefined, () => false);
+    assert.ok(resolve.mock.calls.some(([ref]) => ref === 'first'));
+    assert.ok(resolve.mock.calls.some(([ref]) => ref === 'second'));
+  } finally { comp.dispose(); }
+});

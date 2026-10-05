@@ -70,7 +70,10 @@ class RealDataSource implements DataSource {
       } catch {
         return null;
       }
-    })();
+    })().then((bundle) => {
+      if (!bundle && this.bundleCache.get(kitId) === p) this.bundleCache.delete(kitId);
+      return bundle;
+    });
     this.bundleCache.set(kitId, p);
     while (this.bundleCache.size > RECIPE_BUNDLE_CACHE_LIMIT) {
       const oldestKitId = this.bundleCache.keys().next().value;

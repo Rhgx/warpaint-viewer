@@ -28,12 +28,13 @@ import { BootLoader } from './ui/boot/BootLoader';
 import { DEFAULT_VIEWER_FOV } from './viewer/presets';
 import { CUSTOM_LIGHTING_ID } from './viewer/lighting/customLighting';
 import { useBootData, randomSeed } from './hooks/useBootData';
-import { useComposedPaint, useComposeCache } from './hooks/useComposedPaint';
+import { allowSpeculativeCompose, useComposedPaint, useComposeCache } from './hooks/useComposedPaint';
 import { useLightingRig } from './hooks/useLightingRig';
 import { useWorkspace } from './hooks/useWorkspace';
 import { useViewerEngine } from './hooks/useViewerEngine';
 import { useExportDefinitions, useWorkbenchRecipes } from './hooks/useWorkbenchRecipes';
 import { useSeedHistory } from './hooks/useSeedHistory';
+import { useIntentPreload } from './hooks/useIntentPreload';
 import { useStableCallback } from './hooks/useStableCallback';
 import { useTurntableCapture } from './hooks/useTurntableCapture';
 import { useSourcePackage } from './hooks/useSourcePackage';
@@ -60,7 +61,8 @@ import { AppToasts } from './ui/common/AppToasts';
 const SelfTestPage = lazy(() => import('./dev/selftest').then((m) => ({ default: m.SelfTestPage })));
 // The custom-file UI includes texture decoders and a large interactive editor.
 // It is not needed to view a paint, so mount it only after the drawer opens.
-const CustomWarpaintWorkbench = lazy(() => import('./ui/workbench/CustomWarpaintWorkbench').then((m) => ({ default: m.CustomWarpaintWorkbench })));
+const loadWorkbench = () => import('./ui/workbench/CustomWarpaintWorkbench').then((m) => ({ default: m.CustomWarpaintWorkbench }));
+const CustomWarpaintWorkbench = lazy(loadWorkbench);
 
 const EMPTY_OVERRIDES: WarpaintAssetOverrides = { revision: 0, assets: {} };
 
@@ -288,6 +290,44 @@ function MainApp() {
     ),
     [data, editableKitId, editorCurrent, getImportedRecipe, getStockRecipe],
   );
+
+  const preloadWorkbench = useIntentPreload(useCallback(async () => {
+    await loadWorkbench();
+  }, []));
+  const preloadAssets = useIntentPreload(useCallback(async (target: string, cancelled: () => boolean) => {
+    if (!data || !engineReady) return;
+    const kit = target.startsWith('kit:')
+      ? paintkits.find((entry) => entry.id === Number(target.slice(4)))
+      : selectedKit;
+    if (!kit) return;
+    const weaponKey = target.startsWith('weapon:') ? target.slice(7)
+      : kit.weapons.includes(state.weaponKey) ? state.weaponKey : kit.weapons[0];
+    if (!weaponKey || !kit.weapons.includes(weaponKey)
+      || (kit.id === selectedKit?.id && weaponKey === state.weaponKey)) return;
+    const team = target.startsWith('kit:') && !kit.hasTeamTextures
+      && state.sheen !== 'team_shine' && !firstPersonActive ? 'red' : state.team;
+    const viewer = viewerRef.current;
+    const comp = compositorRef.current;
+    const stale = () => cancelled() || comp !== compositorRef.current
+      || sourceProvider.generation !== packageGeneration || !allowSpeculativeCompose();
+    const model = viewer?.preloadModel(data.getModelUrl(weaponKey));
+    const textures = (async () => {
+      const recipe = await resolveRecipe(kit, weaponKey, team, state.wearIndex);
+      if (!recipe || !comp || stale()) return;
+      // Let input and visible rendering run between texture decodes/uploads.
+      await comp.preload(recipe, () => new Promise<void>((resolve) => {
+        if (typeof window.requestIdleCallback === 'function') {
+          window.requestIdleCallback(() => resolve(), { timeout: 1000 });
+        } else window.setTimeout(resolve, 50);
+      }),
+        stale, state.seed);
+    })();
+    const results = await Promise.allSettled([model, textures]);
+    for (const result of results) {
+      if (result.status === 'rejected') throw result.reason;
+    }
+  }, [data, engineReady, paintkits, selectedKit, state.weaponKey, state.team, state.sheen,
+    state.wearIndex, state.seed, firstPersonActive, resolveRecipe, packageGeneration, sourceProvider]));
 
   // An import can point at the kit it is meant for: a numeric ZIP wrapper is a
   // conventional paintkit index, and a proto_defs file nominates its first new
@@ -858,6 +898,7 @@ function MainApp() {
           paintkits={paintkits}
           selectedId={selectedKitId}
           onSelect={onSelectKit}
+          onPreload={preloadAssets}
           collectionIcons={collectionIcons}
           paintIcons={paintIcons}
           visibilityTrackedKitIds={customCatalogKitIds}
@@ -901,6 +942,7 @@ function MainApp() {
           <StageToolbar
             workbenchOpen={workbenchOpen}
             editingMode={editingMode}
+            onPreloadWorkbench={preloadWorkbench}
             onToggleWorkbench={() => {
               setWorkbenchMounted(true);
               setWorkbenchOpen((open) => !open);
@@ -1038,6 +1080,7 @@ function MainApp() {
           previewControls={previewControls}
           manifest={data.manifest}
           weaponOptions={weaponOptions}
+          onPreloadWeapon={preloadAssets}
           hasTeamTextures={firstPersonActive || kitHasTeamTextures}
           state={state}
           turntableFormats={turntableFormats}

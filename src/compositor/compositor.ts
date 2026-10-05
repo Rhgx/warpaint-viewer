@@ -250,12 +250,14 @@ export class Compositor {
     }
   }
 
-  // Decode and upload all possible inputs while the current paint is already
-  // visible. The compositor remains GPU-native; no pixel buffers cross back to
+  // Decode and upload inputs while the current paint is already visible. A
+  // supplied seed restricts intent warmups to the inputs the click will use.
+  // The compositor remains GPU-native; no pixel buffers cross back to
   // JavaScript, a Worker, or WASM.
-  async preload(recipe: RecipeNode, waitForIdle: () => Promise<void>, cancelled: () => boolean): Promise<void> {
+  async preload(recipe: RecipeNode, waitForIdle: () => Promise<void>, cancelled: () => boolean, seed?: PaintSeed): Promise<void> {
     const refs: { ref: string; nearest: boolean }[] = [];
-    this.collectRecipeRefs(recipe, refs);
+    if (seed === undefined) this.collectRecipeRefs(recipe, refs);
+    else this.collectRefs(resolveRecipe(recipe, seed), refs);
     const unique = [...new Map(refs.map((ref) => [this.textures.keyFor(ref.ref, { nearest: ref.nearest }), ref])).values()];
     for (const ref of unique) {
       await waitForIdle();

@@ -1,3 +1,4 @@
+import { preloadIntent, type PreloadIntent } from '../../hooks/useIntentPreload';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import { Check, Copy, Film, HelpCircle, ImageDown, PackagePlus, Rotate3d, RotateCcw, X } from 'lucide-react';
@@ -64,6 +65,7 @@ export function StageToolbar({
   workbenchOpen,
   editingMode = null,
   onToggleWorkbench,
+  onPreloadWorkbench,
   captureFormat,
   saveLabel,
   onSave,
@@ -76,6 +78,7 @@ export function StageToolbar({
   workbenchOpen: boolean;
   editingMode?: 'paint' | 'sticker' | 'lighting' | 'graph' | null;
   onToggleWorkbench: () => void;
+  onPreloadWorkbench?: PreloadIntent;
   captureFormat: 'image' | 'animated';
   saveLabel: string;
   onSave: () => Promise<void>;
@@ -108,6 +111,7 @@ export function StageToolbar({
           title={workbenchOpen ? 'Close custom warpaint files' : 'Open custom warpaint files'}
           aria-label={workbenchOpen ? 'Close custom warpaint files' : 'Open custom warpaint files'}
           aria-pressed={workbenchOpen}
+          {...preloadIntent('workbench', onPreloadWorkbench)}
           onClick={onToggleWorkbench}
         >
           <PackagePlus size={15} />

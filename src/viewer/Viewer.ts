@@ -2445,6 +2445,11 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     this.invalidate();
   }
 
+  /** Warm parsed geometry without changing meshes, materials, or camera state. */
+  async preloadModel(url: string | null): Promise<void> {
+    if (url && !this.disposed) await this.modelLoader.load(url, this.currentModelUrl);
+  }
+
   // Load a weapon GLB. Concurrent calls resolve in call order via a token so a
   // stale load never wins; missing models leave the stage empty.
   async loadModel(url: string | null, initialView?: ViewAnglePreset, attachments: readonly WeaponAttachment[] = []): Promise<void> {

@@ -73,7 +73,7 @@ function composeCacheLimit(): number {
   return 8;
 }
 
-function allowSpeculativeCompose(): boolean {
+export function allowSpeculativeCompose(): boolean {
   const nav = navigator as ResourceAwareNavigator;
   return document.visibilityState === 'visible'
     && !nav.connection?.saveData

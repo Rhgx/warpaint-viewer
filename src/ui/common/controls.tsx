@@ -1,3 +1,4 @@
+import { preloadIntent, type PreloadIntent } from '../../hooks/useIntentPreload';
 import { Select } from '@base-ui/react/select';
 import { Slider } from '@base-ui/react/slider';
 import { Switch } from '@base-ui/react/switch';
@@ -149,6 +150,7 @@ export function SelectField({
 // Same as SelectField, but each option (and the closed trigger) can show a
 // small icon, e.g. a weapon's backpack icon.
 export function IconSelectField({
+  onPreload,
   value,
   onChange,
   options,
@@ -160,6 +162,7 @@ export function IconSelectField({
   value: string;
   onChange: (v: string) => void;
   options: IconOption[];
+  onPreload?: PreloadIntent;
   placeholder?: string;
   ariaLabel?: string;
   /** Adds previous/next buttons beside the trigger for stepping the list. */
@@ -174,7 +177,7 @@ export function IconSelectField({
   const matchesQuery = (option: IconOption) => !needle || option.label.toLowerCase().includes(needle);
   const visibleCount = options.filter(matchesQuery).length;
 
-  const step = (delta: number) => {
+  const stepValue = (delta: number) => {
     if (options.length === 0) return;
     const current = options.findIndex((o) => o.value === value);
     // Wrapping is the point: this exists to walk the whole list without
@@ -182,7 +185,12 @@ export function IconSelectField({
     const next = current < 0
       ? delta < 0 ? options.length - 1 : 0
       : ((current + delta) % options.length + options.length) % options.length;
-    onChange(options[next].value);
+    return options[next].value;
+  };
+
+  const step = (delta: number) => {
+    const next = stepValue(delta);
+    if (next !== undefined) onChange(next);
   };
 
   const trigger = (
@@ -213,6 +221,7 @@ export function IconSelectField({
             aria-label={stepLabels.previous}
             title={stepLabels.previous}
             disabled={options.length < 2}
+            {...preloadIntent(`weapon:${stepValue(-1) ?? value}`, onPreload)}
             onClick={() => step(-1)}
           >
             <ChevronLeft size={14} aria-hidden="true" />
@@ -224,6 +233,7 @@ export function IconSelectField({
             aria-label={stepLabels.next}
             title={stepLabels.next}
             disabled={options.length < 2}
+            {...preloadIntent(`weapon:${stepValue(1) ?? value}`, onPreload)}
             onClick={() => step(1)}
           >
             <ChevronRight size={14} aria-hidden="true" />
@@ -241,6 +251,7 @@ export function IconSelectField({
                 key={o.value}
                 value={o.value}
                 className="ui-select-item"
+                {...preloadIntent(`weapon:${o.value}`, onPreload)}
                 data-filtered={!matchesQuery(o) ? '' : undefined}
                 aria-hidden={!matchesQuery(o) || undefined}
               >
