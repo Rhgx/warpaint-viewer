@@ -30,7 +30,7 @@ npm run dev
 
 ## Support
 
-If you find the viewer useful, you can support it on <a href="https://boosty.to/rhgx/donate"><img src="docs/assets/boosty.svg" alt="" width="16" height="16" align="absmiddle"></a> <a href="https://boosty.to/rhgx/donate"><b>Boosty</b></a>.
+If you find the viewer useful, you can support its development through **[GitHub Sponsors](https://github.com/sponsors/Rhgx)** or <a href="https://boosty.to/rhgx/donate"><img src="docs/assets/boosty.svg" alt="" width="16" height="16" align="absmiddle"></a> <a href="https://boosty.to/rhgx/donate"><b>Boosty</b></a>.
 
 ## Credits
 
