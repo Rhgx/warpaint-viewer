@@ -67,9 +67,9 @@ function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
 function collectLayerPreviewRefs(node, refs) {
   if (!node?.nodes) return;
   node.nodes.forEach((child, index) => {
-    // The leftmost texture in a combine chain is the unmasked base coat. It
-    // has no following selector, but still appears as a layer row in Edit.
-    if (index === 0 && child.type === 'texture_lookup') refs.add(child.texture);
+    // The leftmost texture in a combine chain (the unmasked base coat) is
+    // left out on purpose: its layer row falls back to the full-size texture,
+    // and generating it here only produced uncommitted thumbnails on refresh.
     if (child.type === 'select' && index > 0) {
       const collectTextures = (candidate) => {
         if (candidate.type === 'texture_lookup') refs.add(candidate.texture);
