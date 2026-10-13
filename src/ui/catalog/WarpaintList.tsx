@@ -5,6 +5,7 @@ import { ArrowDownNarrowWide, ArrowUpNarrowWide, LayoutGrid, List, Search, X } f
 import { AssetIcon, SelectField, TextField } from '../common/controls';
 import { preloadIntent, type PreloadIntent } from '../../hooks/useIntentPreload';
 import type { PaintkitEntry } from '../../data/types';
+import { paintkitDefindex } from '../../protodefs/types';
 
 interface CollectionRow {
   name: string;
@@ -134,7 +135,7 @@ function countGridColumns(group: Element | null): number {
 // Left panel: a search field and a collection dropdown filter a grouped
 // warpaint list. Collections and paints share one oldest/newest order toggle
 // (proxy: ascending minimum paintkit id, which tracks release order).
-// Typing in the filter searches every paintkit and collection name, ignoring
+// Typing in the filter searches every paintkit name, collection name and ID, ignoring
 // whichever collection is selected. ?sortdesc=1 presets descending order.
 export const WarpaintList = memo(function WarpaintList({
   paintkits,
@@ -203,6 +204,9 @@ export const WarpaintList = memo(function WarpaintList({
 
   const q = filter.trim().toLowerCase();
   const isFiltering = q.length > 0;
+  // "400" or "#400" also matches that paint kit ID exactly; a prefix match
+  // would turn "4" into dozens of unrelated paints.
+  const idQuery = /^#?\d+$/.test(q) ? Number(q.replace('#', '')) : null;
   // A filter, or the "All" entry, spans every collection and needs group
   // headers; a single selected collection is already unambiguous.
   const showGroupHeaders = isFiltering || activeCollection === null;
@@ -217,7 +221,9 @@ export const WarpaintList = memo(function WarpaintList({
     const source = isFiltering
       ? paintkits.filter(
           (p) =>
-            p.name.toLowerCase().includes(q) || (p.collection ?? 'Uncategorized').toLowerCase().includes(q),
+            paintkitDefindex(p.id) === idQuery
+            || p.name.toLowerCase().includes(q)
+            || (p.collection ?? 'Uncategorized').toLowerCase().includes(q),
         )
       : activeCollection
         ? paintkits.filter((p) => (p.collection ?? 'Uncategorized') === activeCollection)
@@ -241,7 +247,7 @@ export const WarpaintList = memo(function WarpaintList({
       (a, b) => (collectionOrder.get(a[0]) ?? Number.MAX_SAFE_INTEGER)
         - (collectionOrder.get(b[0]) ?? Number.MAX_SAFE_INTEGER),
     );
-  }, [paintkits, q, isFiltering, activeCollection, collections]);
+  }, [paintkits, q, idQuery, isFiltering, activeCollection, collections]);
 
   useEffect(() => {
     if (!onVisibleKitIdsChange) return;
@@ -378,7 +384,7 @@ export const WarpaintList = memo(function WarpaintList({
           <TextField
             value={filter}
             onChange={setFilter}
-            placeholder="Filter warpaints or collections..."
+            placeholder="Filter by name, collection, or ID..."
             onKeyDown={(event) => {
               if (event.key === 'Escape' && filter) setFilter('');
             }}

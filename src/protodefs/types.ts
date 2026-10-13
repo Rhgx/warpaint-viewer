@@ -23,6 +23,11 @@ export function customKitDefindex(id: number): number {
   return id - CUSTOM_KIT_ID_BASE;
 }
 
+/** The in-game paintkit_proto_def_index for any catalog id, built-in or imported. */
+export function paintkitDefindex(id: number): number {
+  return isCustomKitId(id) ? customKitDefindex(id) : id;
+}
+
 /** Collection name imported kits are grouped under in the catalog. */
 export const CUSTOM_KIT_COLLECTION = 'Imported definitions';
 
