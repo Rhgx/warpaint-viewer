@@ -12,6 +12,7 @@
     "extract:effects": "node tools/extract/effects.mjs",
     "gen:protodefs": "node tools/generate/protodef-schema.mjs",
     "update:warpaints": "node -e \"require('node:fs').rmSync('staging/items_game.json', { force: true })\" && node tools/extract/warpaints.mjs && node tools/extract/grades.mjs && node tools/extract/warpaint-icons.mjs",
+    "update:texture-directory": "node tools/extract/texture-directory.mjs",
     "verify:protodefs": "vitest run tools/verify/protodefs/protodefs.test.mjs",
     "verify:protodefs-write": "vitest run tools/verify/protodefs/protodefs-write.test.mjs",
     "test": "vitest run",
