@@ -1,5 +1,8 @@
 import type { PaintkitEntry } from '../../data/types';
-import { isCustomKitId } from '../../protodefs/types';
+import { isCustomKitId, paintkitDefindex } from '../../protodefs/types';
+import { useSettings } from '../../settings';
+import { useTextureDirectory } from '../../hooks/useTextureDirectory';
+import { PaintkitDetailsButton } from '../catalog/PaintkitDetailsButton';
 
 interface StageOverlayProps {
   selectedKit: PaintkitEntry | null;
@@ -18,15 +21,35 @@ export function StageOverlay({
   composing,
   cameraMode,
 }: StageOverlayProps) {
+  const showPaintkitDetails = useSettings((s) => s.showPaintkitDetails);
+  const directory = useTextureDirectory();
+  // Imported kits are excluded: Pyxell's entry describes the stock paint.
+  const directoryEntry = directory && selectedKit && !isCustomKitId(selectedKit.id)
+    ? directory.entries[selectedKit.id]
+    : undefined;
   return (
     <div className="stage-overlay-tl">
       {showStageHeader && selectedKit && (
         <div className="stage-header">
-          <div
-            className="stage-header-name"
-            style={{ color: selectedKit?.grade ? `var(--grade-${selectedKit.grade})` : undefined }}
-          >
-            {selectedKit.name}
+          <div className="stage-header-title">
+            <div
+              className="stage-header-name"
+              style={{ color: selectedKit?.grade ? `var(--grade-${selectedKit.grade})` : undefined }}
+            >
+              {selectedKit.name}
+            </div>
+            {/* Keyed so a "Copied" notice never carries over to the next kit. */}
+            {showPaintkitDetails && (
+              <PaintkitDetailsButton
+                key={selectedKit.id}
+                defindex={paintkitDefindex(selectedKit.id)}
+                kitName={selectedKit.name}
+                entry={directoryEntry}
+                directory={directory}
+                side="bottom"
+                className="stage-header-info"
+              />
+            )}
           </div>
           <div className="stage-header-meta">
             {isCustomKitId(selectedKit.id)

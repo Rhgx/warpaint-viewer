@@ -1,4 +1,4 @@
-import type { Grade, Manifest, PaintkitEntry, Team } from './types';
+import type { Grade, Manifest, PaintkitEntry, Team, TextureDirectory } from './types';
 import type { RecipeNode } from '../compositor/types';
 import { mockManifest, mockRecipe } from '../dev/mock/data';
 import { mockTextures } from '../dev/mock/textures';
@@ -136,6 +136,21 @@ async function loadGrades(): Promise<Record<string, Grade>> {
   } catch {
     return {};
   }
+}
+
+let textureDirectory: Promise<TextureDirectory> | null = null;
+
+// Only fetched once the Settings toggle that shows it is on. A failed fetch is
+// forgotten so the next attempt can retry.
+export function loadTextureDirectory(): Promise<TextureDirectory> {
+  if (!textureDirectory) {
+    textureDirectory = fetch(`${DATA_ROOT}/texture-directory.json`).then((res) => {
+      if (!res.ok) throw new Error(`texture-directory.json ${res.status}`);
+      return res.json() as Promise<TextureDirectory>;
+    });
+    textureDirectory.catch(() => { textureDirectory = null; });
+  }
+  return textureDirectory;
 }
 
 function applyGrades(manifest: Manifest, grades: Record<string, Grade>): Manifest {

@@ -1,0 +1,26 @@
+/* Rows inside the shared Controls modal frame (ControlsHelpModal.css). */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  font-size: 12px;
+}
+.settings-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.settings-row-description {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.settings-row-description a {
+  color: var(--accent);
+}
+.settings-row .ui-switch {
+  flex: none;
+}

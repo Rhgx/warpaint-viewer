@@ -40,6 +40,11 @@ this project are based on the [Source SDK](https://github.com/valvesoftware/sour
 This is an independent community project and is not affiliated with, sponsored
 by, or endorsed by Valve Corporation.
 
+The texture directory shown by Settings > Workshopper tools > Show paint kit
+details (texture paths, bases, features, and notes for each war paint) comes
+from Pyxell's
+[TF2 Warpaint Texture Directory](https://pyxell.neocities.org/paintersworkshop/texturedirectory).
+
 ## License
 
 The original source code is licensed under the [GNU General Public License v3.0](LICENSE).

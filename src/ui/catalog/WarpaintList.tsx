@@ -4,8 +4,11 @@ import { ScrollArea } from '@base-ui/react/scroll-area';
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, LayoutGrid, List, Search, X } from 'lucide-react';
 import { AssetIcon, SelectField, TextField } from '../common/controls';
 import { preloadIntent, type PreloadIntent } from '../../hooks/useIntentPreload';
-import type { PaintkitEntry } from '../../data/types';
-import { paintkitDefindex } from '../../protodefs/types';
+import type { PaintkitEntry, TextureDirectory, TextureDirectoryEntry } from '../../data/types';
+import { isCustomKitId, paintkitDefindex } from '../../protodefs/types';
+import { useTextureDirectory } from '../../hooks/useTextureDirectory';
+import { PaintkitDetailsButton } from './PaintkitDetailsButton';
+import { useSettings } from '../../settings';
 
 interface CollectionRow {
   name: string;
@@ -48,6 +51,7 @@ const PaintTile = memo(function PaintTile({
   prioritizeIcon,
   onSelect,
   onPreload,
+  showDetails,
 }: {
   kit: PaintkitEntry;
   selected: boolean;
@@ -55,6 +59,7 @@ const PaintTile = memo(function PaintTile({
   prioritizeIcon: boolean;
   onSelect: (id: number) => void;
   onPreload?: PreloadIntent;
+  showDetails: boolean;
 }) {
   const select = useCallback(() => onSelect(kit.id), [kit.id, onSelect]);
   return (
@@ -65,7 +70,7 @@ const PaintTile = memo(function PaintTile({
       {...preloadIntent(`kit:${kit.id}`, onPreload)}
       onClick={select}
       data-grade={kit.grade}
-      title={kit.name}
+      title={showDetails ? `${kit.name} (#${paintkitDefindex(kit.id)})` : kit.name}
       aria-label={kit.name}
     >
       <AssetIcon
@@ -85,6 +90,8 @@ const PaintListItem = memo(function PaintListItem({
   prioritizeIcon,
   onSelect,
   onPreload,
+  showDetails,
+  directory,
 }: {
   kit: PaintkitEntry;
   selected: boolean;
@@ -92,9 +99,17 @@ const PaintListItem = memo(function PaintListItem({
   prioritizeIcon: boolean;
   onSelect: (id: number) => void;
   onPreload?: PreloadIntent;
+  showDetails: boolean;
+  directory: TextureDirectory | null;
 }) {
   const select = useCallback(() => onSelect(kit.id), [kit.id, onSelect]);
-  return (
+  const [hovered, setHovered] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  // Imported kits are excluded: Pyxell's entry describes the stock paint.
+  const entry: TextureDirectoryEntry | undefined = directory && !isCustomKitId(kit.id)
+    ? directory.entries[kit.id]
+    : undefined;
+  const row = (
     <button
       type="button"
       data-kit-id={kit.id}
@@ -113,6 +128,27 @@ const PaintListItem = memo(function PaintListItem({
       </span>
       <span className="warpaint-item-name">{kit.name}</span>
     </button>
+  );
+  if (!showDetails) return row;
+  // The details button is a sibling (buttons cannot nest) and only mounts for
+  // the selected or hovered row: a popover on every row made remounting the
+  // list about four times slower. It also stays while its card is open, since
+  // reaching the card crosses a gap outside the row.
+  return (
+    <div className="warpaint-item-row" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
+      {row}
+      {(selected || hovered || detailsOpen) && (
+        <PaintkitDetailsButton
+          defindex={paintkitDefindex(kit.id)}
+          kitName={kit.name}
+          entry={entry}
+          directory={directory}
+          side="right"
+          className="warpaint-item-info"
+          onOpenChange={setDetailsOpen}
+        />
+      )}
+    </div>
   );
 });
 
@@ -167,6 +203,8 @@ export const WarpaintList = memo(function WarpaintList({
   });
   const [activeCollection, setActiveCollection] = useState<string | null>(null);
   const [view, setView] = useState<CatalogView>(loadStoredView);
+  const showDetails = useSettings((s) => s.showPaintkitDetails);
+  const directory = useTextureDirectory();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -434,7 +472,8 @@ export const WarpaintList = memo(function WarpaintList({
                         icon={paintIcons[kit.id]}
                         prioritizeIcon={prioritizePaintIcons}
                         onSelect={onSelect}
-                      onPreload={onPreload}
+                        onPreload={onPreload}
+                        showDetails={showDetails}
                       />
                     ))}
                   </div>
@@ -448,6 +487,8 @@ export const WarpaintList = memo(function WarpaintList({
                       prioritizeIcon={prioritizePaintIcons}
                       onSelect={onSelect}
                       onPreload={onPreload}
+                      showDetails={showDetails}
+                      directory={directory}
                     />
                   ))
                 )}

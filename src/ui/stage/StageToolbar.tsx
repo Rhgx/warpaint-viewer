@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import { Check, Copy, Film, HelpCircle, ImageDown, PackagePlus, Rotate3d, RotateCcw, X } from 'lucide-react';
 import { ControlsHelpModal } from './ControlsHelpModal';
+import { SettingsDialog } from './SettingsDialog';
 
 type Feedback = 'idle' | 'success' | 'error';
 
@@ -141,6 +142,7 @@ export function StageToolbar({
         )}
         <ToolbarButton label="Reset view" icon={RotateCcw} onAction={onResetView} />
         <span className="stage-toolbar-divider" aria-hidden="true" />
+        <SettingsDialog />
         <button
           ref={controlsHelpTriggerRef}
           type="button"

@@ -1,0 +1,193 @@
+/* The info trigger and the card's copy buttons share one quiet button style. */
+.paintkit-details-trigger,
+.paintkit-details-copy {
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  transition: var(--transition-fast);
+}
+.paintkit-details-trigger:hover,
+.paintkit-details-trigger[data-popup-open],
+.paintkit-details-copy:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.paintkit-details-trigger:focus-visible,
+.paintkit-details-copy:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.paintkit-details-trigger {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.paintkit-details-copy {
+  cursor: copy;
+}
+
+.paintkit-details-positioner {
+  z-index: 110;
+}
+.paintkit-details-popup {
+  box-sizing: border-box;
+  /* Shrinks to an ID-only card; directory entries fill out to the cap. */
+  width: max-content;
+  max-width: min(500px, var(--available-width));
+  max-height: var(--available-height);
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  transform-origin: var(--transform-origin);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.paintkit-details-popup[data-starting-style],
+.paintkit-details-popup[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+.paintkit-details-header:not(:last-child) {
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.paintkit-details-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.paintkit-details-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.paintkit-details-id {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 5px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.paintkit-details-base,
+.paintkit-details-empty {
+  margin: 2px 0 0;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.paintkit-details-section + .paintkit-details-section {
+  margin-top: 10px;
+}
+.paintkit-details-section h3 {
+  margin: 0 0 4px;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.paintkit-details-section ul {
+  margin: 0;
+  padding-left: 16px;
+}
+.paintkit-details-section li + li {
+  margin-top: 2px;
+}
+.paintkit-details-section li[data-explained] {
+  text-decoration: underline dotted var(--text-dim);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+/* Slot labels in one column, their paths aligned in the next. */
+.paintkit-details-textures {
+  display: grid;
+  grid-template-columns: fit-content(140px) minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+}
+.paintkit-details-textures div {
+  display: contents;
+}
+.paintkit-details-textures dt {
+  padding-top: 2px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.paintkit-details-textures dd {
+  grid-column: 2;
+  margin: 0;
+}
+.paintkit-details-path {
+  display: block;
+  max-width: 100%;
+  margin-left: -4px;
+  padding: 1px 4px;
+  color: var(--text);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.paintkit-details-copied {
+  margin-left: 8px;
+  color: var(--pass);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+.paintkit-details-suffix {
+  color: var(--text-dim);
+}
+
+.paintkit-details-footer {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.paintkit-details-legend {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 6px;
+}
+.paintkit-details-legend div {
+  display: flex;
+  gap: 8px;
+}
+.paintkit-details-legend dt {
+  flex: none;
+  width: 20px;
+  color: var(--text);
+  font-weight: 600;
+}
+.paintkit-details-legend dd {
+  margin: 0;
+}
+.paintkit-details-footer p {
+  margin: 0;
+}
+.paintkit-details-footer a {
+  color: var(--accent);
+}
+/* Button transitions already switch off through --transition-fast. */
+@media (prefers-reduced-motion: reduce) {
+  .paintkit-details-popup {
+    transition: none;
+  }
+}

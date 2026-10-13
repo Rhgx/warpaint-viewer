@@ -187,6 +187,19 @@
   white-space: nowrap;
   color: var(--item-grade-text, inherit);
 }
+.warpaint-item-row {
+  position: relative;
+}
+/* Room for the paint kit details button over the row's right end. */
+.warpaint-item-row .warpaint-item {
+  padding-right: 38px;
+}
+.warpaint-item-info {
+  position: absolute;
+  top: 50%;
+  right: 13px;
+  transform: translateY(-50%);
+}
 .warpaint-item-icon {
   position: relative;
   flex: none;

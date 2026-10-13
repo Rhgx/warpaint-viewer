@@ -100,6 +100,22 @@ export interface PaintkitEntry {
   grade?: Grade; // rarity grade, populated at load time from public/data/grades.json
 }
 
+/** One paint's entry in Pyxell's texture directory, verbatim from the page. */
+export interface TextureDirectoryEntry {
+  base?: string[];
+  textures: string[];
+  features?: string[];
+  notes?: string[];
+}
+
+/** public/data/texture-directory.json, written by tools/extract/texture-directory.mjs. */
+export interface TextureDirectory {
+  source: string;
+  retrievedAt: string; // YYYY-MM-DD
+  legend: { term: string; description: string }[];
+  entries: Record<string, TextureDirectoryEntry>; // keyed by built-in paint kit id
+}
+
 export interface Manifest {
   generatedAt: string;
   /**

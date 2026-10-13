@@ -278,6 +278,22 @@
   font-weight: 700;
   line-height: 1.25;
 }
+.stage-header-title {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  max-width: 100%;
+}
+.stage-header-title .stage-header-name {
+  min-width: 0;
+}
+/* The overlay ignores pointer input so the stage stays draggable; the details
+   button is the one clickable element in the header. */
+.stage-header-info {
+  align-self: center;
+  color: rgb(244 246 248 / 62%);
+  pointer-events: auto;
+}
 .stage-header-meta {
   overflow: hidden;
   text-overflow: ellipsis;
