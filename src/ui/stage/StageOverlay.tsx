@@ -11,10 +11,14 @@ interface StageOverlayProps {
   hasCustomFiles: boolean;
   composing: boolean;
   cameraMode: 'inspect' | 'advanced';
+  paintkits: readonly PaintkitEntry[];
+  onSelectKit: (id: number) => void;
 }
 
 export function StageOverlay({
   selectedKit,
+  paintkits,
+  onSelectKit,
   showStageHeader,
   weaponName,
   hasCustomFiles,
@@ -46,6 +50,8 @@ export function StageOverlay({
                 kitName={selectedKit.name}
                 entry={directoryEntry}
                 directory={directory}
+                paintkits={paintkits}
+                onSelectKit={onSelectKit}
                 side="bottom"
                 className="stage-header-info"
               />

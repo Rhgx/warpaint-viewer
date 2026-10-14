@@ -938,6 +938,8 @@ function MainApp() {
             hasCustomFiles={Object.keys(manualTextureOverrides).length > 0}
             composing={composing}
             cameraMode={cameraMode}
+            paintkits={paintkits}
+            onSelectKit={onSelectKit}
           />
           <StageToolbar
             workbenchOpen={workbenchOpen}

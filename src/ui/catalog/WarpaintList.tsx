@@ -92,6 +92,7 @@ const PaintListItem = memo(function PaintListItem({
   onPreload,
   showDetails,
   directory,
+  paintkits,
 }: {
   kit: PaintkitEntry;
   selected: boolean;
@@ -101,6 +102,7 @@ const PaintListItem = memo(function PaintListItem({
   onPreload?: PreloadIntent;
   showDetails: boolean;
   directory: TextureDirectory | null;
+  paintkits: readonly PaintkitEntry[];
 }) {
   const select = useCallback(() => onSelect(kit.id), [kit.id, onSelect]);
   const [hovered, setHovered] = useState(false);
@@ -143,6 +145,8 @@ const PaintListItem = memo(function PaintListItem({
           kitName={kit.name}
           entry={entry}
           directory={directory}
+          paintkits={paintkits}
+          onSelectKit={onSelect}
           side="right"
           className="warpaint-item-info"
           onOpenChange={setDetailsOpen}
@@ -333,11 +337,23 @@ export const WarpaintList = memo(function WarpaintList({
     setActiveCollection(null);
   };
 
+  // Reveals a newly selected kit, whatever selected it: the arrow keys, or a
+  // base paint link in a details card. A filter hiding it is cleared. Only a
+  // change of selection does this, so filtering the current selection out of
+  // view afterwards is left alone.
+  const [revealedId, setRevealedId] = useState(selectedId);
+  if (selectedId !== revealedId) {
+    setRevealedId(selectedId);
+    if (selectedId !== null && !flatKits.some((kit) => kit.id === selectedId)) clearFilters();
+  }
+  useEffect(() => {
+    if (selectedId === null) return;
+    containerRef.current?.querySelector<HTMLElement>(`[data-kit-id="${selectedId}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [selectedId]);
+
   const moveSelection = (nextIndex: number) => {
     const kit = flatKits[nextIndex];
-    if (!kit) return;
-    onSelect(kit.id);
-    containerRef.current?.querySelector<HTMLElement>(`[data-kit-id="${kit.id}"]`)?.scrollIntoView({ block: 'nearest' });
+    if (kit) onSelect(kit.id);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -489,6 +505,7 @@ export const WarpaintList = memo(function WarpaintList({
                       onPreload={onPreload}
                       showDetails={showDetails}
                       directory={directory}
+                      paintkits={paintkits}
                     />
                   ))
                 )}

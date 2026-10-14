@@ -1,8 +1,20 @@
+import { Fragment } from 'react';
 import { Popover } from '@base-ui/react/popover';
 import { Copy, Info } from 'lucide-react';
-import type { TextureDirectory, TextureDirectoryEntry } from '../../data/types';
+import type { PaintkitEntry, TextureDirectory, TextureDirectoryEntry } from '../../data/types';
+import { isCustomKitId } from '../../protodefs/types';
 import { useCopyText } from '../../hooks/useCopyText';
 import './PaintkitDetailsButton.css';
+
+// Pyxell's base names carry footnote asterisks and sometimes drop accents
+// ("Pina Polished" for Piña Polished). Names that match no stock paint, such
+// as "Original", stay plain text.
+const foldName = (name: string) => name.replace(/\*+$/, '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
+function findBaseKit(paintkits: readonly PaintkitEntry[], baseName: string) {
+  const folded = foldName(baseName);
+  return paintkits.find((kit) => !isCustomKitId(kit.id) && foldName(kit.name) === folded);
+}
 
 // 'TL_3 & TL_4 - "patterns/a" & "patterns/b"*' -> slot label, quoted paths,
 // and anything after the last path (the page's footnote asterisks). Lines that
@@ -119,6 +131,8 @@ export function PaintkitDetailsButton({
   kitName,
   entry,
   directory,
+  paintkits,
+  onSelectKit,
   side,
   className,
   onOpenChange,
@@ -127,6 +141,8 @@ export function PaintkitDetailsButton({
   kitName: string;
   entry: TextureDirectoryEntry | undefined;
   directory: TextureDirectory | null;
+  paintkits: readonly PaintkitEntry[];
+  onSelectKit: (id: number) => void;
   side: 'right' | 'bottom';
   className?: string;
   onOpenChange?: (open: boolean) => void;
@@ -152,7 +168,24 @@ export function PaintkitDetailsButton({
                   #{defindex}<Copy size={11} aria-hidden="true" />
                 </CopyButton>
               </div>
-              {entry?.base && <p className="paintkit-details-base">Base: {entry.base.join(', ')}</p>}
+              {entry?.base && (
+                <p className="paintkit-details-base">
+                  Base:{' '}
+                  {entry.base.map((name, i) => {
+                    const kit = findBaseKit(paintkits, name);
+                    return (
+                      <Fragment key={i}>
+                        {i > 0 && ', '}
+                        {kit ? (
+                          <Popover.Close className="paintkit-details-base-link" onClick={() => onSelectKit(kit.id)}>
+                            {name}
+                          </Popover.Close>
+                        ) : name}
+                      </Fragment>
+                    );
+                  })}
+                </p>
+              )}
             </header>
             {entry && directory
               ? <DirectoryEntry entry={entry} directory={directory} />

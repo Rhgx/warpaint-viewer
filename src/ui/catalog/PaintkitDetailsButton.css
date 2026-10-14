@@ -185,6 +185,17 @@
 .paintkit-details-footer a {
   color: var(--accent);
 }
+.paintkit-details-base-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.paintkit-details-base-link:hover {
+  text-decoration: underline;
+}
 /* Button transitions already switch off through --transition-fast. */
 @media (prefers-reduced-motion: reduce) {
   .paintkit-details-popup {
