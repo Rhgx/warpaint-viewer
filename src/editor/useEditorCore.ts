@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PaintkitEntry } from '../data/types';
+import { WORKSHOP_ENABLED } from '../device';
 import type { useCustomDefinitions } from '../hooks/useCustomDefinitions';
 import type { useStockDefinitions } from '../hooks/useStockDefinitions';
 import { customKitDefindex, isCustomKitId } from '../protodefs/types';
@@ -100,20 +101,22 @@ export function useEditorCore({
   } = definitions;
 
   const [editorRequestedKitId, setEditorRequestedKitId] = useState<number | null>(null);
+  // Without a requested kit the session, draft, recipe and preview work below all stay idle.
+  const editorTabOpen = WORKSHOP_ENABLED && workbenchOpen && workbenchTab === 'editor';
 
   useEffect(() => {
-    if (!workbenchOpen || workbenchTab !== 'editor') return;
+    if (!editorTabOpen) return;
     void Promise.all([
       import('./export/packageExport'),
       import('./export/definitionExport'),
     ]).catch(() => undefined);
-  }, [workbenchOpen, workbenchTab]);
+  }, [editorTabOpen]);
 
   useEffect(() => {
-    if (workbenchOpen && workbenchTab === 'editor' && selectedKitId !== null) {
+    if (editorTabOpen && selectedKitId !== null) {
       setEditorRequestedKitId(selectedKitId);
     }
-  }, [selectedKitId, workbenchOpen, workbenchTab]);
+  }, [selectedKitId, editorTabOpen]);
   const editableKitId = resolveEditableKitId(selectedKitId, editorRequestedKitId, selectedKit);
   const loadEditorKit = useCallback((kitId: number) => (
     isCustomKitId(kitId) ? exportImportedKitBundle(kitId) : exportStockKitBundle(kitId)
@@ -441,7 +444,8 @@ export function useEditorHistoryShortcuts({
   editorHistoryActionsRef.current = { undo, redo, canUndo, canRedo };
 
   useEffect(() => {
-    if (!editorTabActive || cameraMode === 'advanced' || (lightingPanelOpen && preset === CUSTOM_LIGHTING_ID)) return;
+    if (!WORKSHOP_ENABLED || !editorTabActive || cameraMode === 'advanced'
+      || (lightingPanelOpen && preset === CUSTOM_LIGHTING_ID)) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || !(event.ctrlKey || event.metaKey)) return;
       // A modal owns its own keyboard loop and must not trigger editing behind

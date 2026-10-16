@@ -81,6 +81,11 @@ function createAimHandleTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+/** Later fingers of a multi-touch gesture belong to the camera, never to a light. */
+function isSecondaryTouch(event: PointerEvent): boolean {
+  return event.pointerType === 'touch' && !event.isPrimary;
+}
+
 function clientToNdc(canvas: HTMLCanvasElement, clientX: number, clientY: number): THREE.Vector2 {
   const bounds = canvas.getBoundingClientRect();
   return new THREE.Vector2(
@@ -163,6 +168,7 @@ export class LightEditor {
     initialRig: CustomLightingRig;
   } | null = null;
   private sourceTransformInitialRig: CustomLightingRig | null = null;
+  private transformPointerId: number | null = null;
   private sourceTransformChanged = false;
   private markerGeometry = new THREE.BufferGeometry().setAttribute(
     'position',
@@ -199,6 +205,16 @@ export class LightEditor {
     this.transformControls.addEventListener('mouseDown', this.onTransformMouseDown);
     this.transformControls.addEventListener('mouseUp', this.onTransformMouseUp);
     this.transformControls.addEventListener('objectChange', this.onTransformObjectChange);
+    // TransformControls reacts to every pointer, so a second finger could
+    // steal or jump an active light drag. Route its input here instead, from
+    // the same listener position, and only for the gesture's first pointer.
+    const touchAction = this.canvas.style.touchAction;
+    this.transformControls.disconnect();
+    this.canvas.style.touchAction = touchAction;
+    this.canvas.addEventListener('pointerdown', this.onTransformPointerDown);
+    this.canvas.addEventListener('pointermove', this.onTransformPointerMove);
+    this.canvas.addEventListener('pointerup', this.onTransformPointerUp);
+    this.canvas.addEventListener('lostpointercapture', this.onPointerCancel);
     this.root.add(this.lightsRoot, this.helpersRoot);
     this.helpersRoot.add(this.transformControls.getHelper());
     this.helpersRoot.visible = false;
@@ -308,7 +324,7 @@ export class LightEditor {
 
   /** Used by InspectControls to reserve a light drag before camera handling. */
   shouldExcludeCameraPointer(event: PointerEvent): boolean {
-    if (!this.editorEnabled || event.button !== 0) return false;
+    if (!this.editorEnabled || event.button !== 0 || isSecondaryTouch(event)) return false;
     if (this.pick(event.clientX, event.clientY) !== null) return true;
     const camera = this.getCamera();
     this.transformControls.camera = camera;
@@ -584,8 +600,48 @@ export class LightEditor {
     }
   }
 
+  // Mirrors TransformControls' own pointer listeners, gated to one pointer.
+  private onTransformPointerDown = (event: PointerEvent): void => {
+    if (!this.transformControls.enabled || this.transformPointerId !== null || isSecondaryTouch(event)) return;
+    // Owning a pointer requires its capture (except under Pointer Lock, which
+    // already routes everything here), so its release or lost capture always
+    // reaches this canvas and can never leave the id occupied.
+    if (!document.pointerLockElement) {
+      try {
+        this.canvas.setPointerCapture(event.pointerId);
+      } catch {
+        return;
+      }
+    }
+    this.transformPointerId = event.pointerId;
+    const pointer = this.transformPointer(event);
+    this.transformControls.pointerHover(pointer);
+    this.transformControls.pointerDown(pointer);
+  };
+
+  private onTransformPointerMove = (event: PointerEvent): void => {
+    if (!this.transformControls.enabled) return;
+    if (event.pointerType === 'mouse' || event.pointerType === 'pen') this.transformControls.pointerHover(this.transformPointer(event));
+    if (event.pointerId === this.transformPointerId) this.transformControls.pointerMove(this.transformPointer(event));
+  };
+
+  private onTransformPointerUp = (event: PointerEvent): void => {
+    if (event.pointerId !== this.transformPointerId) return;
+    this.transformPointerId = null;
+    if (!this.transformControls.enabled) return;
+    if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId);
+    this.transformControls.pointerUp(this.transformPointer(event));
+  };
+
+  // TransformControls reads only NDC x/y and the button from its pointer
+  // argument (the origin while the cursor is locked), as its own handlers do.
+  private transformPointer(event: PointerEvent): PointerEvent {
+    const ndc = document.pointerLockElement ? { x: 0, y: 0 } : clientToNdc(this.canvas, event.clientX, event.clientY);
+    return { x: ndc.x, y: ndc.y, button: event.button } as unknown as PointerEvent;
+  }
+
   private onPointerDown = (event: PointerEvent): void => {
-    if (!this.editorEnabled || event.button !== 0) return;
+    if (!this.editorEnabled || event.button !== 0 || isSecondaryTouch(event)) return;
     const pick = this.pick(event.clientX, event.clientY);
     if (!pick) return;
     this.setSelectedLight(pick.id);
@@ -617,18 +673,27 @@ export class LightEditor {
     if (this.canvas.hasPointerCapture?.(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId);
   };
 
+  // Shared by pointercancel and lostpointercapture. Only the pointer that owns
+  // a light gesture can cancel it; another finger leaves the drag running.
+  // Aim drags end on the window's pointerup wherever it lands, so only a real
+  // cancel reverts them; a capture released during that pointerup must not.
   private onPointerCancel = (event: PointerEvent): void => {
-    if (this.targetDrag && event.pointerId === this.targetDrag.pointerId) {
+    if (event.type === 'pointercancel' && this.targetDrag && event.pointerId === this.targetDrag.pointerId) {
       this.commitTargetTransform(true);
-      return;
     }
-    if (!this.sourceTransformInitialRig) return;
-    this.transformControls.detach();
-    this.rig = this.sourceTransformInitialRig;
-    this.sourceTransformInitialRig = null;
-    this.sourceTransformChanged = false;
-    this.rebuild();
-    this.onChange(this.rig);
+    if (event.pointerId !== this.transformPointerId) return;
+    this.transformPointerId = null;
+    if (this.sourceTransformInitialRig) {
+      this.transformControls.detach();
+      this.rig = this.sourceTransformInitialRig;
+      this.sourceTransformInitialRig = null;
+      this.sourceTransformChanged = false;
+      this.rebuild();
+      this.onChange(this.rig);
+    }
+    // TransformControls has no cancel path. End its drag only now, after the
+    // restore above, so the mouseUp it may emit cannot commit the moved light.
+    this.transformControls.pointerUp(null);
   };
 
   private onKeyDown = (event: KeyboardEvent): void => {
@@ -650,6 +715,10 @@ export class LightEditor {
   };
 
   dispose(): void {
+    this.canvas.removeEventListener('pointerdown', this.onTransformPointerDown);
+    this.canvas.removeEventListener('pointermove', this.onTransformPointerMove);
+    this.canvas.removeEventListener('pointerup', this.onTransformPointerUp);
+    this.canvas.removeEventListener('lostpointercapture', this.onPointerCancel);
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
     this.canvas.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);

@@ -11,6 +11,7 @@ import { useOperationTemplates } from '../../hooks/useOperationTemplates';
 import { PaintkitDetailsButton } from './PaintkitDetailsButton';
 import { operationFilterKits } from './operationFilter';
 import { useSettings } from '../../settings';
+import { matchesMobileLayout } from '../../device';
 
 interface CollectionRow {
   name: string;
@@ -23,11 +24,15 @@ type CatalogView = 'grid' | 'list';
 
 const VIEW_STORAGE_KEY = 'warpaint-viewer:catalog-view';
 
+// With no stored choice, the mobile layout starts on the denser grid, which
+// suits a narrow sheet better than the long list.
 function loadStoredView(): CatalogView {
+  const fallback = matchesMobileLayout() ? 'grid' : 'list';
   try {
-    return localStorage.getItem(VIEW_STORAGE_KEY) === 'grid' ? 'grid' : 'list';
+    const stored = localStorage.getItem(VIEW_STORAGE_KEY);
+    return stored === 'grid' || stored === 'list' ? stored : fallback;
   } catch {
-    return 'list';
+    return fallback;
   }
 }
 
@@ -214,14 +219,17 @@ export const WarpaintList = memo(function WarpaintList({
   const directory = useTextureDirectory();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // Saved only on an explicit toggle, so the layout-dependent default never
+  // gets stored and carried over to the other layout.
+  const chooseView = (next: CatalogView) => {
+    setView(next);
     try {
-      localStorage.setItem(VIEW_STORAGE_KEY, view);
+      localStorage.setItem(VIEW_STORAGE_KEY, next);
     } catch {
       // Storage may be unavailable (private browsing, quota); the toggle
       // still works for the session, it just won't persist.
     }
-  }, [view]);
+  };
 
   const collections = useMemo<CollectionRow[]>(() => {
     const byName = new Map<string, CollectionRow>();
@@ -422,7 +430,7 @@ export const WarpaintList = memo(function WarpaintList({
                 title="List view"
                 aria-label="List view"
                 aria-pressed={view === 'list'}
-                onClick={() => setView('list')}
+                onClick={() => chooseView('list')}
               >
                 <List size={14} />
               </button>
@@ -432,7 +440,7 @@ export const WarpaintList = memo(function WarpaintList({
                 title="Grid view"
                 aria-label="Grid view"
                 aria-pressed={view === 'grid'}
-                onClick={() => setView('grid')}
+                onClick={() => chooseView('grid')}
               >
                 <LayoutGrid size={14} />
               </button>

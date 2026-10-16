@@ -1,3 +1,4 @@
+import { TOUCH_ONLY_DEVICE } from '../../device';
 import type { StickerTransformTool } from '../editor/StickerPlacementEditor';
 
 interface CanvasHintProps {
@@ -29,6 +30,7 @@ function hintText({
         : 'drag the turn handle; Shift places, middle rotates / double-click resets, right pans';
   }
   if (groupAssignActive) return 'hold Shift to preview and select parts, drag to rotate';
+  if (TOUCH_ONLY_DEVICE) return 'drag to rotate, pinch to zoom, two fingers to move, double-tap to reset';
   return 'drag to rotate, scroll to zoom, right-drag to pan, double-click to reset';
 }
 

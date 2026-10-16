@@ -78,6 +78,7 @@ import { EDITOR_LAYER_MAP_COLORS } from '../editor/layers/layerMap';
 import type { StickerPlacementQuad } from '../editor/sticker/viewerStickerPlacement';
 import type { StickerGizmoHandleKind, StickerGizmoTool } from '../editor/sticker/stickerGizmo';
 import { visibleStickerEditorMap } from './stickerEditorMap';
+import { TOUCH_ONLY_DEVICE } from '../device';
 import {
   StickerOverlay,
   type GroupStickerPreviewResources,
@@ -124,16 +125,25 @@ const TRANSFORM_ISOLATION_CONTEXT_OPACITY = 0.2;
  * across the MSAA render target) is the real limit.
  */
 const TURNTABLE_MAX_SUPERSAMPLE = 8;
-/** ~190 MB of colour + depth samples; 480 px GIFs get 6x + MSAA. */
-const TURNTABLE_SAMPLE_BUDGET = 24_000_000;
+/**
+ * ~190 MB of colour + depth samples; 480 px GIFs get 6x + MSAA. Phones get a
+ * third (~64 MB, 3x + MSAA at 480 px): their GPU shares memory with a tab the
+ * browser kills, or whose context it drops, well before a desktop would.
+ */
+const TURNTABLE_SAMPLE_BUDGET = TOUCH_ONLY_DEVICE ? 8_000_000 : 24_000_000;
 /** Low-resolution sweep that finds the turntable crop. */
 const TURNTABLE_PROBE_EDGE = 320;
 const TURNTABLE_PROBE_STEPS = 36;
-/** Frames rendered up front to fit the shared GIF palette. */
-const TURNTABLE_PALETTE_SAMPLES = 40;
+/**
+ * Frames rendered up front to fit the shared GIF palette. Each is a full RGBA
+ * frame held until the encoder starts (2.5 MB at 800 px), so phones keep 16.
+ */
+const TURNTABLE_PALETTE_SAMPLES = TOUCH_ONLY_DEVICE ? 16 : 40;
 /** Crossfade length hiding the loop seam of time-driven effects. */
 const TURNTABLE_SEAM_SECONDS = 0.5;
-const TURNTABLE_SEAM_BUDGET_BYTES = 64 * 1024 * 1024;
+const TURNTABLE_SEAM_BUDGET_BYTES = (TOUCH_ONLY_DEVICE ? 24 : 64) * 1024 * 1024;
+/** Drawing-buffer density cap; phones (often DPR 3) gain little above it. */
+const MAX_PIXEL_RATIO = 1.5;
 /** Widest probe frustum, in viewport sizes, before a sweep is clipped. */
 const TURNTABLE_MAX_REACH = 27;
 
@@ -256,19 +266,22 @@ export class Viewer {
     this.invalidate();
   }
 
+  // Only the phone portrait layout (layout.css), where the Controls sheet
+  // can cover the bottom of the canvas, keeps the viewmodel's whole 4:3 frame.
+  // Elsewhere, even a desktop canvas taller than 4:3 keeps Source's
+  // behaviour of fitting the 4:3 vertical FOV to the canvas height.
+  private portraitSheetLayout = window.matchMedia?.('(max-width: 860px) and (orientation: portrait)') ?? null;
   private previewChildren: THREE.Object3D[] = [];
   private previewVisibility: boolean[] = [];
   private previewLightPosition = new THREE.Vector3();
   private previewLightRotation = new THREE.Quaternion();
 
-  private renderFirstPerson(): void {
+  // `right` and `bottom` are the live view inset; a capture renders through
+  // here too, at the canvas aspect, and passes zeros for the centred frame.
+  private renderFirstPerson(right: number, bottom: number): void {
     const preview = this.firstPerson;
     if (!preview) return;
-    const aspect = (this.canvas.clientWidth || 1) / (this.canvas.clientHeight || 1);
-    if (preview.camera.aspect !== aspect) {
-      preview.camera.aspect = aspect;
-      preview.camera.updateProjectionMatrix();
-    }
+    preview.fitCamera(this.canvas.clientWidth || 1, this.canvas.clientHeight || 1, this.portraitSheetLayout?.matches === true, right, bottom);
     const visibility = this.previewVisibility;
     const children = this.previewChildren;
     this.previewLightPosition.copy(this.lightGroup.position);
@@ -387,6 +400,9 @@ export class Viewer {
 
   private resizeObserver: ResizeObserver | null = null;
   private resizeTimer = 0;
+  // Mobile browsers drop the WebGL context on backgrounding and memory
+  // pressure. No frames are scheduled until it is restored.
+  private contextLost = false;
 
   // Killstreak sheen: a shared second-pass material over per-mesh clones of
   // the weapon geometry. Assets/material are created lazily on first enable
@@ -462,7 +478,7 @@ export class Viewer {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
     this.renderer.setClearAlpha(0);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.LinearToneMapping;
     this.renderer.toneMappingExposure = 1;
@@ -587,12 +603,43 @@ export class Viewer {
     this.resizeObserver.observe(canvas);
     this.lastTime = performance.now();
     document.addEventListener('visibilitychange', this.onVisibilityChange);
+    canvas.addEventListener('webglcontextlost', this.onContextLost);
+    canvas.addEventListener('webglcontextrestored', this.onContextRestored);
+    // Dispatched by the Compositor as it re-renders each composed paint.
+    canvas.addEventListener('warpaint:compose-restored', this.onComposeRestored);
     this.invalidate();
   }
+
+  // three.js also prevents the default, which is what allows a restore; doing
+  // it here keeps that contract explicit rather than incidental.
+  private onContextLost = (event: Event) => {
+    event.preventDefault();
+    this.contextLost = true;
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    window.clearTimeout(this.sheenWakeTimer);
+    this.sheenWakeTimer = 0;
+  };
+
+  // three.js recreates programs, uploads and (blank) render targets lazily on
+  // the next render; every viewer-owned texture keeps its source image or data.
+  // Composed paints are refilled by the Compositor, which reports each one.
+  private onContextRestored = () => {
+    this.contextLost = false;
+    this.lastTime = performance.now();
+    this.sheenLastTime = this.lastTime;
+    this.invalidate();
+  };
+
+  private onComposeRestored = () => this.invalidate();
 
   private onResize = () => {
     const w = this.canvas.clientWidth || 1;
     const h = this.canvas.clientHeight || 1;
+    // Browser zoom, a move to another display and rotation change the DPR.
+    // setPixelRatio resizes the buffer itself, so skip it when unchanged.
+    const pixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
+    if (pixelRatio !== this.renderer.getPixelRatio()) this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(w, h, false);
     this.updateBackplateTransform();
     this.syncDisplayAspect();
@@ -629,7 +676,7 @@ export class Viewer {
   private invalidate() {
     window.clearTimeout(this.sheenWakeTimer);
     this.sheenWakeTimer = 0;
-    if (this.disposed || this.raf || document.hidden) return;
+    if (this.disposed || this.raf || document.hidden || this.contextLost) return;
     this.raf = requestAnimationFrame(this.renderFrame);
   }
 
@@ -666,7 +713,7 @@ export class Viewer {
         this.activeUnusual.updateAnchor(this.firstPerson.weaponAnchor, this.firstPerson.resolveUnusualAnchor);
         this.activeUnusual.update(dt);
       }
-      this.renderFirstPerson();
+      this.renderFirstPerson(this.viewInset.right, this.viewInset.bottom);
       this.scheduleNextFrame(this.firstPerson.animationPlaying || !!this.activeUnusual || emissiveAnimating, this.firstPerson.overlays.sheen);
       return;
     }
@@ -699,6 +746,7 @@ export class Viewer {
       this.activeUnusual.updateAnchor(this.centerGroup.matrixWorld);
       this.activeUnusual.update(dt);
     }
+    this.applyViewInset(this.viewInset.right, this.viewInset.bottom);
     if (this.projectionMode === 'orthographic') {
       this.syncOrthoCamera();
       this.stickers.updateStickerGizmoOverlay();
@@ -754,6 +802,39 @@ export class Viewer {
     this.orthoCamera.near = this.camera.near;
     this.orthoCamera.far = this.camera.far;
     this.orthoCamera.updateProjectionMatrix();
+  }
+
+  /**
+   * Live view only: the canvas area, in CSS pixels from the right and bottom
+   * edges, that a mobile panel covers. Inspect moves the model centre to the
+   * middle of the uncovered area; First Person fits its frame around it.
+   * Captures ignore it.
+   */
+  setViewInset(right: number, bottom: number): void {
+    if (right === this.viewInset.right && bottom === this.viewInset.bottom) return;
+    this.viewInset = { right, bottom };
+    this.applyViewInset(right, bottom);
+    this.invalidate();
+  }
+  private viewInset = { right: 0, bottom: 0 };
+
+  // A view offset, not pan, so controls state, framing and every pick through
+  // the projection matrix stay consistent. Both cameras carry it so switching
+  // projection keeps it; zero clears it.
+  private applyViewInset(right: number, bottom: number): void {
+    // A running turntable owns the view offset; the first live frame after it
+    // applies the inset again.
+    if (this.turntableCapturing) return;
+    const w = this.canvas.clientWidth || 1;
+    const h = this.canvas.clientHeight || 1;
+    for (const camera of [this.camera, this.orthoCamera]) {
+      const view = camera.view?.enabled ? camera.view : null;
+      if (right === 0 && bottom === 0) {
+        if (view) camera.clearViewOffset();
+      } else if (!view || view.fullWidth !== w || view.fullHeight !== h || view.offsetX !== right / 2 || view.offsetY !== bottom / 2) {
+        camera.setViewOffset(w, h, right / 2, bottom / 2, w, h);
+      }
+    }
   }
 
   /** TF2-style inspect auto-spin taking `secondsPerTurn` per revolution, or null to stop. */
@@ -1848,6 +1929,8 @@ export class Viewer {
   // rescaled to keep color * alpha unchanged. Over dark backgrounds this
   // reproduces the glow exactly; opaque weapon pixels pass through untouched.
   async captureScreenshot(size: number | ScreenshotSize = 2): Promise<Blob> {
+    // A lost context reads back as all zeros: an empty image, not an error.
+    if (this.contextLost) throw new Error('The graphics context was lost; try again once the view reappears');
     const w = this.canvas.clientWidth || 1;
     const h = this.canvas.clientHeight || 1;
     // ponytail: cap the working target at an 8K pixel budget; tile the render
@@ -1873,8 +1956,10 @@ export class Viewer {
       this.scene.background = null;
       setParticlePointScale(height);
       this.renderer.setRenderTarget(target);
+      // Captures frame the whole canvas, not the area a mobile panel leaves.
+      this.applyViewInset(0, 0);
       if (this.firstPerson) {
-        this.renderFirstPerson();
+        this.renderFirstPerson(0, 0);
       } else if (this.projectionMode === 'orthographic') {
         this.syncOrthoCamera();
         this.renderer.render(this.scene, this.orthoCamera);
@@ -1883,6 +1968,7 @@ export class Viewer {
       }
       this.renderer.readRenderTargetPixels(target, 0, 0, width, height, raw);
     } finally {
+      this.applyViewInset(this.viewInset.right, this.viewInset.bottom);
       this.renderer.setRenderTarget(prevTarget);
       this.scene.background = prevBackground;
       this.lightEditor.setCaptureMode(false);
@@ -1944,6 +2030,7 @@ export class Viewer {
         throw new TurntableStoppedError('The viewer was resized');
       }
       if (this.controls.getCameraMode() !== cameraMode) throw new TurntableStoppedError('The camera mode changed');
+      if (this.contextLost) throw new TurntableStoppedError('The graphics context was lost');
     };
     const frameCount = Math.max(2, Math.round(seconds * fps));
     const dt = 1 / fps;
@@ -2538,6 +2625,8 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     const projectedMin = new THREE.Vector2(Infinity, Infinity);
     const projectedMax = new THREE.Vector2(-Infinity, -Infinity);
     const point = new THREE.Vector3();
+    // Measure in the full canvas; the view inset would otherwise turn into pan.
+    this.applyViewInset(0, 0);
     for (const geometry of geometries) {
       const positions = geometry.getAttribute('position');
       if (!positions) continue;
@@ -2549,6 +2638,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
         projectedMax.y = Math.max(projectedMax.y, point.y);
       }
     }
+    this.applyViewInset(this.viewInset.right, this.viewInset.bottom);
     if (Number.isFinite(projectedMin.x)) {
       this.perspectiveCenterNdc.copy(projectedMin.add(projectedMax).multiplyScalar(0.5));
       this.defaultPerspectiveCenterNdc.copy(this.perspectiveCenterNdc);
@@ -2584,6 +2674,9 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.onResize);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    this.canvas.removeEventListener('webglcontextlost', this.onContextLost);
+    this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
+    this.canvas.removeEventListener('warpaint:compose-restored', this.onComposeRestored);
     window.clearTimeout(this.resizeTimer);
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;

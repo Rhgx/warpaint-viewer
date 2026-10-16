@@ -407,7 +407,7 @@
   cursor: pointer;
 }
 .custom-asset-file-remove:hover { background: var(--border); color: var(--text); }
-@media (max-width: 860px) {
+@media (max-width: 860px), (max-height: 500px) {
   .custom-workbench-slot[data-open] { flex-basis: min(52vh, 440px); }
 }
 

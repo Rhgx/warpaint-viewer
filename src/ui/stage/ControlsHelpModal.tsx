@@ -13,6 +13,7 @@ import {
   Waypoints,
   X,
 } from 'lucide-react';
+import { TOUCH_ONLY_DEVICE } from '../../device';
 import './ControlsHelpModal.css';
 
 type ControlsHelpModalProps = {
@@ -129,7 +130,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
             <>
               <section className="controls-help-section" aria-labelledby="lighting-pointer-heading">
                 <h3 id="lighting-pointer-heading">Light editing</h3>
-                <ControlRow keys={<Key>Click marker</Key>}>Select a light</ControlRow>
+                <ControlRow keys={<Key>{TOUCH_ONLY_DEVICE ? 'Tap marker' : 'Click marker'}</Key>}>Select a light</ControlRow>
                 <ControlRow keys={<Key>Drag axis</Key>}>Move selected light</ControlRow>
                 <ControlRow keys={<Key>Drag aim</Key>}>Aim a spot or sun light</ControlRow>
               </section>
@@ -144,8 +145,17 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
               <section className="controls-help-section" aria-labelledby="lighting-camera-heading">
                 <h3 id="lighting-camera-heading">Camera</h3>
                 <ControlRow keys={<Key>Drag</Key>}>Rotate rig and weapon</ControlRow>
-                <ControlRow keys={<><Key>Right drag</Key><Key>Middle drag</Key></>}>Move weapon</ControlRow>
-                <ControlRow keys={<Key>Scroll</Key>}>Zoom</ControlRow>
+                {TOUCH_ONLY_DEVICE ? (
+                  <>
+                    <ControlRow keys={<Key>Pinch</Key>}>Zoom</ControlRow>
+                    <ControlRow keys={<Key>Two-finger drag</Key>}>Move weapon</ControlRow>
+                  </>
+                ) : (
+                  <>
+                    <ControlRow keys={<><Key>Right drag</Key><Key>Middle drag</Key></>}>Move weapon</ControlRow>
+                    <ControlRow keys={<Key>Scroll</Key>}>Zoom</ControlRow>
+                  </>
+                )}
               </section>
             </>
           ) : editingMode === 'graph' ? (
@@ -268,10 +278,21 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
             <>
           <section className="controls-help-section" aria-labelledby="inspect-camera-heading">
             <h3 id="inspect-camera-heading">Inspect camera</h3>
-            <ControlRow keys={<Key>Drag</Key>}>Rotate weapon</ControlRow>
-            <ControlRow keys={<><Key>Right drag</Key><Key>Middle drag</Key></>}>Move weapon</ControlRow>
-            <ControlRow keys={<Key>Scroll</Key>}>Zoom</ControlRow>
-            <ControlRow keys={<Key>Double-click</Key>}>Reset view</ControlRow>
+            {TOUCH_ONLY_DEVICE ? (
+              <>
+                <ControlRow keys={<Key>Drag</Key>}>Rotate weapon</ControlRow>
+                <ControlRow keys={<Key>Pinch</Key>}>Zoom</ControlRow>
+                <ControlRow keys={<Key>Two-finger drag</Key>}>Move weapon</ControlRow>
+                <ControlRow keys={<Key>Double-tap</Key>}>Reset view</ControlRow>
+              </>
+            ) : (
+              <>
+                <ControlRow keys={<Key>Drag</Key>}>Rotate weapon</ControlRow>
+                <ControlRow keys={<><Key>Right drag</Key><Key>Middle drag</Key></>}>Move weapon</ControlRow>
+                <ControlRow keys={<Key>Scroll</Key>}>Zoom</ControlRow>
+                <ControlRow keys={<Key>Double-click</Key>}>Reset view</ControlRow>
+              </>
+            )}
           </section>
 
           {editingMode === 'paint' ? (
@@ -283,7 +304,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
               <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo paint edit</ControlRow>
               <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo paint edit</ControlRow>
             </section>
-          ) : (
+          ) : !TOUCH_ONLY_DEVICE && (
             <section className="controls-help-section" aria-labelledby="advanced-camera-heading">
               <h3 id="advanced-camera-heading">Advanced camera</h3>
               <ControlRow keys={<Key>Alt</Key>}>Enter or exit</ControlRow>
@@ -300,7 +321,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
           )}
         </div>
 
-        {!editingMode && <p className="controls-help-mobile-note">Advanced camera requires a keyboard and mouse.</p>}
+        {!editingMode && !TOUCH_ONLY_DEVICE && <p className="controls-help-mobile-note">Advanced camera requires a keyboard and mouse.</p>}
       </div>
     </div>
   );

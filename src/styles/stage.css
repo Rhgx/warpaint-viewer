@@ -223,11 +223,16 @@
   outline-offset: 2px;
   border-radius: 2px;
 }
-/* Narrow stages: the hint pill spans nearly the full width, so keep just the
-   mark and lift it above the pill. */
-@media (max-width: 860px) {
+/* Mobile layout: the hint pill wraps and spans nearly the full width, so keep
+   just the mark, give it a finger-sized target and lift it above a two-line
+   pill. The 40px box is centred where the bare mark used to sit. */
+@media (max-width: 860px), (max-height: 500px) {
   .stage-support-link {
-    bottom: 44px;
+    right: env(safe-area-inset-right);
+    bottom: 52px;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 40px;
   }
   .stage-support-text {
     display: none;
@@ -236,9 +241,24 @@
     width: 16px;
     height: 16px;
   }
+  .canvas-hint {
+    width: max-content;
+    max-width: calc(100% - 24px);
+    font-size: 12px;
+    text-align: center;
+    white-space: normal;
+  }
 }
 .canvas-hint.dismissed {
   opacity: 0;
+}
+/* An open mobile panel covers the hint's slot. Scoped to the mobile layout
+   because a panel left open survives a resize to the desktop layout. */
+@media (max-width: 860px), (max-height: 500px) {
+  .app:not([data-mobile-panel='none']) .canvas-hint {
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 /* The definitions prompt takes the bottom-center slot while it is up, so the
    hint steps above it rather than sitting underneath. */
@@ -304,4 +324,13 @@
   font-size: 11px;
   letter-spacing: 0.2px;
 }
-
+/* Mobile layout: moved below the toolbar (its top offset, its height of the
+   button plus 10px, and a 4px gap); at phone widths the two would otherwise
+   share the top row and overlap. */
+@media (max-width: 860px), (max-height: 500px) {
+  .stage-overlay-tl {
+    top: calc(env(safe-area-inset-top) + var(--stage-toolbar-btn) + 24px);
+    left: calc(10px + env(safe-area-inset-left));
+    max-width: calc(100% - 20px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  }
+}

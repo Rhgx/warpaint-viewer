@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { TextureResolver } from './types';
 import type { TextureMetadata } from '../data/types';
+import { TOUCH_ONLY_DEVICE } from '../device';
 
 export interface LoadOpts {
   nearest?: boolean; // select group maps must not interpolate region indices
@@ -11,6 +12,9 @@ interface Entry {
   bytes: number; // 0 until the image is decoded
   settled: boolean;
   failed: boolean;
+  // Decoded by this entry alone (THREE.Cache is off, so the loader shares
+  // nothing), which makes the entry the bitmap's only owner.
+  bitmap?: ImageBitmap;
 }
 
 /**
@@ -21,6 +25,7 @@ export interface TextureCacheBudgetHints {
   deviceMemory?: number;
   hardwareConcurrency?: number;
   maxTextureSize?: number;
+  touchOnly?: boolean;
 }
 
 const MIB = 1024 * 1024;
@@ -38,11 +43,18 @@ const reportedMissing = new Set<string>();
  * desktop (more than 8 GiB of reported memory) retains the previous 384 MiB
  * budget. GPU max texture size only constrains clearly lower-end adapters; an
  * 8192px desktop GPU is not penalized merely for reporting that limit.
+ *
+ * Phones defeat every hint above: Safari reports no memory, cores are plentiful
+ * and mobile GPUs advertise 8192-16384px textures. A touch-only device is
+ * therefore capped at 128 MiB (about five fully-mipped 2048px textures, one
+ * recipe's inputs plus a variant), since its GPU shares the few hundred MiB a
+ * mobile tab may use before the browser drops the WebGL context.
  */
 export function textureCacheBudgetBytes(hints: TextureCacheBudgetHints = {}): number {
   const nav = globalThis.navigator as (Navigator & { deviceMemory?: number }) | undefined;
   const memory = hints.deviceMemory ?? nav?.deviceMemory;
   const cores = hints.hardwareConcurrency ?? nav?.hardwareConcurrency;
+  const touchOnly = hints.touchOnly ?? TOUCH_ONLY_DEVICE;
   let budgetMiB = 256;
 
   if (Number.isFinite(memory)) {
@@ -66,6 +78,8 @@ export function textureCacheBudgetBytes(hints: TextureCacheBudgetHints = {}): nu
     if (hints.maxTextureSize! <= 2048) budgetMiB = Math.min(budgetMiB, 96);
     else if (hints.maxTextureSize! <= 4096) budgetMiB = Math.min(budgetMiB, 160);
   }
+
+  if (touchOnly) budgetMiB = Math.min(budgetMiB, 128);
 
   return budgetMiB * MIB;
 }
@@ -144,8 +158,18 @@ export class TextureCache {
       if (this.pinned.has(k) || !entry.settled || entry.failed) continue;
       this.cache.delete(k);
       this.totalBytes -= entry.bytes;
-      entry.promise.then((t) => t.dispose()).catch(() => undefined);
+      this.discard(entry, true);
     }
+  }
+
+  // Frees the GPU upload and, unless an in-flight compose may still draw (and,
+  // after a context loss, re-upload) the texture, its decoded bitmap. Every
+  // caller pins before loading, so an unpinned entry has no remaining user.
+  private discard(entry: Entry, closeBitmap: boolean) {
+    entry.promise.then((t) => {
+      t.dispose();
+      if (closeBitmap) entry.bitmap?.close();
+    }).catch(() => undefined);
   }
 
   load(ref: string, opts: LoadOpts = {}): Promise<THREE.Texture> {
@@ -225,6 +249,7 @@ export class TextureCache {
         onError();
       } else if (this.loader) {
         this.loader.load(url, (bitmap) => {
+          entry.bitmap = bitmap;
           onLoad(new THREE.Texture(bitmap));
         }, undefined, onError);
       } else {
@@ -236,9 +261,7 @@ export class TextureCache {
   }
 
   dispose() {
-    for (const e of this.cache.values()) {
-      e.promise.then((t) => t.dispose()).catch(() => undefined);
-    }
+    for (const [k, e] of this.cache) this.discard(e, !this.pinned.has(k));
     this.cache.clear();
     this.totalBytes = 0;
     this.pinned.clear();

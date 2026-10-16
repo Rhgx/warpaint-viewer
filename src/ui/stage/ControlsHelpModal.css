@@ -247,7 +247,7 @@
   font-size: 11px;
   line-height: 1.4;
 }
-@media (max-width: 860px) {
+@media (max-width: 860px), (max-height: 500px) {
   .controls-help-mobile-note {
     display: block;
   }

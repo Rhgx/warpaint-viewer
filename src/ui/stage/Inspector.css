@@ -74,6 +74,19 @@
   opacity: 0.4;
   cursor: default;
 }
+/* Finger-sized adornments on touch-only devices. */
+@media (hover: none) and (pointer: coarse) {
+  .seed-input {
+    padding-right: 76px;
+  }
+  .seed-field-actions {
+    right: 0;
+  }
+  .seed-action-btn {
+    width: 36px;
+    height: 36px;
+  }
+}
 
 /* ---------- inspector (right panel) ---------- */
 /* Its captions and detent labels are chrome, not content: a drag that misses
@@ -157,6 +170,12 @@
   flex: 1;
   height: 26px;
 }
+@media (hover: none) and (pointer: coarse) {
+  .inspector-color-row .lighting-color-swatch,
+  .inspector-color-row .lighting-color-hex {
+    height: var(--control-h);
+  }
+}
 /* Estimated output of the animated capture: a quiet readout closing the
    group, with the size as the figure that matters. */
 .capture-estimate {
@@ -203,10 +222,12 @@
 .inspector .ui-team-toggle {
   width: 100%;
 }
-/* ---------- mobile bottom tab strip (<= 860px) ---------- */
-/* Markup always renders; hidden here by default and switched on inside the
-   860px breakpoint below so no matchMedia/JS is needed to show or hide it. */
-.mobile-tabstrip {
+/* ---------- mobile bottom tab strip (mobile layout) ---------- */
+/* Markup always renders; hidden here by default and switched on by the mobile
+   layout rules in layout.css so no matchMedia/JS is needed to show or hide it.
+   The same goes for the backdrop behind the portrait catalog sheet. */
+.mobile-tabstrip,
+.mobile-sheet-backdrop {
   display: none;
 }
 .mobile-tab-btn {

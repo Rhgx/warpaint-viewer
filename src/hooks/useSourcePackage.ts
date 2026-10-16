@@ -3,6 +3,7 @@ import type { SourcePackage, SourcePackageOpenResult, SourcePackageState, Source
 import { isSupportedTexturePath, sourcePathExtension } from '../source/paths';
 import { SourceTextureProvider } from '../source/provider';
 import { AppError, appErrorDiagnostic, ERROR_CODES } from '../errors';
+import { WORKSHOP_ENABLED } from '../device';
 import {
   deleteCustomSourceFiles,
   readCustomSourceFiles,
@@ -66,11 +67,15 @@ function summaryFor(pkg: SourcePackage, provider: SourceTextureProvider): Source
   };
 }
 
-/** UI state and transactional ZIP/VPK mounting for the single active package. */
+/**
+ * UI state and transactional ZIP/VPK mounting for the single active package.
+ * Disabled, nothing is imported or restored and the saved files are never touched.
+ */
 export function useSourcePackage(
   fallback: (ref: string) => string,
   onSuccessfulImport: () => void,
   hasBuiltIn: (ref: string) => boolean = () => true,
+  enabled = WORKSHOP_ENABLED,
 ) {
   const [activityRevision, setActivityRevision] = useState(0);
   const [state, setState] = useState<Pick<SourcePackageState, 'status' | 'diagnostics' | 'summary'>>({ status: 'empty', diagnostics: [] });
@@ -103,7 +108,7 @@ export function useSourcePackage(
   useEffect(sync, [activityRevision, sync]);
 
   const importFiles = useCallback((files: File[], persist: boolean) => {
-    if (!files.length) return;
+    if (!enabled || !files.length) return;
     const operation = ++importOperationRef.current;
     persistenceDiagnosticRef.current = null;
     const format = files.some((file) => file.name.toLowerCase().endsWith('.vpk')) ? 'vpk' : 'zip';
@@ -165,11 +170,12 @@ export function useSourcePackage(
         });
       }
     })();
-  }, [onSuccessfulImport, provider, sync]);
+  }, [enabled, onSuccessfulImport, provider, sync]);
 
   const onImport = useCallback((files: File[]) => importFiles(files, true), [importFiles]);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     void readCustomSourceFiles('package').then((files) => {
       if (!cancelled && files?.length) importFiles(files, false);
@@ -181,9 +187,10 @@ export function useSourcePackage(
       sync();
     });
     return () => { cancelled = true; };
-  }, [importFiles, sync]);
+  }, [enabled, importFiles, sync]);
 
   const onRemove = useCallback(() => {
+    if (!enabled) return;
     importOperationRef.current += 1;
     persistenceDiagnosticRef.current = null;
     setSuggestedPaintkitId(undefined);
@@ -195,7 +202,7 @@ export function useSourcePackage(
       );
       sync();
     });
-  }, [provider, sync]);
+  }, [enabled, provider, sync]);
   useEffect(() => () => {
     importOperationRef.current += 1;
     provider.dispose();

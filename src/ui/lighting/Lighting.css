@@ -150,7 +150,9 @@
 .lighting-panel {
   position: absolute;
   z-index: 3;
-  top: 56px;
+  /* Toolbar top offset, its height (button plus 10px of padding and border)
+     and an 8px gap; 56px at the desktop button size. */
+  top: calc(28px + var(--stage-toolbar-btn));
   right: 10px;
   display: none;
   flex-direction: column;
@@ -623,11 +625,77 @@
   outline-offset: 1px;
 }
 
-@media (max-width: 860px) {
+/* Mobile layout. The panel only lives over the canvas, so the sheets (fixed,
+   above the stage) cover it while open and the tab strip never overlaps it.
+   Landscape keeps it under the toolbar on the right, clear of the notch. */
+@media (max-width: 860px), (max-height: 500px) {
   .lighting-panel {
-    top: 52px;
-    right: 8px;
+    top: calc(26px + var(--stage-toolbar-btn) + env(safe-area-inset-top));
+    right: calc(8px + env(safe-area-inset-right));
     width: min(248px, calc(100vw - 16px));
-    max-height: calc(100% - 68px);
+    max-height: calc(100% - 34px - var(--stage-toolbar-btn) - env(safe-area-inset-top));
+  }
+  .lighting-panel-body {
+    overscroll-behavior: contain;
+  }
+}
+/* Touch-only devices: finger-sized rows and buttons, and 16px text in the
+   number and name fields so iOS does not zoom the page on focus. */
+@media (hover: none) and (pointer: coarse) {
+  .lighting-panel {
+    width: min(300px, calc(100vw - 16px));
+  }
+  .lighting-scalar,
+  .lighting-vector,
+  .lighting-row {
+    min-height: 36px;
+  }
+  .lighting-readout,
+  .lighting-name-input {
+    height: 32px;
+    font-size: 16px;
+  }
+  .lighting-readout {
+    width: 60px;
+  }
+  .lighting-axis .lighting-readout {
+    height: 30px;
+  }
+  .lighting-color-swatch {
+    height: 32px;
+  }
+  .lighting-color-hex {
+    width: 88px;
+  }
+  .lighting-head-button,
+  .lighting-icon-button,
+  .lighting-range-toggle {
+    width: 36px;
+    height: 36px;
+  }
+  .lighting-list-select {
+    height: 40px;
+  }
+  .lighting-add-button,
+  .lighting-add-option,
+  .lighting-action-button,
+  .lighting-chip {
+    height: 36px;
+  }
+  .lighting-row .ui-select-trigger {
+    min-height: 36px;
+  }
+}
+/* Portrait: docked along the bottom of the canvas at full width, so the
+   weapon, header and toolbar above stay visible for the gizmo. Placed after
+   the touch rule so its width wins. */
+@media (max-width: 860px) and (orientation: portrait) {
+  .lighting-panel {
+    top: auto;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: 45%;
   }
 }

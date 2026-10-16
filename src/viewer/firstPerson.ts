@@ -35,6 +35,27 @@ export function viewmodelFov(horizontal: number): number {
   return THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(horizontal) / 2) * 3 / 4));
 }
 
+// Fraction of the canvas, from the top, that the portrait viewmodel frame is
+// centred in while the Controls sheet is open. Coupled to the First Person
+// Controls sheet height in layout.css (`.app[data-first-person] .inspector`,
+// 45dvh above the tab strip), which leaves a little over half of a phone
+// canvas uncovered. With the sheet closed the frame centres in the whole
+// canvas (fraction 1).
+export const FP_PORTRAIT_FRAME_CENTER = 0.55;
+
+/**
+ * Viewmodels are authored for a 4:3 frame, with the weapon in its lower right;
+ * a canvas taller than that would crop the weapon off the side. Returns where
+ * the top of the full-width 4:3 frame sits on such a canvas, in pixels, when
+ * it is centred in the top `center` fraction of the canvas, or null when the
+ * canvas is 4:3 or wider and simply widens the view like Source.
+ */
+export function viewmodelFrameTop(width: number, height: number, center: number): number | null {
+  const frameHeight = width * 3 / 4;
+  if (!(width > 0) || !(height > frameHeight)) return null;
+  return Math.max(0, (height * center - frameHeight) / 2);
+}
+
 /** Source bonemerge: matching bones follow the arms, others retain their local bind transform. */
 export function bindViewmodelBones(follower: THREE.Bone[], sources: Map<string, THREE.Bone>[]) {
   return follower.map(bone => ({ bone, source: sources.map(bones => bones.get(bone.name)).find(Boolean) }));
@@ -225,6 +246,32 @@ export class FirstPersonPreview {
     // Source continues UpdateBarrelMovement independently of the current viewmodel sequence.
     if (chamberRotating) this.chamberTarget = this.chamberAngle + Math.PI / 3;
     this.update(0);
+  }
+
+  /**
+   * Fits the camera to the canvas. `framed` keeps the whole 4:3 frame on tall
+   * canvases, centred, or lifted above a panel covering the canvas bottom
+   * (`bottom` > 0). A panel covering the right edge shifts the view left by
+   * its width, so the weapon in the frame's lower right stays beside it.
+   * Insets are CSS pixels; captures pass none.
+   */
+  fitCamera(width: number, height: number, framed: boolean, right = 0, bottom = 0): void {
+    const camera = this.camera;
+    const top = framed ? viewmodelFrameTop(width, height, bottom > 0 ? FP_PORTRAIT_FRAME_CENTER : 1) : null;
+    const view = camera.view?.enabled ? camera.view : null;
+    if (top !== null || right !== 0) {
+      // On a tall canvas the full view is the 4:3 frame and the canvas is a
+      // taller window onto it that starts `top` pixels above it.
+      const fullHeight = top === null ? height : width * 3 / 4;
+      const offsetY = top === null ? 0 : -top;
+      if (!view || view.fullWidth !== width || view.fullHeight !== fullHeight || view.height !== height
+        || view.offsetX !== right || view.offsetY !== offsetY) {
+        camera.setViewOffset(width, fullHeight, right, offsetY, width, height);
+      }
+    } else if (view || camera.aspect !== width / height) {
+      camera.aspect = width / height;
+      camera.clearViewOffset();
+    }
   }
 
   setView(fov: number, minimized: boolean): void {

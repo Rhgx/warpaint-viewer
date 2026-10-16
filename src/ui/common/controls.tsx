@@ -423,34 +423,42 @@ export function TeamToggle({
   disabled?: boolean;
   disabledReason?: string;
 }) {
+  const noteId = useId();
+  const showNote = disabled && !!disabledReason;
   return (
-    <div
-      className="ui-team-toggle"
-      data-team={team}
-      data-fixed={disabled || undefined}
-      title={disabled ? disabledReason : undefined}
-    >
-      <Toggle
-        className="ui-team-btn"
-        aria-label="RED team"
-        pressed={disabled || team === 'red'}
-        disabled={disabled}
-        onPressedChange={() => onChange('red')}
-        data-side="red"
+    <>
+      <div
+        className="ui-team-toggle"
+        data-team={team}
+        data-fixed={disabled || undefined}
+        title={disabled ? disabledReason : undefined}
       >
-        RED
-      </Toggle>
-      <Toggle
-        className="ui-team-btn"
-        aria-label="BLU team"
-        pressed={disabled || team === 'blu'}
-        disabled={disabled}
-        onPressedChange={() => onChange('blu')}
-        data-side="blu"
-      >
-        BLU
-      </Toggle>
-    </div>
+        <Toggle
+          className="ui-team-btn"
+          aria-label="RED team"
+          pressed={disabled || team === 'red'}
+          disabled={disabled}
+          onPressedChange={() => onChange('red')}
+          aria-describedby={showNote ? noteId : undefined}
+          data-side="red"
+        >
+          RED
+        </Toggle>
+        <Toggle
+          className="ui-team-btn"
+          aria-label="BLU team"
+          pressed={disabled || team === 'blu'}
+          disabled={disabled}
+          onPressedChange={() => onChange('blu')}
+          aria-describedby={showNote ? noteId : undefined}
+          data-side="blu"
+        >
+          BLU
+        </Toggle>
+      </div>
+      {/* Spelled out, since touch screens never show the tooltip. */}
+      {showNote && <p id={noteId} className="ui-team-note">{disabledReason}</p>}
+    </>
   );
 }
 

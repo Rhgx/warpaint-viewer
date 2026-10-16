@@ -12,34 +12,39 @@ export function MobileTabStrip({ mobilePanel, setMobilePanel }: MobileTabStripPr
   const toggleMobilePanel = (panel: MobilePanel) => setMobilePanel((current) => (current === panel ? 'none' : panel));
 
   return (
-    <nav className="mobile-tabstrip" aria-label="Panels">
-      <button
-        type="button"
-        className="mobile-tab-btn"
-        aria-pressed={mobilePanel === 'catalog'}
-        onClick={() => toggleMobilePanel('catalog')}
-      >
-        <Palette size={18} />
-        <span>Warpaints</span>
-      </button>
-      <button
-        type="button"
-        className="mobile-tab-btn"
-        aria-pressed={mobilePanel === 'none'}
-        onClick={() => setMobilePanel('none')}
-      >
-        <Eye size={18} />
-        <span>Viewer</span>
-      </button>
-      <button
-        type="button"
-        className="mobile-tab-btn"
-        aria-pressed={mobilePanel === 'controls'}
-        onClick={() => toggleMobilePanel('controls')}
-      >
-        <SlidersHorizontal size={18} />
-        <span>Controls</span>
-      </button>
-    </nav>
+    <>
+      {/* Shown by CSS behind the portrait catalog sheet only; a tap above the
+          sheet closes it. The Viewer tab is the keyboard route. */}
+      <div className="mobile-sheet-backdrop" aria-hidden="true" onClick={() => setMobilePanel('none')} />
+      <nav className="mobile-tabstrip" aria-label="Panels">
+        <button
+          type="button"
+          className="mobile-tab-btn"
+          aria-pressed={mobilePanel === 'catalog'}
+          onClick={() => toggleMobilePanel('catalog')}
+        >
+          <Palette size={18} />
+          <span>Warpaints</span>
+        </button>
+        <button
+          type="button"
+          className="mobile-tab-btn"
+          aria-pressed={mobilePanel === 'none'}
+          onClick={() => setMobilePanel('none')}
+        >
+          <Eye size={18} />
+          <span>Viewer</span>
+        </button>
+        <button
+          type="button"
+          className="mobile-tab-btn"
+          aria-pressed={mobilePanel === 'controls'}
+          onClick={() => toggleMobilePanel('controls')}
+        >
+          <SlidersHorizontal size={18} />
+          <span>Controls</span>
+        </button>
+      </nav>
+    </>
   );
 }

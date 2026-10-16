@@ -4,6 +4,7 @@ import type { ComponentType } from 'react';
 import { Check, Copy, Film, HelpCircle, ImageDown, PackagePlus, Rotate3d, RotateCcw, X } from 'lucide-react';
 import { ControlsHelpModal } from './ControlsHelpModal';
 import { SettingsDialog } from './SettingsDialog';
+import { TOUCH_ONLY_DEVICE, WORKSHOP_ENABLED } from '../../device';
 
 type Feedback = 'idle' | 'success' | 'error';
 
@@ -106,25 +107,31 @@ export function StageToolbar({
   return (
     <>
       <div className="stage-toolbar">
-        <button
-          type="button"
-          className="stage-toolbar-btn custom-workbench-trigger"
-          title={workbenchOpen ? 'Close custom warpaint files' : 'Open custom warpaint files'}
-          aria-label={workbenchOpen ? 'Close custom warpaint files' : 'Open custom warpaint files'}
-          aria-pressed={workbenchOpen}
-          {...preloadIntent('workbench', onPreloadWorkbench)}
-          onClick={onToggleWorkbench}
-        >
-          <PackagePlus size={15} />
-        </button>
-        <span className="stage-toolbar-divider" aria-hidden="true" />
+        {WORKSHOP_ENABLED && (
+          <>
+            <button
+              type="button"
+              className="stage-toolbar-btn custom-workbench-trigger"
+              title={workbenchOpen ? 'Close custom warpaint files' : 'Open custom warpaint files'}
+              aria-label={workbenchOpen ? 'Close custom warpaint files' : 'Open custom warpaint files'}
+              aria-pressed={workbenchOpen}
+              {...preloadIntent('workbench', onPreloadWorkbench)}
+              onClick={onToggleWorkbench}
+            >
+              <PackagePlus size={15} />
+            </button>
+            <span className="stage-toolbar-divider" aria-hidden="true" />
+          </>
+        )}
         <ToolbarButton
           label={saveLabel}
           icon={captureFormat === 'animated' ? Film : ImageDown}
           disabled={capturing}
           onAction={withCapture(onSave)}
         />
-        {captureFormat === 'image' && (
+        {/* iOS drops the user gesture across the capture await, so the
+            clipboard write fails on touch-only devices; Save still works. */}
+        {captureFormat === 'image' && !TOUCH_ONLY_DEVICE && (
           <ToolbarButton label="Copy image" icon={Copy} disabled={capturing} onAction={withCapture(onCopyImage)} />
         )}
         <span className="stage-toolbar-divider" aria-hidden="true" />

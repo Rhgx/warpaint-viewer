@@ -3,21 +3,25 @@
 Select a war paint, choose a supported weapon, and adjust its appearance in the
 right sidebar.
 
+On phones and tablets without a mouse or trackpad, the viewer runs without the
+custom war paint workbench.
+
 ## Camera controls
 
-| Action       | Result                          |
-| ------------ | ------------------------------- |
-| Drag         | Rotate the weapon               |
-| Scroll       | Zoom in or out                  |
-| Right-drag   | Move the weapon within the view |
-| Double-click | Reset the view                  |
-| `Alt`        | Toggle Advanced Camera          |
+| Action       | Touch           | Result                          |
+| ------------ | --------------- | ------------------------------- |
+| Drag         | Drag            | Rotate the weapon               |
+| Scroll       | Pinch           | Zoom in or out                  |
+| Right-drag   | Two-finger drag | Move the weapon within the view |
+| Double-click | Double-tap      | Reset the view                  |
+| `Alt`        |                 | Toggle Advanced Camera          |
 
 Preset angles, projection options, and field-of-view settings are under
 **Camera**.
 
 Advanced Camera provides bounded free-flight controls inspired by TF2's roaming
-spectator camera.
+spectator camera. It needs a keyboard and mouse, so touch-only devices do not
+offer it.
 
 The toolbar's **Auto spin** button turns the weapon like TF2's inspect panel:
 it stops while you drag and eases back in two seconds after you let go. It spins
@@ -33,7 +37,10 @@ emissive materials continue animating. The Holy Mackerel also has an optional
 **Fish Bone Physics** switch, on by default; pausing freezes its current bend.
 Paint, wear, seed, team, lighting, effects, and PNG capture use the current
 selection. Close visual editors before entering First Person. Other procedural
-weapon motion and animation autolayers are not included.
+weapon motion and animation autolayers are not included. On tall portrait phone
+screens the viewer shows the full 4:3 viewmodel frame, centred in the canvas
+and lifted above the Controls sheet while it is open. On a phone, landscape
+(fullscreen) gives First Person the most room.
 
 First-person assets load on demand. To refresh them from an extracted sibling
 viewmodel-editor project, run `node tools/models/import-viewmodels.mjs`,

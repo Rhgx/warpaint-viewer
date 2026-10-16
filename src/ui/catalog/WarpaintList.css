@@ -102,6 +102,22 @@
   background: var(--panel-2);
 }
 
+/* Touch-only devices: finger-sized view toggle and clear button. */
+@media (hover: none) and (pointer: coarse) {
+  .view-toggle-btn {
+    width: 36px;
+    height: 36px;
+  }
+  .search-field .ui-input {
+    padding-right: 38px;
+  }
+  .search-clear-btn {
+    right: 0;
+    width: 36px;
+    height: 36px;
+  }
+}
+
 /* ---------- collection filter ---------- */
 .collection-filter {
   margin-top: 8px;
@@ -256,6 +272,13 @@
   grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
   gap: 6px;
   padding: 6px 12px 8px 8px;
+}
+/* Touch-only devices: larger tiles (four or five columns on a phone) so the
+   icons are readable and easy to hit. After the base rule so it wins. */
+@media (hover: none) and (pointer: coarse) {
+  .warpaint-tile-grid {
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  }
 }
 .warpaint-tile {
   position: relative;

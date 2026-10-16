@@ -2,6 +2,7 @@ import { Dialog } from '@base-ui/react/dialog';
 import { Settings, X } from 'lucide-react';
 import { SwitchField } from '../common/controls';
 import { useSettings } from '../../settings';
+import { WORKSHOP_ENABLED } from '../../device';
 // Shares the Controls modal's frame so the two toolbar dialogs read as a pair.
 import './ControlsHelpModal.css';
 import './SettingsDialog.css';
@@ -56,6 +57,12 @@ export function SettingsDialog() {
                   </div>
                   <SwitchField checked={advancedCatalogSearch} onChange={setAdvancedCatalogSearch} ariaLabel="Advanced catalog search" />
                 </div>
+                {!WORKSHOP_ENABLED && (
+                  <div className="settings-row-description">
+                    Custom war paint files, the visual editor and definitions import are desktop features. Open the
+                    viewer on a computer to use them.
+                  </div>
+                )}
               </section>
             </div>
           </Dialog.Popup>

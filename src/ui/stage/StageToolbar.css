@@ -17,8 +17,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--stage-toolbar-btn);
+  height: var(--stage-toolbar-btn);
   padding: 0;
   background: none;
   border: none;
@@ -59,4 +59,15 @@
   color: var(--text);
   background: var(--panel-2);
 }
-
+/* Clear the notch and the rounded corners on phones (env() is 0 elsewhere). */
+@media (max-width: 860px), (max-height: 500px) {
+  .stage-toolbar {
+    top: calc(10px + env(safe-area-inset-top));
+    right: calc(10px + env(safe-area-inset-right));
+  }
+}
+@media (hover: none) and (pointer: coarse) {
+  .stage-toolbar {
+    gap: 6px;
+  }
+}

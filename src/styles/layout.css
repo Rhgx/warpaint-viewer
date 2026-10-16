@@ -110,7 +110,16 @@
 }
 
 /* ---------- responsive ---------- */
-@media (max-width: 1100px) {
+/* Breakpoints (CSS only, they follow the viewport, never the device):
+   - docked:  max-width 1100px and taller than 500px; the inspector docks under
+     the stage.
+   - mobile:  max-width 860px, or any viewport 500px tall or less (landscape
+     phones); panels become overlays toggled by the bottom tab strip.
+     - portrait: the panels are bottom sheets.
+     - landscape: the panels are side slide-overs and the strip slims down.
+   The docked rule excludes short viewports so it never has to be undone by
+   the mobile rule on a short but wide window. */
+@media (max-width: 1100px) and (height > 500px) {
   .app {
     grid-template-columns: var(--catalog-width) minmax(0, 1fr);
     grid-template-rows: 1fr auto;
@@ -126,7 +135,7 @@
   }
   .inspector {
     grid-area: inspector;
-    max-height: 42vh;
+    max-height: 42dvh;
     border-left: none;
     border-top: 1px solid var(--border);
   }
@@ -160,20 +169,24 @@
     transform: rotate(90deg);
   }
 }
-/* Below 860px the sidebar/inspector stop taking grid space entirely and
-   become fixed slide-over panels above the stage instead, toggled by the
-   bottom tab strip. The canvas (inside .stage) is never unmounted and never
-   display:none here, since the panels just overlay it; only .stage's own
-   box shrinks (padding-bottom for the strip), so the WebGL context resizes
-   once when crossing this breakpoint, never when a panel opens or closes. */
-@media (max-width: 860px) {
+/* On the mobile layout the sidebar/inspector stop taking grid space entirely
+   and become fixed overlays above the stage instead, toggled by the bottom tab
+   strip. The canvas (inside .stage) is never unmounted and never display:none
+   here, since the panels just overlay it; only .stage's own box shrinks
+   (padding-bottom for the strip), so the WebGL context resizes once when
+   crossing this breakpoint, never when a panel opens or closes.
+   --mobile-tabstrip-bottom is the strip's full height including the home
+   indicator inset; everything that sits above the strip insets by it. */
+@media (max-width: 860px), (max-height: 500px) {
   .app {
+    --mobile-tabstrip-bottom: calc(var(--mobile-tabstrip-h) + env(safe-area-inset-bottom));
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
     grid-template-areas: 'stage';
   }
   .stage {
-    padding-bottom: var(--mobile-tabstrip-h);
+    grid-area: stage;
+    padding-bottom: var(--mobile-tabstrip-bottom);
   }
   .warpaint-list {
     min-width: 0;
@@ -182,19 +195,28 @@
   .inspector {
     position: fixed;
     top: 0;
-    bottom: var(--mobile-tabstrip-h);
+    bottom: var(--mobile-tabstrip-bottom);
     z-index: 40;
     width: min(88vw, 360px);
+    height: auto;
     max-height: none;
     box-shadow: var(--shadow-pop);
-    transition: transform 220ms ease;
+    /* Closed panels only slide offscreen, so they also turn invisible once the
+       slide ends, which keeps their controls out of the tab order and away
+       from screen readers. */
+    visibility: hidden;
+    transition: transform 220ms ease, visibility 0s linear 220ms;
+  }
+  .inspector,
+  .ui-scroll-viewport {
+    overscroll-behavior: contain;
   }
   .app[data-catalog-hidden] > .sidebar,
   .app[data-controls-hidden] > .inspector {
     opacity: 1;
-    visibility: visible;
+    visibility: hidden;
     pointer-events: auto;
-    transition: transform 220ms ease;
+    transition: transform 220ms ease, visibility 0s linear 220ms;
   }
   .app[data-catalog-hidden] > .sidebar {
     transform: translateX(-100%);
@@ -205,12 +227,7 @@
     border-top-color: var(--border);
     transform: translateX(100%);
   }
-  /* The workbench trigger stays available here: below this width it is the
-     only way to reach Files/Edit/Export, and the drawer's own panels (this
-     one included) are responsive down to phone widths, so there is no reason
-     to hide the door to a room that still works. */
-  .panel-edge-toggle,
-  .stage-toolbar-divider:first-of-type {
+  .panel-edge-toggle {
     display: none;
   }
   .sidebar {
@@ -226,12 +243,6 @@
     border-top: none;
     transform: translateX(100%);
   }
-  .app[data-mobile-panel='catalog'] .sidebar {
-    transform: translateX(0);
-  }
-  .app[data-mobile-panel='controls'] .inspector {
-    transform: translateX(0);
-  }
   .mobile-tabstrip {
     display: flex;
     position: fixed;
@@ -239,16 +250,106 @@
     right: 0;
     bottom: 0;
     z-index: 60;
-    height: var(--mobile-tabstrip-h);
+    height: var(--mobile-tabstrip-bottom);
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     background: var(--panel);
     border-top: 1px solid var(--border);
   }
 }
-/* Placed after the 860px rule above (same specificity) so it wins when both
-   apply: the slide-over panels snap open/closed instead of sliding. */
-@media (max-width: 860px) and (prefers-reduced-motion: reduce) {
+/* Phone portrait: the panels rise from the strip as bottom sheets. Controls
+   stops near the middle so the top half of the weapon stays visible and can
+   still be orbited while values change, so it has no backdrop; the catalog is
+   a browse-and-pick task and takes most of the screen over a dim backdrop that
+   closes it. Closed sheets drop past the strip as well, so their shadow never
+   shows above it. */
+@media (max-width: 860px) and (orientation: portrait) {
+  .sidebar,
+  .inspector,
+  .app[data-catalog-hidden] > .sidebar,
+  .app[data-controls-hidden] > .inspector {
+    transform: translateY(calc(100% + var(--mobile-tabstrip-bottom)));
+  }
   .sidebar,
   .inspector {
+    top: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+    border: none;
+    border-top: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .sidebar {
+    height: 85dvh;
+  }
+  .inspector {
+    height: 55dvh;
+  }
+  /* First Person frames the viewmodel in the canvas area above this sheet;
+     FP_PORTRAIT_FRAME_CENTER in src/viewer/firstPerson.ts depends on it. */
+  .app[data-first-person] .inspector {
+    height: 45dvh;
+  }
+  .mobile-sheet-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: rgb(0 0 0 / 45%);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 220ms ease, visibility 0s linear 220ms;
+  }
+  .app[data-mobile-panel='catalog'] .mobile-sheet-backdrop {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 220ms ease;
+  }
+}
+/* Phone landscape: height is the scarce axis, so the panels stay side
+   slide-overs, the strip drops to a single icon-and-label row, and the side
+   panels pad past the notch. */
+@media (max-width: 860px) and (orientation: landscape), (max-height: 500px) and (orientation: landscape) {
+  .app {
+    --mobile-tabstrip-h: 44px;
+  }
+  .sidebar,
+  .inspector {
+    width: min(60vw, 360px);
+  }
+  .sidebar {
+    padding-left: env(safe-area-inset-left);
+  }
+  .inspector,
+  .app[data-controls-hidden] > .inspector {
+    padding-right: calc(10px + env(safe-area-inset-right));
+  }
+  .mobile-tab-btn {
+    flex-direction: row;
+    gap: 6px;
+    padding: 0;
+    font-size: 11px;
+  }
+}
+/* The open panel, after every hidden rule above (same specificity), so a
+   panel hidden on desktop still opens from its tab after a resize. */
+@media (max-width: 860px), (max-height: 500px) {
+  .app[data-mobile-panel='catalog'] .sidebar,
+  .app[data-mobile-panel='controls'] .inspector {
+    transform: none;
+    visibility: visible;
+    transition: transform 220ms ease, visibility 0s;
+  }
+}
+/* Placed after the mobile rules above (same specificity) so it wins when both
+   apply: the panels snap open/closed instead of sliding. */
+@media (max-width: 860px) and (prefers-reduced-motion: reduce), (max-height: 500px) and (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .inspector,
+  .app[data-catalog-hidden] > .sidebar,
+  .app[data-controls-hidden] > .inspector,
+  .app[data-mobile-panel='catalog'] .sidebar,
+  .app[data-mobile-panel='controls'] .inspector {
     transition: none;
   }
 }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TOUCH_ONLY_DEVICE } from '../device';
 
 // Controls modeled on TF2's in-game item inspect view
 // (tf_item_inspection_panel.cpp / CEmbeddedItemModelPanel): dragging rotates the
@@ -8,11 +9,17 @@ import * as THREE from 'three';
 //   scroll wheel       smooth dolly toward/away from the model
 //   right/middle drag  pan the model in the view plane (limited)
 //   double-click       reset rotation, zoom and pan to the framed default
+// Touch:
+//   one finger         rotate, like left-drag
+//   two fingers        centroid pans, spread pinches the zoom; later fingers
+//                      are ignored until the gesture ends
+//   double-tap         reset, like double-click
 // Rotation carries a short inertia tail that decays in well under a second and
 // can never become a continuous spin on its own. The game's auto-spin is
 // opt-in (setAutoSpin); otherwise the model stays still unless the user acts.
 // Advanced Camera temporarily freezes that inspect pose and drives the camera
-// as a bounded, TF2-inspired free-fly view.
+// as a bounded, TF2-inspired free-fly view. It needs a keyboard and mouse, so
+// touch-only devices never enter it.
 
 const ROTATE_SPEED = 0.0085; // radians per pixel
 const ADVANCED_LOOK_SPEED = 0.0022;
@@ -40,6 +47,10 @@ const SPIN_RESUME_DELAY = 2;
 const SPIN_RAMP_SECONDS = 2;
 const SPIN_RAMP_EXPONENT = Math.log(0.75) / Math.log(0.5);
 const DOUBLE_CLICK_DISTANCE_PX = 6;
+// Two fingertip taps rarely land within a mouse's few pixels of each other.
+const DOUBLE_TAP_SLOP_PX = 40;
+// Below this finger spread a pinch has no usable ratio, so it only pans.
+const MIN_PINCH_SPREAD_PX = 1;
 
 export type CameraMode = 'inspect' | 'advanced';
 /** Which inspect gesture owns a primary drag on empty canvas space. */
@@ -69,11 +80,45 @@ export interface InspectPointerClick {
   readonly time: number;
 }
 
-/** Detect a reliable middle double-click from completed pointer gestures. */
-export function isRapidInspectClickPair(first: InspectPointerClick, second: InspectPointerClick): boolean {
+/** Detect a reliable middle double-click (or, with touch slop, a double-tap) from completed gestures. */
+export function isRapidInspectClickPair(
+  first: InspectPointerClick,
+  second: InspectPointerClick,
+  maxDistancePx = DOUBLE_CLICK_DISTANCE_PX,
+): boolean {
   return second.time >= first.time
     && second.time - first.time <= DOUBLE_CLICK_WINDOW_MS
-    && Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY) <= DOUBLE_CLICK_DISTANCE_PX;
+    && Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY) <= maxDistancePx;
+}
+
+/** Whether two completed single-finger taps form a reset double-tap. */
+export function isInspectDoubleTap(first: InspectPointerClick, second: InspectPointerClick): boolean {
+  return isRapidInspectClickPair(first, second, DOUBLE_TAP_SLOP_PX);
+}
+
+export interface TouchPoint {
+  x: number;
+  y: number;
+}
+
+/** Centroid and spread of a two-finger touch, the baseline for pan and pinch. */
+export interface TouchPairSnapshot {
+  readonly x: number;
+  readonly y: number;
+  readonly distance: number;
+}
+
+export function touchPairSnapshot(a: TouchPoint, b: TouchPoint): TouchPairSnapshot {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, distance: Math.hypot(b.x - a.x, b.y - a.y) };
+}
+
+/**
+ * Centroid movement in pixels and the camera-distance factor between two
+ * snapshots: spreading the fingers moves the camera closer.
+ */
+export function touchPairDelta(from: TouchPairSnapshot, to: TouchPairSnapshot): { dx: number; dy: number; distanceScale: number } {
+  const usable = from.distance >= MIN_PINCH_SPREAD_PX && to.distance >= MIN_PINCH_SPREAD_PX;
+  return { dx: to.x - from.x, dy: to.y - from.y, distanceScale: usable ? from.distance / to.distance : 1 };
 }
 
 export class InspectControls {
@@ -97,8 +142,21 @@ export class InspectControls {
   private pitch = 0;
   private pan = new THREE.Vector2(); // view-plane offset in world units
 
-  // Inspect Camera interaction state
-  private mode: 'none' | 'rotate' | 'pan' = 'none';
+  // Inspect Camera interaction state. One gesture owns the camera at a time:
+  // either a single mouse/pen pointer (`dragPointerId`) or up to two touches.
+  // `pinch` is the two-finger touch gesture (pan plus zoom, never inertia).
+  private mode: 'none' | 'rotate' | 'pan' | 'pinch' = 'none';
+  private dragPointerId: number | null = null;
+  private touches = new Map<number, TouchPoint>();
+  private pinchBaseline: TouchPairSnapshot | null = null;
+  // Set when a higher-level editor took the first finger, so later fingers of
+  // the same touch session do not start a camera gesture underneath it.
+  private touchSessionForeign = false;
+  private tapStart: { readonly pointerId: number; readonly clientX: number; readonly clientY: number } | null = null;
+  private lastTap: InspectPointerClick | null = null;
+  // Touch double-taps reset through the tap tracker; the dblclick a browser may
+  // synthesize from them must not reset a second time.
+  private lastPointerDownWasTouch = false;
   /** Auto-spin speed at full ramp in rad/s; 0 when off. */
   private spinRate = 0;
   /** Seconds into the auto-spin ramp, or -1 while stopped by manipulation. */
@@ -118,13 +176,17 @@ export class InspectControls {
   // The visual paint editor deliberately owns Shift + primary-click for part
   // selection. It also has a much simpler camera model, so free-fly is not
   // available while that interaction is active.
-  private advancedCameraAvailable = true;
+  private advancedCameraAvailable = !TOUCH_ONLY_DEVICE;
   private interactionLocked = false;
   private previewActive = false;
 
+  /** First-person preview owns the view: inspect pointer, wheel and reset input are ignored. */
   setPreviewActive(active: boolean): void {
     this.previewActive = active;
-    if (active) this.setAdvancedCamera(false);
+    if (active) {
+      this.cancelGesture();
+      this.setAdvancedCamera(false);
+    }
   }
   private editorSelectionActive = false;
   // Sticker placement reserves ordinary primary drags for its own surfaces.
@@ -166,7 +228,8 @@ export class InspectControls {
     dom.addEventListener('pointerdown', this.onPointerDown);
     dom.addEventListener('pointermove', this.onPointerMove);
     dom.addEventListener('pointerup', this.onPointerUp);
-    dom.addEventListener('pointercancel', this.onPointerUp);
+    dom.addEventListener('pointercancel', this.onPointerCancel);
+    dom.addEventListener('lostpointercapture', this.onPointerCancel);
     dom.addEventListener('wheel', this.onWheel, { passive: false });
     dom.addEventListener('dblclick', this.onDblClick);
     dom.addEventListener('contextmenu', this.onContextMenu);
@@ -225,7 +288,7 @@ export class InspectControls {
    * camera. Disabling it immediately leaves Advanced Camera if necessary.
    */
   setAdvancedCameraAvailable(available: boolean): CameraMode {
-    this.advancedCameraAvailable = available;
+    this.advancedCameraAvailable = available && !TOUCH_ONLY_DEVICE;
     this.altPressed = false;
     this.altChorded = false;
     if (!available) this.setAdvancedCamera(false);
@@ -235,9 +298,7 @@ export class InspectControls {
   /** Freeze all camera input for an exact authored screenshot composition. */
   setInteractionLocked(locked: boolean) {
     this.interactionLocked = locked;
-    this.mode = 'none';
-    this.velYaw = 0;
-    this.velPitch = 0;
+    this.cancelGesture();
     this.targetDist = this.dist;
     this.altPressed = false;
     this.altChorded = false;
@@ -250,11 +311,7 @@ export class InspectControls {
    */
   setEditorSelectionActive(active: boolean) {
     this.editorSelectionActive = active;
-    if (active) {
-      this.mode = 'none';
-      this.velYaw = 0;
-      this.velPitch = 0;
-    }
+    if (active) this.cancelGesture();
   }
 
   /**
@@ -264,11 +321,9 @@ export class InspectControls {
    */
   setPrimaryDragMode(mode: InspectPrimaryDragMode) {
     this.primaryDragMode = mode;
-    if (mode === 'disabled' && this.mode === 'rotate') {
-      this.mode = 'none';
-      this.velYaw = 0;
-      this.velPitch = 0;
-    }
+    // Touch has no secondary buttons, so a disabled primary drag leaves every
+    // touch to the editor.
+    if (mode === 'disabled' && (this.mode === 'rotate' || this.touches.size > 0)) this.cancelGesture();
     if (mode !== 'disabled') {
       this.pendingStickerMiddleClick = null;
       this.lastStickerMiddleClick = null;
@@ -422,16 +477,16 @@ export class InspectControls {
   private onContextMenu = (e: Event) => e.preventDefault();
 
   private onPointerDown = (e: PointerEvent) => {
-    if (this.interactionLocked) {
+    this.lastPointerDownWasTouch = e.pointerType === 'touch';
+    if (this.interactionLocked || this.previewActive) {
       e.preventDefault();
       return;
     }
     if (e.button === 0 && this.pointerDownExclusion?.(e)) {
       // A missed pointerup must not leave a stale inspect gesture or inertia
       // tail running underneath an editor-owned transform.
-      this.mode = 'none';
-      this.velYaw = 0;
-      this.velPitch = 0;
+      this.cancelGesture();
+      if (e.pointerType === 'touch') this.touchSessionForeign = true;
       if (this.dom.hasPointerCapture(e.pointerId)) this.dom.releasePointerCapture(e.pointerId);
       e.preventDefault();
       return;
@@ -445,6 +500,12 @@ export class InspectControls {
       }
       return;
     }
+    if (e.pointerType === 'touch') {
+      this.beginTouch(e);
+      return;
+    }
+    // One gesture owns the camera; a second pointer kind cannot join it.
+    if (this.touches.size > 0 || (this.dragPointerId !== null && this.dragPointerId !== e.pointerId)) return;
     // Let the editor's React handler observe this exact pointer sequence. Do
     // not capture or prevent it: the editor uses the release point and a
     // small drag threshold to distinguish selection from a camera gesture.
@@ -463,13 +524,18 @@ export class InspectControls {
     // Sticker placement owns left drag. Middle becomes the deliberate inspect
     // orbit gesture, while right remains the stable pan affordance.
     this.mode = inspectDragForPointer(e.button, this.primaryDragMode);
+    this.dragPointerId = null;
     if (this.mode === 'none') return;
+    if (!this.capturePointer(e.pointerId)) {
+      this.mode = 'none';
+      return;
+    }
+    this.dragPointerId = e.pointerId;
     this.lastX = e.clientX;
     this.lastY = e.clientY;
     this.lastMoveTime = performance.now();
     this.velYaw = 0;
     this.velPitch = 0;
-    this.dom.setPointerCapture(e.pointerId);
     // Start the active-control frame loop before the first pointermove.
     this.onChange?.();
     e.preventDefault();
@@ -485,16 +551,26 @@ export class InspectControls {
       }
       return;
     }
-    if (this.mode === 'none') return;
+    if (e.pointerType === 'touch') {
+      this.moveTouch(e);
+      return;
+    }
+    if (this.mode === 'none' || e.pointerId !== this.dragPointerId) return;
     const pendingMiddleClick = this.pendingStickerMiddleClick;
     if (pendingMiddleClick?.pointerId === e.pointerId
       && Math.hypot(e.clientX - pendingMiddleClick.clientX, e.clientY - pendingMiddleClick.clientY) > DOUBLE_CLICK_DISTANCE_PX) {
       this.pendingStickerMiddleClick = { ...pendingMiddleClick, moved: true };
     }
-    const dx = e.clientX - this.lastX;
-    const dy = e.clientY - this.lastY;
-    this.lastX = e.clientX;
-    this.lastY = e.clientY;
+    this.dragTo(e.clientX, e.clientY);
+    e.preventDefault();
+  };
+
+  // Shared by mouse drags and one-finger touch so both feel identical.
+  private dragTo(x: number, y: number) {
+    const dx = x - this.lastX;
+    const dy = y - this.lastY;
+    this.lastX = x;
+    this.lastY = y;
     const now = performance.now();
     const dt = Math.max(1, now - this.lastMoveTime) / 1000;
     this.lastMoveTime = now;
@@ -507,18 +583,21 @@ export class InspectControls {
       this.velYaw = dYaw / dt;
       this.velPitch = dPitch / dt;
     } else {
-      // Pan: convert pixel delta to world units at the model's distance.
-      const h = this.dom.clientHeight || 1;
-      const worldPerPx = (2 * this.dist * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / h;
-      this.pan.x += dx * worldPerPx;
-      this.pan.y -= dy * worldPerPx;
-      const limit = this.radius * PAN_LIMIT_FACTOR;
-      this.pan.x = THREE.MathUtils.clamp(this.pan.x, -limit, limit);
-      this.pan.y = THREE.MathUtils.clamp(this.pan.y, -limit, limit);
+      this.panBy(dx, dy);
     }
     this.applyInspect();
-    e.preventDefault();
-  };
+  }
+
+  private panBy(dx: number, dy: number) {
+    // Pan: convert pixel delta to world units at the model's distance.
+    const h = this.dom.clientHeight || 1;
+    const worldPerPx = (2 * this.dist * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / h;
+    this.pan.x += dx * worldPerPx;
+    this.pan.y -= dy * worldPerPx;
+    const limit = this.radius * PAN_LIMIT_FACTOR;
+    this.pan.x = THREE.MathUtils.clamp(this.pan.x, -limit, limit);
+    this.pan.y = THREE.MathUtils.clamp(this.pan.y, -limit, limit);
+  }
 
   private onPointerUp = (e: PointerEvent) => {
     const pendingMiddleClick = this.pendingStickerMiddleClick;
@@ -529,18 +608,181 @@ export class InspectControls {
       this.lastStickerMiddleClick = moved ? null : released;
       this.pendingStickerMiddleClick = null;
     }
-    if (this.cameraMode === 'advanced' || this.mode === 'none') return;
+    if (e.pointerType === 'touch') {
+      this.endTouch(e);
+      return;
+    }
+    if (e.pointerId !== this.dragPointerId) return;
     // If the pointer has been still for a beat before release, drop the inertia.
     if (performance.now() - this.lastMoveTime > 80 || this.mode !== 'rotate') {
       this.velYaw = 0;
       this.velPitch = 0;
     }
     this.mode = 'none';
+    this.dragPointerId = null;
     if (this.dom.hasPointerCapture(e.pointerId)) this.dom.releasePointerCapture(e.pointerId);
   };
 
+  // pointercancel and lostpointercapture: drop only that pointer, and never
+  // let an interrupted gesture fling or count toward a double-tap.
+  private onPointerCancel = (e: PointerEvent) => {
+    if (this.pendingStickerMiddleClick?.pointerId === e.pointerId) {
+      this.pendingStickerMiddleClick = null;
+      this.lastStickerMiddleClick = null;
+    }
+    const ownedTouch = this.touches.delete(e.pointerId);
+    if (!ownedTouch && e.pointerId !== this.dragPointerId) return;
+    if (!ownedTouch) {
+      this.dragPointerId = null;
+      this.mode = 'none';
+    }
+    if (this.dom.hasPointerCapture(e.pointerId)) this.dom.releasePointerCapture(e.pointerId);
+    this.tapStart = null;
+    this.lastTap = null;
+    if (ownedTouch) this.rebaselineTouches();
+    this.velYaw = 0;
+    this.velPitch = 0;
+  };
+
+  private beginTouch(e: PointerEvent) {
+    // A primary touch starts a new session: every earlier finger has lifted,
+    // even if its pointerup never reached this element.
+    if (e.isPrimary) {
+      this.touchSessionForeign = false;
+      this.touches.clear();
+    }
+    if (this.touchSessionForeign || this.primaryDragMode === 'disabled'
+      || this.dragPointerId !== null || this.touches.size >= 2) return;
+    if (!this.capturePointer(e.pointerId)) return;
+    this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.touches.size === 1) {
+      this.tapStart = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY };
+    } else {
+      // Any multitouch disqualifies the sequence as a double-tap.
+      this.tapStart = null;
+      this.lastTap = null;
+    }
+    this.rebaselineTouches();
+    this.onChange?.();
+    e.preventDefault();
+  }
+
+  private moveTouch(e: PointerEvent) {
+    const point = this.touches.get(e.pointerId);
+    if (!point) return;
+    e.preventDefault();
+    point.x = e.clientX;
+    point.y = e.clientY;
+    const tap = this.tapStart;
+    if (tap?.pointerId === e.pointerId
+      && Math.hypot(e.clientX - tap.clientX, e.clientY - tap.clientY) > DOUBLE_CLICK_DISTANCE_PX) {
+      this.tapStart = null;
+      this.lastTap = null;
+    }
+    if (this.mode === 'rotate') {
+      this.dragTo(e.clientX, e.clientY);
+      return;
+    }
+    const points = [...this.touches.values()];
+    if (this.mode !== 'pinch' || points.length !== 2 || !this.pinchBaseline) return;
+    const next = touchPairSnapshot(points[0], points[1]);
+    const { dx, dy, distanceScale } = touchPairDelta(this.pinchBaseline, next);
+    this.pinchBaseline = next;
+    this.panBy(dx, dy);
+    // Set both distances so the zoom tracks the fingers directly instead of
+    // easing behind them like the wheel does.
+    this.dist = this.targetDist = THREE.MathUtils.clamp(this.dist * distanceScale, this.minDist(), this.maxDist());
+    this.applyInspect();
+  }
+
+  private endTouch(e: PointerEvent) {
+    if (!this.touches.delete(e.pointerId)) return;
+    if (this.dom.hasPointerCapture(e.pointerId)) this.dom.releasePointerCapture(e.pointerId);
+    if (this.touches.size > 0) {
+      // 2 -> 1: keep rotating from the remaining finger's current position.
+      this.rebaselineTouches();
+      return;
+    }
+    // Same release rule as the mouse: a finger that paused keeps no inertia.
+    if (performance.now() - this.lastMoveTime > 80 || this.mode !== 'rotate') {
+      this.velYaw = 0;
+      this.velPitch = 0;
+    }
+    this.mode = 'none';
+    const start = this.tapStart;
+    this.tapStart = null;
+    if (!start || start.pointerId !== e.pointerId
+      || Math.hypot(e.clientX - start.clientX, e.clientY - start.clientY) > DOUBLE_CLICK_DISTANCE_PX) {
+      this.lastTap = null;
+      return;
+    }
+    const tap = { clientX: e.clientX, clientY: e.clientY, time: performance.now() };
+    if (this.lastTap && isInspectDoubleTap(this.lastTap, tap)) {
+      this.lastTap = null;
+      this.resetInspect();
+    } else {
+      this.lastTap = tap;
+    }
+  }
+
+  /**
+   * Called whenever the owned touch count changes. Re-reads the baselines from
+   * the fingers' current positions so the pose never jumps, and drops any
+   * rotational inertia: only a final one-finger release may fling.
+   */
+  private rebaselineTouches() {
+    const points = [...this.touches.values()];
+    this.velYaw = 0;
+    this.velPitch = 0;
+    this.lastMoveTime = performance.now();
+    this.pinchBaseline = null;
+    if (points.length === 2) {
+      this.mode = 'pinch';
+      this.pinchBaseline = touchPairSnapshot(points[0], points[1]);
+    } else if (points.length === 1) {
+      this.mode = 'rotate';
+      this.lastX = points[0].x;
+      this.lastY = points[0].y;
+    } else {
+      this.mode = 'none';
+    }
+  }
+
+  /**
+   * Every owned pointer holds capture: its release then always reaches this
+   * element, and a lost capture drops it through onPointerCancel, so a pointer
+   * released outside the canvas can never stay owned. A pointer the browser
+   * refuses to capture (already released, or unknown) is simply not owned.
+   */
+  private capturePointer(pointerId: number): boolean {
+    try {
+      this.dom.setPointerCapture(pointerId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Drop every owned pointer and release its capture, without an inertia tail. */
+  private cancelGesture() {
+    const owned = [...this.touches.keys()];
+    if (this.dragPointerId !== null) owned.push(this.dragPointerId);
+    // Clear ownership before releasing so the lostpointercapture it causes is a no-op.
+    this.touches.clear();
+    this.dragPointerId = null;
+    this.pinchBaseline = null;
+    this.mode = 'none';
+    this.velYaw = 0;
+    this.velPitch = 0;
+    this.tapStart = null;
+    this.lastTap = null;
+    for (const id of owned) {
+      if (this.dom.hasPointerCapture(id)) this.dom.releasePointerCapture(id);
+    }
+  }
+
   private onWheel = (e: WheelEvent) => {
-    if (this.interactionLocked) {
+    if (this.interactionLocked || this.previewActive) {
       e.preventDefault();
       return;
     }
@@ -552,11 +794,11 @@ export class InspectControls {
   };
 
   private onDblClick = (e: MouseEvent) => {
-    if (this.interactionLocked) {
+    if (this.interactionLocked || this.previewActive) {
       e.preventDefault();
       return;
     }
-    if (this.cameraMode !== 'inspect' || !inspectDoubleClickResets(e.button, this.primaryDragMode)) return;
+    if (this.lastPointerDownWasTouch || this.cameraMode !== 'inspect' || !inspectDoubleClickResets(e.button, this.primaryDragMode)) return;
     e.preventDefault();
     this.resetInspect();
   };
@@ -654,9 +896,7 @@ export class InspectControls {
     this.pressedKeys.clear();
     this.altPressed = false;
     this.altChorded = false;
-    this.mode = 'none';
-    this.velYaw = 0;
-    this.velPitch = 0;
+    this.cancelGesture();
     this.pendingStickerMiddleClick = null;
     this.lastStickerMiddleClick = null;
     this.advancedVelocity.set(0, 0, 0);
@@ -667,9 +907,7 @@ export class InspectControls {
   };
 
   private enterAdvancedCamera() {
-    this.mode = 'none';
-    this.velYaw = 0;
-    this.velPitch = 0;
+    this.cancelGesture();
     this.camera.updateMatrixWorld();
     this.advancedPosition.copy(this.camera.position);
     this.advancedStartPosition.copy(this.camera.position);
@@ -824,11 +1062,13 @@ export class InspectControls {
 
   dispose() {
     this.disposed = true;
+    this.cancelGesture();
     if (document.pointerLockElement === this.dom) document.exitPointerLock?.();
     this.dom.removeEventListener('pointerdown', this.onPointerDown);
     this.dom.removeEventListener('pointermove', this.onPointerMove);
     this.dom.removeEventListener('pointerup', this.onPointerUp);
-    this.dom.removeEventListener('pointercancel', this.onPointerUp);
+    this.dom.removeEventListener('pointercancel', this.onPointerCancel);
+    this.dom.removeEventListener('lostpointercapture', this.onPointerCancel);
     this.dom.removeEventListener('wheel', this.onWheel);
     this.dom.removeEventListener('dblclick', this.onDblClick);
     this.dom.removeEventListener('contextmenu', this.onContextMenu);

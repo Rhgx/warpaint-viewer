@@ -8,6 +8,7 @@ import type { RecipeNode } from '../../../src/compositor/types';
 // Pixel correctness remains covered by the browser self-test.
 const gpu = vi.hoisted(() => ({
   capabilities: { maxTextureSize: 16384, getMaxAnisotropy: () => 1 },
+  domElement: new EventTarget(),
   getRenderTarget: () => null,
   setRenderTarget: vi.fn(),
   render: vi.fn(),
@@ -172,4 +173,149 @@ test('intent warmup loads only the seed-selected sticker, while idle warmup reta
     assert.ok(resolve.mock.calls.some(([ref]) => ref === 'first'));
     assert.ok(resolve.mock.calls.some(([ref]) => ref === 'second'));
   } finally { comp.dispose(); }
+});
+
+const lost = () => gpu.domElement.dispatchEvent(new Event('webglcontextlost'));
+const restored = () => gpu.domElement.dispatchEvent(new Event('webglcontextrestored'));
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const dims = { width: 64, height: 64 };
+const lookup = (texture: string): RecipeNode => ({ type: 'texture_lookup', texture });
+const drawsInto = (target: THREE.WebGLRenderTarget) => gpu.setRenderTarget.mock.calls.filter(([drawn]) => drawn === target).length;
+
+/**
+ * Decodes each ref into a fake ImageBitmap the way ImageBitmapLoader does
+ * (fetch, then createImageBitmap). A ref with a gate waits for it to open.
+ */
+function stubBitmaps(edge: (ref: string) => number) {
+  const closed = new Set<unknown>();
+  const gates = new Map<string, Promise<void>>();
+  const requested: string[] = [];
+  vi.stubGlobal('fetch', async (url: string) => {
+    requested.push(url);
+    await gates.get(url);
+    return { blob: async () => new Blob([url]) };
+  });
+  vi.stubGlobal('createImageBitmap', async (blob: Blob) => {
+    const size = edge(await blob.text());
+    const bitmap = { width: size, height: size, close: () => { closed.add(bitmap); } };
+    return bitmap;
+  });
+  return { closed, gates, requested };
+}
+
+test('a restore reloads inputs evicted during the loss instead of uploading closed bitmaps', async () => {
+  // 4096px fits any cache budget alone; 8192px exceeds every budget.
+  const { closed, gates } = stubBitmaps((ref) => ref === 'big' ? 8192 : 4096);
+  let closedUses = 0;
+  const countClosed = (texture: unknown) => {
+    if (texture instanceof THREE.Texture && closed.has(texture.image)) closedUses++;
+  };
+  gpu.initTexture.mockImplementation(countClosed);
+  gpu.render.mockImplementation((scene: THREE.Scene) => scene.traverse((object) => {
+    if (!(object instanceof THREE.Mesh) || !(object.material instanceof THREE.RawShaderMaterial)) return;
+    for (const slot of ['uTex0', 'uTex1', 'uTex2', 'uTex3']) countClosed(object.material.uniforms[slot].value);
+  }));
+  const comp = new Compositor((ref) => ref);
+  let open = () => {};
+  try {
+    const kept = await comp.compose(lookup('small'), '0', dims);
+    lost();
+    // Pushes the cache over budget, evicting and closing both inputs.
+    comp.releaseResult(await comp.compose(lookup('big'), '0', dims));
+    await flush();
+    assert.equal(closed.size, 2);
+
+    gates.set('small', new Promise<void>((resolve) => { open = resolve; }));
+    gpu.setRenderTarget.mockClear();
+    restored();
+    const after = comp.compose(recipe, '1');
+    await flush();
+    assert.equal(drawsInto(kept.target), 0);
+    open();
+    comp.releaseResult(await after);
+    assert.equal(drawsInto(kept.target), 1);
+    assert.equal(closedUses, 0);
+    comp.releaseResult(kept);
+  } finally {
+    open();
+    comp.dispose();
+    gpu.initTexture.mockReset();
+    gpu.render.mockReset();
+    vi.unstubAllGlobals();
+  }
+});
+
+test('disposing while a restore awaits its inputs stops it without rendering or pooling', async () => {
+  const { gates, requested } = stubBitmaps(() => 8192);
+  const comp = new Compositor((ref) => ref);
+  let open = () => {};
+  try {
+    const kept = await comp.compose(lookup('a'), '0', dims);
+    const keptDisposed = vi.fn();
+    kept.target.addEventListener('dispose', keptDisposed);
+    // The input was evicted on unpin, so the restore has to fetch it again.
+    gates.set('a', new Promise<void>((resolve) => { open = resolve; }));
+    lost();
+    restored();
+    await vi.waitFor(() => assert.equal(requested.length, 2));
+
+    comp.dispose();
+    gpu.render.mockClear();
+    gpu.setRenderTarget.mockClear();
+    gpu.initTexture.mockClear();
+    open();
+    await flush();
+    await flush();
+    assert.equal(gpu.render.mock.calls.length, 0);
+    assert.equal(gpu.setRenderTarget.mock.calls.length, 0);
+    assert.equal(gpu.initTexture.mock.calls.length, 0);
+    // An owner returning its result late gets it destroyed, not pooled.
+    comp.releaseResult(kept);
+    assert.equal(keptDisposed.mock.calls.length, 1);
+  } finally {
+    open();
+    comp.dispose();
+    vi.unstubAllGlobals();
+  }
+});
+
+test('each restore recomposes every live result once and a superseded restore abandons', async () => {
+  const comp = new Compositor((ref) => ref);
+  const restoredEvents = vi.fn();
+  gpu.domElement.addEventListener('warpaint:compose-restored', restoredEvents);
+  // Queued behind any restore, so it settles once the restore has run.
+  const settle = async () => comp.releaseResult(await comp.compose(recipe, '9'));
+  try {
+    const first = await comp.compose(recipe, '0', dims);
+    const second = await comp.compose(recipe, '1', dims);
+    comp.releaseResult(await comp.compose(recipe, '2', dims));
+    const disposed = await comp.compose(recipe, '3', dims);
+    disposed.target.dispose();
+    gpu.setRenderTarget.mockClear();
+
+    for (let cycle = 1; cycle <= 2; cycle++) {
+      lost();
+      restored();
+      await settle();
+      assert.equal(restoredEvents.mock.calls.length, 2 * cycle);
+      assert.equal(drawsInto(first.target), cycle);
+      assert.equal(drawsInto(second.target), cycle);
+    }
+
+    // Lost again before the queued pass ran: only the latest pass does work.
+    lost();
+    restored();
+    lost();
+    restored();
+    await settle();
+    assert.equal(restoredEvents.mock.calls.length, 6);
+    assert.equal(drawsInto(first.target), 3);
+    assert.equal(drawsInto(second.target), 3);
+    assert.equal(drawsInto(disposed.target), 0);
+    comp.releaseResult(first);
+    comp.releaseResult(second);
+  } finally {
+    gpu.domElement.removeEventListener('warpaint:compose-restored', restoredEvents);
+    comp.dispose();
+  }
 });

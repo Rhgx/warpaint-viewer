@@ -44,9 +44,14 @@
      line up in the controls bar. */
   --control-h: 28px;
 
+  /* Square size of the stage toolbar's buttons. Overlays that sit under the
+     toolbar (stage header on the mobile layout, lights panel) offset by it. */
+  --stage-toolbar-btn: 28px;
+
   /* Height of the bottom tab strip that replaces the sidebar/inspector
-     layout below 860px; the stage and slide-over panels both inset by this
-     so nothing renders underneath it. */
+     layout on the mobile layout (see layout.css); the stage and the panels
+     both inset by this (plus the home indicator inset) so nothing renders
+     underneath it. Phone landscape slims it down. */
   --mobile-tabstrip-h: 56px;
 
   /* Radius scale, applied consistently across buttons/inputs/popups. */
@@ -64,5 +69,13 @@
 @media (prefers-reduced-motion: reduce) {
   :root {
     --transition-fast: none;
+  }
+}
+
+/* Touch-only devices get finger-sized controls regardless of layout. */
+@media (hover: none) and (pointer: coarse) {
+  :root {
+    --control-h: 36px;
+    --stage-toolbar-btn: 36px;
   }
 }

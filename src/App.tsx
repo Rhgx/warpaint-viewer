@@ -56,6 +56,7 @@ import { useTransformEditor } from './editor/transform/useTransformEditor';
 import { collectPackageStickerSpecularOverrides } from './workbench/assetSlots';
 import { ClearWorkspaceDialog } from './ui/common/ClearWorkspaceDialog';
 import { AppToasts } from './ui/common/AppToasts';
+import { matchesMobileLayout, WORKSHOP_ENABLED } from './device';
 
 // Selftest page is code-split: it never loads in normal use.
 const SelfTestPage = lazy(() => import('./dev/selftest').then((m) => ({ default: m.SelfTestPage })));
@@ -81,6 +82,7 @@ export default function App() {
 function MainApp() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewerRef = useRef<Viewer | null>(null);
+  const inspectorRef = useRef<HTMLElement | null>(null);
   const compositorRef = useRef<Compositor | null>(null);
 
   const [engineReady, setEngineReady] = useState(false);
@@ -283,6 +285,25 @@ function MainApp() {
       setState((current) => ({ ...current, team: 'red' }));
     }
   }, [kitHasTeamTextures, firstPersonActive, selectedKit, state.sheen, state.team]);
+  // Keep the weapon in the canvas area an open mobile Controls panel leaves
+  // uncovered. Measures the panel's layout box, which its slide transform does
+  // not change: the portrait sheet's height (55dvh, 45dvh in First Person, see
+  // layout.css) or the landscape slide-over's width. The catalog sheet and the
+  // desktop layout leave the view alone. First Person is a dependency only
+  // because it changes the sheet height.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!engineReady || !viewer) return;
+    const update = () => {
+      const panel = mobilePanel === 'controls' && matchesMobileLayout() ? inspectorRef.current : null;
+      if (!panel) viewer.setViewInset(0, 0);
+      else if (window.matchMedia('(orientation: portrait)').matches) viewer.setViewInset(0, panel.offsetHeight);
+      else viewer.setViewInset(panel.offsetWidth, 0);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [engineReady, mobilePanel, firstPersonActive]);
   const selectedMaterialOverrideId = selectedKit?.materialOverrides?.[state.weaponKey] ?? '';
   const selectedAssetKey = selectedKit && state.weaponKey
     ? `${state.weaponKey}|material:${selectedMaterialOverrideId || 'stock'}|package:${packageGeneration}`
@@ -627,6 +648,9 @@ function MainApp() {
     // it does in First Person, where the arms follow the team.
     if (kit && !kit.hasTeamTextures && state.sheen !== 'team_shine' && !firstPersonActive) next.team = 'red';
     patch(next);
+    // On the mobile layout the catalog covers the stage, so picking a paint
+    // gets out of the way to show it.
+    if (matchesMobileLayout()) setMobilePanel('none');
   });
 
   const paintNames = useMemo(
@@ -939,6 +963,7 @@ function MainApp() {
       data-mobile-panel={mobilePanel}
       data-catalog-hidden={!catalogVisible ? '' : undefined}
       data-controls-hidden={!controlsVisible ? '' : undefined}
+      data-first-person={firstPersonActive ? '' : undefined}
     >
       <aside className="sidebar" id="warpaint-catalog-panel">
         <WarpaintList
@@ -993,6 +1018,8 @@ function MainApp() {
             editingMode={editingMode}
             onPreloadWorkbench={preloadWorkbench}
             onToggleWorkbench={() => {
+              // The only way in, so the workbench is never imported or mounted without the workshop.
+              if (!WORKSHOP_ENABLED) return;
               setWorkbenchMounted(true);
               setWorkbenchOpen((open) => !open);
             }}
@@ -1124,7 +1151,7 @@ function MainApp() {
           )}
         </div>
       </main>
-      <aside className="inspector" id="viewer-controls-panel">
+      <aside className="inspector" id="viewer-controls-panel" ref={inspectorRef}>
         <Inspector
           firstPersonActive={firstPersonActive}
           previewControls={previewControls}

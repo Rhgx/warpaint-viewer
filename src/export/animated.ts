@@ -14,6 +14,7 @@ import {
 } from 'mediabunny';
 import { pngChunk, zlibCompress } from '../source/png';
 import type { TurntableQuality } from '../viewer/controls';
+import { TOUCH_ONLY_DEVICE } from '../device';
 
 /** Frame encoder contract shared with GifEncoder. */
 export interface AnimationEncoder {
@@ -26,9 +27,11 @@ const ascii = (text: string) => Uint8Array.from(text, (c) => c.charCodeAt(0));
 /**
  * Frames a platform encoder may work on at once. Both CompressionStream and
  * the canvas WebP encoder run off the calling thread, so overlapping frames
- * uses more cores; results are still kept in frame order.
+ * uses more cores; results are still kept in frame order. Phones hold two
+ * snapshots instead of four. In the encoder worker TOUCH_ONLY_DEVICE reads
+ * false, but there the page's own in-flight limit already bounds the frames.
  */
-const FRAMES_IN_FLIGHT = 4;
+const FRAMES_IN_FLIGHT = TOUCH_ONLY_DEVICE ? 2 : 4;
 
 /** Ordered results of asynchronous per-frame work with at most FRAMES_IN_FLIGHT running. */
 class FramePipeline<T> {

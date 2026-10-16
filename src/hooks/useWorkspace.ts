@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { clearCustomWorkspace } from '../editor/draftStorage';
+import { WORKSHOP_ENABLED } from '../device';
 import type { useEditorDraft } from '../editor/useEditorDraft';
 import type { PaintkitEntry } from '../data/types';
 import type { WarpaintAssetOverrides, WorkbenchTab } from '../workbench/types';
@@ -56,6 +57,8 @@ export function useWorkspace({
       : null;
 
   const clearWorkspace = useCallback(() => {
+    // Wipes every saved custom file and draft, which belong to the desktop app.
+    if (!WORKSHOP_ENABLED) return;
     setClearingWorkspace(true);
     setClearWorkspaceError(null);
     void clearCustomWorkspace().then((result) => {
@@ -76,6 +79,7 @@ export function useWorkspace({
   // Custom files only live in memory. Let the browser warn before a refresh,
   // tab close, or navigation would discard any cached edit set.
   useEffect(() => {
+    if (!WORKSHOP_ENABLED) return;
     const hasCachedEdits = Object.values(assetOverrideCache).some((entry) => Object.keys(entry.assets).length > 0);
     const editorDraftAtRisk = editorDirty && editorDraft.status !== 'saved';
     if (!hasCachedEdits && !editorDraftAtRisk && sourcePackage.status !== 'mounted' && definitions.state.status !== 'loaded') return;

@@ -140,9 +140,14 @@
   }
 }
 
-@media (max-width: 860px) {
+/* Mobile layout: the stage header moves under the toolbar there, so toasts
+   take the top edge instead (above the toolbar, clear of the notch). They
+   stack over every stage overlay, so a toast can briefly cover the header
+   but never slips underneath it. */
+@media (max-width: 860px), (max-height: 500px) {
   .toast-viewport {
-    width: calc(100vw - 20px);
+    top: calc(10px + env(safe-area-inset-top));
+    width: min(420px, calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right)));
   }
 
   .app-toast {

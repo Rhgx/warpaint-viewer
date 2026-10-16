@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react';
+import { Fragment, memo, useEffect, useState } from 'react';
 import type { PreloadIntent } from '../../hooks/useIntentPreload';
 import type { ReactNode } from 'react';
 import {
@@ -16,10 +16,13 @@ import type { LightingStore } from '../../viewer/lighting/lightingStore';
 import { CUSTOM_LIGHTING_ID } from '../../viewer/lighting/customLighting';
 import { LightingRigSummary } from '../lighting/LightingRigSummary';
 import { TURNTABLE_FORMATS, turntablePlaybackFps } from '../../hooks/useScreenshotActions';
+import { matchesMobileLayout, TOUCH_ONLY_DEVICE } from '../../device';
 
 const rgbCss = ([r, g, b]: [number, number, number]) =>
   `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
 
+// Mobile browsers cap canvas area well below an 8K capture, so touch-only
+// devices stop at 4K.
 const SCREENSHOT_SIZE_OPTIONS = [
   { value: '1280', label: '720p' },
   { value: '1920', label: '1080p' },
@@ -27,7 +30,7 @@ const SCREENSHOT_SIZE_OPTIONS = [
   { value: '3840', label: '4K' },
   { value: '7680', label: '8K' },
   { value: '15360', label: '16K' },
-];
+].filter((option) => !TOUCH_ONLY_DEVICE || Number(option.value) <= 3840);
 
 const TURNTABLE_QUALITY_OPTIONS = [
   { value: 'standard', label: 'Standard' },
@@ -43,10 +46,15 @@ const TURNTABLE_FORMAT_DESCRIPTIONS: Record<TurntableFormat, string> = {
   mp4: 'Smallest, no transparency',
 };
 
-// A collapsible group of controls. Expanded by default; each section keeps
-// its own local, unpersisted open/closed state.
-export function InspectorSection({ title, children, className = '' }: { title: string; children: ReactNode; className?: string }) {
-  const [open, setOpen] = useState(true);
+// A collapsible group of controls. Expanded unless defaultOpen says otherwise;
+// each section keeps its own local, unpersisted open/closed state.
+export function InspectorSection({ title, children, className = '', defaultOpen = true }: {
+  title: string;
+  children: ReactNode;
+  className?: string;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className={`inspector-section ${className}`}>
       <button
@@ -207,6 +215,9 @@ export const Inspector = memo(function Inspector({
   onToggleLightingPanel: () => void;
   onSelectLight: (id: string) => void;
 }) {
+  // The mobile layout's Controls sheet is short, so the sections used less
+  // often start collapsed there. Decided once; resizing never folds them.
+  const [compact] = useState(matchesMobileLayout);
   const presetOptions = [
     ...LIGHTING_PRESETS.map((p) => ({ value: p.id, label: p.label })),
     { value: CUSTOM_LIGHTING_ID, label: 'Custom' },
@@ -235,8 +246,13 @@ export const Inspector = memo(function Inspector({
   const turntableOverDiscordLimit = turntableEstimatedBytes > 10 * 1024 * 1024;
   const turntableEstimatedMb = (turntableEstimatedBytes / (1024 * 1024)).toFixed(1);
 
+  // First Person leads with its own controls, so the animation list is not
+  // below Item and Finish. Keyed, so moving it keeps the controls' state.
+  const preview = <Fragment key="preview">{previewControls}</Fragment>;
+
   return (
     <>
+      {firstPersonActive && preview}
       <InspectorSection title="Item">
         <div className="control" role="group" aria-label="Weapon">
           <span className="control-label"><Crosshair size={12} /><span>Weapon</span></span>
@@ -318,11 +334,11 @@ export const Inspector = memo(function Inspector({
         </Control>
       </InspectorSection>
 
-      {previewControls}
+      {!firstPersonActive && preview}
 
       {/* First Person has its own camera, so none of these apply there. */}
       {!firstPersonActive && (
-        <InspectorSection title="Camera">
+        <InspectorSection title="Camera" defaultOpen={!compact}>
           <Control label={<><Camera size={12} /><span>View angle</span></>}>
             <SelectField
               value={viewAngle}
@@ -369,7 +385,7 @@ export const Inspector = memo(function Inspector({
         </InspectorSection>
       )}
 
-      <InspectorSection title="Capture">
+      <InspectorSection title="Capture" defaultOpen={!compact}>
         {/* First Person renders a live view, not the inspect pose an animated turntable needs, so it can only capture images. */}
         {!firstPersonActive && (
           <Control group label={<span>Output</span>}>

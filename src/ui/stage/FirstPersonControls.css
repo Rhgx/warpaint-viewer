@@ -23,3 +23,14 @@
 .first-person-controls [role='status'] { color: var(--text-dim); font-size: 11px; line-height: 1.5; }
 .canvas-wrap:has(.first-person-input-shield) ~ .canvas-hint { display: none; }
 .canvas-wrap:has(.first-person-input-shield) .canvas-hint { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .first-person-animation-option,
+  .first-person-playback { min-height: var(--control-h); }
+  .first-person-controls .ui-switch { width: 36px; height: 20px; border-radius: 10px; }
+  .first-person-controls .ui-switch-thumb { width: 16px; height: 16px; }
+  .first-person-controls .ui-switch[data-checked] .ui-switch-thumb { transform: translateX(16px); }
+}
+/* The Controls sheet scrolls as a whole instead of nesting a scroll box. */
+@media (max-width: 860px), (max-height: 500px) {
+  .first-person-animation-list { max-height: none; }
+}

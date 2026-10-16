@@ -5,6 +5,7 @@ import { TURNTABLE_SECONDS, type ControlsState, type TurntableFormat, type Turnt
 import type { TurntableWorkerRequest, TurntableWorkerResponse } from '../export/turntable.worker';
 import { downloadBlob } from '../ui/common/download';
 import { canEncodeMp4, canEncodeWebp, WebpEncoder } from '../export/animated';
+import { TOUCH_ONLY_DEVICE } from '../device';
 
 export type TurntableSettings = Pick<
   ControlsState,
@@ -89,8 +90,9 @@ export type TurntableStatus =
   | { readonly phase: 'failed'; readonly message: string };
 
 // Frames the encoder may have queued before rendering waits for it, which
-// bounds memory to a handful of frames plus the output file itself.
-const MAX_FRAMES_IN_FLIGHT = 4;
+// bounds memory to a handful of frames plus the output file itself. A raw
+// 1440 px MP4 frame is about 8 MB, so phones keep two.
+const MAX_FRAMES_IN_FLIGHT = TOUCH_ONLY_DEVICE ? 2 : 4;
 const PROGRESS_INTERVAL_MS = 100;
 
 /**

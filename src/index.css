@@ -12,6 +12,8 @@ body,
 }
 
 body {
+  /* No pull-to-refresh or rubber-banding while a drag orbits the model. */
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -489,6 +491,14 @@ button {
   background: color-mix(in srgb, var(--blu) 56%, var(--panel));
   color: color-mix(in srgb, #fff 76%, var(--muted));
 }
+/* Why the toggle is locked, as a quiet line under it rather than a tooltip
+   that touch screens never show. */
+.ui-team-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.35;
+}
 
 /* ---------- Base UI: Switch ---------- */
 .ui-switch {
@@ -514,6 +524,27 @@ button {
 }
 .ui-switch[data-checked] .ui-switch-thumb {
   transform: translateX(16px);
+}
+
+/* ---------- touch targets ---------- */
+/* Touch-only devices: finger-sized list rows and slider grabs (the thumb keeps
+   its look, an invisible box widens what a finger can land on), and 16px text
+   in every text field so iOS does not zoom the page on focus. --control-h
+   grows in tokens.css for the same reason. */
+@media (hover: none) and (pointer: coarse) {
+  .ui-select-item {
+    min-height: 40px;
+  }
+  .ui-slider-thumb::before {
+    content: '';
+    position: absolute;
+    inset: -10.5px;
+  }
+  .ui-input,
+  .ui-num-input,
+  .ui-select-search input {
+    font-size: 16px;
+  }
 }
 
 /* ---------- Base UI: ScrollArea ---------- */

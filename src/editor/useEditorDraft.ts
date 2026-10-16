@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { WORKSHOP_ENABLED } from '../device';
 import type { ProtoDefKitBundle } from '../protodefs/types';
 import {
   deleteEditorDraft,
@@ -27,6 +28,8 @@ interface UseEditorDraftOptions {
   current: ProtoDefKitBundle | null;
   dirty: boolean;
   restore: (bundle: ProtoDefKitBundle) => boolean;
+  /** Off leaves every stored draft untouched: nothing is read, written, or deleted. */
+  enabled?: boolean;
 }
 
 export interface EditorDraftState {
@@ -41,7 +44,7 @@ function bundlesEqual(left: ProtoDefKitBundle, right: ProtoDefKitBundle): boolea
 }
 
 export function useEditorDraft({
-  key,
+  key: requestedKey,
   kitId,
   paintName,
   revision,
@@ -49,7 +52,10 @@ export function useEditorDraft({
   current,
   dirty,
   restore,
+  enabled = WORKSHOP_ENABLED,
 }: UseEditorDraftOptions): EditorDraftState {
+  // Without a key every storage path below is already inert.
+  const key = enabled ? requestedKey : null;
   const [candidate, setCandidate] = useState<EditorDraftRecord | null>(null);
   const [storageStatus, setStorageStatus] = useState<EditorDraftStatus>('idle');
   const [savedAt, setSavedAt] = useState<number | undefined>();

@@ -36,6 +36,7 @@ import {
 } from '../protodefs/templatePaint';
 import { loadOperationTemplates } from '../data/loader';
 import { appErrorDiagnostic, ERROR_CODES } from '../errors';
+import { WORKSHOP_ENABLED } from '../device';
 import { topLevelMessages } from '../editor/kitBundle';
 import { applyImplicitStickerSpecs } from '../protodefs/implicitStickerSpecs';
 import { partitionResolvableKits } from '../protodefs/validation';
@@ -92,6 +93,8 @@ interface UseCustomDefinitionsOptions {
   getAssetUrl: (rel: string) => string | null;
   provider: SourceTextureProvider;
   packageGeneration: number;
+  /** Off loads nothing and never touches the saved definition files. */
+  enabled?: boolean;
 }
 
 interface LoadedFile {
@@ -148,6 +151,7 @@ export function useCustomDefinitions({
   getAssetUrl,
   provider,
   packageGeneration,
+  enabled = WORKSHOP_ENABLED,
 }: UseCustomDefinitionsOptions): CustomDefinitions {
   const [status, setStatus] = useState<CustomDefinitionsState['status']>('empty');
   const [loaded, setLoaded] = useState<LoadedFile | null>(null);
@@ -241,6 +245,9 @@ export function useCustomDefinitions({
     run: (source: ProtoDefSource, options: ProtoDefOpenOptions) => Promise<ProtoDefIndex>,
     extras: FragmentOpenOptions & { fragments?: ProtoDefJsonFragment[] } = {},
   ): Promise<boolean> => {
+    // Every load (import, restore, create, rename, delete) opens here, and a
+    // failed open never reaches the saved-file writes that follow it.
+    if (!enabled) return false;
     const operation = ++importOperationRef.current;
     setStatus('importing');
     setFileName(name);
@@ -320,7 +327,7 @@ export function useCustomDefinitions({
       setDiagnostics([errorDiagnostic(cause)]);
       return false;
     }
-  }, [loadWeaponsByItemDef, manifest, provider, release]);
+  }, [enabled, loadWeaponsByItemDef, manifest, provider, release]);
 
   const openContainer = useCallback((name: string, bytes: Uint8Array) => openWith(name, (source, options) => {
     if (bytes.byteLength > MAX_DEFINITION_BYTES) {
@@ -524,7 +531,7 @@ export function useCustomDefinitions({
   const onImport = useCallback((files: File[]) => importFiles(files, true), [importFiles]);
 
   useEffect(() => {
-    if (!manifest || !getAssetUrl('item-defs.json')) return;
+    if (!enabled || !manifest || !getAssetUrl('item-defs.json')) return;
     let cancelled = false;
     void readCustomSourceFiles('definitions').then((files) => {
       if (!cancelled && files?.length) importFiles(files, false);
@@ -540,9 +547,10 @@ export function useCustomDefinitions({
       ]);
     });
     return () => { cancelled = true; };
-  }, [getAssetUrl, importFiles, manifest]);
+  }, [enabled, getAssetUrl, importFiles, manifest]);
 
   const onRemove = useCallback(() => {
+    if (!enabled) return;
     importOperationRef.current += 1;
     release();
     setLoaded(null);
@@ -561,7 +569,7 @@ export function useCustomDefinitions({
         ),
       ]);
     });
-  }, [release]);
+  }, [enabled, release]);
 
   // An edited copy of the paint would still be exported with its old fragments,
   // so the preview is dropped whenever that paint's files change.
