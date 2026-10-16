@@ -34,7 +34,17 @@ const bootHints = {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), bootHints],
-  optimizeDeps: { rolldownOptions: { plugins: [emptyFs] } },
+  optimizeDeps: {
+    // Workers start through new URL(...), which the dependency scan does not
+    // follow, and the workbench loads lazily. Without these, their libraries
+    // were only found once they ran, forcing a re-bundle and a full page
+    // reload mid-session (and a cold rebuild if the server stopped first).
+    entries: ['index.html', 'src/**/*.worker.ts'],
+    include: ['@xyflow/react', '@zip.js/zip.js', 'jsonc-parser', 'mediabunny', 'protobufjs/light'],
+    rolldownOptions: { plugins: [emptyFs] },
+  },
+  // Transform the app shell before the browser asks for it.
+  server: { warmup: { clientFiles: ['./src/main.tsx', './src/App.tsx'] } },
   test: {
     exclude: [...configDefaults.exclude, '**/.tmp/**'],
   },
