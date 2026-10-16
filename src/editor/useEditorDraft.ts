@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ProtoDefKitMessages } from '../protodefs/types';
+import type { ProtoDefKitBundle } from '../protodefs/types';
 import {
   deleteEditorDraft,
   readEditorDraft,
@@ -23,10 +23,10 @@ interface UseEditorDraftOptions {
   kitId: number | null;
   paintName?: string;
   revision: number;
-  original: ProtoDefKitMessages | null;
-  current: ProtoDefKitMessages | null;
+  original: ProtoDefKitBundle | null;
+  current: ProtoDefKitBundle | null;
   dirty: boolean;
-  restore: (messages: ProtoDefKitMessages) => boolean;
+  restore: (bundle: ProtoDefKitBundle) => boolean;
 }
 
 export interface EditorDraftState {
@@ -36,7 +36,7 @@ export interface EditorDraftState {
   save: () => void;
 }
 
-function messagesEqual(left: ProtoDefKitMessages, right: ProtoDefKitMessages): boolean {
+function bundlesEqual(left: ProtoDefKitBundle, right: ProtoDefKitBundle): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
@@ -70,12 +70,12 @@ export function useEditorDraft({
     const timestamp = Date.now();
     setStorageStatus('saving');
     const record: EditorDraftRecord = {
-      version: 1,
+      version: 2,
       key,
       kitId,
       ...(paintName ? { paintName } : {}),
       savedAt: timestamp,
-      messages: structuredClone(current),
+      bundle: structuredClone(current),
     };
     void enqueue(() => writeEditorDraft(record)).then(() => {
       if (operation !== operationRef.current) return;
@@ -102,7 +102,7 @@ export function useEditorDraft({
     void readEditorDraft(key).then((draft) => {
       if (operation !== operationRef.current) return;
       settledKeyRef.current = key;
-      if (draft && !messagesEqual(draft.messages, original)) {
+      if (draft && !bundlesEqual(draft.bundle, original)) {
         setCandidate(draft);
         setSavedAt(draft.savedAt);
       } else if (draft) {
@@ -137,7 +137,7 @@ export function useEditorDraft({
   }, [candidate, current, dirty, enqueue, key, kitId, save]);
 
   const restoreCandidate = useCallback(() => {
-    if (!candidate || !restore(candidate.messages)) return;
+    if (!candidate || !restore(candidate.bundle)) return;
     setCandidate(null);
     setSavedAt(candidate.savedAt);
     setStorageStatus('saved');

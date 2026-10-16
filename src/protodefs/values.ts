@@ -56,6 +56,13 @@ export function varFieldValue(field: VarFieldMsg | undefined, dict: Map<string, 
   return undefined;
 }
 
+/** A missing, blank, or non-numeric sticker weight counts as 1, matching the compositor. */
+export function stickerWeightFromString(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === '') return 1;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : 1;
+}
+
 export function buildVarDict(baseHeaderVars: Many<VarDefMsg>): Map<string, VarEntry> {
   const dict = new Map<string, VarEntry>();
   for (const variable of many(baseHeaderVars)) {

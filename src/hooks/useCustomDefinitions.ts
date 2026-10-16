@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Manifest, PaintkitEntry, Team } from '../data/types';
+import type { Manifest, OperationTemplateData, PaintkitEntry, Team } from '../data/types';
 import type { RecipeNode } from '../compositor/types';
 import type { SourceDiagnostic } from '../source/contracts';
 import type { SourceTextureProvider } from '../source/provider';
@@ -12,6 +12,7 @@ import {
 } from '../protodefs/types';
 import type {
   CustomDefinitionKitRow,
+  ProtoDefKitBundle,
   ProtoDefKitMessages,
   CustomDefinitionsState,
   ProtoDefIndex,
@@ -23,8 +24,19 @@ import type {
   ProtoDefSource,
 } from '../protodefs/types';
 import { classifyProtoDefFragment } from '../protodefs/jsonFragments';
+import {
+  buildCopiedWarPaint,
+  buildTemplateWarPaint,
+  definitionSetName,
+  generatedPaintDefindex,
+  nextWarPaintIds,
+  operationDefindexesIn,
+  renameGeneratedPaint,
+  withoutGeneratedPaint,
+} from '../protodefs/templatePaint';
+import { loadOperationTemplates } from '../data/loader';
 import { appErrorDiagnostic, ERROR_CODES } from '../errors';
-import { serializeProtoDefKitMessages } from '../editor/export/jsonExport';
+import { topLevelMessages } from '../editor/kitBundle';
 import { applyImplicitStickerSpecs } from '../protodefs/implicitStickerSpecs';
 import { partitionResolvableKits } from '../protodefs/validation';
 import {
@@ -57,12 +69,14 @@ export interface CustomDefinitions {
     team: Team,
     wearIndex: number,
   ) => Promise<ProtoDefRecipeWithProvenance | null>;
-  /** An imported kit's definition and operation, for the export builder. */
+  /** An imported kit's definition and operation, for the export builder. Null for a per-wear paint. */
   exportKit: (kitId: number) => Promise<ProtoDefKitMessages | null>;
+  /** An imported kit's definition, operations, and item definitions, for the editor and JSON export. */
+  exportKitBundle: (kitId: number) => Promise<ProtoDefKitBundle | null>;
   /** An imported kit's weapon slots, resolved to weapon key and authored path. */
   exportKitWeaponSlots: (kitId: number) => Promise<ProtoDefKitWeaponSlot[] | null>;
   /** Replace one imported kit with an in-memory JSON-backed editor preview. */
-  previewKitMessages: (kitId: number, messages: ProtoDefKitMessages) => Promise<void>;
+  previewKitBundle: (kitId: number, bundle: ProtoDefKitBundle) => Promise<void>;
   /** Return recipe/export resolution to the originally imported container. */
   clearPreviewKit: () => void;
   /** Bumped whenever the active editor preview changes or is cleared. */
@@ -84,12 +98,20 @@ interface LoadedFile {
   name: string;
   index: ProtoDefIndex;
   source: ProtoDefSource;
+  /** The JSON fragments this set was opened from; undefined for a whole container. */
+  fragments?: ProtoDefJsonFragment[];
 }
 
 interface EditedKit {
   kitId: number;
   source: ProtoDefSource;
-  messages: ProtoDefKitMessages;
+  bundle: ProtoDefKitBundle;
+}
+
+interface FragmentOpenOptions {
+  preferredDefindex?: number;
+  /** False leaves the current selection alone (delete), instead of suggesting a kit. */
+  suggest?: boolean;
 }
 
 function diagnostic(level: SourceDiagnostic['level'], message: string, detail?: string): SourceDiagnostic {
@@ -217,6 +239,7 @@ export function useCustomDefinitions({
   const openWith = useCallback(async (
     name: string,
     run: (source: ProtoDefSource, options: ProtoDefOpenOptions) => Promise<ProtoDefIndex>,
+    extras: FragmentOpenOptions & { fragments?: ProtoDefJsonFragment[] } = {},
   ): Promise<boolean> => {
     const operation = ++importOperationRef.current;
     setStatus('importing');
@@ -239,14 +262,17 @@ export function useCustomDefinitions({
       if (operation !== importOperationRef.current) { source.dispose(); return false; }
 
       release();
-      loadedRef.current = { name, index, source };
+      loadedRef.current = { name, index, source, fragments: extras.fragments };
       setLoaded(loadedRef.current);
 
       setLoadedDefindexes(newKits.map((kit) => kit.defindex));
       setQuarantinedDefindexes(quarantined.map((kit) => kit.defindex));
       setStatus('loaded');
       setGeneration((current) => current + 1);
-      setSuggestedKitId(newKits.length ? customKitId(newKits[0].defindex) : undefined);
+      const suggested = extras.suggest === false
+        ? undefined
+        : newKits.find((kit) => kit.defindex === extras.preferredDefindex) ?? newKits[0];
+      setSuggestedKitId(suggested ? customKitId(suggested.defindex) : undefined);
 
       const notes: SourceDiagnostic[] = [];
       const unsupported = index.kits.filter((kit) => kit.weapons.length === 0).length;
@@ -271,12 +297,12 @@ export function useCustomDefinitions({
           'Use Remove to discard the saved source files, or Replace to import corrected files.',
         ));
       }
-      const teamTextureMismatches = index.kits.filter((kit) => kit.teamTextureMismatch);
-      for (const kit of teamTextureMismatches) {
+      const teamButtonsHidden = index.kits.filter((kit) => kit.teamButtonsHidden);
+      for (const kit of teamButtonsHidden) {
         notes.push(diagnostic(
-          'warning',
-          `${kit.name} uses a team-color prefab, but has_team_textures is disabled.`,
-          'Set has_team_textures to true to enable RED and BLU textures.',
+          'info',
+          `${kit.name} changes per team, but has_team_textures is off, so the in-game inspect panel will not show its team buttons.`,
+          'Set has_team_textures to true to show them. Matches still use the RED and BLU textures either way.',
         ));
       }
       if (!provider.package) {
@@ -303,10 +329,101 @@ export function useCustomDefinitions({
     return source.open(bytes, options);
   }), [openWith]);
 
-  const openFragments = useCallback((name: string, fragments: ProtoDefJsonFragment[]) => openWith(
+  const openFragments = useCallback((
+    name: string,
+    fragments: ProtoDefJsonFragment[],
+    options: FragmentOpenOptions = {},
+  ) => openWith(
     name,
-    async (source, options) => source.openJsonFragments(await loadBaseDefs(), fragments, options),
+    async (source, openOptions) => source.openJsonFragments(await loadBaseDefs(), fragments, openOptions),
+    { fragments, ...options },
   ), [openWith, loadBaseDefs]);
+
+  // Reopens a JSON set and saves its files. The set keeps its name whatever
+  // generated paints it holds (see definitionSetName), so drafts stay valid.
+  const reopenFragments = useCallback(async (
+    fragments: ProtoDefJsonFragment[],
+    options: FragmentOpenOptions = {},
+  ): Promise<boolean> => {
+    const opened = await openFragments(definitionSetName(fragments.map((fragment) => fragment.name)), fragments, options);
+    if (!opened) return false;
+    try {
+      await writeCustomSourceFiles('definitions', fragments.map((fragment) => (
+        new File([fragment.text], fragment.name, { type: 'application/json' })
+      )));
+    } catch {
+      setDiagnostics((entries) => [
+        ...entries,
+        diagnostic(
+          'warning',
+          'The war paint is loaded, but the definitions could not be saved locally.',
+          'Keep the original definition files before reloading or closing this page.',
+        ),
+      ]);
+    }
+    return true;
+  }, [openFragments]);
+
+  // Shared by every way of adding a paint. The new paint joins the loaded JSON
+  // set instead of replacing it. Existing fragments come first, so the placeholder
+  // ids of paints already loaded are assigned the same way, and their draft keys
+  // stay valid.
+  const addWarPaint = useCallback(async (
+    buildPaint: (ids: { defindex: number; operationDefindex: number }, templates: OperationTemplateData) => ProtoDefJsonFragment[],
+  ): Promise<boolean> => {
+    const current = loadedRef.current;
+    try {
+      if (current && !current.fragments) {
+        throw new Error('Clear the imported proto_defs.vpd to create a new war paint.');
+      }
+      const templates = await loadOperationTemplates();
+      const existing = current?.fragments ?? [];
+      const ids = nextWarPaintIds({
+        paintDefindexes: [
+          ...(manifest?.paintkits.map((kit) => kit.id) ?? []),
+          ...(current?.index.kits.map((kit) => kit.defindex) ?? []),
+        ],
+        operationDefindexes: [
+          ...Object.keys(templates.usage).map(Number),
+          ...templates.templates.map((entry) => entry.defindex),
+          ...operationDefindexesIn(existing),
+        ],
+      });
+      const fragments = [...existing, ...buildPaint(ids, templates)];
+
+      return await reopenFragments(fragments, { preferredDefindex: ids.defindex });
+    } catch (cause) {
+      setDiagnostics([diagnostic(
+        'error',
+        'The new war paint could not be created.',
+        cause instanceof Error ? cause.message : undefined,
+      )]);
+      return false;
+    }
+  }, [manifest, reopenFragments]);
+
+  const createWarPaint = useCallback((templateDefindex: number, name: string): Promise<boolean> => (
+    addWarPaint((ids, templates) => {
+      const template = templates.templates.find((entry) => entry.defindex === templateDefindex);
+      if (!template) throw new Error('That operation template is not in this build.');
+      return buildTemplateWarPaint({
+        template,
+        defindex: ids.defindex,
+        operationDefindex: ids.operationDefindex,
+        name,
+        isShipped: (ref) => Boolean(manifest?.textures?.[ref]),
+      });
+    })
+  ), [addWarPaint, manifest]);
+
+  const createWarPaintCopy = useCallback((messages: ProtoDefKitMessages, name: string): Promise<boolean> => (
+    addWarPaint((ids) => buildCopiedWarPaint({
+      messages,
+      defindex: ids.defindex,
+      operationDefindex: ids.operationDefindex,
+      name,
+    }))
+  ), [addWarPaint]);
 
   const clearPreviewKit = useCallback(() => {
     editOperationRef.current += 1;
@@ -318,9 +435,11 @@ export function useCustomDefinitions({
     setEditGeneration((current) => current + 1);
   }, []);
 
-  const previewKitMessages = useCallback(async (
+  // Overlays every operation and item definition of the bundle on the stock base, so a
+  // per-wear paint's edited operation resolves for the weapon and wear that reads it.
+  const previewKitBundle = useCallback(async (
     kitId: number,
-    messages: ProtoDefKitMessages,
+    bundle: ProtoDefKitBundle,
   ): Promise<void> => {
     if (!loadedRef.current) throw new Error('Import definitions before editing them.');
     const defindex = customKitDefindex(kitId);
@@ -328,17 +447,19 @@ export function useCustomDefinitions({
       throw new Error('The selected paint is not part of the imported definitions.');
     }
     const operation = ++editOperationRef.current;
-    const [{ createProtoDefSource }, baseBytes, weaponsByItemDef] = await Promise.all([
+    const [{ createProtoDefSource }, { serializeProtoDefKitBundlePreview }, baseBytes, weaponsByItemDef] = await Promise.all([
       import('../protodefs/client'),
+      import('../editor/export/jsonExport'),
       loadBaseDefs(),
       loadWeaponsByItemDef(),
     ]);
     const source = createProtoDefSource();
     try {
-      const fragments = [...serializeProtoDefKitMessages(messages).fragments];
+      const fragments = serializeProtoDefKitBundlePreview(bundle).fragments;
       const index = await source.openJsonFragments(baseBytes, fragments, {
         weaponsByItemDef,
         builtInIds: manifest?.paintkits.map((kit) => kit.id) ?? [],
+        computeTeamFlags: false,
       });
       if (!index.kits.some((kit) => kit.defindex === defindex)) {
         throw new Error('The edited fragments no longer contain the selected paint.');
@@ -348,7 +469,8 @@ export function useCustomDefinitions({
         return;
       }
       editedRef.current?.source.dispose();
-      editedRef.current = { kitId, source, messages: structuredClone(messages) };
+      // The bundle is the editor's frozen snapshot, so it is kept by reference.
+      editedRef.current = { kitId, source, bundle };
       recipeCacheRef.current.clear();
       setEditGeneration((current) => current + 1);
     } catch (cause) {
@@ -378,7 +500,7 @@ export function useCustomDefinitions({
           const fragments = await Promise.all(
             jsonFiles.map(async (entry) => ({ name: entry.name, text: await entry.text() })),
           );
-          opened = await openFragments(jsonFiles.map((entry) => entry.name).join(', '), fragments);
+          opened = await openFragments(definitionSetName(jsonFiles.map((entry) => entry.name)), fragments);
         }
         if (!opened || !persist) return;
         try {
@@ -441,6 +563,43 @@ export function useCustomDefinitions({
     });
   }, [release]);
 
+  // An edited copy of the paint would still be exported with its old fragments,
+  // so the preview is dropped whenever that paint's files change.
+  const dropPreviewOf = useCallback((defindex: number) => {
+    if (editedRef.current?.kitId === customKitId(defindex)) clearPreviewKit();
+  }, [clearPreviewKit]);
+
+  const onDeleteWarPaint = useCallback((defindex: number) => {
+    const fragments = loadedRef.current?.fragments;
+    if (!fragments) return;
+    const remaining = withoutGeneratedPaint(fragments, defindex);
+    if (remaining.length === 0) {
+      onRemove();
+      return;
+    }
+    dropPreviewOf(defindex);
+    void reopenFragments(remaining, { suggest: false });
+  }, [dropPreviewOf, onRemove, reopenFragments]);
+
+  const onRenameWarPaint = useCallback((defindex: number, name: string) => {
+    const fragments = loadedRef.current?.fragments;
+    const trimmed = name.trim();
+    if (!fragments || !trimmed) return;
+    let renamed: ProtoDefJsonFragment[];
+    try {
+      renamed = renameGeneratedPaint(fragments, defindex, trimmed);
+    } catch (cause) {
+      setDiagnostics([diagnostic(
+        'error',
+        'The war paint could not be renamed.',
+        cause instanceof Error ? cause.message : undefined,
+      )]);
+      return;
+    }
+    dropPreviewOf(defindex);
+    void reopenFragments(renamed, { preferredDefindex: defindex });
+  }, [dropPreviewOf, reopenFragments]);
+
   const onToggleKit = useCallback((defindex: number) => {
     if (quarantinedDefindexes.includes(defindex)) return;
     setLoadedDefindexes((current) => current.includes(defindex)
@@ -497,15 +656,16 @@ export function useCustomDefinitions({
     if (packageFragments.length === 0) return undefined;
     return {
       path: packageFragments.map((fragment) => fragment.name).join(', '),
-      onLoad: () => { void openFragments(`${pkg.name}: definitions`, packageFragments); },
+      onLoad: () => { void openFragments(definitionSetName(packageFragments.map((fragment) => fragment.name)), packageFragments); },
     };
   }, [pkg, packageFragments, openContainer, openFragments]);
 
   const loadedSet = useMemo(() => new Set(loadedDefindexes), [loadedDefindexes]);
   const quarantinedSet = useMemo(() => new Set(quarantinedDefindexes), [quarantinedDefindexes]);
 
-  const kitRows = useMemo<CustomDefinitionKitRow[]>(
-    () => (loaded?.index.kits ?? []).map((kit) => ({
+  const kitRows = useMemo<CustomDefinitionKitRow[]>(() => {
+    const generated = new Set((loaded?.fragments ?? []).map((fragment) => generatedPaintDefindex(fragment.name)));
+    return (loaded?.index.kits ?? []).map((kit) => ({
       id: customKitId(kit.defindex),
       defindex: kit.defindex,
       name: kit.name,
@@ -514,8 +674,13 @@ export function useCustomDefinitions({
       loaded: loadedSet.has(kit.defindex),
       unsupported: kit.weapons.length === 0,
       quarantined: quarantinedSet.has(kit.defindex),
-    })),
-    [loaded, loadedSet, quarantinedSet],
+      generated: generated.has(kit.defindex),
+    }));
+  }, [loaded, loadedSet, quarantinedSet]);
+
+  const stockKitNames = useMemo<Record<number, string>>(
+    () => Object.fromEntries((manifest?.paintkits ?? []).map((kit) => [kit.id, kit.name])),
+    [manifest],
   );
 
   const catalogKits = useMemo<PaintkitEntry[]>(
@@ -605,8 +770,17 @@ export function useCustomDefinitions({
   const exportKit = useCallback(
     (kitId: number): Promise<ProtoDefKitMessages | null> => (
       editedRef.current?.kitId === kitId
-        ? Promise.resolve(structuredClone(editedRef.current.messages))
+        ? Promise.resolve(structuredClone(topLevelMessages(editedRef.current.bundle)))
         : loadedRef.current?.source.exportKit(customKitDefindex(kitId)) ?? Promise.resolve(null)
+    ),
+    [],
+  );
+
+  const exportKitBundle = useCallback(
+    (kitId: number): Promise<ProtoDefKitBundle | null> => (
+      editedRef.current?.kitId === kitId
+        ? Promise.resolve(structuredClone(editedRef.current.bundle))
+        : loadedRef.current?.source.exportKitBundle(customKitDefindex(kitId)) ?? Promise.resolve(null)
     ),
     [],
   );
@@ -627,9 +801,30 @@ export function useCustomDefinitions({
     diagnostics,
     packageCandidate,
     onImport,
+    canAddWarPaint: !loaded || loaded.fragments !== undefined,
+    onCreateWarPaint: createWarPaint,
+    onCreateWarPaintCopy: createWarPaintCopy,
+    onDeleteWarPaint,
+    onRenameWarPaint,
     onToggleKit,
+    stockKitNames,
     onRemove,
-  }), [status, fileName, kitRows, diagnostics, packageCandidate, onImport, onToggleKit, onRemove]);
+  }), [
+    status,
+    fileName,
+    kitRows,
+    diagnostics,
+    packageCandidate,
+    onImport,
+    loaded,
+    createWarPaint,
+    createWarPaintCopy,
+    onDeleteWarPaint,
+    onRenameWarPaint,
+    onToggleKit,
+    stockKitNames,
+    onRemove,
+  ]);
 
   return useMemo(
     () => ({
@@ -639,8 +834,9 @@ export function useCustomDefinitions({
       getRecipe,
       getRecipeWithProvenance,
       exportKit,
+      exportKitBundle,
       exportKitWeaponSlots,
-      previewKitMessages,
+      previewKitBundle,
       clearPreviewKit,
       suggestedKitId,
       generation,
@@ -653,8 +849,9 @@ export function useCustomDefinitions({
       getRecipe,
       getRecipeWithProvenance,
       exportKit,
+      exportKitBundle,
       exportKitWeaponSlots,
-      previewKitMessages,
+      previewKitBundle,
       clearPreviewKit,
       suggestedKitId,
       generation,

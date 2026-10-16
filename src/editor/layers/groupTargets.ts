@@ -73,6 +73,19 @@ export function discoverGroupTextureTarget(
   return variables.length === 1 ? { variableName: variables[0], overridePath: weaponOverridePath } : null;
 }
 
+/**
+ * A per-wear operation has no shared header variable, so its group map is the
+ * literal its select stages carry. Writing it there changes only the weapon and
+ * wear that operation serves, so it is offered for per-wear sessions alone; a
+ * top-level paint keeps the variable-only rule above.
+ */
+export function discoverLiteralGroupTextureTarget(
+  groupsRef: string | undefined,
+  perWear: boolean,
+): GroupTextureTarget | null {
+  return perWear && groupsRef ? { kind: 'literal', groupsValue: groupsRef } : null;
+}
+
 const LITERAL_KEYS = ['string', 'float', 'double', 'uint32', 'uint64', 'sint32', 'sint64', 'bool'] as const;
 
 function directLiteralValue(field: VarFieldMsg | undefined): string | undefined {

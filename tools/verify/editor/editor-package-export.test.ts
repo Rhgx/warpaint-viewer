@@ -11,7 +11,7 @@ import { test } from 'vitest';
 import { exportEditedPackage } from '../../../src/editor/export/packageExport';
 import { decodeProtoDefs, extractKitMessages } from '../../../src/protodefs/decoder';
 import { normalizeProtoDefFragments } from '../../../src/protodefs/jsonFragments';
-import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
+import type { ProtoDefKitBundle, ProtoDefKitMessages } from '../../../src/protodefs/types';
 import type { SourcePackage } from '../../../src/source/contracts';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -81,6 +81,10 @@ const original = {
 const edited = structuredClone(original);
 edited.operation.operation_node.stage.texture_lookup.texture.string = 'patterns/edited';
 
+function singleOperationBundle(kit: ProtoDefKitMessages): ProtoDefKitBundle {
+  return { definition: kit.definition, operations: [kit.operation], itemDefinitions: [], scopes: [] };
+}
+
 const encoder = new TextEncoder();
 test('editor package ZIP export', async () => {
 const sourceFiles = new Map([
@@ -91,7 +95,7 @@ const sourceFiles = new Map([
 ]);
 const sourcePackage = fixturePackage('fixture', 'Fixture.zip', sourceFiles);
 
-const exported = await exportEditedPackage(edited, { package: sourcePackage, name: 'Edited Paint' });
+const exported = await exportEditedPackage(singleOperationBundle(edited), { package: sourcePackage, name: 'Edited Paint' });
 assert.equal(exported.fileName, 'fixture-edited.zip');
 assert.deepEqual([...exported.replacedPaths].sort(), ['defs/custom_definition.json', 'defs/custom_operation.json']);
 assert.deepEqual(exported.addedPaths, []);
@@ -108,7 +112,7 @@ const textureLookup = objectField(operationStage, 'texture_lookup');
 assert.equal(objectField(textureLookup, 'texture').string, 'patterns/edited');
 assert.deepEqual(normalized[1].value, edited.definition);
 
-const minimal = await exportEditedPackage(edited, { name: 'Standalone Paint' });
+const minimal = await exportEditedPackage(singleOperationBundle(edited), { name: 'Standalone Paint' });
 const minimalFiles = await unzip(minimal.blob);
 assert.equal(minimal.fileName, 'standalone_paint-edited.zip');
 assert.deepEqual([...minimalFiles.keys()].sort(), [
@@ -145,7 +149,7 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
     ['materials/patterns/keep.vtf', new Uint8Array([9, 8, 7])],
   ]);
   const vpdPackage = fixturePackage('vpd-fixture', 'Container.zip', vpdFiles);
-  const vpdExport = await exportEditedPackage(editedContainerKit, { package: vpdPackage });
+  const vpdExport = await exportEditedPackage(singleOperationBundle(editedContainerKit), { package: vpdPackage });
   assert.deepEqual(vpdExport.replacedPaths, ['scripts/protodefs/proto_defs.vpd']);
   const vpdOutput = await unzip(vpdExport.blob);
   assert.deepEqual(vpdOutput.get('materials/patterns/keep.vtf'), new Uint8Array([9, 8, 7]));
@@ -160,4 +164,4 @@ if (fs.existsSync(fullPath) && fs.existsSync(itemDefsPath) && fs.existsSync(mani
   );
 }
 
-});
+}, 30_000); // Splices into the 9.8 MB proto_defs snapshot, which outruns the default under parallel load.

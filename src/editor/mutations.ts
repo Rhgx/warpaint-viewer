@@ -3,6 +3,7 @@ import {
   asItem, many, type ItemDataMsg, type ItemMsg, type Many, type OperationNodeMsg, type OperationStageMsg,
   type SelectStageMsg, type StickerStageMsg, type TextureStageMsg, type VarDefMsg, type VarFieldMsg,
 } from '../protodefs/messages';
+import { stickerWeightFromString } from '../protodefs/values';
 
 /** A refused edit is preferable to silently changing a different authored scope. */
 export class EditorMutationAmbiguityError extends Error {
@@ -33,10 +34,14 @@ export interface SelectGroupTarget {
   valueOverridePath?: readonly string[];
 }
 
-export interface GroupTextureTarget {
-  readonly variableName: string;
-  readonly overridePath: readonly string[];
-}
+/**
+ * Where a group-map reference is written: a shared header variable (with the
+ * weapon-local override collection), or, for a per-wear operation, the literal
+ * `groups` value its select stages carry.
+ */
+export type GroupTextureTarget =
+  | { readonly variableName: string; readonly overridePath: readonly string[] }
+  | { readonly kind: 'literal'; readonly groupsValue: string };
 
 /** One editable paint layer considered by an exclusive group assignment. */
 export interface SelectGroupAssignmentTarget {
@@ -149,6 +154,13 @@ function setSelectFieldValue(
 export interface StickerStructureTarget {
   /** Exact authored apply_sticker paths represented by one logical sticker. */
   stagePaths: readonly (readonly string[])[];
+  /**
+   * Each variant's weight as resolved for the weapon, team, and wear being
+   * edited, in variant order. Weight checks use these so weapon slot and wear
+   * overrides count. They only cover that selection; another weapon or wear can
+   * still resolve every variant to 0. Without them, checks read header defaults.
+   */
+  effectiveWeights?: readonly number[];
 }
 
 function upsertVariableFieldAtPath(
@@ -250,6 +262,17 @@ export function setGroupTextureReference(
   const trimmed = textureRef.trim();
   if (!trimmed) throw new TypeError('A group texture reference is required.');
   const next = cloneMessages(messages);
+  if ('kind' in target) {
+    // Every select stage that reads this map is renamed, as one variable would rename all of them.
+    let renamed = 0;
+    collectStages((next.operation as { operation_node?: Many<OperationNodeMsg> }).operation_node, (stage) => {
+      if (!stage.select || literalFieldValue(stage.select.groups) !== target.groupsValue) return;
+      stage.select.groups = { string: trimmed };
+      renamed += 1;
+    });
+    if (renamed === 0) throw new EditorMutationAmbiguityError('No select stage uses this group map.');
+    return next;
+  }
   upsertVariableFieldAtPath(next, target.variableName, target.overridePath, trimmed);
   return next;
 }
@@ -770,6 +793,137 @@ export function setStickerBaseReference(
   return next;
 }
 
+/**
+ * Every authored occurrence of one logical sticker. Variant edits assume each
+ * occurrence lists the same variants, so a mismatch is refused, not guessed at.
+ */
+function stickerVariantStages(operation: Record<string, unknown>, target: StickerStructureTarget): StickerStageMsg[] {
+  if (target.stagePaths.length === 0) throw new EditorMutationAmbiguityError('No authored sticker stage is available to change.');
+  const stages = target.stagePaths.map((path) => {
+    const location = stickerNodeLocation(operation, path);
+    const stage = location.nodes[location.index]?.stage?.apply_sticker;
+    if (!stage) throw new EditorMutationAmbiguityError('This sticker stage no longer exists in this operation.');
+    return stage;
+  });
+  if (new Set(stages.map((stage) => many(stage.sticker).length)).size > 1) {
+    throw new EditorMutationAmbiguityError('The occurrences of this sticker list different variants, so they cannot be edited safely.');
+  }
+  return stages;
+}
+
+function currentVariantWeights(
+  messages: MutableMessages,
+  variants: readonly { weight?: VarFieldMsg }[],
+  effectiveWeights: readonly number[] | undefined,
+): number[] {
+  if (effectiveWeights === undefined) {
+    return variants.map((variant) => stickerWeightFromString(variant.weight ? selectFieldValue(messages, variant.weight) : undefined));
+  }
+  if (effectiveWeights.length !== variants.length) {
+    throw new EditorMutationAmbiguityError('Resolved sticker weights do not match this editable sticker.');
+  }
+  return [...effectiveWeights];
+}
+
+/** Sets one variant's relative weight. A variable weight is forked to a literal on this variant only. */
+export function setStickerVariantWeight(
+  messages: ProtoDefKitMessages,
+  target: StickerStructureTarget,
+  index: number,
+  weight: number,
+): ProtoDefKitMessages {
+  if (!Number.isFinite(weight) || weight < 0) throw new TypeError('A sticker weight must be a finite number, 0 or greater.');
+  const next = cloneMessages(messages);
+  for (const stage of stickerVariantStages(next.operation, target)) {
+    const variants = many(stage.sticker);
+    if (!Number.isInteger(index) || !variants[index]) throw new EditorMutationAmbiguityError(`Sticker variant ${index + 1} does not exist.`);
+    const weights = currentVariantWeights(next, variants, target.effectiveWeights);
+    const total = weights.reduce((sum, current, position) => (
+      sum + (position === index ? weight : current)
+    ), 0);
+    if (total <= 0) throw new EditorMutationAmbiguityError('At least one sticker variant must keep a weight above 0.');
+    const replaced = variants.map((variant, position) => (
+      position === index ? { ...variant, weight: { float: weight } } : variant
+    ));
+    replaceMany(stage as Record<string, unknown>, 'sticker', stage.sticker, replaced);
+  }
+  return next;
+}
+
+/** Appends one artwork choice as a new variant with weight 1 to every occurrence of a sticker. */
+export function addStickerVariant(
+  messages: ProtoDefKitMessages,
+  target: StickerStructureTarget,
+  baseReference: string,
+): ProtoDefKitMessages {
+  if (!baseReference.trim()) throw new TypeError('A sticker texture reference is required.');
+  const next = cloneMessages(messages);
+  for (const stage of stickerVariantStages(next.operation, target)) {
+    const variants = many(stage.sticker);
+    replaceMany(stage as Record<string, unknown>, 'sticker', stage.sticker, [
+      ...variants,
+      { base: { string: baseReference.trim() }, weight: { float: 1 } },
+    ]);
+  }
+  return next;
+}
+
+/** Removes one variant from every occurrence of a sticker. The last variant cannot be removed. */
+export function removeStickerVariant(
+  messages: ProtoDefKitMessages,
+  target: StickerStructureTarget,
+  index: number,
+): ProtoDefKitMessages {
+  const next = cloneMessages(messages);
+  for (const stage of stickerVariantStages(next.operation, target)) {
+    const variants = many(stage.sticker);
+    if (!Number.isInteger(index) || !variants[index]) throw new EditorMutationAmbiguityError(`Sticker variant ${index + 1} does not exist.`);
+    const remaining = variants.filter((_, position) => position !== index);
+    if (remaining.length === 0) throw new EditorMutationAmbiguityError('A sticker needs at least one variant.');
+    const weights = currentVariantWeights(next, variants, target.effectiveWeights);
+    const total = weights.reduce((sum, current, position) => (position === index ? sum : sum + current), 0);
+    if (total <= 0) throw new EditorMutationAmbiguityError('The remaining sticker variants would all have weight 0.');
+    replaceMany(stage as Record<string, unknown>, 'sticker', stage.sticker, remaining);
+  }
+  return next;
+}
+
+/** Points one variant of every occurrence of a sticker at new artwork, as a literal. Other variants keep their artwork. */
+export function setStickerVariantBase(
+  messages: ProtoDefKitMessages,
+  target: StickerStructureTarget,
+  index: number,
+  baseReference: string,
+): ProtoDefKitMessages {
+  if (!baseReference.trim()) throw new TypeError('A sticker texture reference is required.');
+  const next = cloneMessages(messages);
+  for (const stage of stickerVariantStages(next.operation, target)) {
+    const variants = many(stage.sticker);
+    if (!Number.isInteger(index) || !variants[index]) throw new EditorMutationAmbiguityError(`Sticker variant ${index + 1} does not exist.`);
+    const replaced = variants.map((variant, position) => (
+      position === index ? { ...variant, base: { string: baseReference.trim() } } : variant
+    ));
+    replaceMany(stage as Record<string, unknown>, 'sticker', stage.sticker, replaced);
+  }
+  return next;
+}
+
+/** Gives every variant of every occurrence of a sticker the literal weight 1, as one edit. */
+export function equalizeStickerVariantWeights(
+  messages: ProtoDefKitMessages,
+  target: StickerStructureTarget,
+): ProtoDefKitMessages {
+  const next = cloneMessages(messages);
+  for (const stage of stickerVariantStages(next.operation, target)) {
+    const variants = many(stage.sticker);
+    replaceMany(stage as Record<string, unknown>, 'sticker', stage.sticker, variants.map((variant) => ({
+      ...variant,
+      weight: { float: 1 },
+    })));
+  }
+  return next;
+}
+
 /** Move a logical sticker before or after the adjacent sticker in each sibling collection. */
 export function moveStickerStages(
   messages: ProtoDefKitMessages,
@@ -931,8 +1085,8 @@ function operationHasTeamTextures(nodes: Many<OperationNodeMsg>): boolean {
  * Turns per-team artwork on or off for one texture layer. Enabling copies the
  * layer's texture to both teams, so nothing changes until one side is
  * replaced; disabling keeps the RED texture. The definition's
- * has_team_textures follows, which is what makes the game (and the viewer's
- * team toggle) tell the two apart.
+ * has_team_textures follows so the in-game inspect panel shows its team
+ * buttons; the game draws team sides either way.
  */
 export function setTextureLayerTeamColors(
   messages: ProtoDefKitMessages,
@@ -991,8 +1145,9 @@ export function readTextureLayerTeamColors(
     }
     return undefined;
   };
-  // Team sides only take effect while the definition has team textures on.
-  const enabled = Boolean(stage.texture_red || stage.texture_blue) && messages.definition.has_team_textures === true;
+  // The game draws team sides whatever has_team_textures says; the flag only
+  // shows the inspect panel's team buttons.
+  const enabled = Boolean(stage.texture_red || stage.texture_blue);
   return {
     enabled,
     red: value(stage.texture_red ?? stage.texture),

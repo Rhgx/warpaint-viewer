@@ -73,6 +73,7 @@ import type {
   TextureStageMsg,
   VarFieldMsg,
 } from '../../protodefs/messages';
+import { useOperationTemplates } from '../../hooks/useOperationTemplates';
 import { GraphValueField } from './OperationGraphFields';
 import type {
   GraphComboboxOption,
@@ -137,6 +138,9 @@ export interface OperationGraphEditorProps {
   readonly onOpenStickerEditor?: (nodeId: string) => void;
   readonly onPreviewNode?: (nodeId: string) => string | undefined;
   readonly onExportNode?: (nodeId: string, format: OperationGraphExportFormat) => void;
+  /** Stock paint names by id, listed under a selected operation template. */
+  readonly paintNames?: ReadonlyMap<number, string>;
+  readonly onSelectKit?: (id: number) => void;
   readonly readOnly?: boolean;
   readonly className?: string;
 }
@@ -160,6 +164,8 @@ interface FlowNodeData extends Record<string, unknown> {
   readonly onOpenSelectEditor?: (nodeId: string) => void;
   readonly onOpenStickerEditor?: (nodeId: string) => void;
   readonly onExportNode?: (nodeId: string, format: OperationGraphExportFormat) => void;
+  readonly paintNames?: ReadonlyMap<number, string>;
+  readonly onSelectKit?: (id: number) => void;
   readonly emphasis: 'normal' | 'active' | 'related' | 'dimmed';
   readonly searchMatch: boolean;
 }
@@ -167,6 +173,7 @@ interface FlowNodeData extends Record<string, unknown> {
 type FlowNode = Node<FlowNodeData, 'operation'>;
 
 const NO_ITEMS: readonly never[] = Object.freeze([]);
+const TEMPLATE_USAGE_LIMIT = 10;
 
 function sameFlowNodeData(a: FlowNodeData, b: FlowNodeData): boolean {
   const keys = Object.keys(b);
@@ -588,6 +595,23 @@ function PortRow({ port, connectedLabel, connectable }: PortRowProps): React.JSX
 function OperationFlowNodeComponent({ data, selected }: NodeProps<FlowNode>): React.JSX.Element {
   const { graphNode: node, nodesById, connectedEdges } = data;
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const operationUsage = useOperationTemplates(node.kind === 'operation_template');
+  const templateDefindex = node.raw?.operation_template?.defindex;
+  const templateUsers = templateDefindex === undefined ? [] : (operationUsage?.usage[String(templateDefindex)] ?? []);
+  const templateName = templateDefindex === undefined ? undefined : operationUsage?.names[String(templateDefindex)];
+  // Which stock template this is, and how far an edit to it would reach.
+  const templateRows = node.kind === 'operation_template' && operationUsage ? [
+    ...(templateName ? [{ label: 'Template', value: templateName }] : []),
+    {
+      label: 'Used by',
+      value: templateUsers.length === 0
+        ? 'no stock war paints'
+        : `${templateUsers.length} stock war paint${templateUsers.length === 1 ? '' : 's'}`,
+    },
+  ] : [];
+  const templatePaints = templateUsers
+    .map((id) => ({ id, name: data.paintNames?.get(id) ?? String(id) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const nodeDiagnostics = data.diagnostics;
   // Advisory warnings fire on ordinary, working paints, so only real errors
   // earn a badge on the card. Warnings stay in the selected-node list.
@@ -681,7 +705,7 @@ function OperationFlowNodeComponent({ data, selected }: NodeProps<FlowNode>): Re
         </div>
       )}
 
-      {(data.previewUrl || summaries.length > 0) && (
+      {(data.previewUrl || summaries.length > 0 || templateRows.length > 0) && (
         <div className="operation-graph-node-summary">
           {data.previewUrl && (
             <img className="operation-graph-node-preview" src={data.previewUrl} alt={`${node.label} preview`} draggable={false} />
@@ -690,6 +714,12 @@ function OperationFlowNodeComponent({ data, selected }: NodeProps<FlowNode>): Re
             <div className="operation-graph-summary-row" key={summary.label}>
               <span>{summary.label}</span>
               <span title={summary.value}>{shortTexturePath(summary.value)}</span>
+            </div>
+          ))}
+          {templateRows.map((row) => (
+            <div className="operation-graph-summary-row" key={row.label}>
+              <span>{row.label}</span>
+              <span title={row.value}>{row.value}</span>
             </div>
           ))}
         </div>
@@ -731,7 +761,24 @@ function OperationFlowNodeComponent({ data, selected }: NodeProps<FlowNode>): Re
       )}
 
       {selected && node.kind === 'operation_template' && (
-        <p className="operation-graph-note"><LockKeyhole size={11} aria-hidden /> Template references are preserved and read-only.</p>
+        <p className="operation-graph-note">Template references are preserved and read-only.</p>
+      )}
+      {selected && node.kind === 'operation_template' && templatePaints.length > 0 && (
+        <div
+          className="operation-graph-note operation-graph-usage nodrag"
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          {templatePaints.slice(0, TEMPLATE_USAGE_LIMIT).map((paint, index) => (
+            <span key={paint.id}>
+              {index > 0 && ', '}
+              <button type="button" className="operation-graph-usage-link" onClick={() => data.onSelectKit?.(paint.id)}>{paint.name}</button>
+            </span>
+          ))}
+          {templatePaints.length > TEMPLATE_USAGE_LIMIT && (
+            <span>, and {templatePaints.length - TEMPLATE_USAGE_LIMIT} more</span>
+          )}
+        </div>
       )}
       {selected && node.kind === 'invalid' && (
         <p className="operation-graph-note">This node contains an unknown operation stage.</p>
@@ -884,6 +931,8 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
     onOpenStickerEditor,
     onPreviewNode,
     onExportNode,
+    paintNames,
+    onSelectKit,
     readOnly = false,
   } = props;
   const { fitView, screenToFlowPosition } = useReactFlow<FlowNode, FlowEdge>();
@@ -1287,6 +1336,8 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
         onOpenSelectEditor,
         onOpenStickerEditor,
         onExportNode,
+        paintNames,
+        onSelectKit,
         emphasis,
         searchMatch: !normalizedQuery || searchMatches.has(node.id),
       };
@@ -1309,7 +1360,7 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
     });
     flowNodeDataRef.current = nextData;
     return nodes;
-  }, [activeNodeId, connectedEdgesByTarget, diagnosticsByNode, graph.nodes, layout, measurements, nodesById, normalizedQuery, onExportNode, onGraphChange, onOpenSelectEditor, onOpenStickerEditor, onOpenTextureEditor, onPreviewNode, onReorderInput, onUpdateParameter, positions, readOnly, relatedNodes, searchMatches, selectNode, textureOptions, variables]);
+  }, [activeNodeId, connectedEdgesByTarget, diagnosticsByNode, graph.nodes, layout, measurements, nodesById, normalizedQuery, onExportNode, onGraphChange, onOpenSelectEditor, onOpenStickerEditor, onOpenTextureEditor, onPreviewNode, onReorderInput, onSelectKit, onUpdateParameter, paintNames, positions, readOnly, relatedNodes, searchMatches, selectNode, textureOptions, variables]);
 
   const flowEdges = useMemo((): FlowEdge[] => graph.edges.map((edge) => {
     const onPath = relatedNodes.has(edge.source) && relatedNodes.has(edge.target);

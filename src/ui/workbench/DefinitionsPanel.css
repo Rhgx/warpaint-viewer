@@ -42,6 +42,68 @@
   font-size: 11px;
 }
 
+.definitions-empty-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.definitions-create {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 384px;
+  padding: 12px;
+  text-align: left;
+}
+/* No card of its own: the tab already frames it. Empty, it stands in for the
+   empty state's centred column; loaded, it is a band under the toolbar,
+   ruled off the same way the toolbar is. */
+.definitions-panel[data-status='empty'] .definitions-create { margin: 0 auto; }
+.definitions-panel[data-status='loaded'] .definitions-create {
+  max-width: none;
+  border-bottom: 1px solid var(--border);
+}
+.definitions-panel[data-status='loaded'] .definitions-create > * { max-width: 360px; }
+/* Labels sit flush over their fields, as in the inspector. */
+.definitions-create .control { align-items: stretch; }
+.definitions-create-title { color: var(--text); font-size: 12px; font-weight: 650; }
+.definitions-create-summary {
+  margin: -2px 0 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.definitions-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.definitions-create-error {
+  margin: 0;
+  color: var(--fail);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.definitions-segmented { display: flex; }
+.definitions-segmented .definitions-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+}
+.definitions-segmented .definitions-btn + .definitions-btn { margin-left: -1px; }
+.definitions-segmented .definitions-btn span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .definitions-candidate {
   display: flex;
   flex: none;
@@ -143,9 +205,30 @@
 }
 .definitions-btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .definitions-btn[data-busy] { cursor: progress; opacity: 0.6; }
+.definitions-btn:disabled,
+.definitions-btn:disabled:hover { cursor: default; opacity: 0.5; color: var(--text-dim); border-color: var(--border); }
 .definitions-btn-primary { border-color: var(--accent); background: var(--accent); color: var(--accent-text); }
 .definitions-btn-primary:hover { filter: brightness(1.1); color: var(--accent-text); }
-.definitions-remove[data-confirm] {
+.definitions-btn[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.definitions-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.definitions-link:hover { text-decoration: underline; }
+.definitions-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 1px;
+}
+.definitions-remove[data-confirm],
+.definitions-row-delete[data-confirm] {
   border-color: color-mix(in srgb, var(--fail) 55%, var(--border));
   background: color-mix(in srgb, var(--fail) 12%, var(--panel));
   color: var(--fail);
@@ -218,6 +301,14 @@
   border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
   background: var(--accent-soft);
   color: var(--accent);
+}
+.definitions-row-rename {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 650;
 }
 .definitions-row-reason {
   flex: none;

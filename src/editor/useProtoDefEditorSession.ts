@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   assignSelectGroupExclusively,
   clearSelectGroupIds,
   addStickerStages,
+  addStickerVariant,
+  equalizeStickerVariantWeights,
   EditorMutationAmbiguityError,
   moveStickerStages,
   removeStickerStages,
+  removeStickerVariant,
   setStickerDestQuad,
   setStickerBaseReference,
+  setStickerVariantBase,
+  setStickerVariantWeight,
   setTextureLayerTeamColors,
   setTextureLayerTeamTexture,
   setTextureTransformFlip,
@@ -31,11 +36,19 @@ import {
 } from './mutations';
 import { SnapshotHistory } from './history';
 import {
-  serializeProtoDefKitMessages,
-  type ProtoDefKitJsonExport,
+  serializeProtoDefKitBundle,
+  type ProtoDefKitBundleJsonExport,
   type SerializeProtoDefKitOptions,
 } from './export/jsonExport';
-import type { ProtoDefKitMessages } from '../protodefs/types';
+import {
+  activeOperationIndex,
+  applyBundleEdit,
+  operationMessages,
+  selectActiveScope,
+  snapshotBundle,
+  type KitViewerScope,
+} from './kitBundle';
+import type { ProtoDefKitBundle, ProtoDefKitMessages, ProtoDefOperationScope } from '../protodefs/types';
 import type { VarDefMsg } from '../protodefs/messages';
 import {
   graphToOperation,
@@ -44,14 +57,19 @@ import {
 } from './graph';
 import type { OperationMsg } from '../protodefs/messages';
 
-/** Fetches one imported kit by its catalog id. */
-type ProtoDefEditorKitLoader = (kitId: number) => Promise<ProtoDefKitMessages | null>;
+/** Fetches one imported kit's bundle by its catalog id. */
+type ProtoDefEditorKitLoader = (kitId: number) => Promise<ProtoDefKitBundle | null>;
 
 export interface UseProtoDefEditorSessionOptions {
   /** The selected imported catalog id, or null when the editor has no kit. */
   kitId: number | null | undefined;
-  /** Usually useCustomDefinitions().exportKit. */
+  /** Loads the whole kit: useStockDefinitions or useCustomDefinitions exportKitBundle, by kind. */
   loadKit: ProtoDefEditorKitLoader;
+  /**
+   * The weapon and wear the viewer shows. For a per-wear paint this picks the
+   * operation `current` exposes. Changing it never resets the session.
+   */
+  scope?: KitViewerScope;
 }
 
 interface ReloadProtoDefEditorSessionOptions {
@@ -72,11 +90,19 @@ interface GroupTextureDefaultAssignment {
 export interface ProtoDefEditorSession {
   status: 'idle' | 'loading' | 'ready' | 'error';
   kitId: number | null;
-  /** Immutable baseline as it was loaded from the imported definition source. */
+  /** The active operation's baseline, with the shared definition. */
   original: ProtoDefKitMessages | null;
-  /** Immutable working snapshot. Do not mutate it; use the session actions. */
+  /** The active operation's working snapshot. Do not mutate it; use the session actions. */
   current: ProtoDefKitMessages | null;
-  /** Incremented whenever current changes, so a renderer can rebuild from it. */
+  /** Immutable working bundle: every operation of the paint, the definition, and its item definitions. */
+  bundle: ProtoDefKitBundle | null;
+  /** Immutable baseline bundle, the one `dirty` is measured against. */
+  originalBundle: ProtoDefKitBundle | null;
+  /** Which operation each weapon and wear reads. Empty for a top-level paint. */
+  scopes: readonly ProtoDefOperationScope[];
+  /** The scope `current` edits for the viewer's weapon and wear, or null for a top-level paint. */
+  activeScope: { weaponKey: string; wear: number } | null;
+  /** Incremented whenever current changes (including when the viewer's scope changes it), so a renderer can rebuild from it. */
   revision: number;
   dirty: boolean;
   canUndo: boolean;
@@ -103,6 +129,15 @@ export interface ProtoDefEditorSession {
   moveSticker: (target: StickerStructureTarget, direction: -1 | 1) => boolean;
   /** Points one logical sticker at new artwork without touching stickers that shared it. */
   setStickerBase: (target: StickerStructureTarget, baseReference: string) => boolean;
+  /** Sets one variant's relative weight, one history entry per call. */
+  setStickerVariantWeight: (target: StickerStructureTarget, index: number, weight: number) => boolean;
+  /** Appends artwork as a new weight-1 variant of one logical sticker. */
+  addStickerVariant: (target: StickerStructureTarget, baseReference: string) => boolean;
+  removeStickerVariant: (target: StickerStructureTarget, index: number) => boolean;
+  /** Points one variant at new artwork, leaving the other variants and their artwork alone. */
+  setStickerVariantBase: (target: StickerStructureTarget, index: number, baseReference: string) => boolean;
+  /** Sets every variant's weight to 1 in one history entry. */
+  equalizeStickerVariantWeights: (target: StickerStructureTarget) => boolean;
   /** Gives one texture layer separate RED and BLU artwork, or folds it back to one. */
   setLayerTeamColors: (target: Pick<TextureTransformTarget, 'stagePath'>, enabled: boolean) => boolean;
   setLayerTeamTexture: (target: Pick<TextureTransformTarget, 'stagePath'>, team: 'red' | 'blu', textureReference: string) => boolean;
@@ -138,36 +173,13 @@ export interface ProtoDefEditorSession {
   undo: () => void;
   redo: () => void;
   reset: () => void;
-  /** Restores a locally saved working snapshot as one undoable edit. */
-  restoreDraft: (messages: ProtoDefKitMessages) => boolean;
+  /** Restores a locally saved working bundle as one undoable edit. */
+  restoreDraft: (bundle: ProtoDefKitBundle) => boolean;
   /** Reloads the source kit. Dirty work requires discardEdits: true. */
   reload: (options?: ReloadProtoDefEditorSessionOptions) => Promise<boolean>;
-  /** Serializes the current working snapshot to portable operation/definition JSON. */
-  serialize: (options?: SerializeProtoDefKitOptions) => ProtoDefKitJsonExport | null;
-  /**
-   * Returns a mutable copy suitable for a renderer or a one-off resolver. The
-   * returned copy is intentionally detached from editor history.
-   */
-  getCurrentMessages: () => ProtoDefKitMessages | null;
+  /** Serializes the whole working bundle to portable JSON fragments. */
+  serialize: (options?: SerializeProtoDefKitOptions) => ProtoDefKitBundleJsonExport | null;
   clearError: () => void;
-}
-
-function cloneMessages(messages: ProtoDefKitMessages): ProtoDefKitMessages {
-  return structuredClone(messages) as ProtoDefKitMessages;
-}
-
-/**
- * Decoder messages are plain data, but freezing them catches accidental UI
- * mutation early. The WeakSet also makes this safe for an unexpected cycle.
- */
-function freezeDeep<T>(value: T, visited = new WeakSet<object>()): T {
-  if (!value || typeof value !== 'object') return value;
-  if (ArrayBuffer.isView(value)) return value;
-  const object = value as object;
-  if (visited.has(object)) return value;
-  visited.add(object);
-  for (const child of Object.values(object as Record<string, unknown>)) freezeDeep(child, visited);
-  return Object.freeze(value);
 }
 
 /** The paint kit's declared variables, whatever Many<T> shape they were authored in. */
@@ -181,9 +193,7 @@ function definitionHeaderVariables(definition: Record<string, unknown>): VarDefM
   ));
 }
 
-function snapshot(messages: ProtoDefKitMessages): ProtoDefKitMessages {
-  return freezeDeep(cloneMessages(messages));
-}
+const NO_SCOPES: readonly ProtoDefOperationScope[] = [];
 
 function errorMessage(cause: unknown): string {
   if (cause instanceof EditorMutationAmbiguityError || cause instanceof Error) return cause.message;
@@ -208,37 +218,69 @@ function isOperationMessage(value: Record<string, unknown>): value is Record<str
 export function useProtoDefEditorSession({
   kitId: requestedKitId,
   loadKit,
+  scope,
 }: UseProtoDefEditorSessionOptions): ProtoDefEditorSession {
   const kitId = requestedKitId ?? null;
   const [status, setStatus] = useState<ProtoDefEditorSession['status']>('idle');
-  const [original, setOriginal] = useState<ProtoDefKitMessages | null>(null);
-  const [current, setCurrent] = useState<ProtoDefKitMessages | null>(null);
+  const [bundle, setBundle] = useState<ProtoDefKitBundle | null>(null);
+  const [originalBundle, setOriginalBundle] = useState<ProtoDefKitBundle | null>(null);
   const [revision, setRevision] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const currentRef = useRef<ProtoDefKitMessages | null>(null);
-  const originalRef = useRef<ProtoDefKitMessages | null>(null);
+  const bundleRef = useRef<ProtoDefKitBundle | null>(null);
+  const originalRef = useRef<ProtoDefKitBundle | null>(null);
   const dirtyRef = useRef(false);
-  const historyRef = useRef(new SnapshotHistory<ProtoDefKitMessages>());
+  const historyRef = useRef(new SnapshotHistory<ProtoDefKitBundle>());
   const requestRef = useRef(0);
   const loaderRef = useRef(loadKit);
   loaderRef.current = loadKit;
+  const viewerWeaponKey = scope?.weaponKey;
+  const viewerWear = scope?.wear;
+  const viewer = useMemo<KitViewerScope | undefined>(
+    () => (viewerWeaponKey === undefined || viewerWear === undefined
+      ? undefined
+      : { weaponKey: viewerWeaponKey, wear: viewerWear }),
+    [viewerWeaponKey, viewerWear],
+  );
+  // Edit callbacks read the viewer's scope through a ref so they keep stable identities.
+  const viewerRef = useRef(viewer);
+  viewerRef.current = viewer;
 
-  const install = useCallback((messages: ProtoDefKitMessages) => {
-    const nextOriginal = snapshot(messages);
+  // Scope only chooses which operation is exposed. The bundle, its history,
+  // and its dirty state are untouched by a change of weapon or wear.
+  const activeIndex = bundle ? activeOperationIndex(bundle, viewer) : 0;
+  const current = useMemo(
+    () => (bundle ? operationMessages(bundle, activeIndex) : null),
+    [bundle, activeIndex],
+  );
+  const original = useMemo(
+    () => (originalBundle ? operationMessages(originalBundle, activeIndex) : null),
+    [originalBundle, activeIndex],
+  );
+  const activeScope = bundle ? selectActiveScope(bundle.scopes, viewer) : null;
+
+  // A different operation under `current` must count as a new revision, since
+  // renderers (such as the operation graph's pending drafts) key on it.
+  const [shownIndex, setShownIndex] = useState(activeIndex);
+  if (shownIndex !== activeIndex) {
+    setShownIndex(activeIndex);
+    setRevision((value) => value + 1);
+  }
+
+  const install = useCallback((nextBundle: ProtoDefKitBundle) => {
+    const nextOriginal = snapshotBundle(nextBundle);
     // Both references deliberately begin at the same frozen snapshot. Every
     // edit produces a fresh snapshot, making identity a precise dirty check
     // and letting undo return to the actual baseline without deep comparison.
-    const nextCurrent = nextOriginal;
     originalRef.current = nextOriginal;
-    currentRef.current = nextCurrent;
+    bundleRef.current = nextOriginal;
     historyRef.current.clear();
     dirtyRef.current = false;
-    setOriginal(nextOriginal);
-    setCurrent(nextCurrent);
+    setOriginalBundle(nextOriginal);
+    setBundle(nextOriginal);
     setRevision((value) => value + 1);
     setDirty(false);
     setCanUndo(false);
@@ -249,11 +291,11 @@ export function useProtoDefEditorSession({
 
   const clear = useCallback((nextStatus: ProtoDefEditorSession['status'] = 'idle') => {
     originalRef.current = null;
-    currentRef.current = null;
+    bundleRef.current = null;
     historyRef.current.clear();
     dirtyRef.current = false;
-    setOriginal(null);
-    setCurrent(null);
+    setOriginalBundle(null);
+    setBundle(null);
     setRevision((value) => value + 1);
     setDirty(false);
     setCanUndo(false);
@@ -274,11 +316,11 @@ export function useProtoDefEditorSession({
     clear('loading');
     setError(null);
     try {
-      const messages = await loaderRef.current(kitId);
+      const loaded = await loaderRef.current(kitId);
       // A selection or loader change won while awaiting the source.
       if (request !== requestRef.current) return false;
-      if (!messages) throw new Error('The selected imported definition is no longer available.');
-      install(messages);
+      if (!loaded) throw new Error('The selected imported definition is no longer available.');
+      install(loaded);
       return true;
     } catch (cause) {
       if (request !== requestRef.current) return false;
@@ -296,11 +338,11 @@ export function useProtoDefEditorSession({
     return () => { requestRef.current += 1; };
   }, [load]);
 
-  const commitEdit = useCallback((prior: ProtoDefKitMessages, next: ProtoDefKitMessages) => {
+  const commitEdit = useCallback((prior: ProtoDefKitBundle, next: ProtoDefKitBundle) => {
     historyRef.current.record(prior);
-    currentRef.current = next;
+    bundleRef.current = next;
     dirtyRef.current = true;
-    setCurrent(next);
+    setBundle(next);
     setRevision((value) => value + 1);
     setDirty(true);
     setCanUndo(historyRef.current.canUndo);
@@ -309,15 +351,15 @@ export function useProtoDefEditorSession({
   }, []);
 
   const applyEdit = useCallback((edit: (prior: ProtoDefKitMessages) => ProtoDefKitMessages): boolean => {
-    const prior = currentRef.current;
+    const prior = bundleRef.current;
     if (!prior) {
       setError('Load an imported definition before editing it.');
       return false;
     }
     try {
-      const next = edit(prior);
+      const next = applyBundleEdit(prior, activeOperationIndex(prior, viewerRef.current), edit);
       if (next === prior) return false;
-      commitEdit(prior, snapshot(next));
+      commitEdit(prior, snapshotBundle(next));
       return true;
     } catch (cause) {
       setError(errorMessage(cause));
@@ -330,24 +372,27 @@ export function useProtoDefEditorSession({
     candidates: readonly SelectGroupAssignmentTarget[],
     groupIds: readonly number[],
   ): readonly Omit<SelectGroupAssignmentResult, 'messages'>[] | null => {
-    const prior = currentRef.current;
+    const prior = bundleRef.current;
     if (!prior) {
       setError('Load an imported definition before editing it.');
       return null;
     }
     try {
-      let next = prior;
       const results: Array<Omit<SelectGroupAssignmentResult, 'messages'>> = [];
       const seen = new Set<number>();
-      for (const groupId of groupIds) {
-        if (seen.has(groupId)) continue;
-        seen.add(groupId);
-        const result = assignSelectGroupExclusively(next, active, candidates, groupId);
-        next = result.messages;
-        results.push({ action: result.action, displacedLabels: result.displacedLabels });
-      }
+      const next = applyBundleEdit(prior, activeOperationIndex(prior, viewerRef.current), (messages) => {
+        let edited = messages;
+        for (const groupId of groupIds) {
+          if (seen.has(groupId)) continue;
+          seen.add(groupId);
+          const result = assignSelectGroupExclusively(edited, active, candidates, groupId);
+          edited = result.messages;
+          results.push({ action: result.action, displacedLabels: result.displacedLabels });
+        }
+        return edited;
+      });
       if (results.length === 0) return [];
-      commitEdit(prior, snapshot(next));
+      commitEdit(prior, snapshotBundle(next));
       return results;
     } catch (cause) {
       setError(errorMessage(cause));
@@ -366,13 +411,17 @@ export function useProtoDefEditorSession({
   ): boolean => applyEdit((prior) => {
     let next = setGroupTextureReference(prior, target, textureRef);
     if (defaultAssignment) {
+      // A literal map is renamed in place, so assignment targets that name the old value must follow it.
+      const previousLiteral = 'kind' in target ? target.groupsValue : undefined;
+      const follow = (entry: SelectGroupAssignmentTarget): SelectGroupAssignmentTarget => (
+        previousLiteral !== undefined && entry.target.groupsValue === previousLiteral
+          ? { ...entry, target: { ...entry.target, groupsValue: textureRef.trim() } }
+          : entry
+      );
+      const active = follow(defaultAssignment.active);
+      const candidates = defaultAssignment.candidates.map(follow);
       for (const groupId of defaultAssignment.groupIds) {
-        next = assignSelectGroupExclusively(
-          next,
-          defaultAssignment.active,
-          defaultAssignment.candidates,
-          groupId,
-        ).messages;
+        next = assignSelectGroupExclusively(next, active, candidates, groupId).messages;
       }
     }
     return next;
@@ -389,11 +438,11 @@ export function useProtoDefEditorSession({
   // a rotated/scaled paint layer has no cheap shader-uniform preview the way
   // a sticker quad does, so the live redraw has to go through the same
   // recipe recomposite path a committed edit already uses.
-  const transformGestureRef = useRef<{ baseline: ProtoDefKitMessages; recorded: boolean } | null>(null);
+  const transformGestureRef = useRef<{ baseline: ProtoDefKitBundle; recorded: boolean } | null>(null);
 
   const beginTransformGesture = useCallback(() => {
-    const current = currentRef.current;
-    if (current) transformGestureRef.current = { baseline: current, recorded: false };
+    const working = bundleRef.current;
+    if (working) transformGestureRef.current = { baseline: working, recorded: false };
   }, []);
 
   const endTransformGesture = useCallback(() => {
@@ -401,22 +450,22 @@ export function useProtoDefEditorSession({
   }, []);
 
   const applyTransformEdit = useCallback((mutate: (prior: ProtoDefKitMessages) => ProtoDefKitMessages): boolean => {
-    const prior = currentRef.current;
+    const prior = bundleRef.current;
     if (!prior) {
       setError('Load an imported definition before editing it.');
       return false;
     }
     try {
-      const next = snapshot(mutate(prior));
+      const next = snapshotBundle(applyBundleEdit(prior, activeOperationIndex(prior, viewerRef.current), mutate));
       const gesture = transformGestureRef.current;
       if (gesture) {
         if (!gesture.recorded) {
           historyRef.current.record(gesture.baseline);
           gesture.recorded = true;
         }
-        currentRef.current = next;
+        bundleRef.current = next;
         dirtyRef.current = true;
-        setCurrent(next);
+        setBundle(next);
         setRevision((value) => value + 1);
         setDirty(true);
         setCanUndo(historyRef.current.canUndo);
@@ -466,7 +515,7 @@ export function useProtoDefEditorSession({
   ), [applyEdit]);
 
   const replaceOperationGraph = useCallback((graph: OperationGraph): boolean => {
-    const prior = currentRef.current;
+    const prior = bundleRef.current;
     if (!prior) {
       setError('Load an imported definition before editing it.');
       return false;
@@ -476,24 +525,24 @@ export function useProtoDefEditorSession({
       setError(validation.diagnostics.map((diagnostic) => diagnostic.message).join(' '));
       return false;
     }
-    if (!isOperationMessage(prior.operation)) {
+    const index = activeOperationIndex(prior, viewerRef.current);
+    const messages = operationMessages(prior, index);
+    if (!messages || !isOperationMessage(messages.operation)) {
       setError('The selected definition has an invalid operation message.');
       return false;
     }
     try {
       const operation = graphToOperation(graph);
-      const next = snapshot({
-        ...prior,
-        operation: {
-          ...prior.operation,
-          ...operation,
-          header: {
-            ...prior.operation.header,
-            ...operation.header,
-          },
-          operation_node: operation.operation_node,
+      const merged = {
+        ...messages.operation,
+        ...operation,
+        header: {
+          ...messages.operation.header,
+          ...operation.header,
         },
-      });
+        operation_node: operation.operation_node,
+      };
+      const next = snapshotBundle(applyBundleEdit(prior, index, (active) => ({ ...active, operation: merged })));
       commitEdit(prior, next);
       return true;
     } catch (cause) {
@@ -503,7 +552,7 @@ export function useProtoDefEditorSession({
   }, [commitEdit]);
 
   const setDefinitionVariable = useCallback((name: string, value: string): boolean => {
-    const prior = currentRef.current;
+    const prior = bundleRef.current;
     if (!prior) {
       setError('Load an imported definition before editing it.');
       return false;
@@ -523,7 +572,7 @@ export function useProtoDefEditorSession({
     // Preserve the authored Many<T> shape: a lone declaration stays a lone
     // declaration so the serialized definition keeps byte-for-byte structure.
     header.variables = Array.isArray(header.variables) ? replacement : replacement[0];
-    commitEdit(prior, snapshot({ ...prior, definition }));
+    commitEdit(prior, snapshotBundle({ ...prior, definition }));
     return true;
   }, [commitEdit]);
 
@@ -543,6 +592,26 @@ export function useProtoDefEditorSession({
     applyEdit((prior) => setStickerBaseReference(prior, target, baseReference))
   ), [applyEdit]);
 
+  const setVariantWeight = useCallback((target: StickerStructureTarget, index: number, weight: number) => (
+    applyEdit((prior) => setStickerVariantWeight(prior, target, index, weight))
+  ), [applyEdit]);
+
+  const addVariant = useCallback((target: StickerStructureTarget, baseReference: string) => (
+    applyEdit((prior) => addStickerVariant(prior, target, baseReference))
+  ), [applyEdit]);
+
+  const removeVariant = useCallback((target: StickerStructureTarget, index: number) => (
+    applyEdit((prior) => removeStickerVariant(prior, target, index))
+  ), [applyEdit]);
+
+  const setVariantBase = useCallback((target: StickerStructureTarget, index: number, baseReference: string) => (
+    applyEdit((prior) => setStickerVariantBase(prior, target, index, baseReference))
+  ), [applyEdit]);
+
+  const equalizeVariantWeights = useCallback((target: StickerStructureTarget) => (
+    applyEdit((prior) => equalizeStickerVariantWeights(prior, target))
+  ), [applyEdit]);
+
   const setLayerTeamColors = useCallback((target: Pick<TextureTransformTarget, 'stagePath'>, enabled: boolean) => (
     applyEdit((prior) => setTextureLayerTeamColors(prior, target, enabled))
   ), [applyEdit]);
@@ -556,14 +625,14 @@ export function useProtoDefEditorSession({
   ), [applyEdit]);
 
   const undo = useCallback(() => {
-    const currentMessages = currentRef.current;
-    if (!currentMessages) return;
-    const prior = historyRef.current.undo(currentMessages);
+    const working = bundleRef.current;
+    if (!working) return;
+    const prior = historyRef.current.undo(working);
     if (!prior) return;
-    currentRef.current = prior;
+    bundleRef.current = prior;
     const nextDirty = prior !== originalRef.current;
     dirtyRef.current = nextDirty;
-    setCurrent(prior);
+    setBundle(prior);
     setRevision((value) => value + 1);
     setDirty(nextDirty);
     setCanUndo(historyRef.current.canUndo);
@@ -572,14 +641,14 @@ export function useProtoDefEditorSession({
   }, []);
 
   const redo = useCallback(() => {
-    const currentMessages = currentRef.current;
-    if (!currentMessages) return;
-    const next = historyRef.current.redo(currentMessages);
+    const working = bundleRef.current;
+    if (!working) return;
+    const next = historyRef.current.redo(working);
     if (!next) return;
-    currentRef.current = next;
+    bundleRef.current = next;
     const nextDirty = next !== originalRef.current;
     dirtyRef.current = nextDirty;
-    setCurrent(next);
+    setBundle(next);
     setRevision((value) => value + 1);
     setDirty(nextDirty);
     setCanUndo(historyRef.current.canUndo);
@@ -589,12 +658,12 @@ export function useProtoDefEditorSession({
 
   const reset = useCallback(() => {
     const baseline = originalRef.current;
-    const prior = currentRef.current;
+    const prior = bundleRef.current;
     if (!baseline || !prior || prior === baseline) return;
     historyRef.current.record(prior);
-    currentRef.current = baseline;
+    bundleRef.current = baseline;
     dirtyRef.current = false;
-    setCurrent(baseline);
+    setBundle(baseline);
     setRevision((value) => value + 1);
     setDirty(false);
     setCanUndo(historyRef.current.canUndo);
@@ -602,14 +671,21 @@ export function useProtoDefEditorSession({
     setError(null);
   }, []);
 
-  const restoreDraft = useCallback((messages: ProtoDefKitMessages): boolean => {
+  const restoreDraft = useCallback((draft: ProtoDefKitBundle): boolean => {
     const baseline = originalRef.current;
     if (!baseline) {
       setError('Load a war paint before restoring its draft.');
       return false;
     }
+    // A draft saved from a different source file under the same name must not
+    // leave the viewer's scope pointing at an operation that does not exist.
+    if (draft.operations.length !== baseline.operations.length
+      || JSON.stringify(draft.scopes) !== JSON.stringify(baseline.scopes)) {
+      setError('This draft does not match the loaded war paint.');
+      return false;
+    }
     try {
-      commitEdit(baseline, snapshot(messages));
+      commitEdit(baseline, snapshotBundle(draft));
       return true;
     } catch (cause) {
       setError(errorMessage(cause));
@@ -622,25 +698,20 @@ export function useProtoDefEditorSession({
     [load],
   );
 
-  const serialize = useCallback((options: SerializeProtoDefKitOptions = {}): ProtoDefKitJsonExport | null => {
-    const messages = currentRef.current;
-    if (!messages) {
+  const serialize = useCallback((options: SerializeProtoDefKitOptions = {}): ProtoDefKitBundleJsonExport | null => {
+    const working = bundleRef.current;
+    if (!working) {
       setError('Load an imported definition before exporting it.');
       return null;
     }
     try {
-      const result = serializeProtoDefKitMessages(messages, options);
+      const result = serializeProtoDefKitBundle(working, options);
       setError(null);
       return result;
     } catch (cause) {
       setError(errorMessage(cause));
       return null;
     }
-  }, []);
-
-  const getCurrentMessages = useCallback(() => {
-    const messages = currentRef.current;
-    return messages ? cloneMessages(messages) : null;
   }, []);
 
   const clearError = useCallback(() => setError(null), []);
@@ -650,6 +721,10 @@ export function useProtoDefEditorSession({
     kitId,
     original,
     current,
+    bundle,
+    originalBundle,
+    scopes: bundle?.scopes ?? NO_SCOPES,
+    activeScope,
     revision,
     dirty,
     canUndo,
@@ -663,6 +738,11 @@ export function useProtoDefEditorSession({
     removeSticker,
     moveSticker,
     setStickerBase,
+    setStickerVariantWeight: setVariantWeight,
+    addStickerVariant: addVariant,
+    removeStickerVariant: removeVariant,
+    setStickerVariantBase: setVariantBase,
+    equalizeStickerVariantWeights: equalizeVariantWeights,
     setLayerTeamColors,
     setLayerTeamTexture,
     beginTransformGesture,
@@ -680,7 +760,6 @@ export function useProtoDefEditorSession({
     restoreDraft,
     reload,
     serialize,
-    getCurrentMessages,
     clearError,
   };
 }

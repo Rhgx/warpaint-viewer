@@ -1,5 +1,5 @@
 import type { TextureMetadata } from '../data/types';
-import type { ProtoDefKitMessages } from '../protodefs/types';
+import type { ProtoDefKitBundle } from '../protodefs/types';
 import type { ExportTextureKind } from '../export/plan';
 
 export interface ExportItem {
@@ -12,7 +12,7 @@ export interface ExportItem {
 export interface ExportDefinitionsContext {
   isImported: boolean;
   builtInKits: { defindex: number; name: string }[];
-  loadKitMessages: () => Promise<ProtoDefKitMessages | null>;
+  loadKitBundle: () => Promise<ProtoDefKitBundle | null>;
   packageFiles: () => Promise<{ path: string; data: Uint8Array }[]>;
   packageFileCount: number;
   packageMounted: boolean;

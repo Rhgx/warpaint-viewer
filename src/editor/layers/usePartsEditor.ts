@@ -7,7 +7,7 @@ import type { CustomWarpaintWorkbench } from '../../ui/workbench/CustomWarpaintW
 import type { ControlsState } from '../../viewer/controls';
 import type { Viewer } from '../../viewer/Viewer';
 import type { WarpaintAssetOverrides, WorkbenchTab } from '../../workbench/types';
-import { discoverGroupTextureTarget } from './groupTargets';
+import { discoverGroupTextureTarget, discoverLiteralGroupTextureTarget } from './groupTargets';
 import {
   compatibleGroupTextures,
   formatGroupNameForDisplay,
@@ -72,6 +72,7 @@ interface UsePartsEditorOptions extends
     | 'assignSessionGroups'
     | 'clearSessionGroups'
     | 'setSessionGroupTexture'
+    | 'editorActiveScope'
   >,
   Pick<EditorLayers,
     | 'activeEditorSelector'
@@ -156,6 +157,7 @@ export function usePartsEditor({
   assignSessionGroups,
   clearSessionGroups,
   setSessionGroupTexture,
+  editorActiveScope,
   activeEditorSelector,
   setActiveEditorSelector,
   weaponBaseLayerActive,
@@ -224,11 +226,18 @@ export function usePartsEditor({
     [displayedGroupRef, groupNameReferenceGeneration],
   );
   const activeWeaponVariablePath = weaponSlots.find((slot) => slot.weaponKey === state.weaponKey)?.path;
+  const perWearSession = editorActiveScope !== null;
   const groupTextureTarget = useMemo(() => discoverGroupTextureTarget(
     provenanceRecipe?.provenance,
     activeGroupRef,
     activeWeaponVariablePath ? [...activeWeaponVariablePath, 'data', 'variable'] : undefined,
-  ), [activeGroupRef, activeWeaponVariablePath, provenanceRecipe?.provenance]);
+  ) ?? discoverLiteralGroupTextureTarget(activeGroupTarget?.groupsRef, perWearSession), [
+    activeGroupRef,
+    activeGroupTarget?.groupsRef,
+    activeWeaponVariablePath,
+    perWearSession,
+    provenanceRecipe?.provenance,
+  ]);
 
   useEffect(() => {
     if (requestedGroupTextureRef && requestedGroupTextureRef === resolvedGroupTextureValue) {

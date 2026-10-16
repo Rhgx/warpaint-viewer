@@ -1,4 +1,6 @@
-import type { Grade, Manifest, PaintkitEntry, Team, TextureDirectory } from './types';
+import type {
+  Grade, Manifest, OperationTemplateData, OperationTemplateFile, OperationTemplateSlot, PaintkitEntry, Team, TextureDirectory,
+} from './types';
 import type { RecipeNode } from '../compositor/types';
 import { mockManifest, mockRecipe } from '../dev/mock/data';
 import { mockTextures } from '../dev/mock/textures';
@@ -89,8 +91,8 @@ class RealDataSource implements DataSource {
 
     const wearSuffix = kit.perWear ? `_w${wearIndex}` : '';
     let key = `${weaponKey}_${team}${wearSuffix}`;
-    // Team fallback: only `red` is emitted when hasTeamTextures is false, and
-    // blu falls back to red.
+    // Team fallback: blu falls back to red when the bundle has no blu variant
+    // (no team textures, or blu identical to red).
     if (!(key in bundle.variants) && team === 'blu') {
       key = `${weaponKey}_red${wearSuffix}`;
     }
@@ -151,6 +153,47 @@ export function loadTextureDirectory(): Promise<TextureDirectory> {
     textureDirectory.catch(() => { textureDirectory = null; });
   }
   return textureDirectory;
+}
+
+let operationTemplates: Promise<OperationTemplateData> | null = null;
+// The settled value, so a component mounting after the first load can render it
+// on its first frame instead of one tick later (a popover would visibly resize).
+let loadedOperationTemplates: OperationTemplateData | null = null;
+
+export function peekOperationTemplates(): OperationTemplateData | null {
+  return loadedOperationTemplates;
+}
+
+// Same caching as loadTextureDirectory. Not gated on mock mode: the file is shipped
+// in public/data, so mock mode fetches it too. The file stores each template's weapon
+// slots as indexes into one shared table; they are expanded here so callers get slot objects.
+export function loadOperationTemplates(): Promise<OperationTemplateData> {
+  if (!operationTemplates) {
+    operationTemplates = fetch(`${DATA_ROOT}/operation-templates.json`).then(async (res) => {
+      if (!res.ok) throw new Error(`operation-templates.json ${res.status}`);
+      const file = await res.json() as OperationTemplateFile;
+      const slotFor = (index: number): OperationTemplateSlot => {
+        const slot = file.slots[index];
+        if (!slot) throw new Error(`operation-templates.json has no weapon slot ${index}`);
+        return slot;
+      };
+      return {
+        usage: file.usage,
+        names: file.names,
+        templates: file.templates.map((template) => ({
+          ...template,
+          items: Object.fromEntries(Object.entries(template.items).map(
+            ([field, index]): [string, OperationTemplateSlot] => [field, slotFor(index)],
+          )),
+        })),
+      };
+    });
+    operationTemplates.then(
+      (loaded) => { loadedOperationTemplates = loaded; },
+      () => { operationTemplates = null; },
+    );
+  }
+  return operationTemplates;
 }
 
 function applyGrades(manifest: Manifest, grades: Record<string, Grade>): Manifest {

@@ -107,6 +107,40 @@ function draftStatusLabel(status: EditorDraftStatus): string | null {
   if (status === 'error') return 'Autosave failed';
   return null;
 }
+
+/** Commits on blur or Enter, so typing a weight is one history entry rather than one per keystroke. */
+function StickerVariantWeightInput({
+  label,
+  weight,
+  onCommit,
+}: {
+  label: string;
+  weight: number;
+  onCommit: (weight: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      type="number"
+      className="sticker-placement-editor-variant-weight"
+      aria-label={label}
+      title={label}
+      min={0}
+      step={0.1}
+      value={draft ?? String(weight)}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        if (draft === null) return;
+        setDraft(null);
+        const parsed = draft.trim() === '' ? Number.NaN : Number(draft);
+        if (Number.isFinite(parsed) && parsed >= 0 && parsed !== weight) onCommit(parsed);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+      }}
+    />
+  );
+}
 export function CustomWarpaintWorkbench({
   recipes,
   resolveTexture,
@@ -161,9 +195,30 @@ export function CustomWarpaintWorkbench({
         baseReference?: string;
         /** How many other stickers draw this same artwork file. */
         sharedWith?: number;
+        /** Weighted artwork choices the seed picks between. */
+        variantCount?: number;
       }[];
       /** Points the active sticker at different artwork. */
       onSetTargetTexture?: (baseReference: string) => void;
+      /** Weighted artwork choices of the active sticker, in list order. */
+      variants?: readonly {
+        index: number;
+        /** Authored artwork reference of this variant, when it has one. */
+        baseReference?: string;
+        thumbnail?: string | null;
+        weight: number;
+        /** True when the current seed drew this variant's artwork. */
+        picked: boolean;
+        /** True when this variant is pinned for preview in the sticker editor. */
+        previewing: boolean;
+      }[];
+      /** Pins a variant for preview, or unpins it when it is already pinned. */
+      onPreviewVariant?: (index: number) => void;
+      onSetVariantWeight?: (index: number, weight: number) => void;
+      onSetVariantBase?: (index: number, baseReference: string) => void;
+      onEqualizeVariantWeights?: () => void;
+      onAddVariant?: (baseReference: string) => void;
+      onRemoveVariant?: (index: number) => void;
       activeTargetId: string;
       onActiveTargetChange: (id: string) => void;
       textureChoices: readonly { ref: string; label: string; thumbnail?: string | null }[];
@@ -196,6 +251,8 @@ export function CustomWarpaintWorkbench({
     graph?: OperationGraphEditorProps;
     paintSubView?: 'parts' | 'transform' | 'graph';
     onPaintSubViewChange?: (view: 'parts' | 'transform' | 'graph') => void;
+    /** Weapon and wear whose operation is being edited, for a per-wear paint; absent otherwise. */
+    perWearScope?: { weapon: string; wear: string };
     /** Per-layer marker, aligned with `selectors`, for a non-default transform range. */
     layerHasTransformEdits?: readonly boolean[];
     /** Per-layer marker, aligned with `selectors`, for transforms that are intentionally unavailable. */
@@ -263,6 +320,9 @@ export function CustomWarpaintWorkbench({
   const [dropping, setDropping] = useState(false);
   const [dropHint, setDropHint] = useState(false);
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  // One picker serves both "Add sticker" and "Add variant"; this says which
+  // action the chosen texture goes to.
+  const [stickerPickerPurpose, setStickerPickerPurpose] = useState<'sticker' | 'variant'>('sticker');
   const [stickerSearch, setStickerSearch] = useState('');
   const [showAllStickerTextures, setShowAllStickerTextures] = useState(false);
   // dragenter/dragleave fire for every child the pointer crosses, so the cue
@@ -435,6 +495,15 @@ export function CustomWarpaintWorkbench({
     if (error) setEditImportError(error);
     else if (split) onSplit(target);
   };
+  const toggleStickerPicker = (purpose: 'sticker' | 'variant') => {
+    if (stickerPickerOpen && stickerPickerPurpose === purpose) {
+      setStickerPickerOpen(false);
+      return;
+    }
+    setStickerPickerPurpose(purpose);
+    setShowAllStickerTextures(false);
+    setStickerPickerOpen(true);
+  };
   const replaceStickerImage = (file: File) => {
     const sticker = editor?.sticker;
     const active = sticker?.targets.find((target) => target.id === sticker.activeTargetId);
@@ -442,6 +511,15 @@ export function CustomWarpaintWorkbench({
     const ref = texturePublicPath(referenceStem(active.baseReference)) ?? '';
     const split = (active.sharedWith ?? 0) > 0 || !isSplitOffReference(ref);
     void importEditTexture(active.baseReference, 'sticker', file, split, sticker.onSetTargetTexture);
+  };
+  const replaceVariantImage = (index: number, file: File) => {
+    const sticker = editor?.sticker;
+    const variants = sticker?.variants ?? [];
+    const variant = variants.find((row) => row.index === index);
+    if (!sticker?.onSetVariantBase || !variant?.baseReference) return;
+    // Always a fresh file: this variant's texture may also be drawn by another
+    // sticker or variant, and only the chosen variant should change.
+    void importEditTexture(variant.baseReference, 'sticker', file, true, (reference) => sticker.onSetVariantBase?.(index, reference));
   };
   const replaceTeamTexture = (team: 'red' | 'blu', file: File) => {
     const colors = editor?.teamColors;
@@ -459,6 +537,9 @@ export function CustomWarpaintWorkbench({
     );
   };
   const stickerFileRef = useRef<HTMLInputElement | null>(null);
+  // One file input serves every variant row; the row that asked for it is remembered here.
+  const variantFileRef = useRef<HTMLInputElement | null>(null);
+  const variantReplaceIndexRef = useRef<number | null>(null);
 
   const removeAlpha = async (ref: string) => {
     const current = assetsRef.current[ref];
@@ -831,6 +912,11 @@ export function CustomWarpaintWorkbench({
                   role="listbox"
                   aria-label={materialsActive ? 'Material overrides' : (editor.mode === 'paint' ? 'Paint layers' : 'Stickers')}
                 >
+                  {editor.perWearScope && (
+                    <p className="custom-workbench-edit-scope-note">
+                      Editing: {editor.perWearScope.weapon}, {editor.perWearScope.wear}. This paint has a separate operation for each weapon and wear; change the weapon or wear in the viewer to edit another.
+                    </p>
+                  )}
                   {materialsActive ? (
                     <p className="custom-workbench-edit-materials-note">
                       Material overrides apply to the whole paint, so this list is not used in Materials.
@@ -926,6 +1012,11 @@ export function CustomWarpaintWorkbench({
                         <span className="custom-workbench-edit-sticker-label">
                           {target.label || `Sticker ${index + 1}`}
                         </span>
+                        {(target.variantCount ?? 1) > 1 && (
+                          <span className="custom-workbench-edit-layer-count" title={`${target.variantCount} random variants`}>
+                            {target.variantCount}
+                          </span>
+                        )}
                         {(target.sharedWith ?? 0) > 0 && (
                           <span
                             className="custom-workbench-edit-layer-vary"
@@ -946,11 +1037,8 @@ export function CustomWarpaintWorkbench({
                         type="button"
                         title="Add sticker"
                         aria-label="Add sticker"
-                        aria-expanded={stickerPickerOpen}
-                        onClick={() => setStickerPickerOpen((open) => {
-                          if (!open) setShowAllStickerTextures(false);
-                          return !open;
-                        })}
+                        aria-expanded={stickerPickerOpen && stickerPickerPurpose === 'sticker'}
+                        onClick={() => toggleStickerPicker('sticker')}
                       >
                         <Plus size={13} />
                       </button>
@@ -992,9 +1080,14 @@ export function CustomWarpaintWorkbench({
                   );
                 })()}
                 {!materialsActive && editor.mode === 'sticker' && editor.sticker && stickerPickerOpen && (
-                  <div className="custom-workbench-sticker-picker" role="dialog" aria-label="Add sticker">
+                  <div
+                    className="custom-workbench-sticker-picker"
+                    data-purpose={stickerPickerPurpose}
+                    role="dialog"
+                    aria-label={stickerPickerPurpose === 'variant' ? 'Add variant' : 'Add sticker'}
+                  >
                     <div className="custom-workbench-sticker-picker-head">
-                      <strong>Add sticker</strong>
+                      <strong>{stickerPickerPurpose === 'variant' ? 'Add variant' : 'Add sticker'}</strong>
                       <button type="button" aria-label="Close sticker picker" onClick={() => setStickerPickerOpen(false)}>
                         <X size={13} />
                       </button>
@@ -1034,7 +1127,8 @@ export function CustomWarpaintWorkbench({
                             aria-selected="false"
                             title={choice.ref}
                             onClick={() => {
-                              editor.sticker?.onAddTarget(choice.ref);
+                              if (stickerPickerPurpose === 'variant') editor.sticker?.onAddVariant?.(choice.ref);
+                              else editor.sticker?.onAddTarget(choice.ref);
                               setStickerPickerOpen(false);
                               setStickerSearch('');
                             }}
@@ -1163,11 +1257,118 @@ export function CustomWarpaintWorkbench({
                   ? (() => {
                     const sticker = editor.sticker;
                     const active = sticker.targets.find((target) => target.id === sticker.activeTargetId);
+                    const variants = sticker.variants ?? [];
+                    const total = variants.reduce((sum, variant) => sum + variant.weight, 0);
+                    const weightsEqual = variants.every((variant) => variant.weight === variants[0]?.weight);
+                    const variantsPanel = variants.length > 0 ? (
+                      <div className="sticker-placement-editor-variants" role="listbox" aria-label="Sticker variants">
+                        {variants.map((variant) => {
+                          const label = variant.baseReference ? referenceLabel(variant.baseReference) : 'No texture';
+                          const percent = total > 0 ? Math.round((variant.weight / total) * 100) : 0;
+                          const onlyVariant = variants.length <= 1;
+                          const togglePreview = () => sticker.onPreviewVariant?.(variant.index);
+                          return (
+                            <div
+                              key={`${variant.index}:${variant.baseReference ?? ''}`}
+                              className="sticker-placement-editor-variant"
+                              role="option"
+                              tabIndex={0}
+                              aria-selected={variant.previewing}
+                              title="Preview this variant in the sticker editor"
+                              onClick={(event) => {
+                                // Controls inside the row keep their own clicks.
+                                if (event.target instanceof Element && event.target.closest('button, input')) return;
+                                togglePreview();
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+                                event.preventDefault();
+                                togglePreview();
+                              }}
+                            >
+                              <span className="custom-workbench-edit-sticker-thumb" aria-hidden="true">
+                                {variant.thumbnail ? <img src={variant.thumbnail} alt="" draggable={false} /> : null}
+                              </span>
+                              <span className="sticker-placement-editor-variant-name" title={variant.baseReference}>{label}</span>
+                              <button
+                                type="button"
+                                className="sticker-placement-editor-variant-remove"
+                                title={onlyVariant ? 'A sticker needs at least one variant.' : 'Remove variant'}
+                                aria-label="Remove variant"
+                                disabled={onlyVariant}
+                                onClick={() => sticker.onRemoveVariant?.(variant.index)}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                className="sticker-placement-editor-variant-replace"
+                                title="Replace this variant's image"
+                                aria-label="Replace this variant's image"
+                                disabled={!variant.baseReference}
+                                onClick={() => {
+                                  variantReplaceIndexRef.current = variant.index;
+                                  variantFileRef.current?.click();
+                                }}
+                              >
+                                <ImageUp size={12} />
+                              </button>
+                              <span
+                                className="sticker-placement-editor-variant-chance"
+                                title={`Weight ${variant.weight} of ${total} total`}
+                              >
+                                {variant.previewing
+                                  ? <span title="Shown in the sticker editor">Previewing · </span>
+                                  : variant.picked && <span title="Drawn for the current seed">Picked · </span>}
+                                {percent}%
+                              </span>
+                              <StickerVariantWeightInput
+                                label={`Relative weight of ${label}`}
+                                weight={variant.weight}
+                                onCommit={(weight) => sticker.onSetVariantWeight?.(variant.index, weight)}
+                              />
+                            </div>
+                          );
+                        })}
+                        <input
+                          ref={variantFileRef}
+                          type="file"
+                          accept={TEXTURE_FILE_ACCEPT}
+                          hidden
+                          onChange={(event) => {
+                            const file = event.currentTarget.files?.[0];
+                            const index = variantReplaceIndexRef.current;
+                            event.currentTarget.value = '';
+                            if (file && index !== null) replaceVariantImage(index, file);
+                          }}
+                        />
+                        <div className="sticker-placement-editor-corner-actions">
+                          <button
+                            type="button"
+                            aria-expanded={stickerPickerOpen && stickerPickerPurpose === 'variant'}
+                            onClick={() => toggleStickerPicker('variant')}
+                          >
+                            <Plus size={13} aria-hidden="true" />
+                            Add variant
+                          </button>
+                          <button
+                            type="button"
+                            title={weightsEqual ? 'Every variant already has the same weight.' : 'Give every variant the same weight'}
+                            disabled={weightsEqual}
+                            onClick={() => sticker.onEqualizeVariantWeights?.()}
+                          >
+                            Equal weights
+                          </button>
+                        </div>
+                      </div>
+                    ) : undefined;
                     return (
                       <StickerPlacementEditor
                         {...sticker}
                         label={active?.label ?? sticker.label}
                         focusKey={sticker.activeTargetId}
+                        variantsPanel={variantsPanel}
+                        variantCount={variants.length}
                       />
                     );
                   })()
@@ -1242,6 +1443,9 @@ export function CustomWarpaintWorkbench({
                         </label>
                       )}
                     </>);
+                    // A per-wear scope with no parts still offers Graph (and Transform), so its switch
+                    // stays visible beside the parts message. A top-level paint keeps the switch hidden there.
+                    const partsHeaderSlot = editor.enabled || editor.perWearScope ? subViewSwitch : undefined;
                     return editor.graph && subView === 'graph'
                       ? (
                         <div className="custom-workbench-graph-view">
@@ -1251,7 +1455,7 @@ export function CustomWarpaintWorkbench({
                       )
                       : editor.transform && subView === 'transform'
                       ? <TextureTransformPanel {...editor.transform} headerSlot={subViewSwitch} headerActions={teamActions} />
-                      : <VisualWarpaintEditorPanel {...editor} headerSlot={subViewSwitch} headerActions={teamActions} />;
+                      : <VisualWarpaintEditorPanel {...editor} headerSlot={partsHeaderSlot} headerActions={teamActions} />;
                   })()}
               </div>
             </div>

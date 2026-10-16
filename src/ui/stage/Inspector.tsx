@@ -263,7 +263,7 @@ export const Inspector = memo(function Inspector({
           <TeamToggle
             team={state.team}
             disabled={!hasTeamTextures && state.sheen !== 'team_shine'}
-            disabledReason="This warpaint uses one shared texture; team choice only affects the Team Shine sheen"
+            disabledReason="This war paint has no separate BLU textures."
             onChange={(t) => onChange({ team: t })}
           />
         </Control>

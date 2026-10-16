@@ -676,6 +676,20 @@
   line-height: 1.4;
 }
 
+.operation-graph-usage { display: block; }
+
+.operation-graph-usage-link {
+  padding: 0;
+  border: 0;
+  color: var(--graph-accent);
+  background: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+.operation-graph-usage-link:hover { text-decoration: underline; }
+.operation-graph-usage-link:focus-visible { outline: 2px solid var(--graph-accent); outline-offset: 1px; }
+
 .operation-graph-diagnostics {
   display: grid;
   gap: 3px;

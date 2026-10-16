@@ -1,5 +1,7 @@
 // Typed shapes for public/data/manifest.json and recipe files.
 
+import type { OperationNodeMsg } from '../protodefs/messages';
+
 export interface WeaponMaterial {
   phongExponent: number | null;
   phongBoost: number;
@@ -93,7 +95,7 @@ export interface PaintkitEntry {
   name: string;
   collection: string | null;
   icon?: string; // pattern swatch WebP relative to public/data, e.g. "icons/paints/431.webp"
-  hasTeamTextures: boolean;
+  hasTeamTextures: boolean; // has_team_textures is set, or the BLU recipes differ from RED
   weapons: string[]; // weapon keys this kit can render on
   perWear?: boolean; // if true, recipe files are split per wear level
   materialOverrides?: Record<string, string>; // weapon key -> manifest material id
@@ -114,6 +116,55 @@ export interface TextureDirectory {
   retrievedAt: string; // YYYY-MM-DD
   legend: { term: string; description: string }[];
   entries: Record<string, TextureDirectoryEntry>; // keyed by built-in paint kit id
+}
+
+/** One variable on an operation header. `inherit` is present only when set explicitly (the schema default is true). */
+export interface OperationTemplateVariable {
+  name: string;
+  value: string;
+  inherit?: boolean;
+}
+
+/** One weapon slot of a stock paint: the item definition it paints, and the weapon's model maps. */
+export interface OperationTemplateSlot {
+  defindex: number;
+  data: { variable: { variable: string; string: string }[] };
+}
+
+/** A top-level operation template used by at least one stock paint kit. */
+export interface OperationTemplateInfo {
+  defindex: number;
+  name: string;
+  variables: OperationTemplateVariable[];
+  /** Weapon slot field (e.g. "scattergun") -> slot, from one stock paint that uses this template. */
+  items: Record<string, OperationTemplateSlot>;
+  /** The template's operation_node with nested operation_template references inlined. */
+  operationNode: OperationNodeMsg[];
+  textureLayers: number; // distinct texture_layer_N variables
+  stickers: number; // apply_sticker stages reached
+  stickerVariants: number; // most stickers in one apply_sticker stage
+  innerWear: boolean; // any inner_layer_N variable
+  teamTextures: boolean; // a texture_red/texture_blue lookup, or "team_color" in the name
+}
+
+/** A template as written in the file: each items entry is an index into OperationTemplateFile.slots. */
+interface OperationTemplateFileInfo extends Omit<OperationTemplateInfo, 'items'> {
+  items: Record<string, number>;
+}
+
+/** public/data/operation-templates.json, written by tools/extract/operation-templates.mjs. */
+export interface OperationTemplateFile {
+  usage: Record<string, number[]>; // operation defindex -> sorted paint kit ids that reach it
+  names: Record<string, string>; // operation defindex -> header name, for every operation in usage
+  slots: OperationTemplateSlot[]; // every distinct weapon slot, shared by the templates
+  templates: OperationTemplateFileInfo[];
+}
+
+/** The operation template data the app reads, with each items index expanded to its slot. */
+export interface OperationTemplateData {
+  usage: Record<string, number[]>; // operation defindex -> sorted paint kit ids that reach it
+  names: Record<string, string>; // operation defindex -> header name, for every operation in usage
+  templates: OperationTemplateInfo[];
 }
 
 export interface Manifest {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, type StoreApi } from 'zustand';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Braces, Copy, Expand, Eye, EyeOff, Link2, Magnet, Minus, MoreHorizontal, Move, Plus, RotateCw, Unlink2 } from 'lucide-react';
 import {
   clampStickerPlacement,
@@ -99,6 +99,9 @@ export interface StickerPlacementEditorProps {
   readonly hiddenModelPartCount?: number;
   readonly onModelPartPickingChange?: (active: boolean) => void;
   readonly onRestoreHiddenModelParts?: () => void;
+  /** The sticker's weighted artwork choices, shown under a third inspector tab. */
+  readonly variantsPanel?: ReactNode;
+  readonly variantCount?: number;
 }
 
 type PointerInteraction =
@@ -207,6 +210,8 @@ export function StickerPlacementEditor({
   hiddenModelPartCount = 0,
   onModelPartPickingChange,
   onRestoreHiddenModelParts,
+  variantsPanel,
+  variantCount,
 }: StickerPlacementEditorProps) {
   const draftQuad = useStore(draftStore);
   const quad = draftQuad ?? authoredQuad;
@@ -223,7 +228,9 @@ export function StickerPlacementEditor({
   // Precision work is a normal part of placing a decal, so the numbers are
   // present by default and only dismissed when the surface is wanted clear.
   const [valuesOpen, setValuesOpen] = useState(true);
-  const [valueMode, setValueMode] = useState<'simple' | 'proto'>('simple');
+  const [valueMode, setValueMode] = useState<'simple' | 'proto' | 'variants'>('simple');
+  // A sticker without a variants panel falls back to placement values.
+  const shownMode = valueMode === 'variants' && !variantsPanel ? 'simple' : valueMode;
   const [editingValue, setEditingValue] = useState<{ field: keyof StickerPlacement; text: string } | null>(null);
   const [cornerError, setCornerError] = useState<string | null>(null);
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
@@ -841,10 +848,10 @@ export function StickerPlacementEditor({
           <button
             type="button"
             className="sticker-placement-editor-values-toggle"
-            aria-label="Exact values"
+            aria-label="Inspector"
             aria-expanded={valuesOpen}
             aria-pressed={valuesOpen}
-            title="Exact values"
+            title="Inspector"
             disabled={unavailable}
             onClick={() => setValuesOpen((open) => !open)}
           >
@@ -857,10 +864,16 @@ export function StickerPlacementEditor({
         {valuesOpen ? (
           <aside className="sticker-placement-editor-inspector" aria-label="Sticker values">
             <div className="sticker-placement-editor-value-mode" role="group" aria-label="Value mode">
-              <button type="button" aria-pressed={valueMode === 'simple'} onClick={() => setValueMode('simple')}>Simple</button>
-              <button type="button" aria-pressed={valueMode === 'proto'} onClick={() => setValueMode('proto')}>Proto</button>
+              <button type="button" aria-pressed={shownMode === 'simple'} onClick={() => setValueMode('simple')}>Simple</button>
+              <button type="button" aria-pressed={shownMode === 'proto'} onClick={() => setValueMode('proto')}>Proto</button>
+              {variantsPanel ? (
+                <button type="button" aria-pressed={shownMode === 'variants'} onClick={() => setValueMode('variants')}>
+                  Variants
+                  {(variantCount ?? 0) > 1 ? <span className="sticker-placement-editor-value-mode-count">{variantCount}</span> : null}
+                </button>
+              ) : null}
             </div>
-            {valueMode === 'simple' ? (
+            {shownMode === 'variants' ? variantsPanel : shownMode === 'simple' ? (
               <div className="sticker-placement-editor-values">
                 {([
               ['x', 'X', 'Horizontal position', 0.01, undefined],

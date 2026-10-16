@@ -17,8 +17,8 @@ import { Root } from 'protobufjs/light';
 import type { INamespace, Type } from 'protobufjs/light';
 import type { RecipeNode } from '../compositor/types';
 import type {
-  ProtoDefIndex, ProtoDefJsonFragment, ProtoDefKit, ProtoDefKitWeaponSlot, ProtoDefOpenOptions, ProtoDefRecipe,
-  ProtoDefRecipeWithProvenance, ProtoDefValueProvenance, ProtoDefValueTrace,
+  ProtoDefIndex, ProtoDefJsonFragment, ProtoDefKit, ProtoDefKitBundle, ProtoDefKitWeaponSlot, ProtoDefOpenOptions,
+  ProtoDefOperationScope, ProtoDefRecipe, ProtoDefRecipeWithProvenance, ProtoDefValueProvenance, ProtoDefValueTrace,
 } from './types';
 import { parseContainer } from './container';
 import { normalizeProtoDefFragments } from './jsonFragments';
@@ -32,7 +32,7 @@ import {
 import {
   applyVarDefOverrides, applyVarFieldOverrides, buildVarDict,
   parseInverseRange, parseRange, parseRangeDiv255, parseVec2, texturePublicPath,
-  varFieldValue, type VarEntry,
+  stickerWeightFromString, varFieldValue, type VarEntry,
 } from './values';
 import { buildResolveCtx, type ResolveCtx } from './resolve';
 
@@ -257,11 +257,9 @@ function resolveStage(
     for (const st of many(s.sticker)) {
       const base = texturePublicPath(varFieldValue(st.base, dict));
       if (base) textureRefs.add(base);
-      const rawWeight = varFieldValue(st.weight, dict);
-      const weight = rawWeight === undefined || rawWeight.trim() === '' ? 1 : Number(rawWeight);
       const entry: { base: string; weight: number; spec?: string } = {
         base: base ?? '',
-        weight: Number.isFinite(weight) ? weight : 1,
+        weight: stickerWeightFromString(varFieldValue(st.weight, dict)),
       };
       const specVal = varFieldValue(st.spec, dict);
       if (specVal) {
@@ -666,8 +664,20 @@ interface RawDecoded {
   countsByType: Record<number, number>;
 }
 
-function definitionUsesTeamColorPrefab(def: PaintkitDefinitionMsg): boolean {
-  return many(def.header.tags).some((tag) => /(?:^|_)team_color(?:_|$)/.test(tag));
+// The game composites each team's textures whatever has_team_textures says; the
+// flag only decides whether the inspect panel shows its team buttons. So a paint
+// whose RED and BLU trees differ has team textures even with the flag unset.
+// Every wear is checked: a per-wear paint can name BLU textures on later wears only.
+function slotsDifferByTeam(def: PaintkitDefinitionMsg, slots: ResolvedSlot[], ctx: ResolveCtx): boolean {
+  return slots.some(({ item, itemDef }) => {
+    const wears = Math.max(1, many(itemDef.definition).length);
+    for (let wear = 0; wear < wears; wear += 1) {
+      const red = resolveOne(def, item, itemDef, wear, 'red', ctx);
+      const blu = resolveOne(def, item, itemDef, wear, 'blu', ctx);
+      if (JSON.stringify(red?.tree ?? null) !== JSON.stringify(blu?.tree ?? null)) return true;
+    }
+    return false;
+  });
 }
 
 function decodeBaseContainer(bytes: Uint8Array): RawDecoded {
@@ -716,6 +726,10 @@ function assembleDecoded(raw: RawDecoded, options: ProtoDefOpenOptions): Decoded
     // any slot's item definition template offering more than one per-wear entry.
     const perWear = slots.some((s) => many(s.itemDef.definition).length > 1);
     const isNew = !builtInIds.has(defindex);
+    // Resolving every slot, wear and team is costly (a full container decode is ~20x
+    // slower), so only new paints pay it: built-in paints take their team flag from
+    // the manifest, and with the flag on the result cannot change either field.
+    const teamsDiffer = isNew && options.computeTeamFlags !== false && !def.has_team_textures && slotsDifferByTeam(def, slots, ctx);
 
     let iconRef: string | undefined;
     if (isNew && slots.length > 0 && iconRefBudget > 0) {
@@ -730,8 +744,8 @@ function assembleDecoded(raw: RawDecoded, options: ProtoDefOpenOptions): Decoded
       name: def.header.name || `paintkit_${defindex}`,
       weapons,
       ...(Object.keys(materialOverrides).length ? { materialOverrides } : {}),
-      hasTeamTextures: !!def.has_team_textures,
-      teamTextureMismatch: !def.has_team_textures && definitionUsesTeamColorPrefab(def),
+      hasTeamTextures: !!def.has_team_textures || teamsDiffer,
+      teamButtonsHidden: !def.has_team_textures && teamsDiffer,
       perWear,
       isNew,
       unsupportedItemDefs: [...new Set(unsupportedItemDefs)],
@@ -749,10 +763,7 @@ export function decodeProtoDefs(bytes: Uint8Array, options: ProtoDefOpenOptions)
 }
 
 // Later entries win on a shared defindex, so a fragment can override a stock
-// operation or item definition of the same id (only operations do in
-// practice today: the two fragment kinds classifyProtoDefFragment recognises
-// never carry a standalone item definition, but this stays generic rather
-// than special-cased to that).
+// operation, item definition or kit of the same id.
 function mergeByDefindex<T extends { header: HeaderMsg }>(base: T[], overlay: T[]): T[] {
   if (overlay.length === 0) return base;
   const map = new Map<number, T>();
@@ -779,18 +790,20 @@ export function decodeProtoDefsFromJson(
   const normalized = normalizeProtoDefFragments(fragments);
 
   const fragmentOperations: OperationMsg[] = [];
+  const fragmentItemDefs: ItemDefinitionMsg[] = [];
   const fragmentDefs: PaintkitDefinitionMsg[] = [];
   for (const fragment of normalized) {
     // Trusted only as far as decodeType()'s own output is: both are plain
     // objects shaped by an external, snake_case schema, never a class instance.
     if (fragment.kind === 'operation') fragmentOperations.push(fragment.value as unknown as OperationMsg);
+    else if (fragment.kind === 'itemDefinition') fragmentItemDefs.push(fragment.value as unknown as ItemDefinitionMsg);
     else fragmentDefs.push(fragment.value as unknown as PaintkitDefinitionMsg);
   }
 
   return assembleDecoded({
     variables: base.variables,
     operations: mergeByDefindex(base.operations, fragmentOperations),
-    itemDefs: base.itemDefs,
+    itemDefs: mergeByDefindex(base.itemDefs, fragmentItemDefs),
     defs: mergeByDefindex(base.defs, fragmentDefs),
     countsByType: base.countsByType,
   }, options);
@@ -822,6 +835,57 @@ export function extractKitMessages(
   const operation = decoded.ctx.opByIdx.get(operationDefindex);
   if (!operation) return null;
   return { definition, operation: operation as unknown as Record<string, unknown> };
+}
+
+// Wear levels a per-wear paint authors, Factory New (0) through Battle Scarred (4).
+const WEAR_LEVELS = 5;
+
+/**
+ * Everything needed to re-create one kit from JSON fragments (see
+ * ProtoDefKitBundle). A top-level paint is extractKitMessages() in bundle form.
+ * A per-wear paint resolves each (weapon slot, wear) to the operation that
+ * resolveOne() would pick, using the same clamp when an item definition has
+ * fewer than five wear entries. Returns null when a referenced operation or
+ * item definition is missing, or when a wear has no operation of its own.
+ */
+export function extractKitBundle(decoded: DecodedContainer, defindex: number): ProtoDefKitBundle | null {
+  const top = extractKitMessages(decoded, defindex);
+  if (top) return { definition: top.definition, operations: [top.operation], itemDefinitions: [], scopes: [] };
+
+  const kit = decoded.kitsByDefindex.get(defindex);
+  // A top-level reference that extractKitMessages could not resolve is a dangling pointer, not a per-wear paint.
+  if (!kit || kit.def.operation_template || kit.slots.length === 0) return null;
+
+  const operations: Record<string, unknown>[] = [];
+  const operationIndexByDefindex = new Map<number, number>();
+  const itemDefinitions: Record<string, unknown>[] = [];
+  const itemDefinitionDefindexes = new Set<number>();
+  const scopes: ProtoDefOperationScope[] = [];
+
+  for (const slot of kit.slots) {
+    const itemDefindex = slot.itemDef.header.defindex;
+    if (!itemDefinitionDefindexes.has(itemDefindex)) {
+      itemDefinitionDefindexes.add(itemDefindex);
+      itemDefinitions.push(slot.itemDef as unknown as Record<string, unknown>);
+    }
+    const wears = many(slot.itemDef.definition);
+    for (let wear = 0; wear < WEAR_LEVELS; wear += 1) {
+      const entry = wears[Math.max(0, Math.min(wear, wears.length - 1))];
+      const reference = entry?.operation_template;
+      if (!reference) return null;
+      const operation = decoded.ctx.opByIdx.get(reference.defindex);
+      if (!operation) return null;
+      let operationIndex = operationIndexByDefindex.get(reference.defindex);
+      if (operationIndex === undefined) {
+        operationIndex = operations.length;
+        operations.push(operation as unknown as Record<string, unknown>);
+        operationIndexByDefindex.set(reference.defindex, operationIndex);
+      }
+      scopes.push({ weaponKey: slot.weaponKey, wear, operationIndex });
+    }
+  }
+
+  return { definition: kit.def as unknown as Record<string, unknown>, operations, itemDefinitions, scopes };
 }
 
 /**

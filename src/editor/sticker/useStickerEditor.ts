@@ -11,8 +11,8 @@ import type { StickerTransformTool } from '../../ui/editor/StickerPlacementEdito
 import type { ControlsState } from '../../viewer/controls';
 import type { StickerGizmoDrag } from '../../viewer/stickerOverlay';
 import type { Viewer } from '../../viewer/Viewer';
-import { protoTextureReference, isStickerArtworkReference, stickerTargetLabel, textureChoiceLabel, discoverStickerPlacementTargets } from './stickerTargets';
-import { texturePublicPath } from '../../protodefs/values';
+import { protoTextureReference, isStickerArtworkReference, stickerTargetLabel, textureChoiceLabel, discoverStickerPlacementTargets, type StickerPlacementTarget } from './stickerTargets';
+import { stickerWeightFromString, texturePublicPath } from '../../protodefs/values';
 import { collectPackageStickerSpecularOverrides, stickerSpecularRef } from '../../workbench/assetSlots';
 import { isSupportedTexturePath } from '../../source/paths';
 import { collectAppliedStickers } from '../layers/recipeLayers';
@@ -56,6 +56,11 @@ interface UseStickerEditorOptions extends
     | 'removeSessionSticker'
     | 'moveSessionSticker'
     | 'setSessionStickerBase'
+    | 'setSessionStickerVariantWeight'
+    | 'addSessionStickerVariant'
+    | 'removeSessionStickerVariant'
+    | 'setSessionStickerVariantBase'
+    | 'equalizeSessionStickerVariantWeights'
     | 'undoEditor'
     | 'redoEditor'
     | 'resetEditor'
@@ -77,6 +82,40 @@ interface UseStickerEditorOptions extends
   setHintDismissed: Dispatch<SetStateAction<boolean>>;
 }
 
+type StickerVariantSource = StickerPlacementTarget['stickers'][number];
+
+/** Every variant's weight as resolved for the selected weapon, team, and wear. */
+function resolvedVariantWeights(variants: readonly StickerVariantSource[]): number[] {
+  return variants.map((variant) => stickerWeightFromString(variant.weight.resolvedValue));
+}
+
+/**
+ * Rows for the active sticker's variants. The picked row is the variant whose
+ * artwork the current seed drew, marked only when that artwork is unambiguous.
+ * The previewing row is the variant pinned for preview, or -1 for none.
+ */
+function stickerVariantRows(
+  variants: readonly StickerVariantSource[],
+  pickedBase: string | undefined,
+  thumbnails: ReadonlyMap<string, string | null | undefined>,
+  previewingIndex: number,
+) {
+  const values = variants.map((variant) => variant.base.resolvedValue ?? variant.base.authoredValue);
+  const files = values.map((value) => texturePublicPath(value));
+  const pickedCount = files.filter((file) => file !== null && file === pickedBase).length;
+  return variants.map((variant, index) => {
+    const value = values[index];
+    return {
+      index,
+      baseReference: value,
+      thumbnail: value ? (thumbnails.get(protoTextureReference(value)) ?? null) : null,
+      weight: stickerWeightFromString(variant.weight.resolvedValue),
+      picked: pickedCount === 1 && files[index] === pickedBase,
+      previewing: index === previewingIndex,
+    };
+  });
+}
+
 /**
  * Sticker placement: the sticker targets of the working definition, the
  * retained bases and artwork the UV and on-model previews draw from, the
@@ -95,6 +134,11 @@ export function useStickerEditor({
   removeSessionSticker,
   moveSessionSticker,
   setSessionStickerBase,
+  setSessionStickerVariantWeight,
+  addSessionStickerVariant,
+  removeSessionStickerVariant,
+  setSessionStickerVariantBase,
+  equalizeSessionStickerVariantWeights,
   undoEditor,
   redoEditor,
   resetEditor,
@@ -122,6 +166,9 @@ export function useStickerEditor({
   const [modelPartPickingActive, setModelPartPickingActive] = useState(false);
   const [hiddenModelPartCount, setHiddenModelPartCount] = useState(0);
   const [activeStickerTarget, setActiveStickerTarget] = useState(0);
+  // The variant pinned for preview. It names its sticker, so a stale pin on
+  // another sticker never applies.
+  const [previewVariant, setPreviewVariant] = useState<{ targetId: string; index: number } | null>(null);
   const [pendingAddedStickerRef, setPendingAddedStickerRef] = useState<string | null>(null);
   const [stickerTargetThumbnails, setStickerTargetThumbnails] = useState<Record<string, string>>({});
   const [stickerTargetArtwork, setStickerTargetArtwork] = useState<Record<string, string>>({});
@@ -258,12 +305,30 @@ export function useStickerEditor({
     })),
     resolvedStickerStages,
   ), [resolvedStickerStages, stickerTargets]);
-  const matchedStickerStages = useMemo(
-    () => matchedStickerStageGroups.map((stages) => stages[0] ?? null),
-    [matchedStickerStageGroups],
-  );
   const selectedStickerIndex = stickerTargets[activeStickerTarget] ? activeStickerTarget : (stickerTargets.length > 0 ? 0 : -1);
   const selectedStickerTarget = selectedStickerIndex >= 0 ? stickerTargets[selectedStickerIndex] : null;
+  const previewedVariantIndex = selectedStickerTarget && previewVariant?.targetId === selectedStickerTarget.id
+    && selectedStickerTarget.stickers[previewVariant.index]
+    ? previewVariant.index
+    : -1;
+  const previewedVariant = selectedStickerTarget && previewedVariantIndex >= 0
+    ? selectedStickerTarget.stickers[previewedVariantIndex]
+    : null;
+  const previewedVariantBase = previewedVariant
+    ? previewedVariant.base.resolvedValue ?? previewedVariant.base.authoredValue
+    : undefined;
+  // A pinned variant stands in for the artwork the seed drew, for its sticker
+  // only. The resolved stage itself is kept as is, since the group context
+  // finds it by identity in the resolved tree.
+  const matchedStickerStages = useMemo(() => matchedStickerStageGroups.map((stages, index) => {
+    const stage = stages[0] ?? null;
+    if (!stage || index !== selectedStickerIndex || !previewedVariant || !previewedVariantBase) return stage;
+    return {
+      ...stage,
+      base: previewedVariantBase,
+      spec: previewedVariant.spec.resolvedValue ?? previewedVariant.spec.authoredValue,
+    };
+  }), [matchedStickerStageGroups, previewedVariant, previewedVariantBase, selectedStickerIndex]);
   const composedStickerTargetIds = useMemo(() => new Set(stickerTargets.filter((target) => (
     stickerArtworkNeedsComposedPreview(target.stickers.flatMap((sticker) => [
       sticker.base.resolvedValue,
@@ -278,7 +343,7 @@ export function useStickerEditor({
     return matchedStickerStageGroups[selectedStickerIndex] ?? [];
   }, [matchedStickerStageGroups, selectedStickerIndex]);
   const selectedStickerSpecularRef = (() => {
-    const sticker = selectedResolvedStickerStages[0];
+    const sticker = matchedStickerStages[selectedStickerIndex];
     if (!sticker) return null;
     if (sticker.spec) return sticker.spec;
     const inferred = stickerSpecularRef(sticker.base);
@@ -291,12 +356,14 @@ export function useStickerEditor({
     const mapReference = (reference: string) => activeTextureOverrides[reference] ?? reference;
     return {
       ...context,
+      // The group mask is the sticker's base, so a pinned variant replaces it here.
+      sticker: previewedVariantBase ? { ...context.sticker, base: previewedVariantBase } : context.sticker,
       base: mapResolvedTextureReferences(context.base, mapReference),
       selectorBase: mapResolvedTextureReferences(context.selectorBase, mapReference),
       endpointZero: mapResolvedTextureReferences(context.endpointZero, mapReference),
       endpointOne: mapResolvedTextureReferences(context.endpointOne, mapReference),
     };
-  }, [activeTextureOverrides, resolvedPreviewRecipe, selectedResolvedStickerStages, selectedStickerUsesComposedArtwork]);
+  }, [activeTextureOverrides, previewedVariantBase, resolvedPreviewRecipe, selectedResolvedStickerStages, selectedStickerUsesComposedArtwork]);
   const authoredStickerQuad = selectedStickerTarget?.quad ?? null;
   const stickerPlacementRead = useMemo(
     () => authoredStickerQuad ? stickerPlacementFromQuad(authoredStickerQuad) : { editable: false as const },
@@ -418,6 +485,10 @@ export function useStickerEditor({
   useEffect(() => {
     updateStickerDraft(null);
   }, [activeStickerTarget, editableKitId, state.weaponKey, updateStickerDraft]);
+
+  useEffect(() => {
+    setPreviewVariant(null);
+  }, [activeStickerTarget, editableKitId, editorTool, state.weaponKey]);
 
   useEffect(() => {
     viewerRef.current?.resetStickerGizmoAnchor();
@@ -841,6 +912,9 @@ export function useStickerEditor({
     setActiveStickerTarget(nextIndex);
   };
 
+  const stickerThumbnailByRef = new Map<string, string | null | undefined>(
+    currentStickerTextureChoices.map((choice) => [choice.ref, choice.thumbnail]),
+  );
   const stickerEditorProps: StickerEditorProps | undefined = stickerTargets.length > 0 ? {
     targets: (() => {
       // Several stickers can share a source, so a repeated
@@ -862,6 +936,7 @@ export function useStickerEditor({
           canMoveLater: target.canMoveLater,
           baseReference: bases[index],
           sharedWith: files[index] ? files.filter((file) => file === files[index]).length - 1 : 0,
+          variantCount: target.stickers.length,
           thumbnail: groupStickerArtwork[target.id]?.url
             ?? stickerTargetThumbnails[target.id]
             ?? null,
@@ -895,6 +970,42 @@ export function useStickerEditor({
     onSetTargetTexture: (baseReference: string) => {
       if (!selectedStickerTarget) return;
       setSessionStickerBase({ stagePaths: selectedStickerTarget.stagePaths }, baseReference);
+    },
+    variants: selectedStickerTarget
+      ? stickerVariantRows(selectedStickerTarget.stickers, selectedResolvedStickerStages[0]?.base, stickerThumbnailByRef, previewedVariantIndex)
+      : [],
+    onPreviewVariant: (index: number) => {
+      if (!selectedStickerTarget) return;
+      const targetId = selectedStickerTarget.id;
+      setPreviewVariant((current) => (
+        current?.targetId === targetId && current.index === index ? null : { targetId, index }
+      ));
+    },
+    onSetVariantWeight: (index: number, weight: number) => {
+      if (!selectedStickerTarget) return;
+      setSessionStickerVariantWeight({
+        stagePaths: selectedStickerTarget.stagePaths,
+        effectiveWeights: resolvedVariantWeights(selectedStickerTarget.stickers),
+      }, index, weight);
+    },
+    onSetVariantBase: (index: number, baseReference: string) => {
+      if (!selectedStickerTarget) return;
+      setSessionStickerVariantBase({ stagePaths: selectedStickerTarget.stagePaths }, index, baseReference);
+    },
+    onEqualizeVariantWeights: () => {
+      if (!selectedStickerTarget) return;
+      equalizeSessionStickerVariantWeights({ stagePaths: selectedStickerTarget.stagePaths });
+    },
+    onAddVariant: (baseReference: string) => {
+      if (!selectedStickerTarget) return;
+      addSessionStickerVariant({ stagePaths: selectedStickerTarget.stagePaths }, baseReference);
+    },
+    onRemoveVariant: (index: number) => {
+      if (!selectedStickerTarget) return;
+      removeSessionStickerVariant({
+        stagePaths: selectedStickerTarget.stagePaths,
+        effectiveWeights: resolvedVariantWeights(selectedStickerTarget.stickers),
+      }, index);
     },
     onRemoveTarget: () => {
       if (!selectedStickerTarget) return;

@@ -13,6 +13,8 @@ const TEXTURE_DIRECTORY_URL = 'https://pyxell.neocities.org/paintersworkshop/tex
 export function SettingsDialog() {
   const showPaintkitDetails = useSettings((s) => s.showPaintkitDetails);
   const setShowPaintkitDetails = useSettings((s) => s.setShowPaintkitDetails);
+  const advancedCatalogSearch = useSettings((s) => s.advancedCatalogSearch);
+  const setAdvancedCatalogSearch = useSettings((s) => s.setAdvancedCatalogSearch);
 
   return (
     <Dialog.Root>
@@ -43,6 +45,16 @@ export function SettingsDialog() {
                     </span>
                   </div>
                   <SwitchField checked={showPaintkitDetails} onChange={setShowPaintkitDetails} ariaLabel="Show paint kit details" />
+                </div>
+                <div className="settings-row">
+                  <div className="settings-row-text">
+                    <span>Advanced catalog search</span>
+                    <span className="settings-row-description">
+                      Lets the warpaint filter match an exact paint kit ID (400 or #400) and list every paint that
+                      uses an operation (op:name, for example op:yeti_multiply_skin_with_stickers).
+                    </span>
+                  </div>
+                  <SwitchField checked={advancedCatalogSearch} onChange={setAdvancedCatalogSearch} ariaLabel="Advanced catalog search" />
                 </div>
               </section>
             </div>

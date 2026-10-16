@@ -7,8 +7,8 @@
  * it is portable and can be imported without synthetic placeholder ids.
  */
 
-import { normalizeProtoDefFragments } from '../../protodefs/jsonFragments';
-import type { ProtoDefJsonFragment, ProtoDefKitMessages } from '../../protodefs/types';
+import { normalizeProtoDefFragments, type ProtoDefFragmentKind } from '../../protodefs/jsonFragments';
+import type { ProtoDefJsonFragment, ProtoDefKitBundle, ProtoDefKitMessages } from '../../protodefs/types';
 import { sanitizePackName } from '../../export/plan';
 
 export interface ProtoDefKitJsonExport {
@@ -18,6 +18,11 @@ export interface ProtoDefKitJsonExport {
   definition: ProtoDefJsonFragment;
   /** Stable import order: the operation always comes before its definition. */
   fragments: readonly [ProtoDefJsonFragment, ProtoDefJsonFragment];
+}
+
+export interface ProtoDefKitBundleJsonExport {
+  /** Strict JSON per message, in import order: operations, item definitions, then the definition. */
+  fragments: ProtoDefJsonFragment[];
 }
 
 export interface SerializeProtoDefKitOptions {
@@ -79,13 +84,17 @@ function equivalent(left: unknown, right: unknown): boolean {
       && equivalent(left[key], right[key]));
 }
 
-function namesFor(definitionDefindex: number, requestedName?: string): [string, string] {
+function stemFor(definitionDefindex: number, requestedName?: string): string {
   // These names become browser downloads in the editor. Reuse the pack-name
   // contract so a paint name cannot smuggle path separators or platform-
   // invalid punctuation into the suggested filename.
-  const name = requestedName?.trim()
+  return requestedName?.trim()
     ? sanitizePackName(requestedName)
     : `paintkit-${definitionDefindex}`;
+}
+
+function namesFor(definitionDefindex: number, requestedName?: string): [string, string] {
+  const name = stemFor(definitionDefindex, requestedName);
   return [`${name}__operation.json`, `${name}__definition.json`];
 }
 
@@ -129,4 +138,87 @@ export function serializeProtoDefKitMessages(
   }
 
   return { operation, definition, fragments };
+}
+
+/**
+ * Serializes a kit bundle (see ProtoDefKitBundle) into one strict JSON fragment
+ * per operation, one per item definition, and one for the definition. A
+ * top-level paint with a single operation and no item definitions is delegated
+ * to serializeProtoDefKitMessages, so its files are unchanged. The supplied
+ * bundle is never modified.
+ */
+export function serializeProtoDefKitBundle(
+  bundle: ProtoDefKitBundle,
+  options: SerializeProtoDefKitOptions = {},
+): ProtoDefKitBundleJsonExport {
+  if (bundle.itemDefinitions.length === 0 && bundle.operations.length === 1) {
+    const { operation, definition } = serializeProtoDefKitMessages(
+      { operation: bundle.operations[0], definition: bundle.definition },
+      options,
+    );
+    return { fragments: [operation, definition] };
+  }
+  if (bundle.operations.length === 0) {
+    throw new Error('A kit bundle must include at least one operation.');
+  }
+
+  const stem = stemFor(defindexAt(bundle.definition, 'definition'), options.name);
+  const fragments: ProtoDefJsonFragment[] = [];
+  bundle.operations.forEach((operation, index) => {
+    const label = `operations[${index}]`;
+    const defindex = defindexAt(operation, label);
+    fragments.push({ name: `${stem}__operation_${defindex}.json`, text: serializeJson(operation, label) });
+  });
+  bundle.itemDefinitions.forEach((itemDefinition, index) => {
+    const label = `itemDefinitions[${index}]`;
+    const defindex = defindexAt(itemDefinition, label);
+    fragments.push({ name: `${stem}__item_${defindex}.json`, text: serializeJson(itemDefinition, label) });
+  });
+  fragments.push({ name: `${stem}__definition.json`, text: serializeJson(bundle.definition, 'definition') });
+
+  const names = new Set(fragments.map((fragment) => fragment.name));
+  if (names.size !== fragments.length) {
+    throw new Error('The supplied kit bundle contains two messages with the same defindex.');
+  }
+
+  // Same round-trip guard as serializeProtoDefKitMessages, applied to every fragment in order.
+  const values = [...bundle.operations, ...bundle.itemDefinitions, bundle.definition];
+  const expectedKinds: ProtoDefFragmentKind[] = [
+    ...bundle.operations.map((): ProtoDefFragmentKind => 'operation'),
+    ...bundle.itemDefinitions.map((): ProtoDefFragmentKind => 'itemDefinition'),
+    'definition',
+  ];
+  const normalized = normalizeProtoDefFragments(fragments);
+  const roundTrips = normalized.length === values.length && normalized.every((fragment, index) =>
+    fragment.kind === expectedKinds[index] && equivalent(fragment.value, values[index]));
+  if (!roundTrips) {
+    throw new Error('The supplied kit bundle cannot round-trip through the proto_defs JSON fragment importer.');
+  }
+
+  return { fragments };
+}
+
+/**
+ * Compact fragments for the editor's live preview. The input is the session's
+ * own frozen snapshot, and the preview decoder rejects malformed fragments on
+ * its own, so this skips the pretty-printing and round-trip guard that exports
+ * run. File names match serializeProtoDefKitBundle.
+ */
+export function serializeProtoDefKitBundlePreview(bundle: ProtoDefKitBundle): ProtoDefKitBundleJsonExport {
+  if (bundle.operations.length === 0) {
+    throw new Error('A kit bundle must include at least one operation.');
+  }
+  const stem = stemFor(defindexAt(bundle.definition, 'definition'));
+  const fragments: ProtoDefJsonFragment[] = [
+    ...bundle.operations.map((operation, index) => ({
+      name: `${stem}__operation_${defindexAt(operation, `operations[${index}]`)}.json`,
+      text: JSON.stringify(operation),
+    })),
+    ...bundle.itemDefinitions.map((itemDefinition, index) => ({
+      name: `${stem}__item_${defindexAt(itemDefinition, `itemDefinitions[${index}]`)}.json`,
+      text: JSON.stringify(itemDefinition),
+    })),
+    { name: `${stem}__definition.json`, text: JSON.stringify(bundle.definition) },
+  ];
+  return { fragments };
 }

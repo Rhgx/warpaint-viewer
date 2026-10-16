@@ -172,7 +172,7 @@ function MainApp() {
     editGeneration: stockEditGeneration,
   } = stockDefinitions;
   const {
-    exportKit: exportImportedKit,
+    exportKitBundle: exportImportedKitBundle,
     getRecipeWithProvenance: getImportedRecipeWithProvenance,
   } = definitions;
   const composeCache = useComposeCache(compositorRef);
@@ -218,6 +218,11 @@ function MainApp() {
     removeSessionSticker,
     moveSessionSticker,
     setSessionStickerBase,
+    setSessionStickerVariantWeight,
+    addSessionStickerVariant,
+    removeSessionStickerVariant,
+    setSessionStickerVariantBase,
+    equalizeSessionStickerVariantWeights,
     setSessionLayerTeamColors,
     setSessionLayerTeamTexture,
     beginSessionTransformGesture,
@@ -238,6 +243,7 @@ function MainApp() {
     setEditorTool,
     paintSubView,
     setPaintSubView,
+    editorActiveScope,
     provenanceRecipe,
     editorDraftKey,
     editorDraft,
@@ -249,6 +255,15 @@ function MainApp() {
     downloadEditorPackage,
     downloadEditorRecovery,
   } = editor;
+  // Team colors switched on in the editor count as soon as the edit lands, so
+  // the RED/BLU toggle and the Files list follow the working definition.
+  // A per-wear paint has one operation per weapon and wear; the editor names the one it shows.
+  const perWearScope = editorActiveScope && data
+    ? {
+      weapon: data.manifest.weapons.find((w) => w.key === editorActiveScope.weaponKey)?.name ?? editorActiveScope.weaponKey,
+      wear: data.manifest.wearNames[editorActiveScope.wear] ?? `Wear ${editorActiveScope.wear}`,
+    }
+    : undefined;
   // Team colors switched on in the editor count as soon as the edit lands, so
   // the RED/BLU toggle and the Files list follow the working definition.
   const kitHasTeamTextures = (selectedKit?.hasTeamTextures ?? false)
@@ -339,12 +354,15 @@ function MainApp() {
   const suggestionToken = definitions.suggestedKitId !== undefined
     ? `defs:${definitions.generation}:${definitions.suggestedKitId}`
     : `pkg:${packageGeneration}:${suggestedPaintkitId}`;
-  const appliedSuggestionRef = useRef<string | undefined>(undefined);
+  // Every applied token is kept, not just the last: when a later definitions
+  // suggestion clears (deleting a created paint), the package's earlier one
+  // falls back in and must not select its paint a second time.
+  const appliedSuggestionsRef = useRef(new Set<string>());
   useEffect(() => {
-    if (suggestedKitId === undefined || suggestionToken === appliedSuggestionRef.current || editorDirty) return;
+    if (suggestedKitId === undefined || appliedSuggestionsRef.current.has(suggestionToken) || editorDirty) return;
     const kit = paintkits.find((entry) => entry.id === suggestedKitId);
     if (!kit) return;
-    appliedSuggestionRef.current = suggestionToken;
+    appliedSuggestionsRef.current.add(suggestionToken);
     setSelectedKitId(kit.id);
     setState((current) => ({
       ...current,
@@ -442,6 +460,7 @@ function MainApp() {
     assignSessionGroups,
     clearSessionGroups,
     setSessionGroupTexture,
+    editorActiveScope,
     activeEditorSelector,
     setActiveEditorSelector,
     weaponBaseLayerActive,
@@ -531,6 +550,11 @@ function MainApp() {
     removeSessionSticker,
     moveSessionSticker,
     setSessionStickerBase,
+    setSessionStickerVariantWeight,
+    addSessionStickerVariant,
+    removeSessionStickerVariant,
+    setSessionStickerVariantBase,
+    equalizeSessionStickerVariantWeights,
     undoEditor,
     redoEditor,
     resetEditor,
@@ -588,6 +612,28 @@ function MainApp() {
       ? editorTool === 'paint' && paintSubView === 'graph' ? 'graph' : editorTool
       : null;
 
+  // Stable so the catalog rows do not re-render every time the seed or a
+  // selection changes what this closes over.
+  const onSelectKit = useStableCallback((id: number) => {
+    if (id !== selectedKitId && editorDirty && !window.confirm('Discard unsaved edits and open another war paint?')) return;
+    setSelectedKitId(id);
+    const kit = paintkits.find((p) => p.id === id);
+    const next: Partial<ControlsState> = {};
+    if (kit && !kit.weapons.includes(state.weaponKey)) {
+      next.weaponKey = kit.weapons[0] ?? state.weaponKey;
+    }
+    // Team Shine is the one sheen with a per-team color, so the team choice
+    // stays meaningful (and selectable) even on single-team warpaints, as
+    // it does in First Person, where the arms follow the team.
+    if (kit && !kit.hasTeamTextures && state.sheen !== 'team_shine' && !firstPersonActive) next.team = 'red';
+    patch(next);
+  });
+
+  const paintNames = useMemo(
+    () => new Map<number, string>(data?.manifest.paintkits.map((kit) => [kit.id, kit.name]) ?? []),
+    [data],
+  );
+
   const graph = useOperationGraphEditor({
     editableKitId,
     editorStatus,
@@ -615,6 +661,8 @@ function MainApp() {
     sourceProvider,
     packageGeneration,
     selectedKit,
+    paintNames,
+    onSelectKit,
   });
   const { composing, visibleDefinitionGeneration } = useComposedPaint({
     cache: composeCache,
@@ -721,41 +769,40 @@ function MainApp() {
     setError,
   });
 
-  // Stable so the catalog rows do not re-render every time the seed or a
-  // selection changes what this closes over.
-  const onSelectKit = useStableCallback((id: number) => {
-    if (id !== selectedKitId && editorDirty && !window.confirm('Discard unsaved edits and open another war paint?')) return;
-    setSelectedKitId(id);
-    const kit = paintkits.find((p) => p.id === id);
-    const next: Partial<ControlsState> = {};
-    if (kit && !kit.weapons.includes(state.weaponKey)) {
-      next.weaponKey = kit.weapons[0] ?? state.weaponKey;
-    }
-    // Team Shine is the one sheen with a per-team color, so the team choice
-    // stays meaningful (and selectable) even on single-team warpaints, as
-    // it does in First Person, where the arms follow the team.
-    if (kit && !kit.hasTeamTextures && state.sheen !== 'team_shine' && !firstPersonActive) next.team = 'red';
-    patch(next);
-  });
-
   // Selecting a kit belongs to the app, so the hook leaves that hole for it.
-  const definitionsState = useMemo<CustomDefinitionsState>(() => ({
-    ...definitions.state,
-    onSelectKit,
-    onImport: (files) => {
-      if (editorDirty && !window.confirm('Discard unsaved edits and replace the imported definitions?')) return;
-      definitions.state.onImport(files);
-    },
-    onRemove: () => {
-      if (editorDirty && !window.confirm('Discard unsaved edits and remove the imported definitions?')) return;
-      definitions.state.onRemove();
-    },
-  }), [definitions.state, editorDirty, onSelectKit]);
+  const definitionsState = useMemo<CustomDefinitionsState>(() => {
+    // Only a stock paint can be copied; an imported paint is already a file the user owns.
+    const stockKit = selectedKit && !isCustomKitId(selectedKit.id) ? selectedKit : null;
+    const exportStockKit = stockDefinitions.exportKit;
+    return {
+      ...definitions.state,
+      onSelectKit,
+      onImport: (files) => {
+        if (editorDirty && !window.confirm('Discard unsaved edits and replace the imported definitions?')) return;
+        definitions.state.onImport(files);
+      },
+      onCreateWarPaint: async (templateDefindex, name) => {
+        if (editorDirty && !window.confirm('Discard unsaved edits and create a new war paint?')) return false;
+        return definitions.state.onCreateWarPaint(templateDefindex, name);
+      },
+      onCreateWarPaintCopy: async (messages, name) => {
+        // The exported messages carry the open edits, so the copy keeps them.
+        if (editorDirty && !window.confirm('The copy will include your unsaved edits, which are then discarded from this paint. Create the copy?')) return false;
+        return definitions.state.onCreateWarPaintCopy(messages, name);
+      },
+      selectedStockKit: stockKit ? { id: stockKit.id, name: stockKit.name } : undefined,
+      exportSelectedStockKit: stockKit ? () => exportStockKit(stockKit.id) : undefined,
+      onRemove: () => {
+        if (editorDirty && !window.confirm('Discard unsaved edits and remove the imported definitions?')) return;
+        definitions.state.onRemove();
+      },
+    };
+  }, [definitions.state, editorDirty, onSelectKit, selectedKit, stockDefinitions.exportKit]);
 
   const exportDefinitions = useExportDefinitions({
     data,
     selectedKit,
-    exportImportedKit,
+    exportImportedKitBundle,
     sourceProvider,
     packageGeneration,
     editorRecipes,
@@ -1045,6 +1092,7 @@ function MainApp() {
                   ...(materials ? { materials } : {}),
                   paintSubView,
                   onPaintSubViewChange: setPaintSubView,
+                  perWearScope,
                   layerHasTransformEdits,
                   layerTransformLocked,
                 }}

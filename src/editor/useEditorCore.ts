@@ -30,6 +30,32 @@ export function resolveEditableKitId(
   return selectedKit && selectedKitId === requestedKitId ? selectedKitId : null;
 }
 
+/** A burst of edits or a drag builds one preview, once it has paused this long. */
+const PREVIEW_DEBOUNCE_MS = 120;
+
+/**
+ * Runs preview builds one at a time. A task submitted while one is in flight
+ * replaces any task still waiting, so the newest state is always built next.
+ */
+export function createLatestOnlyQueue(): (task: () => Promise<void>) => void {
+  let busy = false;
+  let waiting: (() => Promise<void>) | null = null;
+  const drain = (): void => {
+    const task = waiting;
+    if (busy || !task) return;
+    waiting = null;
+    busy = true;
+    void task().finally(() => {
+      busy = false;
+      drain();
+    });
+  };
+  return (task) => {
+    waiting = task;
+    drain();
+  };
+}
+
 interface UseEditorCoreOptions {
   selectedKitId: number | null;
   workbenchOpen: boolean;
@@ -59,17 +85,17 @@ export function useEditorCore({
 }: UseEditorCoreOptions) {
   const {
     editGeneration: stockEditGeneration,
-    exportKit: exportStockKit,
+    exportKitBundle: exportStockKitBundle,
     exportKitWeaponSlots: exportStockKitWeaponSlots,
     getRecipeWithProvenance: getStockRecipeWithProvenance,
-    previewKitMessages: previewStockKitMessages,
+    previewKitBundle: previewStockKitBundle,
     clearPreviewKit: clearStockPreviewKit,
   } = stockDefinitions;
   const {
-    exportKit: exportImportedKit,
+    exportKitBundle: exportImportedKitBundle,
     exportKitWeaponSlots: exportImportedKitWeaponSlots,
     getRecipeWithProvenance: getImportedRecipeWithProvenance,
-    previewKitMessages: previewImportedKitMessages,
+    previewKitBundle: previewImportedKitBundle,
     clearPreviewKit: clearImportedPreviewKit,
   } = definitions;
 
@@ -90,17 +116,24 @@ export function useEditorCore({
   }, [selectedKitId, workbenchOpen, workbenchTab]);
   const editableKitId = resolveEditableKitId(selectedKitId, editorRequestedKitId, selectedKit);
   const loadEditorKit = useCallback((kitId: number) => (
-    isCustomKitId(kitId) ? exportImportedKit(kitId) : exportStockKit(kitId)
-  ), [exportImportedKit, exportStockKit]);
+    isCustomKitId(kitId) ? exportImportedKitBundle(kitId) : exportStockKitBundle(kitId)
+  ), [exportImportedKitBundle, exportStockKitBundle]);
   const loadEditorKitWeaponSlots = useCallback((kitId: number) => (
     isCustomKitId(kitId) ? exportImportedKitWeaponSlots(kitId) : exportStockKitWeaponSlots(kitId)
   ), [exportImportedKitWeaponSlots, exportStockKitWeaponSlots]);
-  const editorSession = useProtoDefEditorSession({ kitId: editableKitId, loadKit: loadEditorKit });
+  // The viewer's weapon and wear choose which operation a per-wear paint edits.
+  const editorSession = useProtoDefEditorSession({
+    kitId: editableKitId,
+    loadKit: loadEditorKit,
+    scope: { weaponKey: state.weaponKey, wear: state.wearIndex },
+  });
   const {
     kitId: editorSessionKitId,
     status: editorStatus,
     original: editorOriginal,
     current: editorCurrent,
+    bundle: editorBundle,
+    originalBundle: editorOriginalBundle,
     dirty: editorDirty,
     canUndo: editorCanUndo,
     canRedo: editorCanRedo,
@@ -113,6 +146,11 @@ export function useEditorCore({
     removeSticker: removeSessionSticker,
     moveSticker: moveSessionSticker,
     setStickerBase: setSessionStickerBase,
+    setStickerVariantWeight: setSessionStickerVariantWeight,
+    addStickerVariant: addSessionStickerVariant,
+    removeStickerVariant: removeSessionStickerVariant,
+    setStickerVariantBase: setSessionStickerVariantBase,
+    equalizeStickerVariantWeights: equalizeSessionStickerVariantWeights,
     setLayerTeamColors: setSessionLayerTeamColors,
     setLayerTeamTexture: setSessionLayerTeamTexture,
     beginTransformGesture: beginSessionTransformGesture,
@@ -128,10 +166,10 @@ export function useEditorCore({
     restoreDraft: restoreEditorDraft,
     reload: reloadEditor,
     serialize: serializeEditor,
-    getCurrentMessages: getEditorMessages,
     replaceOperationGraph,
     setDefinitionVariable,
     revision: editorRevision,
+    activeScope: editorActiveScope,
   } = editorSession;
   // The definition/operation messages the editor session holds carry no
   // items_game defindex table, so the weapon each authored slot paints (and
@@ -193,8 +231,8 @@ export function useEditorCore({
     kitId: editorStatus === 'ready' ? editableKitId : null,
     paintName: selectedKit?.name,
     revision: editorRevision,
-    original: editorStatus === 'ready' ? editorOriginal : null,
-    current: editorStatus === 'ready' ? editorCurrent : null,
+    original: editorStatus === 'ready' ? editorOriginalBundle : null,
+    current: editorStatus === 'ready' ? editorBundle : null,
     dirty: editorDirty,
     restore: restoreEditorDraft,
   });
@@ -230,24 +268,46 @@ export function useEditorCore({
     state.wearIndex,
   ]);
 
+  const [submitPreviewBuild] = useState(() => createLatestOnlyQueue());
+  // Keyed on the whole bundle, not the active operation, so switching weapon or
+  // wear does not rebuild the preview source. Every bundle change restarts the
+  // debounce, so the last state always gets a build.
   useEffect(() => {
-    if (editorStatus !== 'ready' || !editorCurrent || editableKitId === null) return;
-    let cancelled = false;
+    if (editorStatus !== 'ready' || !editorBundle || editableKitId === null) return;
+    let current = true;
     setEditorPreviewPending(true);
     setEditorPreviewError(null);
     const preview = isCustomKitId(editableKitId)
-      ? previewImportedKitMessages
-      : previewStockKitMessages;
-    void preview(editableKitId, editorCurrent)
-      .catch((cause) => {
-        console.warn('[warpaint-viewer] editor preview could not be updated:', cause);
-        if (!cancelled) setEditorPreviewError('The preview could not be updated.');
-      })
-      .finally(() => {
-        if (!cancelled) setEditorPreviewPending(false);
+      ? previewImportedKitBundle
+      : previewStockKitBundle;
+    const timer = window.setTimeout(() => {
+      submitPreviewBuild(async () => {
+        // A newer bundle, a kit switch or unmount ends this request; the newer one builds instead.
+        if (!current) return;
+        try {
+          await preview(editableKitId, editorBundle);
+          if (current) setEditorPreviewPending(false);
+        } catch (cause) {
+          console.warn('[warpaint-viewer] editor preview could not be updated:', cause);
+          if (current) {
+            setEditorPreviewError('The preview could not be updated.');
+            setEditorPreviewPending(false);
+          }
+        }
       });
-    return () => { cancelled = true; };
-  }, [editableKitId, editorCurrent, editorStatus, previewImportedKitMessages, previewStockKitMessages]);
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [
+    editableKitId,
+    editorBundle,
+    editorStatus,
+    previewImportedKitBundle,
+    previewStockKitBundle,
+    submitPreviewBuild,
+  ]);
 
   useEffect(() => {
     // Selection changes must release the isolated draft source; the imported
@@ -259,17 +319,17 @@ export function useEditorCore({
   }, [clearImportedPreviewKit, clearStockPreviewKit, editableKitId]);
 
   const downloadEditorPackage = useCallback((format: EditorDownloadFormat) => {
-    const messages = getEditorMessages();
-    if (!messages || editorPackageExporting || editableKitId === null) return;
+    // The whole bundle, not the active operation: a per-wear paint needs every operation and item definition.
+    if (!editorBundle || editorPackageExporting || editableKitId === null) return;
     setEditorPackageExportError(null);
     setEditorPackageExporting(true);
     const pending = format === 'zip'
-      ? import('./export/packageExport').then(({ exportEditedPackage }) => exportEditedPackage(messages, {
+      ? import('./export/packageExport').then(({ exportEditedPackage }) => exportEditedPackage(editorBundle, {
           package: sourceProvider.package,
           name: selectedKit?.name,
         }))
       : import('./export/definitionExport').then(({ exportEditorDefinition }) => exportEditorDefinition(
-          messages,
+          editorBundle,
           format,
           isCustomKitId(editableKitId) ? customKitDefindex(editableKitId) : editableKitId,
           selectedKit?.name,
@@ -280,7 +340,7 @@ export function useEditorCore({
     }).catch((cause) => {
       setEditorPackageExportError(cause instanceof Error ? cause.message : 'The edited package could not be exported.');
     }).finally(() => setEditorPackageExporting(false));
-  }, [editableKitId, editorPackageExporting, getEditorMessages, selectedKit?.name, sourceProvider]);
+  }, [editableKitId, editorBundle, editorPackageExporting, selectedKit?.name, sourceProvider]);
 
   const downloadEditorRecovery = useCallback(() => {
     const serialized = serializeEditor({ name: selectedKit?.name });
@@ -294,6 +354,7 @@ export function useEditorCore({
     editorStatus,
     editorOriginal,
     editorCurrent,
+    editorActiveScope,
     editorDirty,
     editorCanUndo,
     editorCanRedo,
@@ -306,6 +367,11 @@ export function useEditorCore({
     removeSessionSticker,
     moveSessionSticker,
     setSessionStickerBase,
+    setSessionStickerVariantWeight,
+    addSessionStickerVariant,
+    removeSessionStickerVariant,
+    setSessionStickerVariantBase,
+    equalizeSessionStickerVariantWeights,
     setSessionLayerTeamColors,
     setSessionLayerTeamTexture,
     beginSessionTransformGesture,

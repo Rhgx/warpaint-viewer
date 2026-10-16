@@ -64,7 +64,7 @@ test('creates a missing weapon override and rejects unsafe discovery', () => {
     'models/rocket_groups_04',
     ['definition', 'rocketlauncher', 'data', 'variable'],
   );
-  assert.ok(target);
+  assert.ok(target && 'overridePath' in target);
   const withoutOverride = structuredClone(messages);
   (withoutOverride.definition.rocketlauncher as { data: Record<string, unknown> }).data.variable = undefined;
   const edited = setGroupTextureReference(withoutOverride, target, 'models/rocket_groups_05');

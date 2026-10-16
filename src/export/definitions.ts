@@ -13,14 +13,14 @@
  * snapshot this site ships, or the player's own copy when they supply one.
  */
 
-import type { ProtoDefKitMessages } from '../protodefs/types';
+import type { ProtoDefKitBundle } from '../protodefs/types';
 import {
   decodeLocalization,
   encodeLocalization,
   localizationPackPath,
   setPaintkitName,
 } from './localization';
-import { spliceProtoDefs } from './protoWrite';
+import { spliceProtoDefBundle } from './protoWrite';
 import type { SpliceMode } from './protoWrite';
 import type { ExportExtraFile } from './bundle';
 
@@ -30,8 +30,8 @@ export const PACK_PROTO_DEFS_PATH = 'scripts/protodefs/proto_defs.vpd';
 export interface DefinitionsBuildOptions {
   /** A complete proto_defs container to splice into. */
   baseContainer: Uint8Array;
-  /** The imported paint's two messages, from ProtoDefSource.exportKit(). */
-  kit: ProtoDefKitMessages;
+  /** The imported paint's whole bundle, from ProtoDefSource.exportKitBundle(). */
+  bundle: ProtoDefKitBundle;
   mode: SpliceMode;
   /** Paint kit to replace, when mode is 'overwrite'. */
   targetDefindex?: number;
@@ -55,10 +55,9 @@ export interface DefinitionsBuildResult {
 }
 
 export function buildDefinitionFiles(options: DefinitionsBuildOptions): DefinitionsBuildResult {
-  const spliced = spliceProtoDefs({
+  const spliced = spliceProtoDefBundle({
     baseBytes: options.baseContainer,
-    operation: options.kit.operation,
-    definition: options.kit.definition,
+    bundle: options.bundle,
     mode: options.mode,
     targetDefindex: options.targetDefindex,
   });

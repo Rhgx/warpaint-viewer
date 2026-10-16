@@ -22,7 +22,7 @@ import { printParseErrorCode, visit, type ParseErrorCode } from 'jsonc-parser';
 import type { ProtoDefJsonFragment } from './types';
 import { AppError, ERROR_CODES } from '../errors';
 
-export type ProtoDefFragmentKind = 'operation' | 'definition';
+export type ProtoDefFragmentKind = 'operation' | 'definition' | 'itemDefinition';
 
 export interface NormalizedProtoDefFragment {
   name: string;
@@ -171,15 +171,20 @@ function parseFragmentJson(name: string, jsonText: string): Record<string, unkno
 
 // An OPERATION fragment has a top-level operation_node; a DEFINITION fragment
 // has a header plus at least one field that is itself an object carrying
-// item_definition_template (a weapon slot). Checked in that order because an
-// operation fragment also has a header, but never a weapon slot.
+// item_definition_template (a weapon slot); an ITEM DEFINITION fragment has a
+// header, an item_definition_index and a definition array of per-wear entries.
+// Checked in that order because each later shape also has a header, but
+// never the earlier shape's distinguishing field.
 function classifyShape(value: Record<string, unknown>): ProtoDefFragmentKind | null {
   const opNode = value.operation_node;
   if (Array.isArray(opNode) ? opNode.length > 0 : isPlainObject(opNode)) return 'operation';
   const header = value.header;
   if (isPlainObject(header) && header.defindex !== undefined) {
-    const hasWeaponSlot = Object.values(value).some((v) => isPlainObject(v) && 'item_definition_template' in v);
+    // The repeated `item` field holds its slots as an array; named weapon fields hold one.
+    const isWeaponSlot = (v: unknown) => isPlainObject(v) && 'item_definition_template' in v;
+    const hasWeaponSlot = Object.values(value).some((v) => (Array.isArray(v) ? v.some(isWeaponSlot) : isWeaponSlot(v)));
     if (hasWeaponSlot) return 'definition';
+    if (value.item_definition_index !== undefined && Array.isArray(value.definition)) return 'itemDefinition';
   }
   return null;
 }

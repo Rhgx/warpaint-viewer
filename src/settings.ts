@@ -7,6 +7,9 @@ interface SettingsState {
   /** Paint kit IDs plus Pyxell's texture directory entries. */
   showPaintkitDetails: boolean;
   setShowPaintkitDetails(show: boolean): void;
+  /** Exact paint kit ID and op:<operation> matches in the warpaint filter. */
+  advancedCatalogSearch: boolean;
+  setAdvancedCatalogSearch(enabled: boolean): void;
 }
 
 // persist falls back to in-memory state when localStorage is unavailable, so
@@ -16,6 +19,8 @@ export const useSettings = create<SettingsState>()(
     (set) => ({
       showPaintkitDetails: false,
       setShowPaintkitDetails: (showPaintkitDetails) => set({ showPaintkitDetails }),
+      advancedCatalogSearch: false,
+      setAdvancedCatalogSearch: (advancedCatalogSearch) => set({ advancedCatalogSearch }),
     }),
     { name: 'warpaint-viewer:settings', version: 1 },
   ),

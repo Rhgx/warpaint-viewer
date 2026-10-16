@@ -54,6 +54,7 @@ export function StageOverlay({
                 onSelectKit={onSelectKit}
                 side="bottom"
                 className="stage-header-info"
+                stockKit={!isCustomKitId(selectedKit.id)}
               />
             )}
           </div>

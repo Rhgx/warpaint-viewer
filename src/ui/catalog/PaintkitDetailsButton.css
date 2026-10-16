@@ -84,7 +84,6 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.paintkit-details-base,
 .paintkit-details-empty {
   margin: 2px 0 0;
   color: var(--text-dim);
@@ -145,6 +144,18 @@
   text-align: left;
   overflow-wrap: anywhere;
 }
+/* Header facts (base, operation) as one label/value grid under the title. */
+.paintkit-details-meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px 10px;
+  margin: 4px 0 0;
+  font-size: 11px;
+}
+.paintkit-details-meta div { display: contents; }
+.paintkit-details-meta dt { color: var(--text-dim); }
+.paintkit-details-meta dd { margin: 0; color: var(--text); }
+.paintkit-details-meta .paintkit-details-path { display: inline; margin-left: -4px; }
 .paintkit-details-copied {
   margin-left: 8px;
   color: var(--pass);
@@ -152,6 +163,25 @@
 }
 .paintkit-details-suffix {
   color: var(--text-dim);
+}
+.paintkit-details-shared-toggle {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.paintkit-details-shared-toggle:hover {
+  text-decoration: underline;
+}
+.paintkit-details-shared-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.paintkit-details-shared {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
 }
 
 .paintkit-details-footer {

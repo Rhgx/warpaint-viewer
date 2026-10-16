@@ -87,6 +87,8 @@ interface UseOperationGraphEditorOptions extends
   sourceProvider: SourceTextureProvider;
   packageGeneration: number;
   selectedKit: PaintkitEntry | null;
+  paintNames: ReadonlyMap<number, string>;
+  onSelectKit: (id: number) => void;
 }
 
 /**
@@ -121,6 +123,8 @@ export function useOperationGraphEditor({
   sourceProvider,
   packageGeneration,
   selectedKit,
+  paintNames,
+  onSelectKit,
 }: UseOperationGraphEditorOptions) {
   const committedOperationGraph = useMemo<OperationGraph | null>(() => {
     if (!editorCurrent) return null;
@@ -564,6 +568,8 @@ export function useOperationGraphEditor({
     onOpenStickerEditor: openOperationStickerNode,
     onPreviewNode: (nodeId) => operationGraphPreviewUrls[nodeId],
     onExportNode: (nodeId, format) => { void exportOperationGraphNode(nodeId, format); },
+    paintNames,
+    onSelectKit,
     readOnly: editorStatus !== 'ready',
   } : undefined;
 

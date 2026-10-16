@@ -44,9 +44,14 @@ export interface ProtoDefKit {
   weapons: string[];
   /** Per-weapon Source material paths authored by item_data.material_override. */
   materialOverrides?: Record<string, string>;
+  /** RED and BLU textures are used: has_team_textures is set, or the team trees differ. */
   hasTeamTextures: boolean;
-  /** The prefab requests team colors, but the definition explicitly disables team textures. */
-  teamTextureMismatch: boolean;
+  /**
+   * The paint changes per team but has_team_textures is off, so the in-game inspect
+   * panel will not show its team buttons (the legacy "has team color paintkit" item
+   * attribute is not checked here). Matches still use the RED and BLU textures.
+   */
+  teamButtonsHidden: boolean;
   /**
    * True when any item definition template carries more than one per-wear
    * definition. This is a cheap proxy for the build pipeline's rule (which
@@ -114,6 +119,11 @@ export interface ProtoDefOpenOptions {
   weaponsByItemDef: Record<string, string>;
   /** Built-in paintkit ids, used to flag which definitions are new. */
   builtInIds: number[];
+  /**
+   * Whether new paints get their team flags (has_team_textures, teamButtonsHidden).
+   * Defaults to true. Previews only need the kit to exist, so they pass false.
+   */
+  computeTeamFlags?: boolean;
 }
 
 /**
@@ -139,6 +149,27 @@ export interface ProtoDefJsonFragment {
 export interface ProtoDefKitMessages {
   definition: Record<string, unknown>;
   operation: Record<string, unknown>;
+}
+
+/** Which operation one weapon slot reads at one wear level (0 = Factory New .. 4 = Battle Scarred). */
+export interface ProtoDefOperationScope {
+  weaponKey: string;
+  wear: number;
+  /** Index into ProtoDefKitBundle.operations. */
+  operationIndex: number;
+}
+
+/**
+ * Everything one kit needs to be re-created from JSON fragments. A top-level
+ * paint has one operation; a per-wear paint (no top-level operation_template)
+ * has the operations its weapon slots read at each wear, plus the item
+ * definitions those slots use.
+ */
+export interface ProtoDefKitBundle {
+  definition: Record<string, unknown>;
+  operations: Record<string, unknown>[];
+  itemDefinitions: Record<string, unknown>[];
+  scopes: ProtoDefOperationScope[];
 }
 
 /**
@@ -185,6 +216,11 @@ export interface ProtoDefSource {
    */
   exportKit(defindex: number): Promise<ProtoDefKitMessages | null>;
   /**
+   * Like exportKit(), but also returns the item definitions and per-wear
+   * operations a per-wear paint needs, so it can be written as JSON fragments.
+   */
+  exportKitBundle(defindex: number): Promise<ProtoDefKitBundle | null>;
+  /**
    * Every weapon slot on one kit's definition, resolved to the weapon it
    * paints and its authored location, so an editor can read or write that
    * weapon's own material_override without guessing which definition field
@@ -209,6 +245,8 @@ export interface CustomDefinitionKitRow {
   unsupported: boolean;
   /** Its first renderable weapon could not produce an initial recipe. */
   quarantined: boolean;
+  /** Made by New war paint, so it can be renamed or deleted. */
+  generated: boolean;
 }
 
 /** A proto_defs file the mounted Source package carries. */
@@ -225,10 +263,26 @@ export interface CustomDefinitionsState {
   diagnostics: SourceDiagnostic[];
   packageCandidate?: CustomDefinitionsCandidate;
   onImport: (files: File[]) => void;
+  /** False while a whole proto_defs.vpd is loaded, since JSON paints cannot join a container. */
+  canAddWarPaint: boolean;
+  /** Add a paint built on a stock operation template. Resolves true once it is loaded. */
+  onCreateWarPaint: (templateDefindex: number, name: string) => Promise<boolean>;
+  /** Add a copy of an exported stock paint (see exportSelectedStockKit). Resolves true once it is loaded. */
+  onCreateWarPaintCopy: (messages: ProtoDefKitMessages, name: string) => Promise<boolean>;
+  /** The selected paint, when it is a stock paint that a new war paint can copy. */
+  selectedStockKit?: { id: number; name: string };
+  /** The selected stock paint's definition and operation. Null for a per-wear paint. */
+  exportSelectedStockKit?: () => Promise<ProtoDefKitMessages | null>;
+  /** Remove a generated war paint's files. Removing the last one clears the set. */
+  onDeleteWarPaint: (defindex: number) => void;
+  /** Rename a generated war paint. Blank names are ignored. */
+  onRenameWarPaint: (defindex: number, name: string) => void;
   /** Add or remove one definition from the catalog. */
   onToggleKit: (defindex: number) => void;
   /** Select a loaded definition in the viewer. */
   onSelectKit: (id: number) => void;
+  /** Stock paint names by catalog id, for linking a template's example paints. */
+  stockKitNames: Record<number, string>;
   onRemove: () => void;
 }
 

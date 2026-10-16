@@ -1,10 +1,10 @@
 import { BlobWriter, TextReader, Uint8ArrayReader, ZipWriter } from '@zip.js/zip.js';
-import type { ProtoDefKitMessages } from '../../protodefs/types';
+import type { ProtoDefKitBundle } from '../../protodefs/types';
 import { sanitizePackName } from '../../export/plan';
 import { loadSnapshotContainer } from '../../export/snapshot';
-import { spliceProtoDefs } from '../../export/protoWrite';
+import { spliceProtoDefBundle } from '../../export/protoWrite';
 import { PACK_PROTO_DEFS_PATH } from '../../export/definitions';
-import { serializeProtoDefKitMessages } from './jsonExport';
+import { serializeProtoDefKitBundle } from './jsonExport';
 
 export type EditorDownloadFormat = 'zip' | 'json' | 'vpd';
 
@@ -18,21 +18,20 @@ function safeName(name: string | undefined): string {
 }
 
 async function editedContainer(
-  kit: ProtoDefKitMessages,
+  bundle: ProtoDefKitBundle,
   targetDefindex: number,
   overwrite: boolean,
 ): Promise<Uint8Array> {
-  return spliceProtoDefs({
+  return spliceProtoDefBundle({
     baseBytes: await loadSnapshotContainer(),
-    operation: kit.operation,
-    definition: kit.definition,
+    bundle,
     mode: overwrite ? 'overwrite' : 'append',
     targetDefindex: overwrite ? targetDefindex : undefined,
   }).bytes;
 }
 
 export async function exportEditorDefinition(
-  kit: ProtoDefKitMessages,
+  bundle: ProtoDefKitBundle,
   format: EditorDownloadFormat,
   targetDefindex: number,
   name?: string,
@@ -40,7 +39,7 @@ export async function exportEditorDefinition(
 ): Promise<DefinitionExportResult> {
   const stem = safeName(name);
   if (format === 'vpd') {
-    const bytes = await editedContainer(kit, targetDefindex, overwrite);
+    const bytes = await editedContainer(bundle, targetDefindex, overwrite);
     const buffer = new Uint8Array(bytes).buffer;
     return {
       blob: new Blob([buffer], { type: 'application/octet-stream' }),
@@ -51,11 +50,11 @@ export async function exportEditorDefinition(
   const writer = new ZipWriter(new BlobWriter('application/zip'));
   try {
     if (format === 'zip') {
-      await writer.add(PACK_PROTO_DEFS_PATH, new Uint8ArrayReader(await editedContainer(kit, targetDefindex, overwrite)));
+      await writer.add(PACK_PROTO_DEFS_PATH, new Uint8ArrayReader(await editedContainer(bundle, targetDefindex, overwrite)));
     } else {
-      const serialized = serializeProtoDefKitMessages(kit, { name });
-      await writer.add(serialized.operation.name, new TextReader(serialized.operation.text));
-      await writer.add(serialized.definition.name, new TextReader(serialized.definition.text));
+      for (const fragment of serializeProtoDefKitBundle(bundle, { name }).fragments) {
+        await writer.add(fragment.name, new TextReader(fragment.text));
+      }
     }
     return {
       blob: await writer.close(),

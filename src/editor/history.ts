@@ -1,4 +1,10 @@
 /**
+ * Undo depth. Snapshots share untouched operations, so this bounds retained
+ * memory without limiting what a single edit can change.
+ */
+const MAX_UNDO_ENTRIES = 100;
+
+/**
  * Snapshot history for the editor's immutable working messages. The owner
  * supplies already-detached snapshots; this class only owns their ordering.
  */
@@ -17,6 +23,7 @@ export class SnapshotHistory<T> {
   /** Record a new edit. Any alternate future is no longer valid. */
   record(prior: T): void {
     this.undoStack.push(prior);
+    if (this.undoStack.length > MAX_UNDO_ENTRIES) this.undoStack.shift();
     this.redoStack.length = 0;
   }
 

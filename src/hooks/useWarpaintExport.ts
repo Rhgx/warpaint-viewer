@@ -29,8 +29,8 @@ export function useWarpaintExport(inputs: WarpaintExportInputs) {
             'Choose which war paint this should replace, or add it as a new one instead.',
           );
         }
-        const kit = await definitions.loadKitMessages();
-        if (!kit)
+        const bundle = await definitions.loadKitBundle();
+        if (!bundle)
           throw new Error(
             'This war paint’s definitions could not be read. Re-import them and try again.',
           );
@@ -48,7 +48,7 @@ export function useWarpaintExport(inputs: WarpaintExportInputs) {
             : Promise.resolve(new Map<string, Uint8Array>()),
         ]);
         const { collectMaterialOverrides } = await import('../export/plan');
-        const overrides = collectMaterialOverrides(kit.definition);
+        const overrides = collectMaterialOverrides(bundle.definition);
         if (overrides.length) {
           const materials = await definitions.materialFiles(overrides);
           extras.push(...materials.files);
@@ -69,7 +69,7 @@ export function useWarpaintExport(inputs: WarpaintExportInputs) {
 
         const built = buildDefinitionFiles({
           baseContainer,
-          kit,
+          bundle,
           mode:
             inputs.definitionsMode === 'append' ? 'append' : 'overwrite',
           targetDefindex:

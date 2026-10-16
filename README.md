@@ -12,6 +12,7 @@ Preview TF2 war paints in your browser, rendered by a 1:1 recreation of the game
 - TF2 lighting environments, sheens, unusual effects, and a first-person view.
 - Export transparent PNGs and animated turntables (GIF, WebP, APNG, MP4).
 - Preview custom war paints from your own definitions and textures.
+- Edit war paints in the browser, or start new ones from a stock template or a copy of a stock paint.
 
 ## Documentation
 

@@ -120,7 +120,7 @@ export function useWorkbenchRecipes({
 interface UseExportDefinitionsOptions {
   data: DataSource | null;
   selectedKit: PaintkitEntry | null;
-  exportImportedKit: ReturnType<typeof useCustomDefinitions>['exportKit'];
+  exportImportedKitBundle: ReturnType<typeof useCustomDefinitions>['exportKitBundle'];
   sourceProvider: SourceTextureProvider;
   packageGeneration: number;
   editorRecipes: WearRecipe[];
@@ -130,7 +130,7 @@ interface UseExportDefinitionsOptions {
 export function useExportDefinitions({
   data,
   selectedKit,
-  exportImportedKit,
+  exportImportedKitBundle,
   sourceProvider,
   packageGeneration,
   editorRecipes,
@@ -162,8 +162,8 @@ export function useExportDefinitions({
     return {
       isImported: selectedKit ? isCustomKitId(selectedKit.id) : false,
       builtInKits: (data?.manifest.paintkits ?? []).map((kit) => ({ defindex: kit.id, name: kit.name })),
-      loadKitMessages: async () => (
-        selectedKit && isCustomKitId(selectedKit.id) ? exportImportedKit(selectedKit.id) : null
+      loadKitBundle: async () => (
+        selectedKit && isCustomKitId(selectedKit.id) ? exportImportedKitBundle(selectedKit.id) : null
       ),
       packageFiles: async () => {
         if (!pkg) return [];
@@ -196,5 +196,5 @@ export function useExportDefinitions({
     // its own identity across both, so without it this would keep answering for
     // whatever archive was mounted first.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, selectedKit, exportImportedKit, sourceProvider, packageGeneration, editorRecipes, manualTextureOverrides]);
+  }, [data, selectedKit, exportImportedKitBundle, sourceProvider, packageGeneration, editorRecipes, manualTextureOverrides]);
 }

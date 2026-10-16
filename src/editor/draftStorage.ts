@@ -1,10 +1,12 @@
-import type { ProtoDefKitMessages } from '../protodefs/types';
+import type { ProtoDefKitBundle, ProtoDefOperationScope } from '../protodefs/types';
 
 const DATABASE_NAME = 'warpaint-viewer';
 const DATABASE_VERSION = 2;
 const DRAFT_STORE_NAME = 'editor-drafts';
 const CUSTOM_SOURCE_STORE_NAME = 'custom-source-files';
-const DRAFT_VERSION = 1;
+const DRAFT_VERSION = 2;
+// Version 1 drafts held one operation under `messages`. They are still read, as a one-operation bundle.
+const LEGACY_DRAFT_VERSION = 1;
 const CUSTOM_SOURCE_VERSION = 1;
 
 export type CustomSourceFileKind = 'package' | 'definitions';
@@ -22,7 +24,7 @@ export interface EditorDraftRecord {
   kitId: number;
   paintName?: string;
   savedAt: number;
-  messages: ProtoDefKitMessages;
+  bundle: ProtoDefKitBundle;
 }
 
 let databasePromise: Promise<IDBDatabase> | null = null;
@@ -31,18 +33,55 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function recordList(value: unknown): Record<string, unknown>[] | null {
+  if (!Array.isArray(value)) return null;
+  const records = value.filter(isRecord);
+  return records.length === value.length ? records : null;
+}
+
+function parseScopes(value: unknown, operationCount: number): ProtoDefOperationScope[] | null {
+  if (!Array.isArray(value)) return null;
+  const scopes = value.filter((entry): entry is ProtoDefOperationScope => (
+    isRecord(entry)
+    && typeof entry.weaponKey === 'string'
+    && typeof entry.wear === 'number'
+    && typeof entry.operationIndex === 'number'
+    && Number.isSafeInteger(entry.operationIndex)
+    && entry.operationIndex >= 0
+    && entry.operationIndex < operationCount
+  ));
+  return scopes.length === value.length ? scopes : null;
+}
+
+function parseKitBundle(value: unknown): ProtoDefKitBundle | null {
+  if (!isRecord(value) || !isRecord(value.definition)) return null;
+  const operations = recordList(value.operations);
+  const itemDefinitions = recordList(value.itemDefinitions);
+  const scopes = operations && parseScopes(value.scopes, operations.length);
+  if (!operations || operations.length === 0 || !itemDefinitions || !scopes) return null;
+  return { definition: value.definition, operations, itemDefinitions, scopes };
+}
+
+function parseLegacyMessages(value: unknown): ProtoDefKitBundle | null {
+  if (!isRecord(value) || !isRecord(value.definition) || !isRecord(value.operation)) return null;
+  return { definition: value.definition, operations: [value.operation], itemDefinitions: [], scopes: [] };
+}
+
 export function parseEditorDraftRecord(value: unknown, expectedKey: string): EditorDraftRecord | null {
   if (!isRecord(value)
-    || value.version !== DRAFT_VERSION
     || value.key !== expectedKey
     || typeof value.kitId !== 'number'
     || !Number.isSafeInteger(value.kitId)
     || typeof value.savedAt !== 'number'
     || !Number.isFinite(value.savedAt)
-    || !isRecord(value.messages)
-    || !isRecord(value.messages.definition)
-    || !isRecord(value.messages.operation)
     || (value.paintName !== undefined && typeof value.paintName !== 'string')) return null;
+
+  const bundle = value.version === DRAFT_VERSION
+    ? parseKitBundle(value.bundle)
+    : value.version === LEGACY_DRAFT_VERSION
+      ? parseLegacyMessages(value.messages)
+      : null;
+  if (!bundle) return null;
 
   return {
     version: DRAFT_VERSION,
@@ -50,10 +89,7 @@ export function parseEditorDraftRecord(value: unknown, expectedKey: string): Edi
     kitId: value.kitId,
     ...(value.paintName === undefined ? {} : { paintName: value.paintName }),
     savedAt: value.savedAt,
-    messages: {
-      definition: value.messages.definition,
-      operation: value.messages.operation,
-    },
+    bundle,
   };
 }
 

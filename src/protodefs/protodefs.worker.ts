@@ -8,6 +8,7 @@
 import {
   decodeProtoDefs,
   decodeProtoDefsFromJson,
+  extractKitBundle,
   extractKitMessages,
   getKitWeaponSlots,
   resolveKitRecipe,
@@ -57,6 +58,12 @@ interface ExportKitRequest {
   defindex: number;
 }
 
+interface ExportKitBundleRequest {
+  id: number;
+  kind: 'exportKitBundle';
+  defindex: number;
+}
+
 interface ExportKitWeaponSlotsRequest {
   id: number;
   kind: 'exportKitWeaponSlots';
@@ -70,7 +77,7 @@ interface DisposeRequest {
 
 type Request =
   | OpenRequest | OpenJsonRequest | ResolveRecipeRequest | ResolveRecipeWithProvenanceRequest
-  | ExportKitRequest | ExportKitWeaponSlotsRequest | DisposeRequest;
+  | ExportKitRequest | ExportKitBundleRequest | ExportKitWeaponSlotsRequest | DisposeRequest;
 
 let decoded: DecodedContainer | null = null;
 
@@ -117,6 +124,10 @@ self.onmessage = (event: MessageEvent<Request>) => {
       }
       case 'exportKit': {
         reply(request.id, decoded ? extractKitMessages(decoded, request.defindex) : null);
+        break;
+      }
+      case 'exportKitBundle': {
+        reply(request.id, decoded ? extractKitBundle(decoded, request.defindex) : null);
         break;
       }
       case 'exportKitWeaponSlots': {

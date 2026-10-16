@@ -41,6 +41,22 @@ optionally passing the path to `tf-viewmodel-editor`. The imported subset covers
 the stock warpaint-supported weapons and class arms; running the viewer needs
 neither that project nor a local game install.
 
+## Settings
+
+The toolbar's **Settings** button holds the Workshopper tools, all off by
+default:
+
+- **Show paint kit details** adds a details button to the selected or hovered
+  war paint: its paintkit_proto_def_index, the operation it uses and the other
+  stock paints sharing it, and texture paths, bases, and features from Pyxell's
+  TF2 Warpaint Texture Directory.
+- **Advanced catalog search** lets the warpaint filter match an exact paint kit
+  ID (`400` or `#400`) and list every paint that uses an operation
+  (`op:<name>`).
+
+Team switches to BLU on any war paint whose BLU textures differ, as it does in
+game, whether or not its definition sets `has_team_textures`.
+
 ## Capture
 
 The **Capture** section chooses what the toolbar's save button produces.

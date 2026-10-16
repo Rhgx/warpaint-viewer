@@ -1,9 +1,11 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { Popover } from '@base-ui/react/popover';
 import { Copy, Info } from 'lucide-react';
-import type { PaintkitEntry, TextureDirectory, TextureDirectoryEntry } from '../../data/types';
+import type { OperationTemplateData, PaintkitEntry, TextureDirectory, TextureDirectoryEntry } from '../../data/types';
 import { isCustomKitId } from '../../protodefs/types';
 import { useCopyText } from '../../hooks/useCopyText';
+import { useOperationTemplates } from '../../hooks/useOperationTemplates';
+import { useSettings } from '../../settings';
 import './PaintkitDetailsButton.css';
 
 // Pyxell's base names carry footnote asterisks and sometimes drop accents
@@ -26,6 +28,96 @@ function splitTextureLine(line: string) {
   const paths = [...rest.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
   if (!paths.length) return null;
   return { slot: line.slice(0, split), paths, suffix: rest.slice(rest.lastIndexOf('"') + 1).trim() };
+}
+
+interface OperationUsage {
+  defindex: number;
+  name: string;
+  others: number;
+  users: ReadonlySet<number>;
+}
+
+// Top-level templates whose usage list holds this stock paint, with how many
+// other stock paints share each one.
+function operationsFor(data: OperationTemplateData | null, defindex: number): OperationUsage[] {
+  if (!data) return [];
+  return data.templates.flatMap((template) => {
+    const users = data.usage[String(template.defindex)] ?? [];
+    return users.includes(defindex)
+      ? [{ defindex: template.defindex, name: template.name, others: users.length - 1, users: new Set(users) }]
+      : [];
+  });
+}
+
+function sharedSuffix(others: number): string {
+  if (others === 0) return 'not shared';
+  return others === 1 ? 'shared with 1 other' : `shared with ${others} others`;
+}
+
+const SHARED_LIST_LIMIT = 12;
+
+// The Operation row, with each shared count expandable into the other stock
+// paints on that operation. The open state lives here, so every opened card
+// starts collapsed.
+function OperationRow({ defindex, operations, paintkits, onSelectKit }: {
+  defindex: number;
+  operations: OperationUsage[];
+  paintkits: readonly PaintkitEntry[];
+  onSelectKit: (id: number) => void;
+}) {
+  const [sharedOpen, setSharedOpen] = useState<number | null>(null);
+  const expanded = operations.find((operation) => operation.defindex === sharedOpen);
+  const sharers = expanded
+    ? paintkits
+        .filter((kit) => !isCustomKitId(kit.id) && kit.id !== defindex && expanded.users.has(kit.id))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    : [];
+
+  return (
+    <div>
+      <dt>Operation</dt>
+      <dd>
+        {operations.map((operation, i) => {
+          const title = `${operation.others} other stock war paint${operation.others === 1 ? '' : 's'} use this operation`;
+          return (
+            <Fragment key={operation.defindex}>
+              {i > 0 && ', '}
+              <CopyButton text={operation.name} title="Copy operation name" className="paintkit-details-path">
+                {operation.name}
+              </CopyButton>
+              {' '}
+              {operation.others > 0 ? (
+                <button
+                  type="button"
+                  className="paintkit-details-suffix paintkit-details-shared-toggle"
+                  title={title}
+                  aria-expanded={sharedOpen === operation.defindex}
+                  onClick={() => setSharedOpen(sharedOpen === operation.defindex ? null : operation.defindex)}
+                >
+                  {sharedSuffix(operation.others)}
+                </button>
+              ) : (
+                <span className="paintkit-details-suffix" title={title}>{sharedSuffix(operation.others)}</span>
+              )}
+            </Fragment>
+          );
+        })}
+        {expanded && (
+          <div className="paintkit-details-shared">
+            {sharers.slice(0, SHARED_LIST_LIMIT).map((kit, i) => (
+              <Fragment key={kit.id}>
+                {i > 0 && ', '}
+                <Popover.Close className="paintkit-details-base-link" onClick={() => onSelectKit(kit.id)}>
+                  {kit.name}
+                </Popover.Close>
+              </Fragment>
+            ))}
+            {sharers.length > SHARED_LIST_LIMIT && `, and ${sharers.length - SHARED_LIST_LIMIT} more`}
+          </div>
+        )}
+      </dd>
+    </div>
+  );
 }
 
 function CopyButton({ text, title, className, children }: {
@@ -123,6 +215,74 @@ function DirectoryEntry({ entry, directory }: { entry: TextureDirectoryEntry; di
   );
 }
 
+// The popup body. Popover.Portal mounts its children only while the popover is
+// open, so the operation template data is fetched on the first open, not on hover.
+function PaintkitDetailsContent({
+  defindex,
+  kitName,
+  entry,
+  directory,
+  paintkits,
+  onSelectKit,
+  stockKit,
+}: {
+  defindex: number;
+  kitName: string;
+  entry: TextureDirectoryEntry | undefined;
+  directory: TextureDirectory | null;
+  paintkits: readonly PaintkitEntry[];
+  onSelectKit: (id: number) => void;
+  stockKit: boolean;
+}) {
+  const showDetails = useSettings((s) => s.showPaintkitDetails);
+  const operationUsage = useOperationTemplates(showDetails);
+  const operations = stockKit ? operationsFor(operationUsage, defindex) : [];
+
+  return (
+    <>
+      <header className="paintkit-details-header">
+        <div className="paintkit-details-heading">
+          <Popover.Title className="paintkit-details-title">{kitName}</Popover.Title>
+          {/* The paintkit_proto_def_index that VScript and popfiles take. */}
+          <CopyButton text={String(defindex)} title="Copy paintkit_proto_def_index" className="paintkit-details-id">
+            #{defindex}<Copy size={11} aria-hidden="true" />
+          </CopyButton>
+        </div>
+        {(entry?.base || operations.length > 0) && (
+          <dl className="paintkit-details-meta">
+            {entry?.base && (
+              <div>
+                <dt>Base</dt>
+                <dd>
+                  {entry.base.map((name, i) => {
+                    const kit = findBaseKit(paintkits, name);
+                    return (
+                      <Fragment key={i}>
+                        {i > 0 && ', '}
+                        {kit ? (
+                          <Popover.Close className="paintkit-details-base-link" onClick={() => onSelectKit(kit.id)}>
+                            {name}
+                          </Popover.Close>
+                        ) : name}
+                      </Fragment>
+                    );
+                  })}
+                </dd>
+              </div>
+            )}
+            {operations.length > 0 && (
+              <OperationRow defindex={defindex} operations={operations} paintkits={paintkits} onSelectKit={onSelectKit} />
+            )}
+          </dl>
+        )}
+      </header>
+      {entry && directory
+        ? <DirectoryEntry entry={entry} directory={directory} />
+        : directory && <p className="paintkit-details-empty">No texture directory entry.</p>}
+    </>
+  );
+}
+
 // Info button plus the card it opens: the paint kit ID and, when Pyxell's
 // texture directory covers the paint, its entry. Opens on hover for mouse
 // users and on click for touch.
@@ -136,6 +296,7 @@ export function PaintkitDetailsButton({
   side,
   className,
   onOpenChange,
+  stockKit,
 }: {
   defindex: number;
   kitName: string;
@@ -146,6 +307,8 @@ export function PaintkitDetailsButton({
   side: 'right' | 'bottom';
   className?: string;
   onOpenChange?: (open: boolean) => void;
+  /** Imported kits can share a defindex with a stock kit, so they are excluded by catalog id. */
+  stockKit: boolean;
 }) {
   return (
     <Popover.Root onOpenChange={onOpenChange}>
@@ -160,36 +323,15 @@ export function PaintkitDetailsButton({
       <Popover.Portal>
         <Popover.Positioner side={side} align="start" sideOffset={8} collisionPadding={10} className="paintkit-details-positioner">
           <Popover.Popup className="paintkit-details-popup" data-camera-input-suspended="">
-            <header className="paintkit-details-header">
-              <div className="paintkit-details-heading">
-                <Popover.Title className="paintkit-details-title">{kitName}</Popover.Title>
-                {/* The paintkit_proto_def_index that VScript and popfiles take. */}
-                <CopyButton text={String(defindex)} title="Copy paintkit_proto_def_index" className="paintkit-details-id">
-                  #{defindex}<Copy size={11} aria-hidden="true" />
-                </CopyButton>
-              </div>
-              {entry?.base && (
-                <p className="paintkit-details-base">
-                  Base:{' '}
-                  {entry.base.map((name, i) => {
-                    const kit = findBaseKit(paintkits, name);
-                    return (
-                      <Fragment key={i}>
-                        {i > 0 && ', '}
-                        {kit ? (
-                          <Popover.Close className="paintkit-details-base-link" onClick={() => onSelectKit(kit.id)}>
-                            {name}
-                          </Popover.Close>
-                        ) : name}
-                      </Fragment>
-                    );
-                  })}
-                </p>
-              )}
-            </header>
-            {entry && directory
-              ? <DirectoryEntry entry={entry} directory={directory} />
-              : directory && <p className="paintkit-details-empty">No texture directory entry.</p>}
+            <PaintkitDetailsContent
+              defindex={defindex}
+              kitName={kitName}
+              entry={entry}
+              directory={directory}
+              paintkits={paintkits}
+              onSelectKit={onSelectKit}
+              stockKit={stockKit}
+            />
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>

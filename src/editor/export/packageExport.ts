@@ -1,11 +1,12 @@
 import { BlobWriter, TextReader, Uint8ArrayReader, ZipWriter } from '@zip.js/zip.js';
 import { sanitizePackName } from '../../export/plan';
-import { spliceProtoDefs } from '../../export/protoWrite';
+import { spliceProtoDefBundle } from '../../export/protoWrite';
 import { classifyProtoDefFragment, normalizeProtoDefFragments } from '../../protodefs/jsonFragments';
-import type { ProtoDefJsonFragment, ProtoDefKitMessages } from '../../protodefs/types';
+import type { ProtoDefFragmentKind } from '../../protodefs/jsonFragments';
+import type { ProtoDefJsonFragment, ProtoDefKitBundle } from '../../protodefs/types';
 import { PACKAGE_PROTO_DEFS_PATH } from '../../protodefs/types';
 import type { SourcePackage } from '../../source/contracts';
-import { serializeProtoDefKitMessages } from './jsonExport';
+import { serializeProtoDefKitBundle } from './jsonExport';
 
 const MAX_FRAGMENT_ENTRIES = 128;
 const MAX_FRAGMENT_BYTES = 8 * 1024 * 1024;
@@ -22,6 +23,14 @@ export interface ExportEditedPackageOptions {
   name?: string;
 }
 
+/** One message of the bundle, as the JSON fragment file that carries it. */
+interface KitFragment {
+  kind: ProtoDefFragmentKind;
+  defindex: number;
+  name: string;
+  text: string;
+}
+
 function defindex(value: Record<string, unknown>): number {
   const header = value.header as Record<string, unknown> | undefined;
   const index = header?.defindex;
@@ -36,33 +45,44 @@ function downloadName(pkg: SourcePackage | null | undefined, requestedName?: str
   return `${sanitizePackName(source)}-edited.zip`;
 }
 
+function kitFragments(bundle: ProtoDefKitBundle, requestedName?: string): KitFragment[] {
+  const serialized = serializeProtoDefKitBundle(bundle, { name: requestedName }).fragments;
+  const messages: { kind: ProtoDefFragmentKind; value: Record<string, unknown> }[] = [
+    ...bundle.operations.map((value) => ({ kind: 'operation' as const, value })),
+    ...bundle.itemDefinitions.map((value) => ({ kind: 'itemDefinition' as const, value })),
+    { kind: 'definition', value: bundle.definition },
+  ];
+  // serializeProtoDefKitBundle emits exactly one fragment per message, in this order.
+  return messages.map(({ kind, value }, index) => ({
+    kind,
+    defindex: defindex(value),
+    name: serialized[index].name,
+    text: serialized[index].text,
+  }));
+}
+
+/** For each fragment, the package paths already holding a JSON file of the same kind and defindex. */
 async function findJsonFragmentPaths(
   pkg: SourcePackage,
-  operationDefindex: number,
-  definitionDefindex: number,
-): Promise<{ operation: string[]; definition: string[] }> {
-  const fragments: ProtoDefJsonFragment[] = [];
+  fragments: readonly KitFragment[],
+): Promise<string[][]> {
+  const found: ProtoDefJsonFragment[] = [];
   for (const entry of pkg.entries.values()) {
-    if (fragments.length >= MAX_FRAGMENT_ENTRIES) break;
+    if (found.length >= MAX_FRAGMENT_ENTRIES) break;
     if (!entry.path.endsWith('.json') || entry.size > MAX_FRAGMENT_BYTES) continue;
     try {
       const text = new TextDecoder().decode(await pkg.read(entry.path));
-      if (classifyProtoDefFragment(text)) fragments.push({ name: entry.path, text });
+      if (classifyProtoDefFragment(text)) found.push({ name: entry.path, text });
     } catch {
       // Unreadable or unrelated JSON is copied unchanged below.
     }
   }
-  if (fragments.length === 0) return { operation: [], definition: [] };
+  if (found.length === 0) return fragments.map(() => []);
 
-  const normalized = normalizeProtoDefFragments(fragments);
-  return {
-    operation: normalized
-      .filter((fragment) => fragment.kind === 'operation' && defindex(fragment.value) === operationDefindex)
-      .map((fragment) => fragment.name),
-    definition: normalized
-      .filter((fragment) => fragment.kind === 'definition' && defindex(fragment.value) === definitionDefindex)
-      .map((fragment) => fragment.name),
-  };
+  const normalized = normalizeProtoDefFragments(found);
+  return fragments.map((fragment) => normalized
+    .filter((entry) => entry.kind === fragment.kind && defindex(entry.value) === fragment.defindex)
+    .map((entry) => entry.name));
 }
 
 /**
@@ -71,13 +91,11 @@ async function findJsonFragmentPaths(
  * time, so exporting does not retain a second expanded copy of the package.
  */
 export async function exportEditedPackage(
-  kit: ProtoDefKitMessages,
+  bundle: ProtoDefKitBundle,
   options: ExportEditedPackageOptions = {},
 ): Promise<EditedPackageExport> {
   const pkg = options.package ?? null;
-  const serialized = serializeProtoDefKitMessages(kit, { name: options.name });
-  const operationDefindex = defindex(kit.operation);
-  const definitionDefindex = defindex(kit.definition);
+  const fragments = kitFragments(bundle, options.name);
   const replacements = new Map<string, Uint8Array | string>();
   const added = new Map<string, string>();
 
@@ -85,34 +103,27 @@ export async function exportEditedPackage(
     const baseBytes = await pkg.read(PACKAGE_PROTO_DEFS_PATH);
     let result;
     try {
-      result = spliceProtoDefs({
+      result = spliceProtoDefBundle({
         baseBytes,
-        operation: kit.operation,
-        definition: kit.definition,
+        bundle,
         mode: 'overwrite',
-        targetDefindex: definitionDefindex,
+        targetDefindex: defindex(bundle.definition),
       });
     } catch {
       // A separately imported definition may be edited while another package
       // supplies the assets. In that case append it instead of modifying an
       // unrelated kit in the mounted container.
-      result = spliceProtoDefs({
-        baseBytes,
-        operation: kit.operation,
-        definition: kit.definition,
-        mode: 'append',
-      });
+      result = spliceProtoDefBundle({ baseBytes, bundle, mode: 'append' });
     }
     replacements.set(PACKAGE_PROTO_DEFS_PATH, result.bytes);
   } else if (pkg) {
-    const paths = await findJsonFragmentPaths(pkg, operationDefindex, definitionDefindex);
-    for (const path of paths.operation) replacements.set(path, serialized.operation.text);
-    for (const path of paths.definition) replacements.set(path, serialized.definition.text);
-    if (paths.operation.length === 0) added.set(`definitions/${serialized.operation.name}`, serialized.operation.text);
-    if (paths.definition.length === 0) added.set(`definitions/${serialized.definition.name}`, serialized.definition.text);
+    const paths = await findJsonFragmentPaths(pkg, fragments);
+    fragments.forEach((fragment, index) => {
+      for (const path of paths[index]) replacements.set(path, fragment.text);
+      if (paths[index].length === 0) added.set(`definitions/${fragment.name}`, fragment.text);
+    });
   } else {
-    added.set(`definitions/${serialized.operation.name}`, serialized.operation.text);
-    added.set(`definitions/${serialized.definition.name}`, serialized.definition.text);
+    for (const fragment of fragments) added.set(`definitions/${fragment.name}`, fragment.text);
   }
 
   const writer = new ZipWriter(new BlobWriter('application/zip'));

@@ -636,7 +636,8 @@
 }
 
 .custom-workbench-edit-layer-row[aria-selected='true'],
-.custom-workbench-edit-sticker-row[aria-selected='true'] {
+.custom-workbench-edit-sticker-row[aria-selected='true'],
+.sticker-placement-editor-variant[aria-selected='true'] {
   background: var(--accent-soft);
   box-shadow: inset 2px 0 0 var(--accent);
 }
@@ -711,7 +712,8 @@
   color: var(--text-dim);
 }
 
-.custom-workbench-edit-materials-note {
+.custom-workbench-edit-materials-note,
+.custom-workbench-edit-scope-note {
   margin: 10px;
   color: var(--text-dim);
   font-size: 10.5px;
@@ -929,6 +931,17 @@
   content: '';
   transform: rotate(45deg);
 }
+
+/* Add variant opens from the sticker inspector, so the picker sits just right
+   of it (sidebar 260px, editor gap 12px, inspector 208px, gap 12px), under the
+   editor header, keeping the variant list in view. No arrow points anywhere. */
+.custom-workbench-sticker-picker[data-purpose='variant'] {
+  top: 46px;
+  bottom: auto;
+  left: 492px;
+  height: min(410px, calc(100% - 58px));
+}
+.custom-workbench-sticker-picker[data-purpose='variant']::before { display: none; }
 
 .custom-workbench-sticker-picker-head {
   display: grid;
@@ -1208,7 +1221,8 @@
   .custom-workbench-edit-list { grid-area: list; }
   .custom-workbench-edit-sticker-actions { grid-area: tools; }
   .custom-workbench-edit-footer { grid-area: footer; }
-  .custom-workbench-sticker-picker {
+  .custom-workbench-sticker-picker,
+  .custom-workbench-sticker-picker[data-purpose='variant'] {
     top: 88px;
     right: auto;
     bottom: 8px;
@@ -1237,6 +1251,8 @@
   }
   /* Materials has nothing to list; its note only cost a row here. */
   .custom-workbench-edit-list:has(> .custom-workbench-edit-materials-note) { display: none; }
+  /* The list is a single row here, so the note keeps a fixed width and wraps inside it. */
+  .custom-workbench-edit-scope-note { flex: none; width: 280px; margin: 6px 8px; }
   .custom-workbench-edit-layer-row,
   .custom-workbench-edit-sticker-row {
     flex: none;
@@ -1248,7 +1264,8 @@
   .custom-workbench-edit-layer-thumb { width: 24px; height: 24px; }
   .custom-workbench-edit-sticker-thumb { width: 24px; height: 24px; }
   .custom-workbench-edit-layer-row[aria-selected='true'],
-  .custom-workbench-edit-sticker-row[aria-selected='true'] {
+  .custom-workbench-edit-sticker-row[aria-selected='true'],
+  .sticker-placement-editor-variant[aria-selected='true'] {
     box-shadow: inset 0 -2px 0 var(--accent);
   }
   .custom-workbench-edit-sticker-actions {

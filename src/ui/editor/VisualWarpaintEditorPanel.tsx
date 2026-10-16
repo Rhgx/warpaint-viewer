@@ -158,6 +158,7 @@ export function VisualWarpaintEditorPanel({
   if (!enabled) {
     return (
       <section className="visual-warpaint-editor-panel" aria-label="Paint areas">
+        {headerSlot && <div className="visual-warpaint-editor-head">{headerSlot}</div>}
         <p className="visual-warpaint-editor-unavailable" role="status">
           {unavailableReason ?? 'Nothing to edit yet.'}
         </p>
