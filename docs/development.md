@@ -9,6 +9,7 @@ Requires Node 22+. Install dependencies with `npm install`, then:
 | `npm test` | Run the Vitest suites |
 | `npm run lint` | Run oxlint |
 | `npm run update:warpaints` | Regenerate `public/data` (manifest, recipe bundles, textures) from a local TF2 install |
+| `npm run update:operation-templates` | Regenerate `public/data/operation-templates.json` from the shipped `protodefs-full.bin` (also runs at the end of `update:warpaints`) |
 | `npm run extract:effects` | Regenerate unusual-effect particle data from TF2's PCF files |
 | `npm run extract:map-lighting` | Regenerate map lighting presets from TF2 BSP files |
 | `npm run gen:protodefs` | Regenerate the browser protobuf schema from `tools/proto/tf_proto_def_messages.proto` |
