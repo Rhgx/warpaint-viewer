@@ -314,8 +314,11 @@ export function useStickerEditor({
   const previewedVariant = selectedStickerTarget && previewedVariantIndex >= 0
     ? selectedStickerTarget.stickers[previewedVariantIndex]
     : null;
+  // Resolved stages carry public texture paths (textures/....webp), while a
+  // variant's field holds the definition's raw reference, so convert it the
+  // same way the picked-variant match does.
   const previewedVariantBase = previewedVariant
-    ? previewedVariant.base.resolvedValue ?? previewedVariant.base.authoredValue
+    ? texturePublicPath(previewedVariant.base.resolvedValue ?? previewedVariant.base.authoredValue) ?? undefined
     : undefined;
   // A pinned variant stands in for the artwork the seed drew, for its sticker
   // only. The resolved stage itself is kept as is, since the group context
@@ -326,7 +329,7 @@ export function useStickerEditor({
     return {
       ...stage,
       base: previewedVariantBase,
-      spec: previewedVariant.spec.resolvedValue ?? previewedVariant.spec.authoredValue,
+      spec: texturePublicPath(previewedVariant.spec.resolvedValue ?? previewedVariant.spec.authoredValue) ?? undefined,
     };
   }), [matchedStickerStageGroups, previewedVariant, previewedVariantBase, selectedStickerIndex]);
   const composedStickerTargetIds = useMemo(() => new Set(stickerTargets.filter((target) => (
