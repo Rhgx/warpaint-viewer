@@ -181,6 +181,8 @@ function MainApp() {
   const { resetComposeKey, disposeCache } = composeCache;
   // A restored WebGL context brings every render target back blank: drop the
   // cached composites, and the bump recomposes the paint and editor previews.
+  // ponytail: a compose still in flight across the restore can cache one blank
+  // variant; gate compositor work on isContextLost() if that ever shows up.
   const [contextRestores, setContextRestores] = useState(0);
   useEffect(() => {
     const canvas = canvasRef.current;
