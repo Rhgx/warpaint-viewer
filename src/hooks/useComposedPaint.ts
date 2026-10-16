@@ -211,6 +211,8 @@ interface UseComposedPaintOptions {
   /** Receives the exact accepted target already installed on the 3D weapon. */
   onVisibleResult?: (result: ComposeResult, context: { interactive: boolean }) => void;
   engineReady: boolean;
+  /** Bumped after a WebGL context restore, which leaves the composed paint blank. */
+  contextRestores: number;
   data: DataSource | null;
   selectedKit: PaintkitEntry | null;
   resolveRecipe: ResolveRecipe;
@@ -236,6 +238,7 @@ export function useComposedPaint({
   interactiveKey = '',
   onVisibleResult,
   engineReady,
+  contextRestores,
   data,
   selectedKit,
   resolveRecipe,
@@ -528,7 +531,7 @@ export function useComposedPaint({
       window.clearTimeout(badgeTimer);
       cancelPendingIdle?.();
     };
-  }, [suspended, interactive, interactiveRecipe, interactiveKey, onVisibleResult, engineReady, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState, lastResultRef, interactiveResultRef, composeCacheRef, lastComposeKeyRef, lastRequestKeyRef, firstPaintLoggedRef]);
+  }, [suspended, interactive, interactiveRecipe, interactiveKey, onVisibleResult, engineReady, contextRestores, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState, lastResultRef, interactiveResultRef, composeCacheRef, lastComposeKeyRef, lastRequestKeyRef, firstPaintLoggedRef]);
 
   return { composing, visibleDefinitionGeneration };
 }

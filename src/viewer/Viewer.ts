@@ -605,8 +605,6 @@ export class Viewer {
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     canvas.addEventListener('webglcontextlost', this.onContextLost);
     canvas.addEventListener('webglcontextrestored', this.onContextRestored);
-    // Dispatched by the Compositor as it re-renders each composed paint.
-    canvas.addEventListener('warpaint:compose-restored', this.onComposeRestored);
     this.invalidate();
   }
 
@@ -623,15 +621,13 @@ export class Viewer {
 
   // three.js recreates programs, uploads and (blank) render targets lazily on
   // the next render; every viewer-owned texture keeps its source image or data.
-  // Composed paints are refilled by the Compositor, which reports each one.
+  // Composed paints come back blank; the app recomposes them (see App.tsx).
   private onContextRestored = () => {
     this.contextLost = false;
     this.lastTime = performance.now();
     this.sheenLastTime = this.lastTime;
     this.invalidate();
   };
-
-  private onComposeRestored = () => this.invalidate();
 
   private onResize = () => {
     const w = this.canvas.clientWidth || 1;
@@ -2676,7 +2672,6 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.canvas.removeEventListener('webglcontextlost', this.onContextLost);
     this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
-    this.canvas.removeEventListener('warpaint:compose-restored', this.onComposeRestored);
     window.clearTimeout(this.resizeTimer);
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;

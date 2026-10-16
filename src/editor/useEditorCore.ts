@@ -444,8 +444,7 @@ export function useEditorHistoryShortcuts({
   editorHistoryActionsRef.current = { undo, redo, canUndo, canRedo };
 
   useEffect(() => {
-    if (!WORKSHOP_ENABLED || !editorTabActive || cameraMode === 'advanced'
-      || (lightingPanelOpen && preset === CUSTOM_LIGHTING_ID)) return;
+    if (!editorTabActive || cameraMode === 'advanced' || (lightingPanelOpen && preset === CUSTOM_LIGHTING_ID)) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || !(event.ctrlKey || event.metaKey)) return;
       // A modal owns its own keyboard loop and must not trigger editing behind

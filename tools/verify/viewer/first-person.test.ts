@@ -8,7 +8,6 @@ import { FP_PORTRAIT_FRAME_CENTER, FirstPersonPreview, bindViewmodelBones, merge
 import * as materialConfig from '../../../src/viewer/materialConfig';
 import { FishBonePhysics } from '../../../src/viewer/fishPhysics';
 import { firstPersonAnimationGroups } from '../../../src/ui/stage/firstPersonAnimations';
-import { Viewer } from '../../../src/viewer/Viewer';
 
 interface GlbDocument {
   materials: { name: string }[];
@@ -85,111 +84,27 @@ test('animation groups label alternate takes and retain unfamiliar activities', 
   assert.equal(firstPersonAnimationGroups({ ACT_VM_PULLBACK: 'charge' }, 'c_stickybomb_launcher')[0]?.options[0]?.label, 'Charge');
 });
 
-test('tall canvases frame the whole 4:3 viewmodel view, centred or above the sheet', () => {
+test('tall canvases frame the whole 4:3 viewmodel view above the sheet', () => {
   // A 427x764 portrait phone canvas holds a 320.25px tall 4:3 frame.
-  assert.equal(FP_PORTRAIT_FRAME_CENTER, 0.55, 'coupled to the 45dvh First Person sheet in layout.css');
   assert.ok(Math.abs((viewmodelFrameTop(427, 764, FP_PORTRAIT_FRAME_CENTER) ?? NaN) - 49.975) < 1e-9, 'lifted above the open sheet');
-  assert.equal(viewmodelFrameTop(427, 764, 1), 221.875, 'centred in the whole canvas');
   assert.equal(viewmodelFrameTop(400, 310, FP_PORTRAIT_FRAME_CENTER), 0, 'never above the canvas top');
   assert.equal(viewmodelFrameTop(844, 390, 1), null, 'landscape widens the view instead');
-  assert.equal(viewmodelFrameTop(800, 600, 1), null, 'exactly 4:3 is unchanged');
-  assert.equal(viewmodelFrameTop(0, 844, 1), null);
-  assert.equal(viewmodelFrameTop(390, 0, 1), null);
 
   const preview = new FirstPersonPreview();
   const { camera } = preview;
   camera.position.set(0, 0, 0);
   camera.updateMatrixWorld();
   const halfHeight = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-  // Canvas pixel of a point in the authored view, given as a fraction of the
-  // 4:3 frame (x: -1 left to 1 right, y: 1 top to -1 bottom).
-  const pixel = (x: number, y: number, width: number, height: number) => {
+  // Canvas pixel of a corner of the authored 4:3 frame (x: -1 left, y: 1 top).
+  const pixel = (x: number, y: number) => {
     const ndc = new THREE.Vector3(x * halfHeight * 4 / 3, y * halfHeight, -1).project(camera);
-    return [(ndc.x + 1) / 2 * width, (1 - ndc.y) / 2 * height];
+    return [(ndc.x + 1) / 2 * 427, (1 - ndc.y) / 2 * 764];
   };
-  const near = (actual: number[], expected: number[], message: string) =>
-    assert.ok(actual.every((value, i) => Math.abs(value - expected[i]) < 1e-6), `${message}: ${actual} vs ${expected}`);
-
-  // Sheet open: the frame spans the width and sits 49.975px from the top.
   preview.fitCamera(427, 764, true, 0, 300);
-  near(pixel(-1, 1, 427, 764), [0, 49.975], 'open sheet frame top left');
-  near(pixel(1, -1, 427, 764), [427, 370.225], 'open sheet frame bottom right');
-  // Sheet closed: the same frame, centred.
-  preview.fitCamera(427, 764, true);
-  near(pixel(-1, 1, 427, 764), [0, 221.875], 'closed sheet frame top left');
-  near(pixel(1, -1, 427, 764), [427, 542.125], 'closed sheet frame bottom right');
-  // Outside the portrait layout a tall canvas fits the vertical FOV instead.
-  preview.fitCamera(427, 764, false, 0, 300);
-  assert.equal(camera.view?.enabled, false);
-  assert.equal(camera.aspect, 427 / 764);
-
-  // Landscape with the Controls slide-over: the view shifts left by its width,
-  // so the frame's right edge meets the panel.
-  preview.fitCamera(915, 412, false, 360);
-  assert.equal(camera.aspect, 915 / 412);
-  const wide = 915 / 412 * 3 / 4;
-  near(pixel(wide, -1, 915, 412), [555, 412], 'shifted right edge');
-  near(pixel(-wide, 1, 915, 412), [-360, 0], 'shifted left edge');
-  // Both offsets compose into the one view offset.
-  preview.fitCamera(427, 764, true, 100, 300);
-  near(pixel(-1, 1, 427, 764), [-100, 49.975], 'composed offsets');
-  // A wide canvas without an inset drops the offset.
-  preview.fitCamera(915, 412, true);
-  assert.equal(camera.view?.enabled, false);
-  assert.equal(camera.aspect, 915 / 412);
+  for (const [actual, expected] of [[pixel(-1, 1), [0, 49.975]], [pixel(1, -1), [427, 370.225]]]) {
+    assert.ok(actual.every((value, i) => Math.abs(value - expected[i]) < 1e-6), `${actual} vs ${expected}`);
+  }
   preview.dispose();
-});
-
-test('the live First Person view fits its camera to the inset; captures use the centred frame', async () => {
-  const preview = new FirstPersonPreview();
-  const render = vi.fn();
-  const viewer = {
-    firstPerson: preview,
-    canvas: { clientWidth: 427, clientHeight: 764 },
-    portraitSheetLayout: { matches: true },
-    previewChildren: [],
-    previewVisibility: [],
-    previewLightPosition: new THREE.Vector3(),
-    previewLightRotation: new THREE.Quaternion(),
-    lightGroup: new THREE.Group(),
-    scene: new THREE.Scene(),
-    sheenMaterial: null,
-    activeUnusual: null,
-    renderer: { render },
-  };
-  const renderFirstPerson = Reflect.get(Viewer.prototype, 'renderFirstPerson');
-  Reflect.apply(renderFirstPerson, viewer, [0, 300]);
-  assert.equal(render.mock.calls[0][1], preview.camera);
-  assert.ok(Math.abs((preview.camera.view?.offsetY ?? NaN) + 49.975) < 1e-9, 'sheet open lifts the frame');
-  Reflect.apply(renderFirstPerson, viewer, [0, 0]);
-  assert.equal(preview.camera.view?.offsetY, -221.875, 'sheet closed centres the frame');
-  viewer.portraitSheetLayout.matches = false;
-  Reflect.apply(renderFirstPerson, viewer, [0, 300]);
-  assert.equal(preview.camera.view?.enabled, false, 'only the portrait layout keeps the 4:3 frame');
-  preview.dispose();
-
-  // The capture path passes no inset, whatever the live one is.
-  const stop = new Error('stop after render');
-  const capture = {
-    contextLost: false,
-    canvas: { clientWidth: 427, clientHeight: 764 },
-    renderer: {
-      capabilities: { maxTextureSize: 4096 },
-      outputColorSpace: THREE.SRGBColorSpace,
-      getRenderTarget: () => null,
-      setRenderTarget: () => {},
-      getPixelRatio: () => 1,
-      readRenderTargetPixels: () => { throw stop; },
-    },
-    scene: new THREE.Scene(),
-    lightEditor: { setCaptureMode: () => {} },
-    firstPerson: {},
-    viewInset: { right: 0, bottom: 300 },
-    applyViewInset: () => {},
-    renderFirstPerson: vi.fn(),
-  };
-  await assert.rejects(Reflect.apply(Viewer.prototype.captureScreenshot, capture, [1]), stop);
-  assert.deepEqual(capture.renderFirstPerson.mock.calls, [[0, 0]]);
 });
 
 test('bonemerge follows named arms bones and preserves unmatched child offsets', () => {
@@ -207,7 +122,7 @@ test('bonemerge follows named arms bones and preserves unmatched child offsets',
   assert.ok(Math.abs(viewmodelFov(90) - 73.739795) < 0.00001);
 });
 
-test.each(['c_minigun', 'c_gatling_gun', 'c_tomislav', 'c_holymackerel', 'c_knife', 'c_grenadelauncher'])('%s paused pose changes, and overlays remain correct', async weaponKey => {
+test.each(['c_minigun', 'c_holymackerel', 'c_knife', 'c_grenadelauncher'])('%s paused pose changes, and overlays remain correct', async weaponKey => {
   const manifest: ViewmodelManifest = JSON.parse(fs.readFileSync('public/data/viewmodels/manifest.json', 'utf8'));
   const weapon = manifest.weapons.find(entry => entry.weaponKey === weaponKey);
   assert.ok(weapon);
@@ -309,7 +224,7 @@ test.each(['c_minigun', 'c_gatling_gun', 'c_tomislav', 'c_holymackerel', 'c_knif
     assert.equal(source.visible, true, 'hiding hands does not hide the weapon');
     preview.setAppearance(true, false);
     assert.equal(arms.visible, true, 'hands can be restored');
-    assert.equal(preview.hasSpinningBarrel, ['c_minigun', 'c_gatling_gun'].includes(weaponKey));
+    assert.equal(preview.hasSpinningBarrel, weaponKey === 'c_minigun');
     if (preview.hasSpinningBarrel) {
       preview.setAnimation(weapon.activity);
       const barrel = overlay.skeleton.bones.find(bone => bone.name === 'barrel');
@@ -319,25 +234,12 @@ test.each(['c_minigun', 'c_gatling_gun', 'c_tomislav', 'c_holymackerel', 'c_knif
       preview.setAppearance(true, true);
       preview.update(0.1);
       assert.ok(!relativeBarrel().equals(stopped), 'spin rotates the barrel relative to the weapon');
-      const rotationBetween = (a: THREE.Matrix4, b: THREE.Matrix4) =>
-        new THREE.Quaternion().setFromRotationMatrix(a).angleTo(new THREE.Quaternion().setFromRotationMatrix(b));
-      const firstStep = relativeBarrel();
-      preview.update(0.1);
-      assert.ok(rotationBetween(firstStep, relativeBarrel()) > rotationBetween(stopped, firstStep), 'barrel accelerates gradually');
-      for (let i = 0; i < 40; i++) preview.update(0.1);
-      const fullSpeed = relativeBarrel();
-      preview.update(0.1);
-      assert.ok(Math.abs(rotationBetween(fullSpeed, relativeBarrel()) - 2) < 1e-5, 'speed caps at 20 radians per second');
       preview.setPlayback(true, false);
       const frozen = barrel.matrixWorld.clone();
       preview.update(0.2);
       assert.ok(barrel.matrixWorld.equals(frozen), 'pause freezes barrel spinning');
       preview.setAppearance(true, false);
       preview.setPlayback(false, false);
-      const coasting = relativeBarrel();
-      preview.update(0.1);
-      const coastStep = rotationBetween(coasting, relativeBarrel());
-      assert.ok(coastStep > 0 && coastStep < 2, 'disabling spin decelerates instead of stopping immediately');
       for (let i = 0; i < 40; i++) preview.update(0.1);
       const stoppedAgain = relativeBarrel();
       preview.update(0.1);

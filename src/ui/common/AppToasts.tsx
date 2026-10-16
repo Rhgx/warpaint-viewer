@@ -1,5 +1,4 @@
 import type { ComponentProps } from 'react';
-import { WORKSHOP_ENABLED } from '../../device';
 import type { EditorDraftState } from '../../editor/useEditorDraft';
 import { DraftToast } from './DraftToast';
 import { ManagedToast, ToastViewport } from './Toast';
@@ -28,12 +27,10 @@ export function AppToasts({
 }: AppToastsProps) {
   return (
     <ToastViewport>
-      {WORKSHOP_ENABLED && (
-        <DraftToast
-          draft={editorDraft}
-          draftKey={editorDraftKey}
-        />
-      )}
+      <DraftToast
+        draft={editorDraft}
+        draftKey={editorDraftKey}
+      />
       <UpdateToast
         editorDirty={editorDirty}
         draftStatus={editorDraft.status}

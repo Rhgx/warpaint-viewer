@@ -179,6 +179,19 @@ function MainApp() {
   } = definitions;
   const composeCache = useComposeCache(compositorRef);
   const { resetComposeKey, disposeCache } = composeCache;
+  // A restored WebGL context brings every render target back blank: drop the
+  // cached composites, and the bump recomposes the paint and editor previews.
+  const [contextRestores, setContextRestores] = useState(0);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!engineReady || !canvas) return;
+    const onRestored = () => {
+      disposeCache();
+      setContextRestores((count) => count + 1);
+    };
+    canvas.addEventListener('webglcontextrestored', onRestored);
+    return () => canvas.removeEventListener('webglcontextrestored', onRestored);
+  }, [engineReady, disposeCache]);
 
   // Definitions imported from a proto_defs file join the catalog under their own
   // collection. Everything downstream reads this merged list, so a custom kit is
@@ -542,6 +555,7 @@ function MainApp() {
     weaponName,
     data,
     engineReady,
+    contextRestores,
     editorTabActive,
     viewerRef,
     compositorRef,
@@ -583,6 +597,7 @@ function MainApp() {
     state,
     data,
     engineReady,
+    contextRestores,
     editorTabActive,
     viewerRef,
     compositorRef,
@@ -701,6 +716,7 @@ function MainApp() {
       : '',
     onVisibleResult: handleVisiblePaintResult,
     engineReady,
+    contextRestores,
     data,
     selectedKit,
     resolveRecipe,

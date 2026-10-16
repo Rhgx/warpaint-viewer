@@ -79,7 +79,6 @@ export function useWorkspace({
   // Custom files only live in memory. Let the browser warn before a refresh,
   // tab close, or navigation would discard any cached edit set.
   useEffect(() => {
-    if (!WORKSHOP_ENABLED) return;
     const hasCachedEdits = Object.values(assetOverrideCache).some((entry) => Object.keys(entry.assets).length > 0);
     const editorDraftAtRisk = editorDirty && editorDraft.status !== 'saved';
     if (!hasCachedEdits && !editorDraftAtRisk && sourcePackage.status !== 'mounted' && definitions.state.status !== 'loaded') return;

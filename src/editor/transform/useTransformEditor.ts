@@ -69,6 +69,8 @@ interface UseTransformEditorOptions extends
   weaponName: string;
   data: DataSource | null;
   engineReady: boolean;
+  /** Bumped after a WebGL context restore, which leaves the isolation preview blank. */
+  contextRestores: number;
   editorTabActive: boolean;
   viewerRef: React.RefObject<Viewer | null>;
   compositorRef: React.RefObject<Compositor | null>;
@@ -118,6 +120,7 @@ export function useTransformEditor({
   weaponName,
   data,
   engineReady,
+  contextRestores,
   editorTabActive,
   viewerRef,
   compositorRef,
@@ -506,6 +509,7 @@ export function useTransformEditor({
     activeSelectedGroupBuckets,
     data,
     engineReady,
+    contextRestores,
     groupImage,
     paintSubView,
     state.weaponKey,

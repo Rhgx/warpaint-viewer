@@ -1,21 +1,9 @@
 import assert from 'node:assert/strict';
 import { afterEach, test, vi } from 'vitest';
-import { TextureCache, textureCacheBudgetBytes } from '../../../src/compositor/textureCache';
-
-const MIB = 1024 * 1024;
+import { TextureCache } from '../../../src/compositor/textureCache';
 
 afterEach(() => {
   vi.unstubAllGlobals();
-});
-
-test('touch-only devices get a lower texture budget; desktop tiers are unchanged', () => {
-  const desktop = { deviceMemory: 16, hardwareConcurrency: 16, maxTextureSize: 16384 };
-  assert.equal(textureCacheBudgetBytes({ ...desktop, touchOnly: false }), 384 * MIB);
-  assert.equal(textureCacheBudgetBytes({ maxTextureSize: 16384, touchOnly: false }), 256 * MIB);
-  // A phone with no memory hint and plenty of cores, like mobile Safari.
-  assert.equal(textureCacheBudgetBytes({ hardwareConcurrency: 8, maxTextureSize: 16384, touchOnly: true }), 128 * MIB);
-  // The touch cap never raises an already lower tier.
-  assert.equal(textureCacheBudgetBytes({ deviceMemory: 2, touchOnly: true }), 96 * MIB);
 });
 
 /** Decodes every URL into its own fake bitmap, the way ImageBitmapLoader does with THREE.Cache off. */

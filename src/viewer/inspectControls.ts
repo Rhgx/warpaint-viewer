@@ -29,7 +29,7 @@ const INERTIA_HALF_LIFE = 0.09; // seconds; velocity halves every 90 ms
 const INERTIA_CUTOFF = 0.02; // rad/s below which inertia stops
 const ZOOM_STEP = 1.15; // per wheel notch
 const ZOOM_SMOOTHING = 12; // 1/s, exponential approach rate
-export const INSPECT_MIN_DISTANCE_FACTOR = 0.35;
+const INSPECT_MIN_DISTANCE_FACTOR = 0.35;
 /** Default zoom-out ceiling, as a multiple of the model's framed distance. */
 export const INSPECT_MAX_DISTANCE_FACTOR = 4;
 const PAN_LIMIT_FACTOR = 1.2; // max pan offset as a multiple of model radius
@@ -57,7 +57,7 @@ export type CameraMode = 'inspect' | 'advanced';
 export type InspectPrimaryDragMode = 'rotate' | 'disabled';
 
 /** Resolve only the inspect gesture; higher-level editors still own pointer capture. */
-export function inspectDragForPointer(
+function inspectDragForPointer(
   button: number,
   primaryDragMode: InspectPrimaryDragMode,
 ): 'none' | 'rotate' | 'pan' {
@@ -67,7 +67,7 @@ export function inspectDragForPointer(
 }
 
 /** Sticker placement reserves primary double-click; middle keeps a reset route. */
-export function inspectDoubleClickResets(
+function inspectDoubleClickResets(
   button: number,
   primaryDragMode: InspectPrimaryDragMode,
 ): boolean {
@@ -91,34 +91,20 @@ export function isRapidInspectClickPair(
     && Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY) <= maxDistancePx;
 }
 
-/** Whether two completed single-finger taps form a reset double-tap. */
-export function isInspectDoubleTap(first: InspectPointerClick, second: InspectPointerClick): boolean {
-  return isRapidInspectClickPair(first, second, DOUBLE_TAP_SLOP_PX);
-}
-
-export interface TouchPoint {
+interface TouchPoint {
   x: number;
   y: number;
 }
 
 /** Centroid and spread of a two-finger touch, the baseline for pan and pinch. */
-export interface TouchPairSnapshot {
+interface TouchPairSnapshot {
   readonly x: number;
   readonly y: number;
   readonly distance: number;
 }
 
-export function touchPairSnapshot(a: TouchPoint, b: TouchPoint): TouchPairSnapshot {
+function touchPairSnapshot(a: TouchPoint, b: TouchPoint): TouchPairSnapshot {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, distance: Math.hypot(b.x - a.x, b.y - a.y) };
-}
-
-/**
- * Centroid movement in pixels and the camera-distance factor between two
- * snapshots: spreading the fingers moves the camera closer.
- */
-export function touchPairDelta(from: TouchPairSnapshot, to: TouchPairSnapshot): { dx: number; dy: number; distanceScale: number } {
-  const usable = from.distance >= MIN_PINCH_SPREAD_PX && to.distance >= MIN_PINCH_SPREAD_PX;
-  return { dx: to.x - from.x, dy: to.y - from.y, distanceScale: usable ? from.distance / to.distance : 1 };
 }
 
 export class InspectControls {
@@ -685,13 +671,15 @@ export class InspectControls {
     }
     const points = [...this.touches.values()];
     if (this.mode !== 'pinch' || points.length !== 2 || !this.pinchBaseline) return;
+    const from = this.pinchBaseline;
     const next = touchPairSnapshot(points[0], points[1]);
-    const { dx, dy, distanceScale } = touchPairDelta(this.pinchBaseline, next);
     this.pinchBaseline = next;
-    this.panBy(dx, dy);
-    // Set both distances so the zoom tracks the fingers directly instead of
-    // easing behind them like the wheel does.
-    this.dist = this.targetDist = THREE.MathUtils.clamp(this.dist * distanceScale, this.minDist(), this.maxDist());
+    this.panBy(next.x - from.x, next.y - from.y);
+    // Spreading the fingers moves the camera closer. Both distances are set so
+    // the zoom tracks the fingers directly instead of easing like the wheel.
+    const usable = from.distance >= MIN_PINCH_SPREAD_PX && next.distance >= MIN_PINCH_SPREAD_PX;
+    this.dist = this.targetDist = THREE.MathUtils.clamp(
+      this.dist * (usable ? from.distance / next.distance : 1), this.minDist(), this.maxDist());
     this.applyInspect();
   }
 
@@ -717,7 +705,7 @@ export class InspectControls {
       return;
     }
     const tap = { clientX: e.clientX, clientY: e.clientY, time: performance.now() };
-    if (this.lastTap && isInspectDoubleTap(this.lastTap, tap)) {
+    if (this.lastTap && isRapidInspectClickPair(this.lastTap, tap, DOUBLE_TAP_SLOP_PX)) {
       this.lastTap = null;
       this.resetInspect();
     } else {

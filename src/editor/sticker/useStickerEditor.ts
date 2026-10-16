@@ -69,6 +69,8 @@ interface UseStickerEditorOptions extends
   state: ControlsState;
   data: DataSource | null;
   engineReady: boolean;
+  /** Bumped after a WebGL context restore, which leaves the retained bases blank. */
+  contextRestores: number;
   editorTabActive: boolean;
   viewerRef: React.RefObject<Viewer | null>;
   compositorRef: React.RefObject<Compositor | null>;
@@ -146,6 +148,7 @@ export function useStickerEditor({
   state,
   data,
   engineReady,
+  contextRestores,
   editorTabActive,
   viewerRef,
   compositorRef,
@@ -394,8 +397,9 @@ export function useStickerEditor({
       seed: state.seed,
       overrides: activeTextureOverrides,
       weapon: state.weaponKey,
+      contextRestores,
     });
-  }, [activeTextureOverrides, state.seed, state.weaponKey, stickerSurfaceNode]);
+  }, [activeTextureOverrides, contextRestores, state.seed, state.weaponKey, stickerSurfaceNode]);
   const groupStickerComposeKey = selectedStickerUsesComposedArtwork && selectedStickerTarget
     && selectedGroupStickerContext && stickerSurfaceComposeKey
     ? `${selectedStickerTarget.id}\0${stickerSurfaceComposeKey}\0${activeTextureOverrides[selectedGroupStickerContext.sticker.base] ?? selectedGroupStickerContext.sticker.base}\0${selectedGroupStickerContext.sticker.black}\0${selectedGroupStickerContext.sticker.white}\0${selectedGroupStickerContext.sticker.gamma}`

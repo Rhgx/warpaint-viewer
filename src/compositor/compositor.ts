@@ -81,13 +81,6 @@ interface LatestComposeChannel {
   pending: LatestComposeRequest | null;
 }
 
-/**
- * Dispatched on the renderer's canvas each time a composed result has been
- * re-rendered after a WebGL context restore, so the Viewer repaints with it.
- * Viewer.ts listens for the same literal rather than importing this module.
- */
-const COMPOSE_RESTORED_EVENT = 'warpaint:compose-restored';
-
 // Reimplements TF2's paintkit compositor on the GPU via three.js render targets,
 // sharing the viewer's WebGL context. Evaluates a resolved stage tree bottom-up
 // into ping-ponged 8-bit sRGB render targets, with shader math in linear space.
@@ -111,16 +104,6 @@ export class Compositor {
   private latestComposeChannels = new Map<string, LatestComposeChannel>();
   // Source textures already uploaded, so warm composes skip the upload yields.
   private uploaded = new WeakSet<THREE.Texture>();
-  // Results handed out and not yet released or disposed, with the tree that
-  // produced each. A lost context empties every render target and three.js
-  // only recreates them blank, so on restore these are re-rendered in place:
-  // the visible paint, the compose cache and editor previews keep their
-  // texture objects and simply get their pixels back.
-  private live = new Map<THREE.WebGLRenderTarget, { recipe: ResolvedNode; forget: () => void }>();
-  // Bumped by every context loss and restore. A restore pass started under an
-  // older value abandons; the pass queued by the latest restore redoes it all.
-  private contextGeneration = 0;
-  private disposed = false;
 
   constructor(resolver: TextureResolver, opts: CompositorOptions & { renderer?: THREE.WebGLRenderer } = {}) {
     this.width = this.height = opts.size ?? 1024;
@@ -177,77 +160,14 @@ export class Compositor {
     // the first compose on it (KHR_parallel_shader_compile keeps it off the
     // main thread where available).
     void this.renderer.compileAsync(this.scene, this.camera);
-    // three.js registers its own restore handler first, so the new context
-    // is fully initialized by the time this one runs.
-    this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLost);
+    // Uploads died with a lost context. The app recomposes after a restore
+    // (render targets come back blank), so only the upload pacing resets here.
     this.renderer.domElement.addEventListener('webglcontextrestored', this.onContextRestored);
   }
 
-  private onContextLost = () => {
-    this.contextGeneration++;
-  };
-
   private onContextRestored = () => {
-    // Uploads died with the old context; restart the one-per-task pacing.
     this.uploaded = new WeakSet();
-    const generation = ++this.contextGeneration;
-    // Queued behind any compose still in flight, so its result is restored too.
-    const task = this.composeQueue.then(() => this.restoreLiveResults(generation));
-    this.composeQueue = task.then(() => undefined, () => undefined);
   };
-
-  private restoreAbandoned(generation: number): boolean {
-    return this.disposed || generation !== this.contextGeneration;
-  }
-
-  private async restoreLiveResults(generation: number) {
-    const { width, height } = this;
-    try {
-      // Newest first: the visible paint is normally the latest result.
-      for (const target of [...this.live.keys()].reverse()) {
-        if (this.restoreAbandoned(generation)) return;
-        try {
-          await this.restoreTarget(target, generation);
-        } catch (cause) {
-          if (!this.restoreAbandoned(generation)) {
-            console.error('[warpaint-viewer] could not restore a composed paint after WebGL context loss:', cause);
-          }
-        }
-      }
-    } finally {
-      // Callers that pass no dimensions keep composing at the previous size.
-      if (!this.disposed) this.setOutputSize(width, height);
-    }
-  }
-
-  private async restoreTarget(target: THREE.WebGLRenderTarget, generation: number) {
-    const recipe = this.live.get(target)?.recipe;
-    if (!recipe) return;
-    const fresh = await this.composeResolvedNow(recipe, { width: target.width, height: target.height }, () => this.restoreAbandoned(generation));
-    if (!fresh) return;
-    try {
-      // The context may be gone again, or the owner may have released the
-      // target while its inputs reloaded.
-      if (this.restoreAbandoned(generation) || fresh.target === target || this.live.get(target)?.recipe !== recipe) return;
-      this.material.uniforms.uMode.value = MODE_TEXTURE;
-      this.configureInputs([{ texture: fresh.texture, transform: IDENTITY_TRANSFORM, target: null }], this.constWhite());
-      this.renderInto(target);
-      this.renderer.domElement.dispatchEvent(new Event(COMPOSE_RESTORED_EVENT));
-    } finally {
-      this.releaseResult(fresh);
-    }
-  }
-
-  private track(target: THREE.WebGLRenderTarget, recipe: ResolvedNode) {
-    this.live.get(target)?.forget();
-    const forget = () => {
-      this.live.delete(target);
-      target.removeEventListener('dispose', forget);
-    };
-    // Owners may dispose a result directly instead of releasing it.
-    target.addEventListener('dispose', forget);
-    this.live.set(target, { recipe, forget });
-  }
 
   private makeTarget(width = this.width, height = this.height): THREE.WebGLRenderTarget {
     const t = new THREE.WebGLRenderTarget(width, height, {
@@ -274,8 +194,7 @@ export class Compositor {
   private release(t: THREE.WebGLRenderTarget) {
     // Retain scratch space up to 32 MiB; a complex recipe must not permanently
     // reserve its peak allocation after its intermediates have been released.
-    // Late returns after dispose() are destroyed, never pooled.
-    if (!this.disposed && t.width === this.width && t.height === this.height
+    if (t.width === this.width && t.height === this.height
       && (this.pool.length + 1) * t.width * t.height * 4 <= 32 * 1024 * 1024) this.pool.push(t);
     else t.dispose();
   }
@@ -349,14 +268,14 @@ export class Compositor {
     const unique = [...new Map(refs.map((ref) => [this.textures.keyFor(ref.ref, { nearest: ref.nearest }), ref])).values()];
     for (const ref of unique) {
       await waitForIdle();
-      if (cancelled() || this.disposed) return;
+      if (cancelled()) return;
       const unpin = this.textures.pin([this.textures.keyFor(ref.ref, { nearest: ref.nearest })]);
       try {
         const texture = await this.textures.load(ref.ref, { nearest: ref.nearest });
         // Decode can outlive the idle period or the requesting view. Yield
         // again before upload and never upload obsolete speculative inputs.
         await waitForIdle();
-        if (cancelled() || this.disposed) return;
+        if (cancelled()) return;
         this.renderer.initTexture(texture);
         this.uploaded.add(texture);
       } finally {
@@ -651,7 +570,6 @@ export class Compositor {
       let target: THREE.WebGLRenderTarget | null = null;
       try {
         const mask = await this.textures.load(input.mask);
-        this.throwIfDisposed();
         target = this.makeTarget(size, size);
         const u = this.material.uniforms;
         u.uMode.value = MODE_GROUP_STICKER_ARTWORK;
@@ -720,7 +638,6 @@ export class Compositor {
       const loaded = await Promise.all(uniqueRefs.map((r) => this.textures.load(r.ref, { nearest: r.nearest }).catch(() => null)));
       // A newer input may have arrived while the textures were loading.
       if (cancelled?.()) return null;
-      this.throwIfDisposed();
       // Upload new inputs one task at a time. Left to the first draw, a cold
       // paint uploads them all in one 70-100 ms block that freezes the page.
       for (const texture of loaded) {
@@ -729,7 +646,6 @@ export class Compositor {
         this.uploaded.add(texture);
         await new Promise((resolve) => setTimeout(resolve, 0));
         if (cancelled?.()) return null;
-        this.throwIfDisposed();
       }
       const result = await this.evaluate(resolved);
       let target = result.target;
@@ -749,24 +665,15 @@ export class Compositor {
       // Viewer decodes these stored bytes exactly once in map_fragment.
       // colorSpace and wrapping are fixed when the pooled target is created;
       // never mutate/re-upload a render-target texture after drawing it.
-      this.track(target, resolved);
       return { texture: target.texture, target };
     } finally {
       unpin();
     }
   }
 
-  // Every input is loaded and pinned before evaluate() runs, so its own awaits
-  // settle as microtasks and dispose() cannot interleave there; it can only
-  // land across the load and upload awaits that call this.
-  private throwIfDisposed() {
-    if (this.disposed) throw new Error('The compositor was disposed');
-  }
-
   // Recycle a compose result's render target instead of destroying it, so the
   // next compose allocates nothing.
   releaseResult(result: ComposeResult) {
-    this.live.get(result.target)?.forget();
     this.release(result.target);
   }
 
@@ -915,10 +822,7 @@ export class Compositor {
   }
 
   dispose() {
-    this.disposed = true;
-    this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
-    for (const { forget } of [...this.live.values()]) forget();
     this.pool.forEach((t) => t.dispose());
     this.pool = [];
     this.textures.dispose();
