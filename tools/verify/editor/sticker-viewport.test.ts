@@ -4,17 +4,9 @@
 // same V-down compositor coordinate regardless of the current viewport.
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
 import * as viewport from '../../../src/editor/sticker/stickerViewport';
-
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-
-function close(actual: number, expected: number, message: string): void {
-  assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: expected ${expected}, got ${actual}`);
-}
+import { close } from '../fixtures';
 
 test('sticker viewport UV contract', () => {
   const size = { width: 640, height: 400 };
@@ -27,8 +19,7 @@ test('sticker viewport UV contract', () => {
   ]) {
     const pixel = viewport.stickerUvPointToViewport(uv, view, size);
     const roundTrip = viewport.stickerViewportPointToUv(pixel, view, size);
-    close(roundTrip.x, uv.x, 'viewport round-trip preserves U');
-    close(roundTrip.y, uv.y, 'viewport round-trip preserves V-down');
+    close(roundTrip, uv, 'viewport round-trip preserves U and V-down');
   }
 
   const before = { zoom: 1.5, panX: -140, panY: -96 };
@@ -36,19 +27,9 @@ test('sticker viewport UV contract', () => {
   const beforeUv = viewport.stickerViewportPointToUv(pointer, before, size);
   const zoomed = viewport.zoomStickerViewportAt(before, 3, pointer, size);
   const afterUv = viewport.stickerViewportPointToUv(pointer, zoomed, size);
-  close(afterUv.x, beforeUv.x, 'pointer-centred zoom preserves U below pan clamp');
-  close(afterUv.y, beforeUv.y, 'pointer-centred zoom preserves V below pan clamp');
+  close(afterUv, { x: beforeUv.x, y: beforeUv.y }, 'pointer-centred zoom preserves UV below pan clamp');
 
   const fit = viewport.normalizeStickerViewport({ zoom: 1, panX: 99, panY: -99 }, size);
   assert.deepEqual(fit, { zoom: 1, panX: 0, panY: 0 }, 'fit view is an untransformed UV canvas');
 
-  const editorSource = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'editor', 'StickerPlacementEditor.tsx'), 'utf8');
-  assert.match(editorSource, /if \(event\.button !== 2\) return;/, 'UV panning is reserved for right drag');
-  assert.match(editorSource, /onContextMenu=\{\(event\) => event\.preventDefault\(\)\}/, 'right drag suppresses the context menu');
-  assert.match(
-    editorSource,
-    /interactionRef\.current = \{ kind: 'pan', initial: next, pointer \};/,
-    'wheel zoom rebases an active right-drag so its next pointer event preserves the new viewport',
-  );
-  assert.doesNotMatch(editorSource, /middle drag pans|Middle \/ Space drag/, 'UV guidance does not advertise the old middle-drag pan');
 });

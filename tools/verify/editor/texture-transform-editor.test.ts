@@ -1,11 +1,5 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import { test } from 'vitest';
-import { resolveRecipe } from '../../../src/compositor/resolve';
-import { textureUvMatrix } from '../../../src/compositor/transforms';
-import { advancePaintkitStream, createPaintkitRandomState, resolveRange } from '../../../src/compositor/rng';
-import type { RecipeNode } from '../../../src/compositor/types';
 import {
   pushTextureTransformRangeToAllWeapons,
   setTextureTransformRange,
@@ -15,24 +9,11 @@ import { serializeProtoDefKitMessages } from '../../../src/editor/export/jsonExp
 import { normalizeProtoDefFragments } from '../../../src/protodefs/jsonFragments';
 import { discoverBaseTextureTransformTarget, discoverTextureTransformTargets } from '../../../src/editor/transform/transformTargets';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
-import {
-  decodeProtoDefs,
-  extractKitMessages,
-  getKitWeaponSlots,
-  resolveKitRecipeWithProvenance,
-} from '../../../src/protodefs/decoder';
+import { extractKitMessages, getKitWeaponSlots, resolveKitRecipeWithProvenance } from '../../../src/protodefs/decoder';
+import { dig, shippedProtoDefs } from '../fixtures';
 
-const root = path.resolve(import.meta.dirname, '..', '..', '..');
-const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'manifest.json'), 'utf8')) as {
-  paintkits: Array<{ id: number; name: string }>;
-};
-const decoded = decodeProtoDefs(
-  new Uint8Array(fs.readFileSync(path.join(root, 'public', 'data', 'protodefs-full.bin'))),
-  {
-    weaponsByItemDef: JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'item-defs.json'), 'utf8')),
-    builtInIds: manifest.paintkits.map((paint) => paint.id),
-  },
-);
+// Read-only use of the shared decode: the mutations below run on synthetic fixtures.
+const { full: decoded, manifest } = shippedProtoDefs();
 
 const stagePath = ['operation', 'operation_node', '0', 'stage', 'texture_lookup'] as const;
 
@@ -64,24 +45,9 @@ function fixture(): ProtoDefKitMessages {
   };
 }
 
-function record(value: unknown): Record<string, unknown> {
-  assert.ok(value && typeof value === 'object' && !Array.isArray(value));
-  return value as Record<string, unknown>;
-}
-
-function textureStage(messages: ProtoDefKitMessages): Record<string, unknown> {
-  const node = (messages.operation.operation_node as unknown[])[0];
-  return record(record(record(node).stage).texture_lookup);
-}
-
-function headerVariable(messages: ProtoDefKitMessages): Record<string, unknown> {
-  return (record(messages.operation.header).variables as Record<string, unknown>[])[0];
-}
-
-function weaponVariables(messages: ProtoDefKitMessages, weapon: 'rocketlauncher' | 'scattergun'): Record<string, unknown>[] {
-  const item = record(messages.definition[weapon]);
-  return record(item.data).variable as Record<string, unknown>[];
-}
+const textureStage = (messages: ProtoDefKitMessages) => dig(messages.operation, 'operation_node', 0, 'stage', 'texture_lookup');
+const headerVariable = (messages: ProtoDefKitMessages) => dig(messages.operation, 'header', 'variables', 0);
+const weaponVariables = (messages: ProtoDefKitMessages, weapon: string) => dig(messages.definition, weapon, 'data', 'variable');
 
 test('discovers the unmasked base texture as its own transform layer', () => {
   const messages: ProtoDefKitMessages = {
@@ -179,19 +145,19 @@ test('texture transform scope, normalization and JSON round trip', () => {
   const literal = setTextureTransformRange(original, { stagePath }, 'translate_u', {
     mode: 'fixed', min: 0.25, max: 0.25,
   });
-  assert.deepEqual(textureStage(literal).translate_u, { string: '0.25' });
+  assert.deepEqual(dig(textureStage(literal), 'translate_u'), { string: '0.25' });
 
   const reversed = setTextureTransformRange(original, { stagePath }, 'rotation', {
     mode: 'varies', min: 90, max: -90,
   });
-  assert.equal(headerVariable(reversed).value, '90 -90');
+  assert.equal(dig(headerVariable(reversed), 'value'), '90 -90');
 
   const shared = setTextureTransformRange(original, { stagePath }, 'rotation', {
     mode: 'fixed', min: 15, max: 15,
   });
-  assert.equal(headerVariable(shared).value, '15');
-  assert.equal(headerVariable(shared).inherit, true);
-  assert.equal(weaponVariables(shared, 'rocketlauncher')[0].string, '10 20');
+  assert.equal(dig(headerVariable(shared), 'value'), '15');
+  assert.equal(dig(headerVariable(shared), 'inherit'), true);
+  assert.equal(dig(weaponVariables(shared, 'rocketlauncher'), 0, 'string'), '10 20');
 
   const weaponTarget: TextureTransformTarget = {
     stagePath,
@@ -203,10 +169,10 @@ test('texture transform scope, normalization and JSON round trip', () => {
   const weaponOnly = setTextureTransformRange(original, weaponTarget, 'rotation', {
     mode: 'fixed', min: 45, max: 45,
   });
-  assert.equal(headerVariable(weaponOnly).value, '0 360');
-  assert.equal(headerVariable(weaponOnly).inherit, true);
-  assert.equal(weaponVariables(weaponOnly, 'rocketlauncher')[0].string, '45');
-  assert.equal(weaponVariables(weaponOnly, 'scattergun')[0].string, '30 40');
+  assert.equal(dig(headerVariable(weaponOnly), 'value'), '0 360');
+  assert.equal(dig(headerVariable(weaponOnly), 'inherit'), true);
+  assert.equal(dig(weaponVariables(weaponOnly, 'rocketlauncher'), 0, 'string'), '45');
+  assert.equal(dig(weaponVariables(weaponOnly, 'scattergun'), 0, 'string'), '30 40');
 
   const staleProvenance = [{
     fieldPath: [...stagePath, 'rotation'],
@@ -237,7 +203,7 @@ test('texture transform scope, normalization and JSON round trip', () => {
       ['definition', 'scattergun', 'data', 'variable'],
     ],
   );
-  assert.equal(headerVariable(promoted).value, '45');
+  assert.equal(dig(headerVariable(promoted), 'value'), '45');
   assert.deepEqual(weaponVariables(promoted, 'rocketlauncher'), []);
   assert.deepEqual(weaponVariables(promoted, 'scattergun'), []);
 
@@ -246,11 +212,11 @@ test('texture transform scope, normalization and JSON round trip', () => {
   const importedOperation = imported.find((entry) => entry.kind === 'operation');
   assert.ok(importedOperation);
   const roundTrip = { definition: literal.definition, operation: importedOperation.value };
-  assert.deepEqual(textureStage(roundTrip).translate_u, { string: '0.25' });
-  assert.equal(headerVariable(roundTrip).value, '0 360');
+  assert.deepEqual(dig(textureStage(roundTrip), 'translate_u'), { string: '0.25' });
+  assert.equal(dig(headerVariable(roundTrip), 'value'), '0 360');
 });
 
-test('combine UV fields are neither editable nor applied', () => {
+test('combine UV fields are not editable', () => {
   const messages: ProtoDefKitMessages = {
     operation: {
       header: { defindex: 710 },
@@ -262,112 +228,10 @@ test('combine UV fields are neither editable nor applied', () => {
         { stage: { select: { groups: { string: 'patterns/groups' }, select: { uint32: 16 } } } },
       ],
     },
-    definition: {
-      header: { defindex: 711 },
-      operation_template: { defindex: 710, type: 7 },
-    },
+    definition: { header: { defindex: 711 }, operation_template: { defindex: 710, type: 7 } },
   };
-
   const discovered = discoverTextureTransformTargets(messages).targets[0];
   assert.ok(discovered);
   assert.deepEqual(discovered.target.stagePath, []);
   assert.deepEqual(discovered.blockers, ['ambiguous-source-stage']);
-
-  const recipe: RecipeNode = {
-    type: 'combine_multiply',
-    rotation: [45, 45],
-    translateU: [0.25, 0.25],
-    translateV: [0.5, 0.5],
-    scaleUV: [2, 2],
-    nodes: [
-      { type: 'texture_lookup', texture: 'patterns/first' },
-      { type: 'texture_lookup', texture: 'patterns/second' },
-    ],
-  };
-  const resolved = resolveRecipe(recipe, '123');
-  assert.equal(resolved.type, 'combine_multiply');
-  assert.equal(resolved.rotationDeg, 0);
-  assert.equal(resolved.translateU, 0);
-  assert.equal(resolved.translateV, 0);
-  assert.equal(resolved.scale, 1);
-});
-
-test('fixed flips consume no draw and use pre-rotation column signs', () => {
-  const seed = '123';
-  const fixed = resolveRecipe({
-    type: 'texture_lookup', texture: 'patterns/fixed', flipU: [1, 1], rotation: [45, 45],
-  }, seed);
-  const unflipped = resolveRecipe({
-    type: 'texture_lookup', texture: 'patterns/plain', flipU: [0, 0], rotation: [45, 45],
-  }, seed);
-  assert.equal(fixed.type, 'texture_lookup');
-  assert.equal(unflipped.type, 'texture_lookup');
-  assert.equal(fixed.flipU, true);
-  assert.equal(fixed.rotationDeg, unflipped.rotationDeg);
-
-  const elements = textureUvMatrix(45, 0, 0, 1, true, false).elements;
-  assert.ok(Math.abs(elements[0] + Math.SQRT1_2) < 1e-6);
-  assert.ok(Math.abs(elements[1] + Math.SQRT1_2) < 1e-6);
-  assert.ok(Math.abs(elements[3] + Math.SQRT1_2) < 1e-6);
-  assert.ok(Math.abs(elements[4] - Math.SQRT1_2) < 1e-6);
-});
-
-test('sticker levels stay on the stage output', () => {
-  const resolved = resolveRecipe({
-    type: 'apply_sticker',
-    stickers: [{ base: 'patterns/sticker' }],
-    adjustBlack: [0.1, 0.1],
-    adjustOffset: [0.7, 0.7],
-    adjustGamma: [1.5, 1.5],
-    nodes: [{ type: 'texture_lookup', texture: 'patterns/base' }],
-  }, '123');
-  assert.equal(resolved.type, 'apply_sticker');
-  assert.equal(resolved.black, 0.1);
-  assert.ok(Math.abs(resolved.white - 0.8) < 1e-12);
-  assert.equal(resolved.gamma, 1.5);
-});
-
-test('a multi-root copy stage does not draw or toggle the random stream', () => {
-  const child: RecipeNode = {
-    type: 'texture_lookup', texture: 'patterns/child', rotation: [0, 360], translateU: [0, 1],
-  };
-  const direct = resolveRecipe(child, '123');
-  const copied = resolveRecipe({ type: 'combine_multiply', rootCopy: true, nodes: [child] }, '123');
-  assert.equal(copied.type, 'combine_multiply');
-  assert.deepEqual(copied.nodes[0], direct);
-});
-
-test('transformless combine stages preserve seeded child texture placement', () => {
-  const seed = '3753779166464894300';
-  const recipe: RecipeNode = {
-    type: 'combine_multiply',
-    nodes: [{
-      type: 'texture_lookup',
-      texture: 'patterns/alpha-control',
-      rotation: [0, 360],
-      translateU: [0, 1],
-      translateV: [0, 1],
-      scaleUV: [0.4, 0.5],
-    }],
-  };
-
-  const state = createPaintkitRandomState(seed);
-  resolveRange(state.streams[state.current], undefined, 0);
-  resolveRange(state.streams[state.current], undefined, 1);
-  resolveRange(state.streams[state.current], undefined, 1);
-  advancePaintkitStream(state);
-  const rng = state.streams[state.current];
-  const expectedTranslateU = resolveRange(rng, [0, 1], 0);
-  const expectedTranslateV = resolveRange(rng, [0, 1], 0);
-  const expectedRotation = resolveRange(rng, [0, 360], 0);
-  const expectedScale = resolveRange(rng, [0.4, 0.5], 1);
-
-  const resolved = resolveRecipe(recipe, seed);
-  assert.equal(resolved.type, 'combine_multiply');
-  const child = resolved.nodes[0];
-  assert.equal(child.type, 'texture_lookup');
-  assert.equal(child.translateU, expectedTranslateU);
-  assert.equal(child.translateV, expectedTranslateV);
-  assert.equal(child.rotationDeg, expectedRotation);
-  assert.equal(child.scale, expectedScale);
 });

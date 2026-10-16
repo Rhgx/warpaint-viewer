@@ -5,10 +5,8 @@ import { test } from 'vitest';
 import * as geometry from '../../../src/editor/sticker/stickerGeometry';
 import * as rows from '../../../src/editor/sticker/stickerSurface';
 import * as viewport from '../../../src/editor/sticker/stickerViewport';
+import { close } from '../fixtures';
 
-function close(actual: number, expected: number, message: string): void {
-  assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: expected ${expected}, got ${actual}`);
-}
 
 test('2D editor and compositor sticker UV alignment', () => {
 
@@ -18,12 +16,8 @@ test('2D editor and compositor sticker UV alignment', () => {
   const placement = { x: 0.23, y: 0.71, width: 0.18, height: 0.12, rotation: 0 };
   const quad = geometry.stickerPlacementToQuad(placement);
   assert.ok(quad, 'valid placement serializes to an authored destination');
-  close(quad.tl[0], 0.14, 'top-left uses CSS/UV x directly');
-  close(quad.tl[1], 0.65, 'top-left uses CSS/UV y directly');
-  close(quad.tr[0], 0.32, 'top-right preserves x axis');
-  close(quad.tr[1], 0.65, 'top-right remains on the visual top row');
-  close(quad.bl[0], 0.14, 'bottom-left preserves x axis');
-  close(quad.bl[1], 0.77, 'bottom-left is visually below top-left');
+  // CSS/UV x and y map directly; top-right stays on the top row, bottom-left sits below top-left.
+  close(quad, { tl: [0.14, 0.65], tr: [0.32, 0.65], bl: [0.14, 0.77] }, 'authored quad');
 
   // A screen pointer at 92px,142px on a 400x200 fitted 2D surface means
   // exactly the same (.23,.71) UV point used by the authored centre above.
@@ -34,8 +28,7 @@ test('2D editor and compositor sticker UV alignment', () => {
     viewport.DEFAULT_STICKER_VIEWPORT,
     { width: 400, height: 200 },
   );
-  close(pointerUv.x, placement.x, '2D pointer x matches authored/3D UV x');
-  close(pointerUv.y, placement.y, '2D pointer y matches authored/3D UV y');
+  close(pointerUv, { x: placement.x, y: placement.y }, '2D pointer matches authored/3D UV');
 
   // Model a 2x2 compositor target. readback row 0 is UV v=0 and has a
   // unique red marker. In an editor canvas that marker must remain in its top

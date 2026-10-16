@@ -6,94 +6,28 @@ import {
   preferredLayerOccurrenceIndex,
 } from '../../../src/editor/transform/transformIsolation';
 
-function texture(texture: string, rotationDeg: number): ResolvedTexture {
-  return {
-    type: 'texture_lookup',
-    texture,
-    black: 0,
-    white: 1,
-    gamma: 1,
-    rotationDeg,
-    translateU: 0.25,
-    translateV: 0.5,
-    scale: 1.5,
-    flipU: true,
-    flipV: false,
-  };
-}
+const identity = { black: 0, white: 1, gamma: 1, rotationDeg: 0, translateU: 0, translateV: 0, scale: 1, flipU: false, flipV: false };
+const texture = (name: string, rotationDeg: number): ResolvedTexture => (
+  { ...identity, type: 'texture_lookup', texture: name, rotationDeg, translateU: 0.25, translateV: 0.5, scale: 1.5, flipU: true }
+);
 
-test('transform isolation keeps the resolved texture inside its selected groups', () => {
-  const activeTexture = texture('patterns/active', 137);
-  const select: ResolvedSelect = {
-    type: 'select',
-    groups: 'patterns/groups',
-    select: [32, 80],
+test('transform isolation keeps the resolved texture or combined layer inside its selected groups', () => {
+  const combined: ResolvedNode = {
+    ...identity, type: 'combine_multiply', rotationDeg: 30, scale: 2, nodes: [texture('patterns/first', 0), texture('patterns/second', 0)],
   };
-  const recipe: ResolvedNode = {
-    type: 'combine_lerp',
-    black: 0,
-    white: 1,
-    gamma: 1,
-    rotationDeg: 0,
-    translateU: 0,
-    translateV: 0,
-    scale: 1,
-    flipU: false,
-    flipV: false,
-    nodes: [texture('patterns/base', 24), activeTexture, select],
-  };
-
-  const [isolated] = collectResolvedLayerIsolationNodes(recipe);
-  assert.ok(isolated?.type === 'combine_lerp');
-  assert.equal(isolated.nodes[1], activeTexture);
-  assert.equal(isolated.nodes[2], select);
-  assert.equal(isolated.nodes[0]?.type, 'texture_lookup');
-  assert.equal(isolated.nodes[0]?.type === 'texture_lookup' ? isolated.nodes[0].rotationDeg : null, 0);
+  for (const layer of [texture('patterns/active', 137), combined]) {
+    const select: ResolvedSelect = { type: 'select', groups: 'patterns/groups', select: [32, 80] };
+    const [isolated] = collectResolvedLayerIsolationNodes({ ...identity, type: 'combine_lerp', nodes: [texture('patterns/base', 24), layer, select] });
+    assert.ok(isolated?.type === 'combine_lerp');
+    assert.equal(isolated.nodes[1], layer);
+    assert.equal(isolated.nodes[2], select);
+    const base = isolated.nodes[0];
+    assert.equal(base?.type === 'texture_lookup' ? base.rotationDeg : null, 0, 'the base under the layer is untransformed');
+  }
 });
 
 test('transform isolation preserves layer alignment for an unpaired select', () => {
-  const select: ResolvedSelect = {
-    type: 'select',
-    groups: 'patterns/groups',
-    select: [16],
-  };
-
-  assert.deepEqual(collectResolvedLayerIsolationNodes(select), [undefined]);
-});
-
-test('transform isolation keeps a combined layer inside its selected groups', () => {
-  const combined: ResolvedNode = {
-    type: 'combine_multiply',
-    black: 0,
-    white: 1,
-    gamma: 1,
-    rotationDeg: 30,
-    translateU: 0.2,
-    translateV: 0.4,
-    scale: 2,
-    flipU: false,
-    flipV: false,
-    nodes: [texture('patterns/first', 0), texture('patterns/second', 0)],
-  };
-  const select: ResolvedSelect = { type: 'select', groups: 'patterns/groups', select: [16] };
-  const recipe: ResolvedNode = {
-    type: 'combine_lerp',
-    black: 0,
-    white: 1,
-    gamma: 1,
-    rotationDeg: 0,
-    translateU: 0,
-    translateV: 0,
-    scale: 1,
-    flipU: false,
-    flipV: false,
-    nodes: [texture('patterns/base', 0), combined, select],
-  };
-
-  const [isolated] = collectResolvedLayerIsolationNodes(recipe);
-  assert.ok(isolated?.type === 'combine_lerp');
-  assert.equal(isolated.nodes[1], combined);
-  assert.equal(isolated.nodes[2], select);
+  assert.deepEqual(collectResolvedLayerIsolationNodes({ type: 'select', groups: 'patterns/groups', select: [16] }), [undefined]);
 });
 
 test('transform isolation previews the final colour occurrence of a reused authored layer', () => {
@@ -102,7 +36,6 @@ test('transform isolation previews the final colour occurrence of a reused autho
     { sourceKey: 'variables:texture_layer_4_select_1' },
     { sourceKey: 'variables:texture_layer_3_select_1' },
   ];
-
   assert.equal(preferredLayerOccurrenceIndex(targets, targets[0]), 2);
   assert.equal(preferredLayerOccurrenceIndex(targets, null), -1);
 });

@@ -3,9 +3,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { stickerCoverageQuad, stickerPlacementFromQuad, type StickerAffineQuad } from '../../../src/editor/sticker/stickerGeometry';
+import { close } from '../fixtures';
 
-type Pt = readonly [number, number];
-const close = (a: Pt, b: Pt, msg: string) => assert.ok(Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-9, `${msg}: ${a} != ${b}`);
 
 test('perpendicular and degenerate quads are unchanged', () => {
   const s = Math.SQRT1_2;

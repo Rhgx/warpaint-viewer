@@ -5,6 +5,7 @@ import {
   type WeaponMaterialUpdate,
 } from '../../../src/editor/mutations';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
+import { dig } from '../fixtures';
 
 function fixture(): ProtoDefKitMessages {
   return {
@@ -34,14 +35,6 @@ const updates: readonly WeaponMaterialUpdate[] = [
   },
 ];
 
-function materialOverride(messages: ProtoDefKitMessages, weapon: string): unknown {
-  const item = messages.definition[weapon];
-  assert.ok(item && typeof item === 'object' && !Array.isArray(item));
-  const data = (item as Record<string, unknown>).data;
-  assert.ok(data && typeof data === 'object' && !Array.isArray(data));
-  return (data as Record<string, unknown>).material_override;
-}
-
 test('material overrides update both weapons and ignore no-op writes', () => {
   const original = fixture();
   const noOp = setWeaponMaterialOverrides(original, [{
@@ -52,9 +45,6 @@ test('material overrides update both weapons and ignore no-op writes', () => {
 
   const edited = setWeaponMaterialOverrides(original, updates);
   assert.notEqual(edited, original);
-  assert.equal(materialOverride(edited, 'rocketlauncher'), undefined);
-  assert.equal(
-    materialOverride(edited, 'scattergun'),
-    'models/paintkits/macaw/c_scattergun',
-  );
+  assert.equal(dig(edited.definition, 'rocketlauncher', 'data', 'material_override'), undefined);
+  assert.equal(dig(edited.definition, 'scattergun', 'data', 'material_override'), 'models/paintkits/macaw/c_scattergun');
 });

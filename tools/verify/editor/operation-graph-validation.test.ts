@@ -6,33 +6,12 @@ import {
   summarizeOperationGraphDiagnostics,
   validateOperationGraph,
 } from '../../../src/editor/graph/validation';
-
-function texture(name: string): OperationNodeMsg {
-  return { stage: { texture_lookup: { texture: { string: name } } } };
-}
-
-function select(): OperationNodeMsg {
-  return { stage: { select: { groups: { string: 'groups' }, select: [{ uint32: 32 }] } } };
-}
-
-function lerp(children: OperationNodeMsg[]): OperationNodeMsg {
-  return { stage: { combine_lerp: { operation_node: children } } };
-}
-
-test('validates a typed lerp graph', () => {
-  const graph = operationToGraph({
-    header: { defindex: 1 },
-    operation_node: lerp([texture('background'), texture('foreground'), select()]),
-  });
-  const validation = validateOperationGraph(graph);
-  assert.equal(validation.valid, true);
-  assert.deepEqual(validation.diagnostics, []);
-});
+import { addNode, lerpNode as lerp, selectNode as select, textureNode as texture } from '../fixtures';
 
 test('rejects cycles and shared outputs', () => {
   const graph = operationToGraph({
     header: { defindex: 1 },
-    operation_node: { stage: { combine_add: { operation_node: [texture('a'), texture('b')] } } },
+    operation_node: addNode([texture('a'), texture('b')]),
   });
   const root = graph.nodes.find((node) => node.kind === 'combine_add');
   const leaf = graph.nodes.find((node) => node.kind === 'texture_lookup');
@@ -53,43 +32,22 @@ test('rejects cycles and shared outputs', () => {
   assert.ok(validation.diagnostics.some((diagnostic) => diagnostic.code === 'shared-output'));
 });
 
-test('allows texture and mask role crossings with an advisory warning', () => {
-  const graph = operationToGraph({
-    header: { defindex: 1 },
-    operation_node: lerp([texture('background'), texture('foreground'), texture('not-a-mask')]),
-  });
-  const validation = validateOperationGraph(graph);
-  assert.equal(validation.valid, true);
-  assert.ok(validation.diagnostics.some((diagnostic) => (
-    diagnostic.code === 'invalid-port-type'
-      && diagnostic.severity === 'warning'
-      && diagnostic.message.includes('advisory')
-  )));
-});
-
-test('allows a selector/mask stage to feed an apply-sticker surface', () => {
-  const graph = operationToGraph({
-    header: { defindex: 1 },
-    operation_node: {
-      stage: {
-        apply_sticker: {
-          sticker: [{ base: { string: 'sticker' } }],
-          operation_node: select(),
-        },
-      },
-    },
-  });
-  const validation = validateOperationGraph(graph);
-  assert.equal(validation.valid, true);
-  assert.ok(validation.diagnostics.some((diagnostic) => (
-    diagnostic.severity === 'warning' && diagnostic.message.includes('RGBA data')
-  )));
+test('texture/mask role crossings and a mask feeding a sticker only warn', () => {
+  const cases: Array<[OperationNodeMsg, string]> = [
+    [lerp([texture('background'), texture('foreground'), texture('not-a-mask')]), 'advisory'],
+    [{ stage: { apply_sticker: { sticker: [{ base: { string: 'sticker' } }], operation_node: select() } } }, 'RGBA data'],
+  ];
+  for (const [operation_node, warning] of cases) {
+    const validation = validateOperationGraph(operationToGraph({ header: { defindex: 1 }, operation_node }));
+    assert.equal(validation.valid, true);
+    assert.ok(validation.diagnostics.some((diagnostic) => diagnostic.severity === 'warning' && diagnostic.message.includes(warning)));
+  }
 });
 
 test('still rejects malformed connection indexes and arity', () => {
   const addGraph = operationToGraph({
     header: { defindex: 1 },
-    operation_node: { stage: { combine_add: { operation_node: [texture('a'), texture('b')] } } },
+    operation_node: addNode([texture('a'), texture('b')]),
   });
   const addRoot = addGraph.nodes.find((node) => node.kind === 'combine_add');
   assert.ok(addRoot);

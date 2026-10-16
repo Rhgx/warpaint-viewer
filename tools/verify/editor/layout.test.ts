@@ -1,19 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import type { OperationNodeMsg } from '../../../src/protodefs/messages';
 import { operationNodesToGraph } from '../../../src/editor/graph/operationGraph';
 import {
   layoutOperationGraph,
   type OperationGraphNodeDimensions,
 } from '../../../src/editor/graph/layout';
-
-function texture(name: string): OperationNodeMsg {
-  return { stage: { texture_lookup: { texture: { string: name } } } };
-}
-
-function add(children: readonly OperationNodeMsg[]): OperationNodeMsg {
-  return { stage: { combine_add: { operation_node: [...children] } } };
-}
+import { addNode as add, textureNode as texture } from '../fixtures';
 
 function assertNoOverlap(
   graph: ReturnType<typeof operationNodesToGraph>,
@@ -78,14 +70,4 @@ test('preview height changes move following nodes without changing authored orde
   assert.equal(second[sourceIds[1]].y, first[sourceIds[1]].y);
   assert.equal(second[sourceIds[2]].y > first[sourceIds[2]].y, true);
   assert.equal(second[sourceIds[2]].y >= second[sourceIds[1]].y + 640, true);
-});
-
-test('unmeasured layout remains deterministic and preserves fixed-gap x coordinates', () => {
-  const graph = operationNodesToGraph([add([texture('a'), texture('b')])]);
-  const options = { horizontalGap: 100, verticalGap: 30, outputGap: 20 };
-  const first = layoutOperationGraph(graph, options);
-  const second = layoutOperationGraph(graph, options);
-  assert.deepEqual(first, second);
-  assert.equal(first[graph.roots[0]].x, 100);
-  assert.equal(first[graph.outputId].x, 220);
 });

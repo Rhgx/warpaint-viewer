@@ -4,8 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BlobReader, TextWriter, ZipReader } from '@zip.js/zip.js';
 import type { Manifest } from '../../src/data/types';
-import { decodeProtoDefs, extractKitBundle } from '../../src/protodefs/decoder';
-import type { ProtoDefKitBundle } from '../../src/protodefs/types';
+import { decodeProtoDefs, extractKitBundle, type DecodedContainer } from '../../src/protodefs/decoder';
+import { asItem, type HeaderMsg, type ItemDefinitionMsg, type OperationNodeMsg } from '../../src/protodefs/messages';
+import { buildResolveCtx } from '../../src/protodefs/resolve';
+import type { ProtoDefKitBundle, ProtoDefKitMessages } from '../../src/protodefs/types';
 
 export const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
@@ -55,3 +57,43 @@ export function fixturePaintkitIds(value: unknown): number[] {
   ));
 }
 
+/** Reads a nested field of an untyped message (mutation results are plain records), or undefined. */
+export function dig(value: unknown, ...path: Array<string | number>): unknown {
+  return path.reduce<unknown>((node, key) => (node !== null && typeof node === 'object' ? Reflect.get(node, key) : undefined), value);
+}
+
+type CloseExpected = number | readonly CloseExpected[] | { readonly [key: string]: CloseExpected };
+
+/** Asserts a number, or every listed element or field of `expected` (recursively), matches `actual` within 1e-9. */
+export function close(actual: unknown, expected: CloseExpected, message: string): void {
+  if (typeof expected === 'number') {
+    assert.ok(typeof actual === 'number' && Math.abs(actual - expected) < 1e-9, `${message}: expected ${expected}, got ${String(actual)}`);
+    return;
+  }
+  for (const [key, value] of Object.entries(expected)) close(dig(actual, key), value, `${message} ${key}`);
+}
+
+// Minimal authored operation nodes for operation-graph tests.
+export const textureNode = (name: string): OperationNodeMsg => ({ stage: { texture_lookup: { texture: { string: name } } } });
+export const selectNode = (group = 32): OperationNodeMsg => ({ stage: { select: { groups: { string: 'groups' }, select: [{ uint32: group }] } } });
+export const addNode = (children: OperationNodeMsg[]): OperationNodeMsg => ({ stage: { combine_add: { operation_node: children } } });
+export const lerpNode = (children: OperationNodeMsg[]): OperationNodeMsg => ({ stage: { combine_lerp: { operation_node: children } } });
+
+function hasHeader(value: Record<string, unknown>): value is Record<string, unknown> & { header: HeaderMsg } {
+  return typeof dig(value, 'header', 'defindex') === 'number';
+}
+
+/** A one-kit container over synthetic messages; each named weapon slot the definition holds reads `itemDefinition`. */
+export function syntheticContainer(messages: ProtoDefKitMessages, itemDefinition: ItemDefinitionMsg, weaponKeys: readonly string[]): DecodedContainer {
+  const { definition, operation } = messages;
+  assert.ok(hasHeader(definition) && hasHeader(operation), 'synthetic messages need numeric header defindexes');
+  const slots = weaponKeys.flatMap((weaponKey) => {
+    const item = asItem(definition[weaponKey]);
+    return item ? [{ item, itemDef: itemDefinition, weaponKey }] : [];
+  });
+  return {
+    ctx: buildResolveCtx([operation], [itemDefinition], []),
+    kitsByDefindex: new Map([[definition.header.defindex, { def: definition, slots }]]),
+    index: { kits: [], countsByType: {} },
+  };
+}

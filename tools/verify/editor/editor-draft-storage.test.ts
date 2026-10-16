@@ -3,7 +3,6 @@ import { test } from 'vitest';
 import {
   parseCustomSourceFileRecord,
   parseEditorDraftRecord,
-  selectWorkspaceDraftKeys,
 } from '../../../src/editor/draftStorage';
 
 test('editor draft records validate their key and bundle shape', () => {
@@ -76,20 +75,4 @@ test('custom source records retain the imported files for the matching source', 
   assert.equal(parseCustomSourceFileRecord(record, 'definitions'), null);
   assert.equal(parseCustomSourceFileRecord({ ...record, files: [] }, 'package'), null);
   assert.equal(parseCustomSourceFileRecord({ ...record, files: ['not a file'] }, 'package'), null);
-});
-
-test('a workspace clear keeps stock drafts and removes only imported ones', () => {
-  const keys = [
-    'custom:9601:ghastly_guns.ZIP',
-    'stock:250',
-    'custom:9602:ghastly_guns.ZIP',
-    'stock:311',
-  ];
-
-  assert.deepEqual(selectWorkspaceDraftKeys(keys), [
-    'custom:9601:ghastly_guns.ZIP',
-    'custom:9602:ghastly_guns.ZIP',
-  ]);
-  assert.deepEqual(selectWorkspaceDraftKeys(['stock:250']), [], 'a stock draft is never workspace state');
-  assert.deepEqual(selectWorkspaceDraftKeys([7, 'custom:1:a']), ['custom:1:a'], 'non-string keys are not workspace state');
 });

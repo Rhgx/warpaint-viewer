@@ -87,7 +87,6 @@ test('operation graph round trips raw messages, variable references, unknown fie
 });
 
 test('graph preserves singleton and undefined Many shapes', () => {
-  const singletonChild = texture('only_child');
   const singletonRoot = lerp({
     stage: {
       combine_lerp: {
@@ -111,9 +110,6 @@ test('graph preserves singleton and undefined Many shapes', () => {
   const undefinedGraph = operationNodesToGraph(undefined);
   assert.equal(undefinedGraph.rootShape, 'undefined');
   assert.equal(graphToOperationNodes(undefinedGraph), undefined);
-  // Keep a reference in this test to ensure a valid leaf helper remains used
-  // when the fixture is changed to an explicit singleton in the future.
-  assert.equal(singletonChild.stage?.texture_lookup?.texture?.variable, 'only_child');
 });
 
 test('operation-template nodes remain opaque and locked', () => {

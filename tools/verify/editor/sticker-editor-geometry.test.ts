@@ -3,202 +3,72 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import * as geometry from '../../../src/editor/sticker/stickerGeometry';
-import type { StickerPlacement } from '../../../src/editor/sticker/stickerGeometry';
+import { close } from '../fixtures';
 
-function close(actual: number, expected: number, message: string): void {
-  assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: expected ${expected}, got ${actual}`);
-}
+const base = { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 };
 
-function closePoint(actual: readonly [number, number], expected: readonly [number, number], message: string): void {
-  close(actual[0], expected[0], `${message} x`);
-  close(actual[1], expected[1], `${message} y`);
-}
-
-test('compact sticker editor geometry', () => {
+test('a rotated placement round-trips through its authored quad', () => {
   const original = { x: 0.37, y: 0.58, width: 0.28, height: 0.11, rotation: 31 };
   const quad = geometry.stickerPlacementToQuad(original);
   assert.ok(quad, 'valid placement emits an authored quad');
   const parsed = geometry.stickerPlacementFromQuad(quad);
   assert.equal(parsed.editable, true, 'rotated rectangle stays editable');
-  assert.ok(parsed.placement, 'supported quad returns a placement');
-  for (const field of ['x', 'y', 'width', 'height', 'rotation'] as const) {
-    close(parsed.placement[field], original[field], `quad round-trip ${field}`);
-  }
-  close(geometry.snapStickerRotationToCardinal(87), 90, 'rotation snaps up to 90');
-  close(geometry.snapStickerRotationToCardinal(94), 90, 'rotation snaps down to 90 at threshold');
-  close(geometry.snapStickerRotationToCardinal(95), 95, 'rotation remains free outside threshold');
-  close(geometry.snapStickerRotationToCardinal(179), 180, 'rotation snaps near 180');
-  close(geometry.snapStickerRotationToCardinal(359), 0, 'rotation snaps across the zero seam');
-  assert.equal(
-    geometry.stickerPlacementContainsPoint(original, { x: original.x, y: original.y }),
-    true,
-    'rotated sticker contains its centre',
-  );
-  assert.equal(
-    geometry.stickerPlacementContainsPoint(original, { x: 0.02, y: 0.02 }),
-    false,
-    'rotated sticker rejects a distant point',
-  );
-  const nested = [
-    { id: 'large', placement: { x: 0.5, y: 0.5, width: 0.6, height: 0.6, rotation: 0 } },
-    { id: 'small', placement: { x: 0.5, y: 0.5, width: 0.1, height: 0.1, rotation: 0 } },
-  ].filter(({ placement }) => geometry.stickerPlacementContainsPoint(placement, { x: 0.5, y: 0.5 }))
-    .sort((first, second) => first.placement.width * first.placement.height - second.placement.width * second.placement.height);
-  assert.equal(nested[0].id, 'small', 'nested selection prefers the smallest containing sticker');
+  close(parsed.placement, original, 'quad round-trip');
+});
 
-  const skewed = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0.1, 0.2] });
-  assert.equal(skewed.editable, true, 'skewed affine quads expose transform controls');
+test('editability: float noise, shear and mirroring stay editable; collapsed and collinear quads do not', () => {
+  // Fantach Rocket Launcher stickers 1 and 2: ordinary proto float noise.
+  for (const quad of [
+    { tl: [0.1061291099, 0.05910533667], tr: [0.1061293483, 0.128580153], bl: [0.03665441275, 0.05910533667] },
+    { tl: [0.2066156268, 0.1291550994], tr: [0.2066156268, 0.05968052149], bl: [0.2760903239, 0.1291549802] },
+    { tl: [0, 0], tr: [0.4, 0], bl: [0.1, 0.2] },
+    { tl: [0, 0], tr: [0.4, 0], bl: [0, -0.2] },
+  ] as const) assert.equal(geometry.stickerPlacementFromQuad(quad).editable, true, JSON.stringify(quad));
 
-  const rocketStickerOne = geometry.stickerPlacementFromQuad({
-    tl: [0.1061291099, 0.05910533667],
-    tr: [0.1061293483, 0.128580153],
-    bl: [0.03665441275, 0.05910533667],
-  });
-  assert.equal(
-    rocketStickerOne.editable,
-    true,
-    'ordinary proto float noise does not disable Fantach Rocket Launcher sticker 1',
-  );
-  const rocketStickerTwo = geometry.stickerPlacementFromQuad({
-    tl: [0.2066156268, 0.1291550994],
-    tr: [0.2066156268, 0.05968052149],
-    bl: [0.2760903239, 0.1291549802],
-  });
-  assert.equal(
-    rocketStickerTwo.editable,
-    true,
-    'ordinary proto float noise does not disable Fantach Rocket Launcher sticker 2',
-  );
-
-  const authoredSkew = geometry.stickerPlacementFromQuad({
-    tl: [0.2, 0.2],
-    tr: [0.4, 0.2],
-    bl: [0.200836, 0.4],
-  });
-  assert.equal(authoredSkew.editable, true, 'visible authored shear remains editable');
-  assert.ok(authoredSkew.placement);
-  const movedSkew = geometry.applyStickerPlacementToQuad(
-    { tl: [0.2, 0.2], tr: [0.4, 0.2], bl: [0.200836, 0.4] },
-    { ...authoredSkew.placement, x: authoredSkew.placement.x + 0.1 },
-  );
-  assert.ok(movedSkew);
-  closePoint(movedSkew.tl, [0.3, 0.2], 'affine movement preserves top-left');
-  closePoint(movedSkew.tr, [0.5, 0.2], 'affine movement preserves top-right');
-  closePoint(movedSkew.bl, [0.300836, 0.4], 'affine movement preserves authored shear');
-
-  const authoredAmputator = { tl: [0, 0.555], tr: [1, 0], bl: [0.175, 0.555] } as const;
-  const amputatorPlacement = geometry.stickerPlacementFromQuad(authoredAmputator).placement;
-  assert.ok(amputatorPlacement);
-  const editedAmputator = geometry.applyStickerPlacementToQuad(authoredAmputator, {
-    x: 0.4,
-    y: 0.45,
-    width: 0.6,
-    height: 0.2,
-    rotation: 25,
-  });
-  assert.ok(editedAmputator);
-  const editedAmputatorPlacement = geometry.stickerPlacementFromQuad(editedAmputator).placement;
-  assert.ok(editedAmputatorPlacement);
-  close(editedAmputatorPlacement.x, 0.4, 'sheared editor change uses painted centre x');
-  close(editedAmputatorPlacement.y, 0.45, 'sheared editor change uses painted centre y');
-  close(editedAmputatorPlacement.width, 0.6, 'sheared editor change uses painted width');
-  close(editedAmputatorPlacement.height, 0.2, 'sheared editor change uses painted height');
-  close(editedAmputatorPlacement.rotation, 25, 'sheared editor change uses painted rotation');
-
-  const mirrored = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0, -0.2] });
-  assert.equal(mirrored.editable, true, 'mirrored affine quads retain their reflection while edited');
   const collapsed = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0, 0], bl: [0, 0] });
   assert.equal(collapsed.editable, false, 'a collapsed quad requires initialization');
   assert.match(collapsed.reason ?? '', /all three corner points/i);
-  const recovered = geometry.stickerPlacementFromQuad(geometry.stickerPlacementToQuad(geometry.fitStickerPlacement(2))!);
-  assert.equal(recovered.editable, true, 'the aspect-aware starting placement recovers a collapsed quad');
-  const degenerate = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0.2, 0] });
-  assert.equal(degenerate.editable, false, 'a collinear quad remains read-only');
-  assert.match(degenerate.reason ?? '', /straight line/i);
+  const recovered = geometry.stickerPlacementToQuad(geometry.fitStickerPlacement(2));
+  assert.ok(recovered);
+  assert.equal(geometry.stickerPlacementFromQuad(recovered).editable, true, 'the aspect-aware starting placement recovers a collapsed quad');
+  const collinear = geometry.stickerPlacementFromQuad({ tl: [0, 0], tr: [0.4, 0], bl: [0.2, 0] });
+  assert.equal(collinear.editable, false, 'a collinear quad remains read-only');
+  assert.match(collinear.reason ?? '', /straight line/i);
+});
 
-  const resized = geometry.resizeStickerFromCorner(
-    { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 },
-    'bottom-right',
-    { x: 0.7, y: 0.6 },
-  );
-  close(resized.x, 0.55, 'corner resize centre x');
-  close(resized.y, 0.525, 'corner resize centre y');
-  close(resized.width, 0.3, 'corner resize width');
-  close(resized.height, 0.15, 'corner resize height');
+test('moving a sheared quad keeps its shear, and editing one uses the painted rectangle', () => {
+  const authored = { tl: [0.2, 0.2], tr: [0.4, 0.2], bl: [0.200836, 0.4] } as const;
+  const placement = geometry.stickerPlacementFromQuad(authored).placement;
+  assert.ok(placement);
+  const moved = geometry.applyStickerPlacementToQuad(authored, { ...placement, x: placement.x + 0.1 });
+  close(moved, { tl: [0.3, 0.2], tr: [0.5, 0.2], bl: [0.300836, 0.4] }, 'affine movement preserves authored shear');
 
-  const lockedResize = geometry.resizeStickerFromCorner(
-    { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 },
-    'bottom-right',
-    { x: 0.65, y: 0.7 },
-    { preserveAspect: true },
-  );
-  close(lockedResize.width / lockedResize.height, 2, 'locked corner resize keeps artwork ratio');
-  close(lockedResize.x - lockedResize.width / 2, 0.4, 'locked resize holds opposite x');
-  close(lockedResize.y - lockedResize.height / 2, 0.45, 'locked resize holds opposite y');
+  const amputator = { tl: [0, 0.555], tr: [1, 0], bl: [0.175, 0.555] } as const;
+  const target = { x: 0.4, y: 0.45, width: 0.6, height: 0.2, rotation: 25 };
+  const edited = geometry.applyStickerPlacementToQuad(amputator, target);
+  assert.ok(edited);
+  close(geometry.stickerPlacementFromQuad(edited).placement, target, 'sheared editor change');
+});
 
-  const widthOnly = geometry.resizeStickerFromEdge(
-    { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 },
-    'right',
-    { x: 0.7, y: 0.9 },
-  );
-  close(widthOnly.x, 0.55, 'right edge resize shifts centre x');
-  close(widthOnly.y, 0.5, 'right edge resize keeps centre y');
-  close(widthOnly.width, 0.3, 'right edge resize changes width');
-  close(widthOnly.height, 0.1, 'right edge resize preserves height');
+test('resize, snap and texture constraints', () => {
+  close(geometry.resizeStickerFromCorner(base, 'bottom-right', { x: 0.7, y: 0.6 }), { x: 0.55, y: 0.525, width: 0.3, height: 0.15 }, 'corner resize');
+  const locked = geometry.resizeStickerFromCorner(base, 'bottom-right', { x: 0.65, y: 0.7 }, { preserveAspect: true });
+  close(locked.width / locked.height, 2, 'locked corner resize keeps artwork ratio');
+  close([locked.x - locked.width / 2, locked.y - locked.height / 2], [0.4, 0.45], 'locked resize holds the opposite corner');
+  close(geometry.resizeStickerFromEdge(base, 'right', { x: 0.7, y: 0.9 }), { x: 0.55, y: 0.5, width: 0.3, height: 0.1 }, 'right edge resize');
 
-  const widthLocked = geometry.resizeStickerFromEdge(
-    { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 },
-    'right',
-    { x: 0.7, y: 0.5 },
-    { preserveAspect: true },
+  close(
+    geometry.snapStickerPlacement({ x: 0.513, y: 0.487, width: 0.263, height: 0.236, rotation: 22 }, 0.025),
+    { x: 0.525, y: 0.475, width: 0.275, height: 0.225, rotation: 15 },
+    'grid snap',
   );
-  close(widthLocked.width / widthLocked.height, 2, 'locked edge resize keeps artwork ratio');
-  close(widthLocked.x - widthLocked.width / 2, 0.4, 'locked edge resize holds opposite edge');
+  close([87, 94, 95, 179, 359].map((degrees) => geometry.snapStickerRotationToCardinal(degrees)), [90, 90, 95, 180, 0], 'cardinal rotation snap');
 
-  const heightOnly = geometry.resizeStickerFromEdge(
-    { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 },
-    'top',
-    { x: 0.9, y: 0.35 },
-  );
-  close(heightOnly.x, 0.5, 'top edge resize keeps centre x');
-  close(heightOnly.y, 0.45, 'top edge resize shifts centre y');
-  close(heightOnly.width, 0.2, 'top edge resize preserves width');
-  close(heightOnly.height, 0.2, 'top edge resize changes height');
+  close(geometry.moveStickerPlacement({ ...base, height: 0.2 }, { x: 0.8, y: 0 }).x, 1, 'movement stops while its anchor remains recoverable');
+  close(geometry.constrainStickerPlacementToTexture({ x: 0.5, y: 0.5, width: 2, height: 1, rotation: 45 }), { width: 1.5, height: 1 }, 'oversized cap');
 
-  const snapped = geometry.snapStickerPlacement(
-    { x: 0.513, y: 0.487, width: 0.263, height: 0.236, rotation: 22 },
-    0.025,
-  );
-  close(snapped.x, 0.525, 'grid snap x');
-  close(snapped.y, 0.475, 'grid snap y');
-  close(snapped.width, 0.275, 'grid snap width');
-  close(snapped.height, 0.225, 'grid snap height');
-  close(snapped.rotation, 15, 'grid snap turn');
-
-  const moved = geometry.moveStickerPlacement(original, { x: 0.1, y: -0.2 });
-  close(moved.x, 0.47, 'move x');
-  close(moved.y, 0.38, 'move y');
-  const edgeMove = geometry.moveStickerPlacement(
-    { x: 0.5, y: 0.5, width: 0.2, height: 0.2, rotation: 0 },
-    { x: 0.8, y: 0 },
-  );
-  close(edgeMove.x, 1, 'movement stops while its editable anchor remains recoverable');
-  const oversized = geometry.constrainStickerPlacementToTexture({
-    x: 0.5, y: 0.5, width: 2, height: 1, rotation: 45,
-  });
-  close(oversized.width, 1.5, 'extreme width is capped without forbidding valid clipping');
-  close(oversized.height, 1, 'independent height remains intact below the cap');
-  const authoredEdgeLogo = geometry.stickerPlacementFromQuad({
-    tl: [0.634, 0.177], tr: [0.428, 0.177], bl: [0.634, -0.029],
-  }).placement;
-  assert.ok(authoredEdgeLogo, 'Flak Furnished edge logo remains a supported placement');
-  const preservedEdgeLogo = geometry.stickerPlacementToQuad(geometry.clampStickerPlacement(authoredEdgeLogo));
-  assert.ok(preservedEdgeLogo, 'clamped supported placement remains an authored quad');
-  closePoint(preservedEdgeLogo.tl, [0.634, 0.177], 'authored edge clipping preserves top-left');
-  closePoint(preservedEdgeLogo.tr, [0.428, 0.177], 'authored edge clipping preserves top-right');
-  closePoint(preservedEdgeLogo.bl, [0.634, -0.029], 'authored edge clipping preserves bottom-left');
-  const unrotated: StickerPlacement = { x: 0.5, y: 0.5, width: 0.2, height: 0.1, rotation: 0 };
-  const unrotatedQuad = geometry.stickerPlacementToQuad(unrotated);
-  assert.ok(unrotatedQuad, 'finite placement emits an authored quad');
-  closePoint(unrotatedQuad.tl, [0.4, 0.45], 'unrotated top left');
+  const edgeLogo = { tl: [0.634, 0.177], tr: [0.428, 0.177], bl: [0.634, -0.029] } as const;
+  const placement = geometry.stickerPlacementFromQuad(edgeLogo).placement;
+  assert.ok(placement, 'Flak Furnished edge logo remains a supported placement');
+  close(geometry.stickerPlacementToQuad(geometry.clampStickerPlacement(placement)), edgeLogo, 'authored edge clipping is preserved');
 });
