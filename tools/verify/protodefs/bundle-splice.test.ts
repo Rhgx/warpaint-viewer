@@ -1,7 +1,4 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
 import {
   parseProtoDefGroups,
@@ -9,26 +6,15 @@ import {
   spliceProtoDefs,
   usedDefindexes,
 } from '../../../src/export/protoWrite';
-import { decodeProtoDefs, extractKitBundle, resolveKitRecipe } from '../../../src/protodefs/decoder';
-
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
+import { decodeProtoDefs, resolveKitRecipe } from '../../../src/protodefs/decoder';
+import { shippedProtoDefs } from '../fixtures';
 
 // Highest stock defindexes in the shipped snapshot; appended ids must sit above them.
 const STOCK_MAX_OPERATION = 931;
 const STOCK_MAX_ITEM_DEFINITION = 209;
 const STOCK_MAX_PAINTKIT = 442;
 
-const BASE = new Uint8Array(fs.readFileSync(path.join(PUBLIC_DATA, 'protodefs-full.bin')));
-const weaponsByItemDef: Record<string, string> = JSON.parse(fs.readFileSync(path.join(PUBLIC_DATA, 'item-defs.json'), 'utf8'));
-const OPTIONS = { weaponsByItemDef, builtInIds: [] };
-const full = decodeProtoDefs(BASE, OPTIONS);
-
-function bundleOf(defindex: number) {
-  const bundle = extractKitBundle(full, defindex);
-  assert.ok(bundle, `kit ${defindex} should produce a bundle`);
-  return bundle;
-}
+const { fullBytes: BASE, options: OPTIONS, full, bundleOf } = shippedProtoDefs();
 
 function defindexOf(defType: number, payload: Uint8Array): number | undefined {
   return [...usedDefindexes([{ defType, payloads: [payload] }], defType)][0];

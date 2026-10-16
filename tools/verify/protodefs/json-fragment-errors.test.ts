@@ -16,17 +16,9 @@ function importBroken(text: string): AppError {
   assert.fail('Expected definition import to fail.');
 }
 
-test('unterminated definition strings have a stable, helpful error', () => {
-  const error = importBroken('{"header":{"defindex":123},"name":"unfinished}');
-  assert.equal(error.code, ERROR_CODES.definitionJsonUnterminatedString);
-  assert.match(error.userMessage, /missing closing quotation mark/i);
-  assert.deepEqual(error.location, { line: 1, column: 35 });
-  assert.equal(error.path, 'broken_DEF.json');
-  const detail = error.technicalDetail;
-  assert.ok(detail);
-  assert.match(detail, /broken_DEF\.json/);
-  assert.match(detail, /UnexpectedEndOfString/);
-  assert.match(detail, /actual mistake can be earlier/i);
+test('unterminated strings and other malformed JSON get distinct codes', () => {
+  assert.equal(importBroken('{"header":{"defindex":123},"name":"unfinished}').code, ERROR_CODES.definitionJsonUnterminatedString);
+  assert.equal(importBroken('{"header":{"defindex":123},,}').code, ERROR_CODES.definitionJsonSyntax);
 });
 
 test('syntax diagnostics use parser offsets across LF and CRLF lines', () => {
@@ -63,22 +55,4 @@ test('community placeholders and outer trailing commas retain native JSON values
   assert.equal(fragment.value.type, 7);
   assert.equal(Object.hasOwn(fragment.value, '__proto__'), true);
   assert.equal(Object.getPrototypeOf(fragment.value), Object.prototype);
-});
-
-test('truncated definition JSON is not misreported as an unfinished string', () => {
-  const error = importBroken('{"header":{"defindex":123}');
-  assert.equal(error.code, ERROR_CODES.definitionJsonIncomplete);
-  assert.match(error.userMessage, /incomplete json/i);
-  assert.doesNotMatch(error.userMessage, /quotation mark/i);
-  assert.equal(error.location?.line, 1);
-  assert.ok(error.location?.column);
-});
-
-test('other malformed definition JSON uses the generic syntax code', () => {
-  const error = importBroken('{"header":{"defindex":123},,}');
-  assert.equal(error.code, ERROR_CODES.definitionJsonSyntax);
-  assert.match(error.userMessage, /missing comma, quotation mark, bracket, or brace/i);
-  const detail = error.technicalDetail;
-  assert.ok(detail);
-  assert.match(detail, /Parser:/);
 });

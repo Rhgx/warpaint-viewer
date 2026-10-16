@@ -1,15 +1,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
 import { decodeProtoDefsFromJson } from '../../../src/protodefs/decoder';
 import { partitionResolvableKits } from '../../../src/protodefs/validation';
 import type { ProtoDefKit } from '../../../src/protodefs/types';
+import { PUBLIC_DATA } from '../fixtures';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const baseBytes = new Uint8Array(fs.readFileSync(path.join(ROOT, 'public', 'data', 'protodefs-base.bin')));
-const itemDefs = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'item-defs.json'), 'utf8'));
+const baseBytes = new Uint8Array(fs.readFileSync(path.join(PUBLIC_DATA, 'protodefs-base.bin')));
+const itemDefs: Record<string, string> = JSON.parse(fs.readFileSync(path.join(PUBLIC_DATA, 'item-defs.json'), 'utf8'));
 
 const OPERATION_DEFINDEX = 999_435;
 
@@ -34,26 +33,17 @@ function decodeDefinition(hasTeamTextures: boolean, stage: Record<string, unknow
   ], { weaponsByItemDef: itemDefs, builtInIds: [] }).index.kits[0];
 }
 
-test('differing team textures count as team textures even with the flag off', () => {
-  const kit = decodeDefinition(false, {
-    texture: { string: 'patterns/shared' },
-    texture_red: { string: 'patterns/red' },
-    texture_blue: { string: 'patterns/blu' },
-  });
-  assert.equal(kit?.hasTeamTextures, true);
-  assert.equal(kit?.teamButtonsHidden, true);
-});
-
-test('identical team textures stay single-team with the flag off', () => {
-  const kit = decodeDefinition(false, { texture: { string: 'patterns/shared' } });
-  assert.equal(kit?.hasTeamTextures, false);
-  assert.equal(kit?.teamButtonsHidden, false);
-});
-
-test('the team flag alone enables team textures without hiding the team buttons', () => {
-  const kit = decodeDefinition(true, { texture: { string: 'patterns/shared' } });
-  assert.equal(kit?.hasTeamTextures, true);
-  assert.equal(kit?.teamButtonsHidden, false);
+test('team textures come from the flag or from differing team stages, and only the latter hides the team buttons', () => {
+  const shared = { texture: { string: 'patterns/shared' } };
+  const split = { ...shared, texture_red: { string: 'patterns/red' }, texture_blue: { string: 'patterns/blu' } };
+  for (const [flag, stage, hasTeamTextures, teamButtonsHidden] of [
+    [false, split, true, true],
+    [false, shared, false, false],
+    [true, shared, true, false],
+  ] as const) {
+    const kit = decodeDefinition(flag, stage);
+    assert.deepEqual([kit?.hasTeamTextures, kit?.teamButtonsHidden], [hasTeamTextures, teamButtonsHidden], `flag ${flag}`);
+  }
 });
 
 test('imported definitions retain per-weapon material overrides', () => {

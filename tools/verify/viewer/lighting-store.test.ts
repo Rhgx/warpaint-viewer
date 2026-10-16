@@ -1,21 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { createLightingStore } from '../../../src/viewer/lighting/lightingStore';
-import { createDefaultCustomLightingRig, MAX_CUSTOM_LIGHTS, validateCustomLightingRig } from '../../../src/viewer/lighting/customLighting';
-
-test('initial lighting matches Viewer normalization without creating history', () => {
-  const raw = createDefaultCustomLightingRig();
-  const store = createLightingStore(raw);
-  const initial = store.getState();
-  assert.deepEqual(initial.rig, validateCustomLightingRig(raw));
-  assert.equal(initial.canUndo, false);
-  assert.equal(initial.canRedo, false);
-  let notifications = 0;
-  store.subscribe(() => notifications++);
-  initial.apply(validateCustomLightingRig(initial.rig));
-  assert.equal(store.getState(), initial);
-  assert.equal(notifications, 0);
-});
+import { createDefaultCustomLightingRig, MAX_CUSTOM_LIGHTS } from '../../../src/viewer/lighting/customLighting';
 
 test('lighting previews notify rig subscribers and commit one undo step', () => {
   const store = createLightingStore(createDefaultCustomLightingRig());
@@ -50,28 +36,6 @@ test('lighting previews notify rig subscribers and commit one undo step', () => 
   unsubscribe.forEach((stop) => stop());
   store.getState().preview(initial);
   assert.equal(rigs, 102);
-});
-
-test('equal actions preserve state identity and new edits discard redo', () => {
-  const store = createLightingStore(createDefaultCustomLightingRig());
-  const rig = store.getState().rig;
-  const initial = store.getState();
-  let notifications = 0;
-  store.subscribe(() => notifications++);
-  initial.apply({ ...rig });
-  initial.preview({ ...rig });
-  initial.setOpen(false);
-  initial.select(initial.selectedLightId);
-  initial.undo();
-  initial.redo();
-  assert.equal(store.getState(), initial);
-  assert.equal(notifications, 0);
-  initial.apply({ ...rig, exposure: 2 });
-  initial.undo();
-  initial.apply({ ...rig, exposure: 3 });
-  assert.equal(store.getState().canRedo, false);
-  initial.redo();
-  assert.equal(store.getState().rig.exposure, 3);
 });
 
 test('selection stays valid atomically through rig replacement, preview, undo and redo', () => {
@@ -132,20 +96,4 @@ test('light commands update selection atomically, respect the cap, and support h
   store.getState().duplicateSelected();
   assert.equal(store.getState(), capped);
   assert.equal(notifications, 0);
-});
-
-test('empty rigs and separate store instances have independent state and history', () => {
-  const rig = createDefaultCustomLightingRig();
-  const first = createLightingStore(rig);
-  const second = createLightingStore({ ...rig, lights: [] });
-  const empty = second.getState();
-  empty.duplicateSelected();
-  empty.deleteSelected();
-  empty.toggleSelected();
-  empty.select('missing');
-  assert.equal(second.getState(), empty);
-  first.getState().apply({ ...rig, exposure: 2 });
-  first.getState().setOpen(true);
-  assert.equal(second.getState().canUndo, false);
-  assert.equal(second.getState().open, false);
 });

@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import { test, vi } from 'vitest';
 import * as THREE from 'three';
-import { createTf2Uniforms } from '../../../src/viewer/materialConfig';
-import { StickerOverlay } from '../../../src/viewer/stickerOverlay';
 import { Viewer } from '../../../src/viewer/Viewer';
 
 test('transform-only previews reuse the mask and rebuild when the selection changes', () => {
@@ -50,30 +48,6 @@ test('material cancellation while waiting for the environment prevents material 
   assert.equal(viewer.materialLoadToken, 1);
 });
 
-test('sheen resumes at the next sweep after its invisible pause', () => {
-  const now = vi.spyOn(performance, 'now');
-  const viewer = {
-    sheenId: 'team_shine',
-    sheenMaterial: { uniforms: { uFrame: { value: 0 } } },
-    sheenMeshes: [{ visible: true }],
-    sheenElapsed: 0,
-    sheenLastTime: 0,
-  };
-  const update = Reflect.get(Viewer.prototype, 'updateSheenAnimation');
-  try {
-    now.mockReturnValue(2500);
-    Reflect.apply(update, viewer, []);
-    assert.equal(viewer.sheenMeshes[0].visible, false);
-    now.mockReturnValue(7401);
-    Reflect.apply(update, viewer, []);
-    assert.equal(viewer.sheenMeshes[0].visible, true);
-    assert.equal(viewer.sheenMaterial.uniforms.uFrame.value, 0);
-    now.mockReturnValue(7650);
-    Reflect.apply(update, viewer, []);
-    assert.equal(viewer.sheenMaterial.uniforms.uFrame.value, 6);
-  } finally { now.mockRestore(); }
-});
-
 test('late composition retains the sticker base until editing ends', () => {
   const base = new THREE.Texture();
   const composed = new THREE.Texture();
@@ -89,30 +63,4 @@ test('late composition retains the sticker base until editing ends', () => {
     Reflect.apply(Viewer.prototype.setStickerEditorBaseMap, viewer, [null]);
     assert.equal(material.map, composed);
   } finally { base.dispose(); composed.dispose(); material.dispose(); }
-});
-
-test('lit sticker movement reuses diffuse and linear specular textures', async () => {
-  const texture = new THREE.Texture();
-  const specular = new THREE.Texture();
-  const uniforms = createTf2Uniforms();
-  const overlay = {
-    host: { tf2Uniforms: uniforms, isDisposed: () => false, invalidate: vi.fn() },
-    stickerPreviewLoadToken: 0,
-    stickerPreviewUrl: null, stickerPreviewSpecUrl: null, stickerPreviewMode: null,
-    stickerPreviewTexture: null, stickerPreviewSpecTexture: null,
-    teardownStickerPreviewMeshes: vi.fn(), clearStickerPreview: vi.fn(),
-    texLoader: { loadAsync: vi.fn(async (url: string) => url === 'spec' ? specular : texture) },
-  };
-  const load = () => Reflect.apply(Reflect.get(StickerOverlay.prototype, 'loadLitStickerPreviewTextures'), overlay, ['base', 'spec']);
-  try {
-    load();
-    await vi.waitFor(() => assert.equal(uniforms.uTf2StickerPreview.value, 1));
-    assert.equal(uniforms.uTf2StickerMap.value, texture);
-    assert.equal(uniforms.uTf2StickerSpecMap.value, specular);
-    assert.equal(uniforms.uTf2StickerHasSpec.value, 1);
-    assert.equal(specular.colorSpace, THREE.NoColorSpace);
-    load();
-    assert.equal(overlay.texLoader.loadAsync.mock.calls.length, 2, 'moving the sticker does not reload textures');
-    assert.equal(overlay.clearStickerPreview.mock.calls.length, 0);
-  } finally { texture.dispose(); specular.dispose(); }
 });

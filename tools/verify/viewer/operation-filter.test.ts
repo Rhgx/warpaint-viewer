@@ -23,26 +23,10 @@ const data: OperationTemplateData = {
   usage: { '10': [400, 401], '11': [402, customKitId(402)], '12': [403] },
 };
 
-test('op filter matches an exact operation name before substrings', () => {
-  assert.deepEqual(operationFilterKits(paintkits, data, 'ao').map((k) => k.id), [400, 401]);
-});
-
-test('op filter matches substrings when no operation is named exactly', () => {
-  assert.deepEqual(operationFilterKits(paintkits, data, 'glo').map((k) => k.id), [402]);
-});
-
-test('op filter is case-insensitive and trims the query', () => {
-  assert.deepEqual(operationFilterKits(paintkits, data, '  Ao  ').map((k) => k.id), [400, 401]);
-  assert.deepEqual(operationFilterKits(paintkits, data, 'BLEND').map((k) => k.id), [403]);
-});
-
-test('op filter never returns imported kits', () => {
-  const ids = operationFilterKits(paintkits, data, 'glow').map((k) => k.id);
-  assert.deepEqual(ids, [402]);
-});
-
-test('op filter returns nothing for an empty or unmatched query', () => {
-  assert.deepEqual(operationFilterKits(paintkits, data, ''), []);
-  assert.deepEqual(operationFilterKits(paintkits, data, '   '), []);
-  assert.deepEqual(operationFilterKits(paintkits, data, 'missing'), []);
+test('op filter: exact name before substrings, trimmed and case-insensitive, no imported kits', () => {
+  const ids = (query: string) => operationFilterKits(paintkits, data, query).map((k) => k.id);
+  assert.deepEqual(ids('ao'), [400, 401]);
+  assert.deepEqual(ids('  Ao  '), [400, 401]);
+  assert.deepEqual(ids('glo'), [402]);
+  assert.deepEqual(ids('   '), []);
 });

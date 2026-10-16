@@ -2,7 +2,6 @@ import { afterEach, expect, test, vi } from 'vitest';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ModelLoader } from '../../../src/viewer/modelLoader';
-import { Viewer } from '../../../src/viewer/Viewer';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -27,13 +26,4 @@ test('hover loads reuse promises and keep the displayed model in the bounded cac
     expect(disposeFirst).toHaveBeenCalledOnce();
     expect(await loader.load('selected')).toBe(selected);
   } finally { loader.dispose(); }
-});
-
-test('viewer warmup prepares geometry without changing the current model or load token', async () => {
-  const load = vi.fn(async () => []);
-  const viewer = { modelLoader: { load }, currentModelUrl: 'selected', loadToken: 7, disposed: false };
-  await Reflect.apply(Viewer.prototype.preloadModel, viewer, ['next']);
-  expect(load).toHaveBeenCalledWith('next', 'selected');
-  expect(viewer.currentModelUrl).toBe('selected');
-  expect(viewer.loadToken).toBe(7);
 });

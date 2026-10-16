@@ -28,16 +28,16 @@ test('generated paint files are recognized by their exact names', () => {
   assert.equal(generatedPaintDefindex('new_paint_x_definition.json'), null);
 });
 
-test('deleting a generated paint removes both of its files and keeps the set name', () => {
+test('deleting a generated paint removes both of its files; generated files never rename the set', () => {
   const remaining = withoutGeneratedPaint(fragments, 443);
   assert.deepEqual(
     remaining.map((fragment) => fragment.name),
     ['community_operation.json', 'community_definition.json', 'new_paint_444_definition.json'],
   );
-  assert.equal(
-    definitionSetName(remaining.map((fragment) => fragment.name)),
-    definitionSetName(fragments.map((fragment) => fragment.name)),
-  );
+  const communityName = definitionSetName(['community_operation.json', 'community_definition.json']);
+  assert.equal(definitionSetName(remaining.map((fragment) => fragment.name)), communityName);
+  assert.equal(definitionSetName(fragments.map((fragment) => fragment.name)), communityName);
+  assert.equal(definitionSetName(['new_paint_443_operation.json', 'new_paint_443_definition.json']), 'New war paints');
 });
 
 test('renaming a generated paint rewrites only its definition header name', () => {

@@ -1,28 +1,14 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
-import type { Manifest } from '../../../src/data/types';
-import {
-  decodeProtoDefs,
-  decodeProtoDefsFromJson,
-  extractKitMessages,
-  resolveKitRecipe,
-} from '../../../src/protodefs/decoder';
+import { decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipe } from '../../../src/protodefs/decoder';
 import { buildCopiedWarPaint, generatedPaintDefindex, nextWarPaintIds } from '../../../src/protodefs/templatePaint';
+import { shippedProtoDefs } from '../fixtures';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
 // 300 Yeti Coated is a top-level paint: one operation shared by every weapon and wear.
 const SOURCE_DEFINDEX = 300;
 
 test('a copy of a stock paint decodes as a new paint with the original recipe', () => {
-  const weaponsByItemDef: Record<string, string> = JSON.parse(fs.readFileSync(path.join(PUBLIC_DATA, 'item-defs.json'), 'utf8'));
-  const manifest: Manifest = JSON.parse(fs.readFileSync(path.join(PUBLIC_DATA, 'manifest.json'), 'utf8'));
-  const baseBytes = new Uint8Array(fs.readFileSync(path.join(PUBLIC_DATA, 'protodefs-base.bin')));
-  const options = { weaponsByItemDef, builtInIds: manifest.paintkits.map((kit) => kit.id) };
-  const full = decodeProtoDefs(new Uint8Array(fs.readFileSync(path.join(PUBLIC_DATA, 'protodefs-full.bin'))), options);
+  const { options, baseBytes, full } = shippedProtoDefs();
 
   const original = full.index.kits.find((kit) => kit.defindex === SOURCE_DEFINDEX);
   assert.ok(original, `kit ${SOURCE_DEFINDEX} is missing from the full container`);

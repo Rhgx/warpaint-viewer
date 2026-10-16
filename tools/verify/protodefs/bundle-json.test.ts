@@ -1,34 +1,11 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
 import { serializeProtoDefKitBundle, serializeProtoDefKitMessages } from '../../../src/editor/export/jsonExport';
-import type { Manifest } from '../../../src/data/types';
-import {
-  decodeProtoDefs,
-  decodeProtoDefsFromJson,
-  extractKitBundle,
-  extractKitMessages,
-  resolveKitRecipe,
-} from '../../../src/protodefs/decoder';
+import { decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipe } from '../../../src/protodefs/decoder';
 import { classifyProtoDefFragment, type ProtoDefFragmentKind } from '../../../src/protodefs/jsonFragments';
-import type { ProtoDefKitBundle } from '../../../src/protodefs/types';
+import { shippedProtoDefs } from '../fixtures';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
-
-const weaponsByItemDef: Record<string, string> = JSON.parse(fs.readFileSync(path.join(PUBLIC_DATA, 'item-defs.json'), 'utf8'));
-const manifest: Manifest = JSON.parse(fs.readFileSync(path.join(PUBLIC_DATA, 'manifest.json'), 'utf8'));
-const options = { weaponsByItemDef, builtInIds: manifest.paintkits.map((kit) => kit.id) };
-const baseBytes = new Uint8Array(fs.readFileSync(path.join(PUBLIC_DATA, 'protodefs-base.bin')));
-const full = decodeProtoDefs(new Uint8Array(fs.readFileSync(path.join(PUBLIC_DATA, 'protodefs-full.bin'))), options);
-
-function bundleOf(defindex: number): ProtoDefKitBundle {
-  const bundle = extractKitBundle(full, defindex);
-  assert.ok(bundle, `kit ${defindex} should produce a bundle`);
-  return bundle;
-}
+const { options, baseBytes, full, bundleOf } = shippedProtoDefs();
 
 function countKinds(kinds: (ProtoDefFragmentKind | null)[]): Record<string, number> {
   const counts: Record<string, number> = {};

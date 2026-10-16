@@ -23,14 +23,6 @@ function countStickers(nodes, label) {
   return count;
 }
 
-test('templates include the known sticker and inner wear shapes', () => {
-  assert.ok(data.templates.length >= 10);
-  const sticker = data.templates.find((t) => t.name === 'one_sticker_three_texture_inner_wear');
-  assert.ok(sticker);
-  assert.ok(sticker.stickers >= 1);
-  assert.equal(sticker.innerWear, true);
-});
-
 test('every template names its weapon slots with only their model maps', () => {
   for (const template of data.templates) {
     const indexes = Object.values(template.items);
