@@ -394,13 +394,16 @@ async function main() {
     if (!slots.length) continue;
     const name = locLookup(locProto, def.loc_desctoken) || def.header.name || `paintkit_${id}`;
     const hasTeam = !!def.has_team_textures;
-    const teams = hasTeam ? ['red', 'blu'] : ['red'];
+    // Both teams are always resolved. The game composites with the item's actual team whatever
+    // has_team_textures says; the flag only shows the inspect panel's team buttons. So a paint
+    // whose BLU differs from RED has team textures even with the flag off.
+    const teams = ['red', 'blu'];
 
     const kitWeapons = new Set();
     const kitMaterialOverrides = {};
     const kitTextureRefs = new Set();
-    let kitPerWear = false;
-    const kitRecipes = []; // { weaponKey, team, trees:[per wear] }
+    let kitBluDiffers = false;
+    const kitRecipes = []; // { weaponKey, team, trees:[per wear], refs }
 
     for (const { slot } of slots) {
       const itemDef = ctx.itemDefByIdx.get(slot.item_definition_template.defindex);
@@ -425,28 +428,41 @@ async function main() {
       }
 
       const nWear = (itemDef.definition || []).length || 1;
+      let redTrees = [];
       for (const team of teams) {
         const trees = [];
+        const refs = new Set();
         for (let w = 0; w < nWear; w++) {
           const r = resolveRecipe(def, slot, itemDef, w, team, ctx);
           if (!r) { trees.push(null); continue; }
           addImplicitStickerSpecs(r.tree, compositorVpkPaths, r.textureRefs);
           collectLayerPreviewRefs(r.tree, layerPreviewRefs);
-          for (const t of r.textureRefs) { allTextureRefs.add(t); kitTextureRefs.add(t); }
+          for (const t of r.textureRefs) refs.add(t);
           trees.push(r.tree);
         }
-        const nonNull = trees.filter((t) => t);
-        if (!nonNull.length) continue;
-        const differ = nonNull.some((t) => JSON.stringify(t) !== JSON.stringify(nonNull[0]));
-        if (differ) kitPerWear = true;
-        kitRecipes.push({ weaponKey, team, trees });
+        if (team === 'red') redTrees = trees;
+        if (!trees.some((t) => t)) continue;
+        if (team === 'blu' && trees.some((t, w) => JSON.stringify(t) !== JSON.stringify(redTrees[w]))) kitBluDiffers = true;
+        kitRecipes.push({ weaponKey, team, trees, refs });
       }
     }
 
     if (!kitWeapons.size) { skipped.push({ id, reason: 'no resolvable weapons' }); continue; }
 
+    // BLU is kept for every weapon or for none. A weapon missing its BLU recipe would have no
+    // texture for a BLU item, so a per-slot drop is not safe. Refs come after this check so a
+    // dropped BLU pass does not add textures.
+    const hasTeamTextures = hasTeam || kitBluDiffers;
+    const keptRecipes = kitRecipes.filter((rec) => hasTeamTextures || rec.team === 'red');
+    let kitPerWear = false;
+    for (const rec of keptRecipes) {
+      for (const t of rec.refs) { allTextureRefs.add(t); kitTextureRefs.add(t); }
+      const nonNull = rec.trees.filter((t) => t);
+      if (nonNull.some((t) => JSON.stringify(t) !== JSON.stringify(nonNull[0]))) kitPerWear = true;
+    }
+
     // Emit recipe variants (bundled per kit id below).
-    for (const rec of kitRecipes) {
+    for (const rec of keptRecipes) {
       if (kitPerWear) {
         for (let w = 0; w < rec.trees.length; w++) {
           const tree = rec.trees[w] || rec.trees.find((t) => t);
@@ -464,12 +480,12 @@ async function main() {
       id,
       name,
       collection: collectionByPaintkit.get(id) || null,
-      hasTeamTextures: hasTeam,
+      hasTeamTextures,
       perWear: kitPerWear,
       weapons: [...kitWeapons].sort(),
       ...(Object.keys(kitMaterialOverrides).length ? { materialOverrides: kitMaterialOverrides } : {}),
     });
-    const firstTree = kitRecipes[0]?.trees.find((t) => t);
+    const firstTree = keptRecipes[0]?.trees.find((t) => t);
     if (firstTree) paintIconRefByKit.set(id, pickPaintIconRef(firstTree));
   }
 

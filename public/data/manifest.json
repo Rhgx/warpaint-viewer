@@ -1,12 +1,12 @@
 {
- "generatedAt": "2026-10-12T19:05:59.157Z",
+ "generatedAt": "2026-10-16T12:47:39.309Z",
  "gameBuild": "11117211",
  "paintkits": [
   {
    "id": 0,
    "name": "Red Rock Roscoe",
    "collection": "Concealed Killer Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_pistol"
@@ -28,7 +28,7 @@
    "id": 2,
    "name": "Wrapped Reviver",
    "collection": "Concealed Killer Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_medigun"
@@ -50,7 +50,7 @@
    "id": 4,
    "name": "Carpet Bomber",
    "collection": "Concealed Killer Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_stickybomb_launcher"
@@ -171,7 +171,7 @@
    "id": 15,
    "name": "Tartan Torpedo",
    "collection": "Craftsmann Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_scattergun"
@@ -182,7 +182,7 @@
    "id": 16,
    "name": "Rustic Ruiner",
    "collection": "Craftsmann Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_shotgun"
@@ -193,7 +193,7 @@
    "id": 17,
    "name": "Barn Burner",
    "collection": "Craftsmann Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_flamethrower"
@@ -204,7 +204,7 @@
    "id": 18,
    "name": "Homemade Heater",
    "collection": "Craftsmann Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_pistol"
@@ -248,7 +248,7 @@
    "id": 22,
    "name": "Plaid Potshotter",
    "collection": "Craftsmann Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_smg"
@@ -270,7 +270,7 @@
    "id": 24,
    "name": "Blasted Bombardier",
    "collection": "Craftsmann Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_stickybomb_launcher"
@@ -281,7 +281,7 @@
    "id": 25,
    "name": "Reclaimed Reanimator",
    "collection": "Craftsmann Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_medigun"
@@ -303,7 +303,7 @@
    "id": 27,
    "name": "Old Country",
    "collection": "Craftsmann Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_revolver"
@@ -347,7 +347,7 @@
    "id": 31,
    "name": "War Room",
    "collection": "Teufort Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_minigun"
@@ -358,7 +358,7 @@
    "id": 32,
    "name": "Treadplate Tormenter",
    "collection": "Teufort Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_smg"
@@ -380,7 +380,7 @@
    "id": 34,
    "name": "Earth, Sky and Fire",
    "collection": "Teufort Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_flamethrower"
@@ -402,7 +402,7 @@
    "id": 36,
    "name": "Spruce Deuce",
    "collection": "Teufort Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_scattergun"
@@ -413,7 +413,7 @@
    "id": 37,
    "name": "Team Sprayer",
    "collection": "Teufort Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_smg"
@@ -424,7 +424,7 @@
    "id": 38,
    "name": "Rooftop Wrangler",
    "collection": "Teufort Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_stickybomb_launcher"
@@ -435,7 +435,7 @@
    "id": 39,
    "name": "Civil Servant",
    "collection": "Teufort Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_medigun"
@@ -446,7 +446,7 @@
    "id": 40,
    "name": "Citizen Pain",
    "collection": "Teufort Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_minigun"
@@ -468,7 +468,7 @@
    "id": 42,
    "name": "Mayor",
    "collection": "Teufort Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_revolver"
@@ -479,7 +479,7 @@
    "id": 43,
    "name": "Smalltown Bringdown",
    "collection": "Teufort Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_rocketlauncher"
@@ -490,7 +490,7 @@
    "id": 44,
    "name": "Civic Duty",
    "collection": "Teufort Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_shotgun"
@@ -556,7 +556,7 @@
    "id": 50,
    "name": "Spark of Life",
    "collection": "Powerhouse Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_medigun"
@@ -578,7 +578,7 @@
    "id": 52,
    "name": "Shell Shocker",
    "collection": "Powerhouse Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_rocketlauncher"
@@ -644,7 +644,7 @@
    "id": 58,
    "name": "Low Profile",
    "collection": "Powerhouse Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_smg"
@@ -741,7 +741,7 @@
    "id": 65,
    "name": "Wildwood",
    "collection": "Harvest Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_medigun",
@@ -880,7 +880,7 @@
    "id": 76,
    "name": "Coffin Nail",
    "collection": "Gentlemanne's Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_flamethrower",
@@ -915,7 +915,7 @@
    "id": 78,
    "name": "Dressed to Kill",
    "collection": "Gentlemanne's Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_knife",
@@ -975,7 +975,7 @@
    "id": 82,
    "name": "Airwolf",
    "collection": "Warbird Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_knife",
@@ -988,7 +988,7 @@
    "id": 83,
    "name": "Corsair",
    "collection": "Warbird Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_medigun",
@@ -1012,7 +1012,7 @@
    "id": 85,
    "name": "Killer Bee",
    "collection": "Warbird Collection",
-   "hasTeamTextures": false,
+   "hasTeamTextures": true,
    "perWear": true,
    "weapons": [
     "c_scattergun"
@@ -16751,6 +16751,30 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/solid_medium_grey.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/camo/australia_blue.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/models/items/paintkit_tool/p_paintkit_tool_ao.webp": {
    "width": 2048,
    "height": 2048,
@@ -19151,18 +19175,6 @@
    "noMip": false,
    "noLod": false
   },
-  "textures/patterns/solid_medium_grey.webp": {
-   "width": 1024,
-   "height": 1024,
-   "mipCount": 11,
-   "clampS": false,
-   "clampT": false,
-   "pointSample": false,
-   "trilinear": false,
-   "anisotropic": false,
-   "noMip": false,
-   "noLod": false
-  },
   "textures/models/weapons/c_models/c_grenadelauncher/p_grenadelauncher_groups04.webp": {
    "width": 2048,
    "height": 2048,
@@ -20040,6 +20052,18 @@
    "noLod": false
   },
   "textures/patterns/craft/flannel2_red.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/craft/flannel2_blu.webp": {
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
@@ -21711,6 +21735,18 @@
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/solid_blue_craftsman.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
    "clampS": false,
    "clampT": false,
    "pointSample": false,
@@ -24743,6 +24779,30 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/2fort/monitor_world_blu.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/solid_map_blue.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/2fort/metal001.webp": {
    "width": 1024,
    "height": 1024,
@@ -24756,6 +24816,30 @@
    "noLod": false
   },
   "textures/patterns/2fort/wall_concrete_red.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/2fort/metal002.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/2fort/wall_concrete_blue.webp": {
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
@@ -24803,6 +24887,30 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/2fort/clouds.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/2fort/wood_wall005b.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/2fort/grain_elevator_silo_10b.webp": {
    "width": 1024,
    "height": 1024,
@@ -24839,6 +24947,18 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/solid_blu_shiny.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/2fort/wall_light_red.webp": {
    "width": 1024,
    "height": 1024,
@@ -24852,6 +24972,30 @@
    "noLod": false
   },
   "textures/patterns/2fort/concrete.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/2fort/wall_light_blue.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/2fort/concrete_blu.webp": {
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
@@ -25524,6 +25668,18 @@
    "noLod": false
   },
   "textures/patterns/2fort/signage_red.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/2fort/signage_blue.webp": {
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
@@ -26795,6 +26951,18 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/2fort/wood_wall_blu.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/workshop/screamfortress_2024/3328708213/3328708213_necropolish_1.webp": {
    "width": 1024,
    "height": 1024,
@@ -27899,6 +28067,18 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/powerhouse/hydroelectric_blu.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/powerhouse/electric_green.webp": {
    "width": 1024,
    "height": 1024,
@@ -27972,6 +28152,18 @@
    "noLod": false
   },
   "textures/patterns/powerhouse/supersniper_red.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": true
+  },
+  "textures/patterns/powerhouse/supersniper_blu.webp": {
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
@@ -28979,6 +29171,42 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/cig/cig_leaf001.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/cig_blue001.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/cig_blue002.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/models/weapons/c_models/c_grenadelauncher/p_grenadelauncher_groups02.webp": {
    "width": 2048,
    "height": 2048,
@@ -29375,7 +29603,55 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/cig/cig_spy_pattern_blu02.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/cig_brogue_gradient_blu.webp": {
+   "width": 256,
+   "height": 256,
+   "mipCount": 9,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/cig_pattern006_blu.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/cig/cig_heavy_pattern_red.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/cig_heavy_pattern_blu.webp": {
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
@@ -29411,6 +29687,18 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/cig/cig_heavy_pattern_blu02.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/models/weapons/c_models/c_pistol/p_pistol_albedo_desat.webp": {
    "width": 2048,
    "height": 2048,
@@ -29435,7 +29723,31 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/cig/cig_tf_pattern_blu02.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/cig/cig_sniper_pattern_red02.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/cig_sniper_pattern_blu02.webp": {
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
@@ -29459,7 +29771,31 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/cig/cig_demo_pattern_blu02.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/cig/cig_engy_pattern_red02.webp": {
+   "width": 2048,
+   "height": 2048,
+   "mipCount": 12,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/cig/cig_engy_pattern_blu02.webp": {
    "width": 2048,
    "height": 2048,
    "mipCount": 12,
@@ -30107,6 +30443,18 @@
    "noMip": false,
    "noLod": false
   },
+  "textures/patterns/combat/blue.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
   "textures/patterns/combat/c_sniperrifle_focke_wulf_groups.webp": {
    "width": 2048,
    "height": 2048,
@@ -30192,6 +30540,18 @@
    "noLod": false
   },
   "textures/patterns/combat/bright_yellow.webp": {
+   "width": 1024,
+   "height": 1024,
+   "mipCount": 11,
+   "clampS": false,
+   "clampT": false,
+   "pointSample": false,
+   "trilinear": false,
+   "anisotropic": false,
+   "noMip": false,
+   "noLod": false
+  },
+  "textures/patterns/combat/corsair_blue.webp": {
    "width": 1024,
    "height": 1024,
    "mipCount": 11,
