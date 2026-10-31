@@ -235,3 +235,37 @@ test('combine UV fields are not editable', () => {
   assert.deepEqual(discovered.target.stagePath, []);
   assert.deepEqual(discovered.blockers, ['ambiguous-source-stage']);
 });
+
+test('a multiply layer edits the combine child its selector names', () => {
+  const messages: ProtoDefKitMessages = {
+    operation: {
+      header: { defindex: 712, variables: [
+        { name: 'texture_layer_2', value: 'patterns/layer' },
+        { name: 'texture_layer_2_scale_uv', value: '2', inherit: true },
+        { name: 'texture_layer_2_select_1', value: '16' },
+      ] },
+      operation_node: [
+        { stage: { combine_multiply: { operation_node: [
+          { stage: { texture_lookup: { texture: { string: 'patterns/wear' }, scale_uv: { string: '3' } } } },
+          { stage: { texture_lookup: {
+            texture: { variable: 'texture_layer_2' },
+            scale_uv: { variable: 'texture_layer_2_scale_uv' },
+          } } },
+        ] } } },
+        { stage: { select: { groups: { string: 'patterns/groups' }, select: [{ variable: 'texture_layer_2_select_1' }] } } },
+      ],
+    },
+    definition: { header: { defindex: 713 }, operation_template: { defindex: 712, type: 7 } },
+  };
+  const discovered = discoverTextureTransformTargets(messages).targets[0];
+  assert.ok(discovered);
+  const childStage = ['operation', 'operation_node', '0', 'stage', 'combine_multiply', 'operation_node', '1', 'stage', 'texture_lookup'];
+  assert.deepEqual(discovered.target.stagePath, childStage);
+  assert.deepEqual(discovered.blockers, []);
+  assert.equal(discovered.layerChildIndex, 1);
+  assert.deepEqual([discovered.scaleUv.min, discovered.scaleUv.max], [2, 2]);
+
+  const edited = setTextureTransformRange(messages, discovered.target, 'scale_uv', { mode: 'fixed', min: 4, max: 4 });
+  assert.equal(dig(edited.operation, 'header', 'variables', 1, 'value'), '4');
+  assert.deepEqual(dig(edited.operation, 'operation_node', 0, 'stage', 'combine_multiply', 'operation_node', 0, 'stage', 'texture_lookup', 'scale_uv'), { string: '3' });
+});

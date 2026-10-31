@@ -175,11 +175,16 @@ export function useTransformEditor({
     : activeGroupVisualIndex >= 0
       ? (transformScope === 'all' ? originalSharedTransformDiscovery : originalTransformDiscovery)?.targets[activeGroupVisualIndex] ?? null
       : null;
+  // A multiply layer's transform edits one child of the combine it masks.
+  const layerChildIndex = activeTransformTargetInfo?.layerChildIndex;
+  const activeRecipeLayerNode = activeGroupVisualIndex >= 0 ? recipeLayerNodes[activeGroupVisualIndex] : undefined;
   const activeTransformLayerNode = weaponBaseLayerActive
     ? baseRecipeLayerNode
-    : activeGroupVisualIndex >= 0
-      ? recipeLayerNodes[activeGroupVisualIndex] ?? null
-      : null;
+    : layerChildIndex === undefined
+      ? activeRecipeLayerNode ?? null
+      : activeRecipeLayerNode && 'nodes' in activeRecipeLayerNode
+        ? activeRecipeLayerNode.nodes[layerChildIndex] ?? null
+        : null;
   const transformPreviewRecipe = useMemo(() => {
     if (!provenanceRecipe || !transformDraft
       || (!activeTransformLayerNode && !(weaponBaseLayerActive && baseTextureTransform))) {
@@ -342,8 +347,11 @@ export function useTransformEditor({
     }
     if (!resolvedPreviewRecipe) return null;
     if (activeGroupVisualIndex < 0) return null;
-    return collectResolvedLayerTextureNodes(resolvedPreviewRecipe)[activeGroupVisualIndex] ?? null;
-  }, [activeGroupVisualIndex, activeTransformLayerNode, resolvedPreviewRecipe, state.seed, weaponBaseLayerActive]);
+    const layerNode = collectResolvedLayerTextureNodes(resolvedPreviewRecipe)[activeGroupVisualIndex];
+    if (layerChildIndex === undefined) return layerNode ?? null;
+    const child = layerNode?.type === 'texture_lookup' ? undefined : layerNode?.nodes[layerChildIndex];
+    return child?.type === 'texture_lookup' ? child : null;
+  }, [activeGroupVisualIndex, activeTransformLayerNode, layerChildIndex, resolvedPreviewRecipe, state.seed, weaponBaseLayerActive]);
 
   useEffect(() => {
     if (paintSubView !== 'transform' || editableKitId === null

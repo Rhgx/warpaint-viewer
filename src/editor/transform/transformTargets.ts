@@ -1,5 +1,13 @@
 import type { ProtoDefKitMessages, ProtoDefValueTrace } from '../../protodefs/types';
-import { many, type Many, type OperationNodeMsg, type TextureStageMsg, type VarDefMsg, type VarFieldMsg } from '../../protodefs/messages';
+import {
+  many,
+  type Many,
+  type OperationNodeMsg,
+  type SelectStageMsg,
+  type TextureStageMsg,
+  type VarDefMsg,
+  type VarFieldMsg,
+} from '../../protodefs/messages';
 import type { TextureTransformFlipField, TextureTransformRangeField, TextureTransformTarget } from '../mutations';
 
 /** Proto defaults for the four range fields (tools/lib/resolve.mjs DEFAULTS, mirrored here for parsing). */
@@ -46,6 +54,8 @@ export interface TextureTransformTargetInfo {
   readonly flipV: TextureTransformFlipFieldState;
   /** Empty when every field on this layer is safely editable. */
   readonly blockers: readonly TextureTransformTargetBlocker[];
+  /** Set when the layer masks a combine: the index of the combine child whose texture this edits. */
+  readonly layerChildIndex?: number;
 }
 
 export interface TextureTransformDiscovery {
@@ -345,6 +355,36 @@ function buildTarget(
 }
 
 /**
+ * A multiply layer masks a combine of its own texture and a multiply texture
+ * (`texture_layer_4` x `multiply_layer_1` in stock paints), and TF2 ignores a
+ * combine's UV fields. The layer's placement then lives on the combine child
+ * its selector names: `texture_layer_4_select_1` names `texture_layer_4`, and
+ * team textures add a suffix such as `texture_layer_4_blue`. Returns null
+ * unless exactly one direct child texture matches.
+ */
+function combineLayerChild(
+  combineNode: OperationNodeMsg,
+  combinePath: readonly string[],
+  select: SelectStageMsg,
+): { node: OperationNodeMsg; path: readonly string[]; index: number } | null {
+  const stage = combineNode.stage;
+  const key = stage?.combine_multiply ? 'combine_multiply' : stage?.combine_add ? 'combine_add' : stage?.combine_lerp ? 'combine_lerp' : null;
+  const stem = many(select.select).find((field) => field.variable)?.variable?.replace(/_select_\d+$/i, '');
+  if (!stage || !key || !stem) return null;
+  const children = stage[key]?.operation_node;
+  const isArray = Array.isArray(children);
+  const matches = many(children).flatMap((child, index) => {
+    const lookup = child.stage?.texture_lookup;
+    const names = [lookup?.texture, lookup?.texture_red, lookup?.texture_blue].map((field) => field?.variable);
+    return names.some((name) => name === stem || name?.startsWith(`${stem}_`)) ? [{ child, index }] : [];
+  });
+  if (matches.length !== 1) return null;
+  const { child, index } = matches[0];
+  const childrenPath = [...combinePath, 'stage', key, 'operation_node'];
+  return { node: child, path: isArray ? [...childrenPath, String(index)] : childrenPath, index };
+}
+
+/**
  * Visits select stages in exactly the traversal order
  * discoverGroupSelectTargets()'s selectTextureReferences() uses (array order,
  * combine children before the next sibling, sticker children last), so the
@@ -353,7 +393,11 @@ function buildTarget(
 function walk(
   nodes: Many<OperationNodeMsg>,
   path: readonly string[],
-  visit: (precedingNode: OperationNodeMsg | undefined, precedingPath: readonly string[] | undefined) => void,
+  visit: (
+    precedingNode: OperationNodeMsg | undefined,
+    precedingPath: readonly string[] | undefined,
+    select: SelectStageMsg,
+  ) => void,
 ): void {
   const entries = many(nodes);
   const isArray = Array.isArray(nodes);
@@ -366,7 +410,7 @@ function walk(
       const precedingIndex = index - 1;
       const precedingNode = precedingIndex >= 0 ? entries[precedingIndex] : undefined;
       const precedingPath = precedingIndex >= 0 ? (isArray ? [...path, String(precedingIndex)] : path) : undefined;
-      visit(precedingNode, precedingPath);
+      visit(precedingNode, precedingPath, stage.select);
     }
     for (const [key, combine] of [
       ['combine_multiply', stage.combine_multiply],
@@ -452,10 +496,10 @@ export function discoverBaseTextureTransformTarget(
 }
 
 /**
- * Per paint layer, find the texture or combine stage whose transform fields
- * the layer's selector masks. Both stage types own these fields in TF2, so an
- * immediately preceding sibling of either type is safe to edit. Sticker and
- * other sibling types remain ambiguous here.
+ * Per paint layer, find the texture stage whose transform fields the layer's
+ * selector masks: the immediately preceding texture sibling, or the child of
+ * a preceding combine that the selector names (see combineLayerChild). Other
+ * combines, stickers and other sibling types remain ambiguous here.
  */
 export function discoverTextureTransformTargets(
   messages: ProtoDefKitMessages,
@@ -465,8 +509,11 @@ export function discoverTextureTransformTargets(
   const variables = collectVariables(messages);
   const weaponOverridePath = findWeaponOverrideCollectionPath(provenance);
   const targets: (TextureTransformTargetInfo | null)[] = [];
-  walk(operation.operation_node, ['operation', 'operation_node'], (precedingNode, precedingPath) => {
-    targets.push(buildTarget(messages, precedingNode, precedingPath, variables, provenance, weaponOverridePath));
+  walk(operation.operation_node, ['operation', 'operation_node'], (precedingNode, precedingPath, select) => {
+    const child = precedingNode && precedingPath ? combineLayerChild(precedingNode, precedingPath, select) : null;
+    targets.push(child
+      ? { ...buildTarget(messages, child.node, child.path, variables, provenance, weaponOverridePath), layerChildIndex: child.index }
+      : buildTarget(messages, precedingNode, precedingPath, variables, provenance, weaponOverridePath));
   });
   return { targets };
 }

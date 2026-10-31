@@ -32,10 +32,10 @@ export function collectResolvedGroupSelects(node: RecipeNode, output: ResolvedGr
 
 /**
  * Same traversal as collectResolvedGroupSelects(), but returns the RecipeNode
- * of each select's preceding texture_lookup sibling instead of the select's
- * own data. Position-aligned with collectResolvedGroupSelects()'s output (and
- * therefore with groupDiscovery.targets / transformDiscovery.targets), so a
- * layer index picked from one array names the same layer in every other.
+ * of each select's preceding texture_lookup or combine sibling instead of the
+ * select's own data. Position-aligned with collectResolvedGroupSelects()'s
+ * output (and therefore with groupDiscovery.targets / transformDiscovery.targets),
+ * so a layer index picked from one array names the same layer in every other.
  */
 export function collectRecipeLayerNodes(node: RecipeNode, output: (RecipeNode | undefined)[] = []): (RecipeNode | undefined)[] {
   if (node.type === 'select') output.push(undefined);
@@ -45,7 +45,12 @@ export function collectRecipeLayerNodes(node: RecipeNode, output: (RecipeNode | 
       return;
     }
     const preceding = index > 0 ? node.nodes[index - 1] : undefined;
-    output.push(preceding?.type === 'texture_lookup' ? preceding : undefined);
+    output.push(preceding && (
+      preceding.type === 'texture_lookup'
+      || preceding.type === 'combine_multiply'
+      || preceding.type === 'combine_add'
+      || preceding.type === 'combine_lerp'
+    ) ? preceding : undefined);
   });
   return output;
 }
