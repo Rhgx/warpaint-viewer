@@ -5,7 +5,7 @@ import {
   resolveScreenshotCapture,
   screenshotOutputSize,
   screenshotWatermarkScale,
-} from '../../../src/viewer/capture';
+} from '../../../src/viewer/capture/capture';
 
 test('screenshot sizing: watermark orientation, preset fit, crop fit and oversized clamp', () => {
   assert.equal(screenshotWatermarkScale(1080, 1920), screenshotWatermarkScale(1920, 1080));

@@ -6,8 +6,7 @@
 //   BSPSOURCE_HOME=C:/path/to/BSPSource
 //   TF2_DIR=C:/path/to/Team Fortress 2
 
-// The generated TypeScript retains raw Hammer environment values plus the
-// compiled BSP ambient and local-light values used by the Source renderer.
+// The generated TS keeps raw Hammer environment values next to the compiled BSP ambient and local-light values.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -15,15 +14,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeVTF, decodeVTFCubemap } from '../lib/vtf.mjs';
 import { encodePNG } from '../lib/png.mjs';
-import { extractBatch, listVPK } from '../lib/vpk.mjs';
+import { extractBatch, listVPK, TEXTURES_VPK, TF_DIR as TF2_DIR } from '../lib/vpk.mjs';
 import { sampleBspAmbientCube, sampleBspLocalLights } from '../lib/bsp-lighting.mjs';
 import { readBspPak, readBspPakEntry } from '../lib/bsp-pak.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const BSPSOURCE = process.env.BSPSOURCE_HOME || 'C:/Users/TR/Desktop/BSPSource';
-const TF2_DIR = process.env.TF2_DIR || 'C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2';
 const TF_DIR = path.join(TF2_DIR, 'tf');
-const TEXTURES_VPK = path.join(TF_DIR, 'tf2_textures_dir.vpk');
 const WORK_DIR = path.join(ROOT, '.tmp', 'map-lighting');
 const VMF_DIR = path.join(WORK_DIR, 'vmf');
 const VTF_DIR = path.join(WORK_DIR, 'vtf');
@@ -36,8 +33,7 @@ const PRESETS = [
   { id: 'overcast', label: 'Sawmill', map: 'koth_sawmill', sampleOrigin: [511.677, -4.29442, 160.25], captureAngles: [0, 225, 0] },
   {
     id: 'indoors', label: '2Fort', map: 'ctf_2fort',
-    // Valve's unobstructed point_devshot_camera "devshot_red_flagroom2".
-    // This is also the exact origin used by the captured 2Fort backplate.
+    // Valve's unobstructed point_devshot_camera "devshot_red_flagroom2", the origin of the 2Fort backplate.
     sampleOrigin: [-592, 3328, -65.111], captureAngles: [0, 338, 0], focusDistance: 128, localLightCount: 4,
   },
   { id: 'night', label: 'Harvest Event', map: 'koth_harvest_event', sampleOrigin: [0, 0, 104.25], captureAngles: [0, 45, 0] },
@@ -114,9 +110,8 @@ const CUBEMAP_FACES = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
 
 function squareSkyFace(decoded) {
   if (decoded.width === decoded.height) return decoded;
-  // TF2 commonly stores side faces at 2:1 and its sky VMT applies `scale 1 2`.
-  // WebGL cubemaps require square faces, so reproduce that vertical stretch
-  // here with bilinear sampling instead of handing THREE an invalid cube.
+  // TF2 side faces are stored 2:1 and the sky VMT scales them 1x2. WebGL cubes need square
+  // faces, so stretch vertically here with bilinear sampling.
   const size = Math.max(decoded.width, decoded.height);
   const rgba = Buffer.alloc(size * size * 4);
   for (let y = 0; y < size; y++) {
@@ -175,7 +170,7 @@ function extractMapCubemap(map, bspPath, position) {
 
   const selected = candidates[0];
   const decoded = decodeVTFCubemap(readBspPakEntry(pak.data, selected.entry));
-  if (decoded.length !== CUBEMAP_FACES.length || decoded.some((face) => face.width !== face.height)) {
+  if (decoded.some((face) => face.width !== face.height)) {
     throw new Error(`Map cubemap is not a square six-face texture: ${selected.entry.name}`);
   }
   const outputDir = path.join(MAP_CUBEMAP_OUT, map, selected.origin.join('_'));

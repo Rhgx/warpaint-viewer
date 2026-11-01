@@ -1,6 +1,5 @@
-// Browser-safe VTF decoder. This module deliberately only uses Uint8Array and
-// DataView, so it is shared by the Node extraction tools and the web client.
-// It decodes the largest high-resolution mip by default.
+// Browser-safe VTF decoder. It uses only Uint8Array and DataView, so the Node tools and the web
+// client share it. Decodes the largest high-resolution mip by default.
 
 const VTF_FORMAT = {
   RGBA8888: 0, ABGR8888: 1, RGB888: 2, BGR888: 3, RGB565: 4, I8: 5, IA88: 6, P8: 7, A8: 8,
@@ -65,9 +64,7 @@ function formatBlockSize(format) {
   }
 }
 
-// The low-resolution thumbnail is not necessarily in a format the main image
-// decoder supports. This table is deliberately complete for the Source 1 VTF
-// IMAGE_FORMAT enum so its byte range can still be skipped safely.
+// Storage size for any Source 1 IMAGE_FORMAT, so a thumbnail in an unsupported format can still be skipped.
 function formatStorageInfo(format) {
   const supported = formatBlockSize(format);
   if (supported) return supported;
@@ -100,8 +97,7 @@ function mipByteSize(format, width, height) {
   return width * height * info.bpp;
 }
 
-// Sampling flags are independent from pixel decoding. Keep this a small typed
-// data contract for the eventual source-file-system texture provider.
+// Sampling flags, separate from pixel decoding.
 function getVTFSamplingMetadata(flags) {
   return {
     clampS: Boolean(flags & FLAG_CLAMPS),

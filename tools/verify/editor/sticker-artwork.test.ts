@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import {
   adjustStickerArtworkPixels,
-  matchResolvedStickerArtwork,
   matchResolvedStickerArtworkGroups,
   stickerArtworkNeedsComposedPreview,
   stickerLevelsAreIdentity,
@@ -28,7 +27,9 @@ test('sticker artwork levels', () => {
     { base: 'stickers/first', destTl: [0.1, 0.2], destTr: [0.3, 0.2], destBl: [0.1, 0.4] },
   ];
   assert.deepEqual(
-    matchResolvedStickerArtwork(targets, expanded).map((candidate) => candidate?.base),
+    targets
+      .map((target) => matchResolvedStickerArtworkGroups([{ ...target, occurrenceCount: 1 }], expanded)[0][0] ?? null)
+      .map((candidate) => candidate?.base),
     ['stickers/first', 'textures/stickers/second.webp'],
     'expanded template stickers must not shift authored artwork pairing',
   );

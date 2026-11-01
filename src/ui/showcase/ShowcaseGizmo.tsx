@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { TILT_LIMIT, type ShowcaseBoard, type ShowcaseItem } from '../../showcase/ShowcaseBoard';
+import { TILT_LIMIT, type ShowcaseBoard } from '../../showcase/ShowcaseBoard';
+import type { ShowcaseItem } from '../../showcase/showcaseTypes';
 import { POSE_RIGS, snapPose } from '../../showcase/poseRigs';
 
 type Handle = 'roll' | 'tilt' | 'turn';
@@ -11,12 +12,7 @@ const DRAG_DEGREES_PER_PX = 0.35;
 
 const LABELS: Record<Handle, string> = { roll: 'Roll', tilt: 'Tilt', turn: 'Turn' };
 
-/**
- * A rotate gizmo seen from the front, the way a 3D rotate tool looks: the flat
- * ring spins the weapon on the board, the upright ellipse tilts it around its
- * length, and the lying ellipse turns it around its height. The two ellipses
- * follow the weapon's roll, so each always rotates around the weapon's own axis.
- */
+/** Rotate gizmo: the flat ring rolls the weapon; the two ellipses follow its roll and tilt or turn it around its own axes. */
 export function ShowcaseGizmo({ board, item, snap }: { board: ShowcaseBoard; item: ShowcaseItem; snap: number }) {
   const [active, setActive] = useState<Handle | null>(null);
   const [hover, setHover] = useState<Handle | null>(null);
@@ -126,10 +122,7 @@ export function ShowcaseGizmo({ board, item, snap }: { board: ShowcaseBoard; ite
   );
 }
 
-/**
- * Handles on the parts a weapon can pose, as an alternative to the sliders:
- * dragging one moves the part along the path its control allows.
- */
+/** Drag handles on a weapon's posable parts, an alternative to the sliders; each moves its part along its control's path. */
 export function ShowcasePoseHandles({ board, item }: { board: ShowcaseBoard; item: ShowcaseItem }) {
   const [active, setActive] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);

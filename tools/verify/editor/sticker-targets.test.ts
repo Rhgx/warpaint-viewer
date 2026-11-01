@@ -3,6 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
+
 import type { RecipeNode } from '../../../src/compositor/types';
 import {
   addStickerStages,
@@ -10,9 +11,9 @@ import {
   removeStickerStages,
   setStickerDestQuad,
   type StickerQuad,
-} from '../../../src/editor/mutations';
+} from '../../../src/editor/sticker/stickerMutations';
 import { discoverStickerPlacementTargets } from '../../../src/editor/sticker/stickerTargets';
-import { resolveKitRecipeWithProvenance } from '../../../src/protodefs/decoder';
+import { resolveKitRecipeWithProvenance } from '../../../src/protodefs/kitQueries';
 import { applyImplicitStickerSpecs } from '../../../src/protodefs/implicitStickerSpecs';
 import type { ItemDefinitionMsg, OperationNodeMsg, StickerStageMsg, VarDefMsg, VarFieldMsg } from '../../../src/protodefs/messages';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';

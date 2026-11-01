@@ -1,23 +1,20 @@
 /// <reference lib="webworker" />
 
-// Thin message plumbing over decoder.ts. A stock container decodes to tens of
-// megabytes of plain objects (paintkit/item/operation definitions); this worker
-// is what actually holds that memory, so the main thread's heap stays small and
-// dispose() can release it all at once by just dropping the reference.
+// Thin message plumbing over decoder.ts. The decoded container is tens of megabytes of
+// plain objects; holding it here keeps the main thread's heap small, and dispose() frees
+// it by dropping the reference.
 
+import { decodeProtoDefs, decodeProtoDefsFromJson } from './decoder';
 import {
-  decodeProtoDefs,
-  decodeProtoDefsFromJson,
   extractKitBundle,
   extractKitMessages,
   getKitWeaponSlots,
   resolveKitRecipe,
   resolveKitRecipeWithProvenance,
-} from './decoder';
-import type { DecodedContainer } from './decoder';
+} from './kitQueries';
+import type { DecodedContainer } from './decoderShared';
+import type { Team } from '../data/types';
 import type { ProtoDefJsonFragment, ProtoDefOpenOptions } from './types';
-
-type Team = 'red' | 'blu';
 
 interface OpenRequest {
   id: number;

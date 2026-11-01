@@ -35,11 +35,12 @@ export function encodePNG(rgba, width, height) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // color type RGBA
-  ihdr[10] = 0; // compression
-  ihdr[11] = 0; // filter
-  ihdr[12] = 0; // interlace
+  // 8-bit RGBA, no compression, filter or interlace.
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
 
   // Add filter byte (0 = none) per scanline.
   const stride = width * 4;

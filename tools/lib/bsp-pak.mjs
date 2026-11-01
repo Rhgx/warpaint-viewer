@@ -70,8 +70,7 @@ function decompressZipLzma(data, expectedSize) {
       maxBuffer: Math.max(expectedSize + 1024, 1024 * 1024),
     });
   } catch (error) {
-    // xz reports an unterminated raw stream for Source's LZMA entries even
-    // when it has already produced the complete declared payload.
+    // xz reports an unterminated stream after producing the full payload; accept that output.
     const output = error?.stdout;
     if (Buffer.isBuffer(output) && output.length >= expectedSize) return output.subarray(0, expectedSize);
     throw new Error(`Could not decompress BSP pakfile LZMA entry: ${error?.message ?? error}`);

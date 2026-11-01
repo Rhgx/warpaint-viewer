@@ -23,10 +23,9 @@ export interface LightingPreset {
 type SourceLight = readonly [number, number, number, number];
 type SourceVector = readonly [number, number, number];
 
-const cube = (
-  px: [number, number, number], nx = px,
-  py = px, ny = px, pz = px, nz = px,
-): AmbientCube => [px, nx, py, ny, pz, nz].map((value) => new THREE.Vector3(...value)) as unknown as AmbientCube;
+const cube = (color: readonly [number, number, number]): AmbientCube => (
+  sourceAmbientCube([color, color, color, color, color, color])
+);
 
 function sourceColor([r, g, b]: readonly number[]): THREE.Color {
   return new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
@@ -152,10 +151,8 @@ function sourceCompiledLocalLight(
 }
 
 function inspectionLights(): THREE.Light[] {
-  // Resource/UI/econ/InspectionPanel.res from tf2_misc_dir.vpk.
-  // LightDesc_t directional vectors are incident surface-to-light directions;
-  // keep that sign instead of using directional(), whose map-light ray helper
-  // intentionally points from the light toward the surface.
+  // Resource/UI/econ/InspectionPanel.res from tf2_misc_dir.vpk. LightDesc_t directions are
+  // surface-to-light, so keep that sign rather than directional()'s light-to-surface one.
   const key = new THREE.DirectionalLight(0xffffff, 1);
   key.position.copy(inspectionPanelDirection([0, 0, -1])).multiplyScalar(10_000);
   key.target.position.set(0, 0, 0);
@@ -174,9 +171,8 @@ function inspectionLights(): THREE.Light[] {
     0,
   );
   spot.color.setRGB(1, 0.9, 0.9);
-  // Source's maxDistance is a hard cutoff. Three's nonzero distance adds a
-  // smooth polynomial fade, so keep the visible inspection geometry on the
-  // Source constant-attenuation path instead of introducing that fade.
+  // Source's maxDistance is a hard cutoff. A nonzero three distance adds a smooth fade,
+  // so the inspect spot stays on the constant-attenuation path.
   spot.position.copy(inspectionPanelPosition([0, 0, 100]));
   spot.target.position.copy(spot.position).add(inspectionPanelDirection([1, 0, -0.5]));
 
@@ -209,9 +205,8 @@ function ambientProbeBackground(sourceCube: readonly (readonly number[])[]): num
   const average = [0, 1, 2].map((channel) => (
     sourceCube.reduce((sum, face) => sum + face[channel], 0) / sourceCube.length
   ));
-  // Probe values are already linear; convert to the display color space used
-  // by THREE.Color backgrounds. This gives the room its compiled warm-brown
-  // ambience without inventing another hand-authored color.
+  // Probe values are already linear; convert to the color space THREE.Color backgrounds use.
+  // This keeps the compiled warm-brown ambience rather than a hand-authored color.
   return new THREE.Color(average[0], average[1], average[2]).getHex(THREE.SRGBColorSpace);
 }
 
@@ -288,10 +283,9 @@ const paintkitIconLighting: LightingPreset = {
   ambientCube: cube([0.4, 0.4, 0.4]),
   build: (_camera, frame) => {
     if (!frame) return [];
-    // ItemModelPanel.res enables spotlight=1. CModelPanel places that light at
-    // Source (0,0,200), aimed 75% of the model's Z extent above its origin.
-    // LightDesc_t receives cone boundaries in radians. Three expresses the
-    // inner cone as a fraction of the outer cone through `penumbra`.
+    // ItemModelPanel.res enables spotlight=1; CModelPanel places it at Source (0,0,200), aimed
+    // 75% of the model's Z extent up. LightDesc_t takes cone bounds in radians, and three
+    // expresses the inner cone as a fraction of the outer one through `penumbra`.
     const innerCone = 0.035;
     const outerCone = 0.873;
     const light = new THREE.SpotLight(

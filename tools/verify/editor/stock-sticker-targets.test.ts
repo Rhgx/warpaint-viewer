@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { discoverStickerPlacementTargets } from '../../../src/editor/sticker/stickerTargets';
 import { stickerPlacementFromQuad } from '../../../src/editor/sticker/stickerGeometry';
-import { extractKitMessages, resolveKitRecipeWithProvenance } from '../../../src/protodefs/decoder';
+import { extractKitMessages, resolveKitRecipeWithProvenance } from '../../../src/protodefs/kitQueries';
 import { shippedProtoDefs } from '../fixtures';
 
 test('every shipped stock sticker placement is editable on every supported weapon', () => {

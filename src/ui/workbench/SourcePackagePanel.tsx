@@ -1,22 +1,19 @@
-import { useEffect, useState } from 'react';
 import {
   LoaderCircle,
   PackageOpen,
   Trash2,
   Upload,
 } from 'lucide-react';
+import { useArmedConfirm } from '../../hooks/useArmedConfirm';
 import { DiagnosticsList } from './DiagnosticItem';
 import type {
-  SourceDiagnostic,
   SourcePackageFormat,
+  SourcePackageState,
+  SourcePackageSummary,
 } from '../../source/contracts';
-
-export type { SourcePackageFormat } from '../../source/contracts';
-export type SourcePackageDiagnostic = SourceDiagnostic;
-import type { SourcePackageState, SourcePackageSummary } from '../../source/contracts';
 import './SourcePackagePanel.css';
 
-export const SOURCE_PACKAGE_ACCEPT = '.zip,.vpk';
+const SOURCE_PACKAGE_ACCEPT = '.zip,.vpk';
 
 const FORMAT_LABEL: Record<SourcePackageFormat, string> = {
   zip: 'ZIP',
@@ -51,8 +48,7 @@ function ImportPicker({
       <input
         type="file"
         accept={SOURCE_PACKAGE_ACCEPT}
-        // Multiple selection exists for multipart VPKs, where the `_dir.vpk`
-        // and every numbered segment have to arrive together.
+        // Multipart VPKs need the _dir.vpk and every numbered segment together.
         multiple
         disabled={busy}
         aria-label="Import a Source asset package"
@@ -66,22 +62,10 @@ function ImportPicker({
   );
 }
 
-/**
- * The Package tab's full content: an empty state explaining what a package is
- * for, a mounted summary row with its materials breakdown always visible (no
- * more expander now that the tab has room), or an importing spinner. Import
- * diagnostics render in every state since a failed import can still leave
- * nothing mounted.
- */
+/** Package tab content for every state; import diagnostics show in all of them, since a failed import may mount nothing. */
 export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
   const { status, summary, diagnostics, onRemove } = state;
-  const [confirmRemove, setConfirmRemove] = useState(false);
-
-  useEffect(() => {
-    if (!confirmRemove) return;
-    const timer = window.setTimeout(() => setConfirmRemove(false), 3000);
-    return () => window.clearTimeout(timer);
-  }, [confirmRemove]);
+  const [confirmRemove, armRemove] = useArmedConfirm();
 
   return (
     <div className="source-package" data-status={status}>
@@ -164,7 +148,7 @@ export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
             className="source-package-btn source-package-remove"
             data-confirm={confirmRemove ? '' : undefined}
             onClick={() =>
-              confirmRemove ? onRemove() : setConfirmRemove(true)
+              confirmRemove ? onRemove() : armRemove()
             }
           >
             <Trash2 size={12} />

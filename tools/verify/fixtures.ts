@@ -3,8 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BlobReader, TextWriter, ZipReader } from '@zip.js/zip.js';
+
 import type { Manifest } from '../../src/data/types';
-import { decodeProtoDefs, extractKitBundle, type DecodedContainer } from '../../src/protodefs/decoder';
+import { decodeProtoDefs } from '../../src/protodefs/decoder';
+import { extractKitBundle } from '../../src/protodefs/kitQueries';
+import type { DecodedContainer } from '../../src/protodefs/decoderShared';
 import { asItem, type HeaderMsg, type ItemDefinitionMsg, type OperationNodeMsg } from '../../src/protodefs/messages';
 import { buildResolveCtx } from '../../src/protodefs/resolve';
 import type { ProtoDefKitBundle, ProtoDefKitMessages } from '../../src/protodefs/types';
@@ -50,13 +53,6 @@ export async function fixtureFragments(filePath: string): Promise<Array<{ name: 
   }
 }
 
-export function fixturePaintkitIds(value: unknown): number[] {
-  if (!value || typeof value !== 'object' || !('paintkits' in value) || !Array.isArray(value.paintkits)) return [];
-  return value.paintkits.flatMap((kit) => (
-    kit && typeof kit === 'object' && 'id' in kit && typeof kit.id === 'number' ? [kit.id] : []
-  ));
-}
-
 /** Reads a nested field of an untyped message (mutation results are plain records), or undefined. */
 export function dig(value: unknown, ...path: Array<string | number>): unknown {
   return path.reduce<unknown>((node, key) => (node !== null && typeof node === 'object' ? Reflect.get(node, key) : undefined), value);
@@ -92,7 +88,7 @@ export function syntheticContainer(messages: ProtoDefKitMessages, itemDefinition
     return item ? [{ item, itemDef: itemDefinition, weaponKey }] : [];
   });
   return {
-    ctx: buildResolveCtx([operation], [itemDefinition], []),
+    ctx: buildResolveCtx([operation], [itemDefinition]),
     kitsByDefindex: new Map([[definition.header.defindex, { def: definition, slots }]]),
     index: { kits: [], countsByType: {} },
   };

@@ -40,9 +40,17 @@ test('custom lighting validation clamps persisted values and caps lights', () =>
   assert.deepEqual(spot.position, [10, -10, 0]);
   assert.equal(spot.color, '#ffffff');
   assert.equal(spot.intensity, 20);
-  assert.equal(spot.angleDegrees, 90);
+  assert.equal(spot.angleDegrees, 120);
   assert.equal(spot.softness, 0);
   assert.equal(spot.range, 0);
+});
+
+test('the reset rig keeps its Inspect spot cone through validation', () => {
+  const defaults = createDefaultCustomLightingRig();
+  const reset = validateCustomLightingRig(defaults).lights[1];
+  const original = defaults.lights[1];
+  if (reset.type !== 'spot' || original.type !== 'spot') throw new Error('expected a spot light');
+  assert.equal(reset.angleDegrees, original.angleDegrees);
 });
 
 test('custom lighting coordinates use the largest framed dimension', () => {

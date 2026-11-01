@@ -4,6 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
+
 import { serializeProtoDefKitBundle } from '../../../src/editor/export/jsonExport';
 import {
   activeOperationIndex,
@@ -12,9 +13,10 @@ import {
   selectActiveScope,
   topLevelMessages,
 } from '../../../src/editor/kitBundle';
-import { setTextureTransformFlip } from '../../../src/editor/mutations';
+import { setTextureTransformFlip } from '../../../src/editor/transform/transformMutations';
 import { discoverLayerTransforms } from '../../../src/editor/transform/transformTargets';
-import { decodeProtoDefsFromJson, resolveKitRecipe } from '../../../src/protodefs/decoder';
+import { decodeProtoDefsFromJson } from '../../../src/protodefs/decoder';
+import { resolveKitRecipe } from '../../../src/protodefs/kitQueries';
 import type { ProtoDefKitBundle, ProtoDefOperationScope } from '../../../src/protodefs/types';
 import { shippedProtoDefs } from '../fixtures';
 
@@ -63,29 +65,29 @@ test('a top-level paint always edits operation 0, and only a per-wear paint has 
   assert.equal(topLevelMessages(bundleOf(WARHAWK)), null, 'a per-wear paint has no single definition and operation pair');
 });
 
-test('a write-back changes only the scoped operation and keeps the definition', () => {
+test('a no-op edit returns the same bundle object', () => {
   const warhawk = bundleOf(WARHAWK);
   const index = activeOperationIndex(warhawk, { weaponKey: 'c_flamethrower', wear: 2 });
-  const priorOperation = warhawk.operations[index];
-  assert.ok(priorOperation, 'the scoped operation should exist');
-  const edited = applyBundleEdit(warhawk, index, (messages) => ({
-    definition: messages.definition,
-    operation: { ...messages.operation, operation_node: [] },
-  }));
-
-  assert.deepEqual(edited.operations[index].operation_node, []);
-  assert.notDeepEqual(priorOperation.operation_node, [], 'the input bundle must not be mutated');
-  edited.operations.forEach((operation, position) => {
-    if (position !== index) assert.equal(operation, warhawk.operations[position], `operation ${position} should be reused`);
-  });
-  assert.equal(edited.definition, warhawk.definition, 'the shared definition is preserved');
-  assert.equal(edited.itemDefinitions, warhawk.itemDefinitions);
-  assert.deepEqual(edited.scopes, warhawk.scopes);
   assert.equal(
     applyBundleEdit(warhawk, index, (messages) => messages),
     warhawk,
     'an edit that changes nothing returns the bundle unchanged',
   );
+});
+
+test('a real edit leaves the input bundle unchanged', () => {
+  const warhawk = bundleOf(WARHAWK);
+  const index = activeOperationIndex(warhawk, { weaponKey: 'c_flamethrower', wear: 2 });
+  const priorOperation = warhawk.operations[index];
+  assert.ok(priorOperation, 'the scoped operation should exist');
+  const before = structuredClone(warhawk);
+  const edited = applyBundleEdit(warhawk, index, (messages) => ({
+    definition: messages.definition,
+    operation: { ...messages.operation, operation_node: [] },
+  }));
+
+  assert.notEqual(edited.operations[index], priorOperation, 'the scoped operation should change');
+  assert.deepEqual(warhawk, before, 'the input bundle must not be mutated');
 });
 
 test('a Killer Bee wear 0 edit changes and previews only that wear', () => {

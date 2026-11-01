@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { SourcePackage, SourcePackageOpenResult, SourcePackageState, SourcePackageSummary } from '../source/contracts';
+import type { SourceDiagnostic, SourcePackage, SourcePackageOpenResult, SourcePackageState, SourcePackageSummary } from '../source/contracts';
 import { isSupportedTexturePath, sourcePathExtension } from '../source/paths';
 import { SourceTextureProvider } from '../source/provider';
 import { AppError, appErrorDiagnostic, ERROR_CODES } from '../errors';
@@ -15,9 +15,7 @@ type StaticPackageSummary = Omit<
   'usedCount' | 'fallbackCount' | 'nameMatchedCount' | 'ambiguousNameCount' | 'appliedMaterialPaths'
 >;
 
-// Package entry indexes never change after opening. Provider activity is much
-// more frequent than mounts, so retain the archive-derived fields and only
-// recalculate the live counters on each UI sync.
+// Entry indexes never change after opening, so only the live counters recalculate on each UI sync.
 const staticSummaryCache = new WeakMap<SourcePackage, StaticPackageSummary>();
 
 function importDiagnostic(cause: unknown) {
@@ -28,7 +26,7 @@ function importDiagnostic(cause: unknown) {
   });
 }
 
-function persistenceDiagnostic(message: string): ReturnType<typeof importDiagnostic> {
+function persistenceDiagnostic(message: string): SourceDiagnostic {
   return {
     id: `package:persistence:${message}`,
     level: 'warning',
@@ -67,10 +65,7 @@ function summaryFor(pkg: SourcePackage, provider: SourceTextureProvider): Source
   };
 }
 
-/**
- * UI state and transactional ZIP/VPK mounting for the single active package.
- * Disabled, nothing is imported or restored and the saved files are never touched.
- */
+/** Package UI state and transactional ZIP/VPK mounting. When disabled, saved files are never touched. */
 export function useSourcePackage(
   fallback: (ref: string) => string,
   onSuccessfulImport: () => void,
@@ -131,8 +126,7 @@ export function useSourcePackage(
               'Choose exactly one ZIP package.',
             );
           }
-          // Archive parsers are intentionally loaded only after a user picks a
-          // package. @zip.js is sizeable and no normal viewing path needs it.
+          // Archive parsers load after a user picks a package, since @zip.js is large and viewing never needs it.
           const { openZipSourcePackage } = await import('../source/zip');
           opened = await openZipSourcePackage(zips[0]);
         } else if (vpks.length) {

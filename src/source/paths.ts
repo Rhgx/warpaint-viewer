@@ -18,21 +18,17 @@ export interface NormalizeSourcePathOptions {
    * entries must leave this false so absolute archive paths are rejected.
    */
   allowLeadingSeparators?: boolean;
-  /** Directory markers are only useful while validating an archive index. */
-  allowEmpty?: boolean;
 }
 
 /**
- * Converts a path into the case-insensitive Source asset identity. It is
- * deliberately stricter than URL normalization: no relative traversal, drive
- * paths, controls, or absolute archive paths are permitted.
+ * Converts a path into a case-insensitive Source asset identity. Stricter than URL
+ * normalization: no traversal, drive paths, control characters or absolute paths.
  */
 export function normalizeSourcePath(input: string, options: NormalizeSourcePathOptions = {}): string {
   if (typeof input !== 'string') {
     throw new SourcePackageError('invalid-path', 'Source paths must be strings.');
   }
   if (input.length === 0) {
-    if (options.allowEmpty) return '';
     throw new SourcePackageError('invalid-path', 'Source paths cannot be empty.');
   }
   if (hasControlCharacter(input)) {
@@ -59,7 +55,6 @@ export function normalizeSourcePath(input: string, options: NormalizeSourcePathO
     components.push(component);
   }
   if (components.length === 0) {
-    if (options.allowEmpty) return '';
     throw new SourcePackageError('invalid-path', 'Source paths cannot be empty.', input);
   }
   return components.join('/').toLowerCase();
@@ -109,9 +104,8 @@ export function sourceTextureCandidates(reference: string): string[] {
   const normalized = normalizeSourcePath(reference, { allowLeadingSeparators: true });
   const explicitExtension = sourcePathExtension(normalized);
   const identity = sourceTextureIdentity(normalized);
-  // Generated viewer URLs always end in .webp, but that is the built-in
-  // fallback encoding rather than an authored Source extension. Do not let it
-  // outrank a package VTF for the same Source material identity.
+  // Generated viewer URLs end in .webp only as the built-in encoding, so that extension must
+  // not outrank a package VTF.
   const generatedViewerUrl = normalized.startsWith('textures/');
   const extensions = !generatedViewerUrl && explicitExtension && SUPPORTED_TEXTURE_EXTENSION_SET.has(explicitExtension)
     ? [explicitExtension, ...SUPPORTED_TEXTURE_EXTENSIONS.filter((extension) => extension !== explicitExtension)]

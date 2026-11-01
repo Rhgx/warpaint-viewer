@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import {
   assignSelectGroupExclusively,
   clearSelectGroupIds,
+  setGroupTextureReference,
+  type SelectGroupAssignmentResult,
+  type SelectGroupAssignmentTarget,
+  type SelectGroupTarget,
+  type GroupTextureTarget,
+} from './layers/groupMutations';
+import {
   addStickerStages,
   addStickerVariant,
   equalizeStickerVariantWeights,
-  EditorMutationAmbiguityError,
   moveStickerStages,
   removeStickerStages,
   removeStickerVariant,
@@ -13,27 +20,26 @@ import {
   setStickerBaseReference,
   setStickerVariantBase,
   setStickerVariantWeight,
+  type StickerQuad,
+  type StickerStructureTarget,
+  type StickerTarget,
+} from './sticker/stickerMutations';
+import {
   setTextureLayerTeamColors,
   setTextureLayerTeamTexture,
   setTextureTransformFlip,
   setTextureTransformRange,
   pushTextureTransformRangeToAllWeapons,
-  setWeaponMaterialOverride,
-  setWeaponMaterialOverrides,
-  setGroupTextureReference,
-  type SelectGroupAssignmentResult,
-  type SelectGroupAssignmentTarget,
-  type SelectGroupTarget,
-  type GroupTextureTarget,
-  type StickerQuad,
-  type StickerStructureTarget,
-  type StickerTarget,
   type TextureTransformRangeField,
   type TextureTransformRangeValue,
   type TextureTransformTarget,
+} from './transform/transformMutations';
+import {
+  setWeaponMaterialOverride,
+  setWeaponMaterialOverrides,
   type WeaponMaterialTarget,
   type WeaponMaterialUpdate,
-} from './mutations';
+} from './materials/materialMutations';
 import { SnapshotHistory } from './history';
 import {
   serializeProtoDefKitBundle,
@@ -48,7 +54,7 @@ import {
   snapshotBundle,
   type KitViewerScope,
 } from './kitBundle';
-import type { ProtoDefKitBundle, ProtoDefKitMessages, ProtoDefOperationScope } from '../protodefs/types';
+import type { ProtoDefKitBundle, ProtoDefKitMessages } from '../protodefs/types';
 import type { VarDefMsg } from '../protodefs/messages';
 import {
   graphToOperation,
@@ -63,21 +69,14 @@ type ProtoDefEditorKitLoader = (kitId: number) => Promise<ProtoDefKitBundle | nu
 export interface UseProtoDefEditorSessionOptions {
   /** The selected imported catalog id, or null when the editor has no kit. */
   kitId: number | null | undefined;
-  /** Loads the whole kit: useStockDefinitions or useCustomDefinitions exportKitBundle, by kind. */
+  /** Loads the whole kit bundle for a catalog id. */
   loadKit: ProtoDefEditorKitLoader;
-  /**
-   * The weapon and wear the viewer shows. For a per-wear paint this picks the
-   * operation `current` exposes. Changing it never resets the session.
-   */
+  /** The viewer's weapon and wear. Picks the operation `current` exposes without resetting the session. */
   scope?: KitViewerScope;
 }
 
 interface ReloadProtoDefEditorSessionOptions {
-  /**
-   * Reloading replaces the session baseline and discards edits. The caller
-   * must opt into that when the session is dirty rather than losing work as a
-   * side effect of a refresh.
-   */
+  /** Required to reload over unsaved edits, so a refresh never discards work by accident. */
   discardEdits?: boolean;
 }
 
@@ -98,8 +97,6 @@ export interface ProtoDefEditorSession {
   bundle: ProtoDefKitBundle | null;
   /** Immutable baseline bundle, the one `dirty` is measured against. */
   originalBundle: ProtoDefKitBundle | null;
-  /** Which operation each weapon and wear reads. Empty for a top-level paint. */
-  scopes: readonly ProtoDefOperationScope[];
   /** The scope `current` edits for the viewer's weapon and wear, or null for a top-level paint. */
   activeScope: { weaponKey: string; wear: number } | null;
   /** Incremented whenever current changes (including when the viewer's scope changes it), so a renderer can rebuild from it. */
@@ -142,11 +139,8 @@ export interface ProtoDefEditorSession {
   setLayerTeamColors: (target: Pick<TextureTransformTarget, 'stagePath'>, enabled: boolean) => boolean;
   setLayerTeamTexture: (target: Pick<TextureTransformTarget, 'stagePath'>, team: 'red' | 'blu', textureReference: string) => boolean;
   /**
-   * Opens a batched transform gesture: calls to setTransformRange/setTransformFlip
-   * made before the matching endTransformGesture() update `current` live (so the
-   * viewer keeps redrawing as a slider moves) but collapse into the single
-   * history entry recorded by the first of those calls, exactly like a sticker
-   * drag committing one quad at pointer-up.
+   * Opens a batched transform gesture. Until endTransformGesture(), setTransformRange and
+   * setTransformFlip update `current` live but record one history entry.
    */
   beginTransformGesture: () => void;
   endTransformGesture: () => void;
@@ -164,11 +158,7 @@ export interface ProtoDefEditorSession {
   setWeaponMaterials: (updates: readonly WeaponMaterialUpdate[]) => boolean;
   /** Replaces only the operation graph in one validated, undoable edit. */
   replaceOperationGraph: (graph: OperationGraph) => boolean;
-  /**
-   * Writes one paint-kit header variable. These are the values operation
-   * stages bind to, so editing the declaration is how a bound parameter
-   * changes without detaching the binding.
-   */
+  /** Writes one paint-kit header variable. Operation stages bind to these values, so a bound parameter changes without detaching. */
   setDefinitionVariable: (name: string, value: string) => boolean;
   undo: () => void;
   redo: () => void;
@@ -179,7 +169,6 @@ export interface ProtoDefEditorSession {
   reload: (options?: ReloadProtoDefEditorSessionOptions) => Promise<boolean>;
   /** Serializes the whole working bundle to portable JSON fragments. */
   serialize: (options?: SerializeProtoDefKitOptions) => ProtoDefKitBundleJsonExport | null;
-  clearError: () => void;
 }
 
 /** The paint kit's declared variables, whatever Many<T> shape they were authored in. */
@@ -193,10 +182,8 @@ function definitionHeaderVariables(definition: Record<string, unknown>): VarDefM
   ));
 }
 
-const NO_SCOPES: readonly ProtoDefOperationScope[] = [];
-
 function errorMessage(cause: unknown): string {
-  if (cause instanceof EditorMutationAmbiguityError || cause instanceof Error) return cause.message;
+  if (cause instanceof Error) return cause.message;
   return String(cause);
 }
 
@@ -211,9 +198,8 @@ function isOperationMessage(value: Record<string, unknown>): value is Record<str
 }
 
 /**
- * A small editor-only state machine for one imported proto_defs kit. It does
- * not guess which external weapon/wear source should receive an edit: the
- * mutation primitives reject ambiguous fields and surface the reason in error.
+ * Editor-only state for one imported proto_defs kit. The mutation primitives reject
+ * ambiguous edits and report the reason in `error`.
  */
 export function useProtoDefEditorSession({
   kitId: requestedKitId,
@@ -249,8 +235,7 @@ export function useProtoDefEditorSession({
   const viewerRef = useRef(viewer);
   viewerRef.current = viewer;
 
-  // Scope only chooses which operation is exposed. The bundle, its history,
-  // and its dirty state are untouched by a change of weapon or wear.
+  // Scope only picks the exposed operation; the bundle, history and dirty state are unaffected.
   const activeIndex = bundle ? activeOperationIndex(bundle, viewer) : 0;
   const current = useMemo(
     () => (bundle ? operationMessages(bundle, activeIndex) : null),
@@ -262,8 +247,7 @@ export function useProtoDefEditorSession({
   );
   const activeScope = bundle ? selectActiveScope(bundle.scopes, viewer) : null;
 
-  // A different operation under `current` must count as a new revision, since
-  // renderers (such as the operation graph's pending drafts) key on it.
+  // A different operation is a new revision, since renderers such as the operation graph key on it.
   const [shownIndex, setShownIndex] = useState(activeIndex);
   if (shownIndex !== activeIndex) {
     setShownIndex(activeIndex);
@@ -272,9 +256,7 @@ export function useProtoDefEditorSession({
 
   const install = useCallback((nextBundle: ProtoDefKitBundle) => {
     const nextOriginal = snapshotBundle(nextBundle);
-    // Both references deliberately begin at the same frozen snapshot. Every
-    // edit produces a fresh snapshot, making identity a precise dirty check
-    // and letting undo return to the actual baseline without deep comparison.
+    // Both refs start at one frozen snapshot. Every edit makes a fresh snapshot, so identity is the dirty check.
     originalRef.current = nextOriginal;
     bundleRef.current = nextOriginal;
     historyRef.current.clear();
@@ -330,25 +312,28 @@ export function useProtoDefEditorSession({
     }
   }, [clear, install, kitId]);
 
-  // A kit selection intentionally starts a fresh session. Source refreshes
-  // remain explicit through reload(), so a parent re-render cannot discard
-  // unsaved work merely because it supplied a new callback identity.
+  // A kit selection starts a fresh session. Source refreshes stay explicit through reload(), so a new callback identity cannot discard work.
   useEffect(() => {
     void load(true);
     return () => { requestRef.current += 1; };
   }, [load]);
 
-  const commitEdit = useCallback((prior: ProtoDefKitBundle, next: ProtoDefKitBundle) => {
-    historyRef.current.record(prior);
+  // The one place a new working bundle goes live; recording history stays with the caller.
+  const publish = useCallback((next: ProtoDefKitBundle, nextDirty: boolean) => {
     bundleRef.current = next;
-    dirtyRef.current = true;
+    dirtyRef.current = nextDirty;
     setBundle(next);
     setRevision((value) => value + 1);
-    setDirty(true);
+    setDirty(nextDirty);
     setCanUndo(historyRef.current.canUndo);
     setCanRedo(historyRef.current.canRedo);
     setError(null);
   }, []);
+
+  const commitEdit = useCallback((prior: ProtoDefKitBundle, next: ProtoDefKitBundle) => {
+    historyRef.current.record(prior);
+    publish(next, true);
+  }, [publish]);
 
   const applyEdit = useCallback((edit: (prior: ProtoDefKitMessages) => ProtoDefKitMessages): boolean => {
     const prior = bundleRef.current;
@@ -432,12 +417,8 @@ export function useProtoDefEditorSession({
     applyEdit((prior) => setStickerDestQuad(prior, target, quad))
   ), [applyEdit]);
 
-  // Batches a transform drag or typing burst into one history entry while
-  // still updating `current` (and therefore the live viewer) on every
-  // intermediate value, unlike setStickerQuad's single end-of-drag commit:
-  // a rotated/scaled paint layer has no cheap shader-uniform preview the way
-  // a sticker quad does, so the live redraw has to go through the same
-  // recipe recomposite path a committed edit already uses.
+  // Batches a transform drag into one history entry while `current` updates live. Layer transforms have no
+  // cheap shader preview, so each redraw recomposites the recipe like a committed edit.
   const transformGestureRef = useRef<{ baseline: ProtoDefKitBundle; recorded: boolean } | null>(null);
 
   const beginTransformGesture = useCallback(() => {
@@ -463,14 +444,7 @@ export function useProtoDefEditorSession({
           historyRef.current.record(gesture.baseline);
           gesture.recorded = true;
         }
-        bundleRef.current = next;
-        dirtyRef.current = true;
-        setBundle(next);
-        setRevision((value) => value + 1);
-        setDirty(true);
-        setCanUndo(historyRef.current.canUndo);
-        setCanRedo(historyRef.current.canRedo);
-        setError(null);
+        publish(next, true);
       } else {
         commitEdit(prior, next);
       }
@@ -479,7 +453,7 @@ export function useProtoDefEditorSession({
       setError(errorMessage(cause));
       return false;
     }
-  }, [commitEdit]);
+  }, [commitEdit, publish]);
 
   const setTransformRange = useCallback((
     target: TextureTransformTarget,
@@ -540,7 +514,6 @@ export function useProtoDefEditorSession({
           ...messages.operation.header,
           ...operation.header,
         },
-        operation_node: operation.operation_node,
       };
       const next = snapshotBundle(applyBundleEdit(prior, index, (active) => ({ ...active, operation: merged })));
       commitEdit(prior, next);
@@ -569,8 +542,7 @@ export function useProtoDefEditorSession({
     ));
     const definition = structuredClone(prior.definition) as Record<string, unknown>;
     const header = definition.header as Record<string, unknown>;
-    // Preserve the authored Many<T> shape: a lone declaration stays a lone
-    // declaration so the serialized definition keeps byte-for-byte structure.
+    // Keep the authored Many<T> shape so the serialized definition stays byte-for-byte.
     header.variables = Array.isArray(header.variables) ? replacement : replacement[0];
     commitEdit(prior, snapshotBundle({ ...prior, definition }));
     return true;
@@ -629,32 +601,16 @@ export function useProtoDefEditorSession({
     if (!working) return;
     const prior = historyRef.current.undo(working);
     if (!prior) return;
-    bundleRef.current = prior;
-    const nextDirty = prior !== originalRef.current;
-    dirtyRef.current = nextDirty;
-    setBundle(prior);
-    setRevision((value) => value + 1);
-    setDirty(nextDirty);
-    setCanUndo(historyRef.current.canUndo);
-    setCanRedo(historyRef.current.canRedo);
-    setError(null);
-  }, []);
+    publish(prior, prior !== originalRef.current);
+  }, [publish]);
 
   const redo = useCallback(() => {
     const working = bundleRef.current;
     if (!working) return;
     const next = historyRef.current.redo(working);
     if (!next) return;
-    bundleRef.current = next;
-    const nextDirty = next !== originalRef.current;
-    dirtyRef.current = nextDirty;
-    setBundle(next);
-    setRevision((value) => value + 1);
-    setDirty(nextDirty);
-    setCanUndo(historyRef.current.canUndo);
-    setCanRedo(historyRef.current.canRedo);
-    setError(null);
-  }, []);
+    publish(next, next !== originalRef.current);
+  }, [publish]);
 
   const reset = useCallback(() => {
     const baseline = originalRef.current;
@@ -677,8 +633,7 @@ export function useProtoDefEditorSession({
       setError('Load a war paint before restoring its draft.');
       return false;
     }
-    // A draft saved from a different source file under the same name must not
-    // leave the viewer's scope pointing at an operation that does not exist.
+    // A draft from a different source must not leave the viewer's scope on a missing operation.
     if (draft.operations.length !== baseline.operations.length
       || JSON.stringify(draft.scopes) !== JSON.stringify(baseline.scopes)) {
       setError('This draft does not match the loaded war paint.');
@@ -714,8 +669,6 @@ export function useProtoDefEditorSession({
     }
   }, []);
 
-  const clearError = useCallback(() => setError(null), []);
-
   return {
     status,
     kitId,
@@ -723,7 +676,6 @@ export function useProtoDefEditorSession({
     current,
     bundle,
     originalBundle,
-    scopes: bundle?.scopes ?? NO_SCOPES,
     activeScope,
     revision,
     dirty,
@@ -760,6 +712,5 @@ export function useProtoDefEditorSession({
     restoreDraft,
     reload,
     serialize,
-    clearError,
   };
 }

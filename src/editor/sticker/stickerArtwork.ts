@@ -54,28 +54,6 @@ function pointsEqual(first: readonly [number, number], second: readonly [number,
   return Math.abs(first[0] - second[0]) < 1e-7 && Math.abs(first[1] - second[1]) < 1e-7;
 }
 
-/** Match direct authored stages without relying on indexes shifted by expanded templates. */
-export function matchResolvedStickerArtwork<T extends StickerArtworkCandidate>(
-  targets: readonly StickerArtworkTarget[],
-  candidates: readonly T[],
-): readonly (T | null)[] {
-  const claimed = new Set<number>();
-  return targets.map((target) => {
-    if (!target.quad) return null;
-    const bases = new Set(target.bases.map(normalizedTextureReference).filter(Boolean));
-    const match = candidates.findIndex((candidate, index) => (
-      !claimed.has(index)
-      && bases.has(normalizedTextureReference(candidate.base))
-      && pointsEqual(target.quad!.tl, candidate.destTl)
-      && pointsEqual(target.quad!.tr, candidate.destTr)
-      && pointsEqual(target.quad!.bl, candidate.destBl)
-    ));
-    if (match < 0) return null;
-    claimed.add(match);
-    return candidates[match];
-  });
-}
-
 /** Match every resolved wear-branch occurrence owned by each logical sticker. */
 export function matchResolvedStickerArtworkGroups<T extends StickerArtworkCandidate>(
   targets: readonly GroupStickerArtworkTarget[],
@@ -118,9 +96,8 @@ export function adjustStickerArtworkPixels(pixels: Uint8ClampedArray, levels: St
 }
 
 /**
- * Prepare the exact artwork displayed by an apply_sticker stage. Raw source
- * textures can be white masks whose authored levels supply their visible
- * colour, so the editor must not show the source file by itself.
+ * Prepare the artwork an apply_sticker stage shows. Source files can be white masks whose
+ * authored levels supply the colour, so the raw file is never shown alone.
  */
 export async function prepareStickerArtwork(url: string, levels: StickerLevels): Promise<PreparedStickerArtwork> {
   if (stickerLevelsAreIdentity(levels)) return { url, dispose() {} };

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import type { PaintkitEntry } from '../data/types';
 import { WORKSHOP_ENABLED } from '../device';
 import type { useCustomDefinitions } from '../hooks/useCustomDefinitions';
@@ -19,11 +20,8 @@ function downloadText(text: string, fileName: string): void {
   downloadBlob(new Blob([text], { type: 'application/json' }), fileName);
 }
 
-/**
- * A selected id can outlive its kit (removed or unloaded definitions), so the
- * kit must still be in the catalog for the editor to keep working on it.
- */
-export function resolveEditableKitId(
+/** The selected kit must still be in the catalog; a selected id can outlive a removed or unloaded kit. */
+function resolveEditableKitId(
   selectedKitId: number | null,
   requestedKitId: number | null,
   selectedKit: PaintkitEntry | null,
@@ -34,10 +32,7 @@ export function resolveEditableKitId(
 /** A burst of edits or a drag builds one preview, once it has paused this long. */
 const PREVIEW_DEBOUNCE_MS = 120;
 
-/**
- * Runs preview builds one at a time. A task submitted while one is in flight
- * replaces any task still waiting, so the newest state is always built next.
- */
+/** Runs one task at a time; a task submitted while one is in flight replaces any waiting task. */
 export function createLatestOnlyQueue(): (task: () => Promise<void>) => void {
   let busy = false;
   let waiting: (() => Promise<void>) | null = null;
@@ -69,10 +64,7 @@ interface UseEditorCoreOptions {
 }
 
 /**
- * The editor session for the selected paint and everything that hangs directly
- * off it: the provenance recipe, draft persistence, preview messages, and
- * package export. Layer, parts, transform, sticker and graph editing build on
- * what this returns.
+ * The editor session for the selected paint: provenance recipe, draft persistence, preview and package export.
  */
 export function useEditorCore({
   selectedKitId,
@@ -174,10 +166,7 @@ export function useEditorCore({
     revision: editorRevision,
     activeScope: editorActiveScope,
   } = editorSession;
-  // The definition/operation messages the editor session holds carry no
-  // items_game defindex table, so the weapon each authored slot paints (and
-  // where that slot lives) is resolved separately, off the decoded source,
-  // whenever the editable kit changes. See src/editor/materials/materialTargets.ts.
+  // Weapon slots come from the decoded source, not the session, so resolve them whenever the editable kit changes.
   const [weaponSlots, setWeaponSlots] = useState<ProtoDefKitWeaponSlot[]>([]);
   useEffect(() => {
     if (editableKitId === null) {
@@ -195,8 +184,7 @@ export function useEditorCore({
   const [editorPackageExporting, setEditorPackageExporting] = useState(false);
   const [editorPreviewPending, setEditorPreviewPending] = useState(false);
   const [editorTool, setEditorTool] = useState<'paint' | 'sticker'>('paint');
-  // Parts/Transform sub-view of paint mode. Lives beside editorTool rather
-  // than nested under it, since it only matters while editorTool === 'paint'.
+  // Parts/Transform/Graph sub-view of paint mode, kept beside editorTool since it only matters in paint mode.
   const [paintSubView, setPaintSubView] = useState<'parts' | 'transform' | 'graph'>('parts');
   const provenanceRecipeKey = editableKitId !== null && state.weaponKey
     ? `${editableKitId}|${state.weaponKey}|${state.team}|${state.wearIndex}`
@@ -210,9 +198,7 @@ export function useEditorCore({
     : null;
   const editorSourceGenerationRef = useRef(definitions.generation);
 
-  // A selected imported paint can be restored before its definition source
-  // finishes hydrating. Retry once that source arrives, but never discard a
-  // draft if the user is already editing it.
+  // Retry once a restored imported paint's source hydrates, but never discard a draft being edited.
   useEffect(() => {
     if (editorSourceGenerationRef.current === definitions.generation) return;
     if (editableKitId === null) {
@@ -272,9 +258,7 @@ export function useEditorCore({
   ]);
 
   const [submitPreviewBuild] = useState(() => createLatestOnlyQueue());
-  // Keyed on the whole bundle, not the active operation, so switching weapon or
-  // wear does not rebuild the preview source. Every bundle change restarts the
-  // debounce, so the last state always gets a build.
+  // Keyed on the whole bundle so weapon or wear switches do not rebuild the preview. Each change restarts the debounce.
   useEffect(() => {
     if (editorStatus !== 'ready' || !editorBundle || editableKitId === null) return;
     let current = true;
@@ -313,8 +297,7 @@ export function useEditorCore({
   ]);
 
   useEffect(() => {
-    // Selection changes must release the isolated draft source; the imported
-    // container remains the stable baseline for the next edit session.
+    // Selection changes release the isolated preview source; the imported container stays the baseline.
     return () => {
       clearImportedPreviewKit();
       clearStockPreviewKit();
@@ -438,8 +421,7 @@ export function useEditorHistoryShortcuts({
   preset,
   editorTabActive,
 }: UseEditorHistoryShortcutsOptions) {
-  // Keep one global listener for the editor tab while reading current actions
-  // from a ref, rather than replacing it after every history-state render.
+  // One listener for the editor tab, reading current actions from a ref instead of re-subscribing per render.
   const editorHistoryActionsRef = useRef({ undo, redo, canUndo, canRedo });
   editorHistoryActionsRef.current = { undo, redo, canUndo, canRedo };
 
@@ -447,8 +429,7 @@ export function useEditorHistoryShortcuts({
     if (!editorTabActive || cameraMode === 'advanced' || (lightingPanelOpen && preset === CUSTOM_LIGHTING_ID)) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || !(event.ctrlKey || event.metaKey)) return;
-      // A modal owns its own keyboard loop and must not trigger editing behind
-      // it, even when focus momentarily lands on its dialog container.
+      // A modal owns its keyboard loop; do not edit behind it, even when focus lands on the dialog.
       if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       const key = event.key.toLowerCase();
       if (key === 's' && !event.altKey && !event.shiftKey && editorDirty && !editorDraftRecovery) {

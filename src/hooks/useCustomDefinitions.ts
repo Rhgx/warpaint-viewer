@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import type { Manifest, OperationTemplateData, PaintkitEntry, Team } from '../data/types';
 import type { RecipeNode } from '../compositor/types';
 import type { SourceDiagnostic } from '../source/contracts';
@@ -12,6 +13,7 @@ import {
 } from '../protodefs/types';
 import type {
   CustomDefinitionKitRow,
+  EditedKit,
   ProtoDefKitBundle,
   ProtoDefKitMessages,
   CustomDefinitionsState,
@@ -34,7 +36,8 @@ import {
   renameGeneratedPaint,
   withoutGeneratedPaint,
 } from '../protodefs/templatePaint';
-import { loadOperationTemplates } from '../data/loader';
+import { loadBaseProtoDefs, loadItemDefinitionMap, loadOperationTemplates } from '../data/loader';
+import { openKitPreviewSource } from './kitPreview';
 import { appErrorDiagnostic, ERROR_CODES } from '../errors';
 import { WORKSHOP_ENABLED } from '../device';
 import { topLevelMessages } from '../editor/kitBundle';
@@ -46,16 +49,14 @@ import {
   writeCustomSourceFiles,
 } from '../editor/draftStorage';
 
-// A stock container is under 10 MB. The cap only exists so a mis-picked file
-// cannot be read into memory in its entirety before it is rejected.
+// Stock containers are under 10 MB; this only stops a mis-picked file being read whole.
 const MAX_DEFINITION_BYTES = 64 * 1024 * 1024;
-// Community packs ship their definitions as two JSON fragments beside the
-// textures. Both bounds only exist so scanning a large archive for them cannot
-// turn into reading the whole thing.
+// Community packs ship two JSON fragments beside the textures; these bounds stop
+// a scan from reading a whole archive.
 const MAX_FRAGMENT_BYTES = 8 * 1024 * 1024;
 const MAX_FRAGMENT_ENTRIES = 24;
 
-export interface CustomDefinitions {
+interface CustomDefinitions {
   /** Selecting a kit is the app's business, so the view supplies onSelectKit. */
   state: Omit<CustomDefinitionsState, 'onSelectKit'>;
   /** Loaded definitions, shaped for the catalog alongside the built-in kits. */
@@ -105,12 +106,6 @@ interface LoadedFile {
   fragments?: ProtoDefJsonFragment[];
 }
 
-interface EditedKit {
-  kitId: number;
-  source: ProtoDefSource;
-  bundle: ProtoDefKitBundle;
-}
-
 interface FragmentOpenOptions {
   preferredDefindex?: number;
   /** False leaves the current selection alone (delete), instead of suggesting a kit. */
@@ -141,11 +136,7 @@ function toCatalogKit(kit: ProtoDefKit): PaintkitEntry {
   };
 }
 
-/**
- * Owns one imported proto_defs container: the definitions it contains, which of
- * them are in the catalog, and the recipes resolved out of it. Imported source
- * files are retained locally so a reload can rebuild the same container.
- */
+/** Owns one imported proto_defs container and its catalog kits; source files persist for reloads. */
 export function useCustomDefinitions({
   manifest,
   getAssetUrl,
@@ -163,14 +154,11 @@ export function useCustomDefinitions({
   const [suggestedKitId, setSuggestedKitId] = useState<number | undefined>();
   const [generation, setGeneration] = useState(0);
   const [editGeneration, setEditGeneration] = useState(0);
-  // Imports are cancelled by a newer import or a removal, exactly like the
-  // Source package's transactional mount.
+  // A newer import or a removal cancels an import in flight.
   const importOperationRef = useRef(0);
   const loadedRef = useRef<LoadedFile | null>(null);
   const editedRef = useRef<EditedKit | null>(null);
   const editOperationRef = useRef(0);
-  const weaponsByItemDefRef = useRef<Promise<Record<string, string>> | null>(null);
-  const baseDefsRef = useRef<Promise<Uint8Array> | null>(null);
   const recipeCacheRef = useRef(new Map<string, Promise<RecipeNode | null>>());
 
   const textureKeys = manifest?.textures;
@@ -186,8 +174,7 @@ export function useCustomDefinitions({
 
   useEffect(() => release, [release]);
 
-  // The implicit sticker spec and the thumbnails both depend on what the
-  // mounted package answers for a path, so a mount or removal invalidates them.
+  // Implicit sticker specs and thumbnails depend on the mounted package; mounts invalidate them.
   useEffect(() => { recipeCacheRef.current.clear(); }, [packageGeneration]);
 
   const packageHas = useCallback((ref: string): boolean => {
@@ -205,40 +192,17 @@ export function useCustomDefinitions({
     [textureKeys, packageHas],
   );
 
-  const loadWeaponsByItemDef = useCallback((): Promise<Record<string, string>> => {
-    const cached = weaponsByItemDefRef.current;
-    if (cached) return cached;
-    const url = getAssetUrl('item-defs.json');
-    const pending = (async () => {
-      if (!url) throw new Error('This data source has no item definition map.');
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Could not load the item definition map (${response.status}).`);
-      return (await response.json()) as Record<string, string>;
-    })();
-    weaponsByItemDefRef.current = pending;
-    // A failed fetch must not poison every later import attempt.
-    pending.catch(() => { weaponsByItemDefRef.current = null; });
-    return pending;
-  }, [getAssetUrl]);
+  const loadWeaponsByItemDef = useCallback(
+    (): Promise<Record<string, string>> => loadItemDefinitionMap(getAssetUrl('item-defs.json')),
+    [getAssetUrl],
+  );
 
-  // Community JSON fragments reference stock operations and item definition
-  // templates by index, so they only resolve on top of the base game's
-  // definitions. That blob is a fraction of a full container and is fetched
-  // once, the first time someone imports fragments.
-  const loadBaseDefs = useCallback((): Promise<Uint8Array> => {
-    const cached = baseDefsRef.current;
-    if (cached) return cached;
-    const url = getAssetUrl('protodefs-base.bin');
-    const pending = (async () => {
-      if (!url) throw new Error('This data source has no base war paint definitions.');
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Could not load the base war paint definitions (${response.status}).`);
-      return new Uint8Array(await response.arrayBuffer());
-    })();
-    baseDefsRef.current = pending;
-    pending.catch(() => { baseDefsRef.current = null; });
-    return pending;
-  }, [getAssetUrl]);
+  // JSON fragments reference base-game operations by index, so they resolve only on
+  // top of the base defs, fetched once on the first fragment import.
+  const loadBaseDefs = useCallback(
+    (): Promise<Uint8Array> => loadBaseProtoDefs(getAssetUrl('protodefs-base.bin')),
+    [getAssetUrl],
+  );
 
   const openWith = useCallback(async (
     name: string,
@@ -346,8 +310,7 @@ export function useCustomDefinitions({
     { fragments, ...options },
   ), [openWith, loadBaseDefs]);
 
-  // Reopens a JSON set and saves its files. The set keeps its name whatever
-  // generated paints it holds (see definitionSetName), so drafts stay valid.
+  // Reopens a JSON set and saves its files. The set name stays stable so drafts remain valid.
   const reopenFragments = useCallback(async (
     fragments: ProtoDefJsonFragment[],
     options: FragmentOpenOptions = {},
@@ -371,10 +334,8 @@ export function useCustomDefinitions({
     return true;
   }, [openFragments]);
 
-  // Shared by every way of adding a paint. The new paint joins the loaded JSON
-  // set instead of replacing it. Existing fragments come first, so the placeholder
-  // ids of paints already loaded are assigned the same way, and their draft keys
-  // stay valid.
+  // Shared by every way of adding a paint. The paint joins the loaded JSON set; existing
+  // fragments come first, so already-loaded placeholder ids and their draft keys stay the same.
   const addWarPaint = useCallback(async (
     buildPaint: (ids: { defindex: number; operationDefindex: number }, templates: OperationTemplateData) => ProtoDefJsonFragment[],
   ): Promise<boolean> => {
@@ -442,8 +403,6 @@ export function useCustomDefinitions({
     setEditGeneration((current) => current + 1);
   }, []);
 
-  // Overlays every operation and item definition of the bundle on the stock base, so a
-  // per-wear paint's edited operation resolves for the weapon and wear that reads it.
   const previewKitBundle = useCallback(async (
     kitId: number,
     bundle: ProtoDefKitBundle,
@@ -454,20 +413,13 @@ export function useCustomDefinitions({
       throw new Error('The selected paint is not part of the imported definitions.');
     }
     const operation = ++editOperationRef.current;
-    const [{ createProtoDefSource }, { serializeProtoDefKitBundlePreview }, baseBytes, weaponsByItemDef] = await Promise.all([
-      import('../protodefs/client'),
-      import('../editor/export/jsonExport'),
+    const { source, index } = await openKitPreviewSource(
+      bundle,
       loadBaseDefs(),
       loadWeaponsByItemDef(),
-    ]);
-    const source = createProtoDefSource();
+      manifest?.paintkits.map((kit) => kit.id) ?? [],
+    );
     try {
-      const fragments = serializeProtoDefKitBundlePreview(bundle).fragments;
-      const index = await source.openJsonFragments(baseBytes, fragments, {
-        weaponsByItemDef,
-        builtInIds: manifest?.paintkits.map((kit) => kit.id) ?? [],
-        computeTeamFlags: false,
-      });
       if (!index.kits.some((kit) => kit.defindex === defindex)) {
         throw new Error('The edited fragments no longer contain the selected paint.');
       }
@@ -571,8 +523,7 @@ export function useCustomDefinitions({
     });
   }, [enabled, release]);
 
-  // An edited copy of the paint would still be exported with its old fragments,
-  // so the preview is dropped whenever that paint's files change.
+  // An edited copy would export its old fragments, so drop the preview when those files change.
   const dropPreviewOf = useCallback((defindex: number) => {
     if (editedRef.current?.kitId === customKitId(defindex)) clearPreviewKit();
   }, [clearPreviewKit]);
@@ -615,10 +566,8 @@ export function useCustomDefinitions({
       : [...current, defindex]);
   }, [quarantinedDefindexes]);
 
-  // A war paint ships its definitions inside the same archive as its textures,
-  // either as a whole modded container or (far more often) as the two JSON
-  // fragments its author wrote. Find whichever is there so the pack can be
-  // imported in one go rather than unzipped by hand.
+  // A war paint's definitions ship inside its texture archive, as a whole container or,
+  // more often, as JSON fragments. Find whichever is present so the pack imports in one go.
   const pkg = provider.package;
   const [packageFragments, setPackageFragments] = useState<ProtoDefJsonFragment[]>([]);
   useEffect(() => {
@@ -698,17 +647,17 @@ export function useCustomDefinitions({
     [loaded, loadedSet],
   );
 
-  // Thumbnails come from the kit's own pattern texture, but only when that
-  // texture actually resolves; a broken image says less than no image.
+  // Thumbnails come from the kit's pattern texture, shown only when it resolves.
   useEffect(() => {
-    const kits = (loaded?.index.kits ?? []).filter((kit) => kit.iconRef && loadedSet.has(kit.defindex));
+    const kits = (loaded?.index.kits ?? []).flatMap((kit) => (kit.iconRef && loadedSet.has(kit.defindex)
+      ? [{ defindex: kit.defindex, iconRef: kit.iconRef }]
+      : []));
     if (kits.length === 0) return;
     let cancelled = false;
-    void Promise.all(kits.map(async (kit) => {
-      const ref = kit.iconRef as string;
-      if (!hasTexture(ref)) return null;
+    void Promise.all(kits.map(async ({ defindex, iconRef }) => {
+      if (!hasTexture(iconRef)) return null;
       try {
-        return [customKitId(kit.defindex), await provider.resolvePreview(ref)] as const;
+        return [customKitId(defindex), await provider.resolvePreview(iconRef)] as const;
       } catch {
         return null;
       }
@@ -730,10 +679,7 @@ export function useCustomDefinitions({
     const source = edited?.kitId === kitId ? edited.source : loadedRef.current?.source;
     if (!source) return Promise.resolve(null);
     const packageGenerationAtStart = packageGeneration;
-    // A package mount can add an implicit sticker spec to an otherwise
-    // unchanged definition. Include its generation in the cache identity so
-    // a render in the same React turn cannot reuse the recipe resolved before
-    // the package was mounted.
+    // A package mount can add an implicit sticker spec, so the generation keys the cache.
     const key = `${packageGeneration}|${kitId}|${weaponKey}|${team}|${wearIndex}`;
     const cached = recipeCacheRef.current.get(key);
     if (cached) return cached;
@@ -771,10 +717,7 @@ export function useCustomDefinitions({
     }).catch(() => null);
   }, [hasTexture, packageGeneration, provider]);
 
-  // The export builder needs an imported kit's own definition and operation
-  // messages so it can write them into a proto_defs container the game loads.
-  // Routed through the hook rather than by handing out the source, so the
-  // loaded container stays owned in one place.
+  // The export builder reads a kit's messages through here, so the loaded container has one owner.
   const exportKit = useCallback(
     (kitId: number): Promise<ProtoDefKitMessages | null> => (
       editedRef.current?.kitId === kitId

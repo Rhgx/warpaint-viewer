@@ -1,16 +1,14 @@
-// Builds the two JSON fragments a community war paint ships (an operation holding a
-// copy of a stock operation template's stages, and a definition that points at it) for
-// a paint made from one of the stock templates in public/data/operation-templates.json.
-// The shape mirrors the fixtures in tools/verify/editor/example-warpaints.test.ts.
+// Builds the operation and definition JSON fragments for a new paint made from a stock
+// template (public/data/operation-templates.json). The shape mirrors the fixtures in
+// tools/verify/editor/example-warpaints.test.ts.
 
 import type { OperationTemplateInfo, OperationTemplateVariable } from '../data/types';
 import { normalizeProtoDefFragments } from './jsonFragments';
 import type { ProtoDefJsonFragment, ProtoDefKitMessages } from './types';
 import { texturePublicPath } from './values';
 
-// Stand-ins for the pattern paths a template names but the viewer does not ship
-// (patterns/test/*, mostly). A sticker base needs a sticker-shaped texture; any
-// other layer only needs a neutral one.
+// Stand-ins for template patterns the viewer does not ship. A sticker base needs a
+// sticker-shaped texture; other layers need a neutral one.
 const NEUTRAL_TEXTURE = 'patterns/blank_white';
 const NEUTRAL_STICKER = 'patterns/stickers/blank';
 
@@ -28,10 +26,9 @@ interface TemplatePaintOptions {
 // own slot overrides them, but a slot that leaves one out reads the header value.
 const WEAPON_MAP_PLACEHOLDER = /^textures\/models\/weapons\/c_models\/c_\/p__/;
 
-// Numeric values are not textures at all, so only texture paths are checked. A pattern
-// path is replaced with a neutral stand-in, and so is an unshipped weapon map placeholder:
-// each weapon slot overrides that header value with its own map, and borrowing another
-// weapon's map would paint the wrong model (the paintkit tool has no map of its own).
+// Only texture paths are checked. An unshipped pattern becomes a neutral stand-in. An
+// unshipped weapon map placeholder also goes neutral: borrowing another weapon's map would
+// paint the wrong model, and each slot overrides it anyway.
 function shippedVariables(
   template: OperationTemplateInfo,
   isShipped: (publicRef: string) => boolean,
@@ -51,11 +48,10 @@ function shippedVariables(
 }
 
 /**
- * The operation and definition fragments for one new paint. Both carry the
- * template's variables: the decoder takes the definition's header variables as
- * the base dictionary, so without them the template's texture defaults vanish.
- * The operation holds the template's stages itself rather than referencing the
- * stock template, because the editor only edits stages its operation authors.
+ * The operation and definition fragments for one new paint. Both carry the template's
+ * variables, since the decoder takes the definition's header variables as its base
+ * dictionary. The operation holds the stages itself, because the editor only edits
+ * stages its operation authors.
  */
 export function buildTemplateWarPaint(options: TemplatePaintOptions): ProtoDefJsonFragment[] {
   const { template, defindex, operationDefindex } = options;
@@ -100,10 +96,8 @@ function headerOf(message: Record<string, unknown>, label: string): Record<strin
 }
 
 /**
- * The operation and definition fragments for a copy of one stock paint. The copy
- * keeps the original's stages and textures, so it looks the same until edited.
- * Only the ids and the name change; the files are named like any generated paint,
- * so rename and delete work on copies too.
+ * Fragments for a copy of one stock paint. Only the ids and name change, so it looks the
+ * same until edited; the files follow the generated-paint naming so rename and delete work.
  */
 export function buildCopiedWarPaint(options: CopiedPaintOptions): ProtoDefJsonFragment[] {
   const { messages, defindex, operationDefindex } = options;
@@ -129,9 +123,8 @@ const GENERATED_FILE = /^new_paint_(\d+)_(operation|definition)\.json$/;
 const NEW_PAINT_SET_NAME = 'New war paints';
 
 /**
- * The name of a JSON definition set, which the editor's draft keys are built
- * from. Generated paint files are left out, so adding a paint to a loaded set
- * keeps its name, and restoring the saved files after a reload gives it back.
+ * Name of a JSON definition set, used in the editor's draft keys. Generated paint files
+ * are excluded, so adding a paint keeps the set's name across a reload.
  */
 export function definitionSetName(fileNames: readonly string[]): string {
   const imported = fileNames.filter((name) => !GENERATED_FILE.test(name));
@@ -154,9 +147,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * The fragments with one generated paint renamed. Only its definition's header
- * name changes, since that is the name the viewer shows. The file is written
- * back the way buildTemplateWarPaint writes it.
+ * Renames one generated paint by changing only its definition's header name, which is
+ * what the viewer shows.
  */
 export function renameGeneratedPaint(
   fragments: ProtoDefJsonFragment[],
@@ -185,9 +177,9 @@ export function operationDefindexesIn(fragments: ProtoDefJsonFragment[]): number
 }
 
 /**
- * The first defindexes above everything already in use. Paint kits must clear
- * every built-in and loaded paint, and operations every stock operation and
- * loaded operation, or the new one would silently replace that entry.
+ * The first defindexes above everything in use. Paint kits must clear every built-in and
+ * loaded paint, and operations every stock and loaded operation, or the new one silently
+ * replaces an entry.
  */
 export function nextWarPaintIds(used: { paintDefindexes: number[]; operationDefindexes: number[] }): {
   defindex: number;

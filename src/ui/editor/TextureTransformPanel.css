@@ -75,9 +75,7 @@
   display: grid;
   min-height: 0;
   flex: 1;
-  /* The UV surface is capped near its useful square footprint. Give any
-     additional drawer width to the transform controls instead of leaving a
-     widening empty gutter around the image. */
+  /* Caps the UV surface at a square footprint; extra drawer width goes to the controls. */
   grid-template-columns: minmax(300px, 460px) minmax(320px, 1fr);
   overflow: auto;
   background: var(--panel);

@@ -1,13 +1,10 @@
-// Recipe stage-tree node shapes, matching the FINAL pipeline contract
-// (DESIGN.md "Data contract" + "Pipeline schema amendments") and the
-// CMsgPaintKit_Operation_*Stage protos.
+// Recipe stage-tree node shapes, matching the CMsgPaintKit_Operation_*Stage protos.
 //
-// Notes on values (pre-transformed by the pipeline, do NOT re-transform):
+// Values arrive pre-transformed by the pipeline; do not transform them again:
 //   - adjustBlack / adjustOffset are already divided by 255 (0..1 shader space).
 //   - adjustGamma is already inverted (1/x).
-//   - flipU / flipV retain the parsed integer range. Fixed ranges do not draw.
-//   - select values are raw 0..255 group ids; the shader compares them with the
-//     fxc's 1/16 bucketing (cFac in compositor.cpp).
+//   - flipU / flipV keep the parsed integer range; fixed ranges do not draw.
+//   - select values are raw 0..255 group ids; the shader buckets them by 1/16 (cFac).
 
 type Range = [number, number];
 
@@ -31,9 +28,8 @@ interface TextureLookupNode extends StageTransform {
   texture: string;
 }
 
-// Combine stages are n-ary in real data (the engine batches 4 inputs per pass
-// and chains passes for more). Their level fields apply when the output is
-// sampled by the parent, while their UV fields have no effect.
+// Combine stages are n-ary (the engine batches four inputs per pass). Their level fields
+// apply when the parent samples them; their UV fields do nothing.
 export interface CombineNode extends StageTransform {
   type: 'combine_multiply' | 'combine_add' | 'combine_lerp';
   nodes: RecipeNode[]; // multiply/add: 2+, lerp: exactly 3 (c0, c1, selector)
@@ -42,12 +38,11 @@ export interface CombineNode extends StageTransform {
 }
 
 // Select is a LEAF: it samples the groups texture directly and emits a 0/1 mask.
-export interface SelectNode {
+interface SelectNode {
   type: 'select';
   groups: string; // grayscale region-id texture
-  // Raw group ids (0..255); 0 entries are unused slots. A small number of real
-  // recipe files carry string values with trailing junk (e.g. "96```") straight
-  // from the source KV data; the game atoi()s them, and resolve.ts does the same.
+  // Raw group ids (0..255); 0 marks an unused slot. Some real files carry strings with
+  // trailing junk (e.g. "96```"); the game atoi()s them, and resolve.ts does the same.
   select: Array<number | string>;
 }
 

@@ -42,11 +42,7 @@ export interface OperationGraphRenderResult extends OperationGraphRecipeMapping 
 export type OperationGraphRecipeResult = OperationGraphRecipeMapping | OperationGraphRecipeUnavailable;
 
 export interface MapOperationGraphRecipeOptions {
-  /**
-   * The resolved recipe roots in the same order as graph.roots. A resolver
-   * with multiple operation roots can pass an array; a normal operation passes
-   * one RecipeNode.
-   */
+  /** Resolved roots in graph.roots order: one RecipeNode, or an array for multi-root operations. */
   readonly recipeRoots: RecipeNode | readonly RecipeNode[];
 }
 
@@ -154,15 +150,6 @@ function mapAuthoredChildren(
   if (!childNode) return { failure: unavailable(targetNodeId, 'missing-node', `Graph node ${childId} is missing.`) };
 
   if (childNode.kind === 'operation_template') {
-    if (childId === targetNodeId) {
-      return {
-        failure: unavailable(
-          targetNodeId,
-          'opaque-operation-template',
-          `${childNode.label} is an opaque operation-template reference; expand it before previewing this subtree.`,
-        ),
-      };
-    }
     const maxConsumed = resolvedChildren.length - resolvedIndex;
     const successes: MappingSnapshot[] = [];
     let lastFailure: OperationGraphRecipeUnavailable | null = null;
@@ -245,17 +232,7 @@ function mapBranch(
     return unavailable(targetNodeId, 'shared-authored-node', `${graphNode.label} is shared by more than one authored branch.`);
   }
   if (graphNode.kind === 'operation_template') {
-    if (graphNodeId === targetNodeId) {
-      return unavailable(
-        targetNodeId,
-        'opaque-operation-template',
-        `${graphNode.label} is an opaque operation-template reference; expand it before previewing this subtree.`,
-      );
-    }
-    // A template is a lossless opaque reference in the authored graph, but the
-    // resolved recipe already contains the template's expanded subtree. Treat
-    // the matching resolved node as a wildcard and continue with siblings so
-    // an editable ancestor can still receive an intermediate preview.
+    // The resolved recipe already holds the template's expansion, so treat it as a wildcard and keep mapping siblings.
     state.seenGraphNodes.add(graphNodeId);
     state.nodeIds.push(graphNodeId);
     return null;
@@ -287,29 +264,21 @@ function mapBranch(
   state.seenGraphNodes.add(graphNodeId);
   state.nodeIds.push(graphNodeId);
   if (graphNodeId === targetNodeId) state.targetRecipe = recipe;
-  const childResult = hasOpaqueChild
-    ? mapAuthoredChildren(graph, graphChildren, resolvedChildren, 0, 0, targetNodeId, state)
-    : graphChildren.reduce<ChildMappingSearchResult | null>((prior, childId, index) => {
-      if (prior?.failure || prior?.snapshot === undefined) return prior;
-      const childFailure = mapBranch(graph, childId, resolvedChildren[index]!, targetNodeId, state);
-      return childFailure ? { failure: childFailure } : { failure: null, snapshot: snapshotMappingState(state) };
-    }, { failure: null, snapshot: snapshotMappingState(state) }) ?? { failure: null };
-  if (childResult.failure) {
-    state.activeGraphNodes.delete(graphNodeId);
-    return childResult.failure;
+  let childFailure: OperationGraphRecipeUnavailable | null = null;
+  if (hasOpaqueChild) {
+    childFailure = mapAuthoredChildren(graph, graphChildren, resolvedChildren, 0, 0, targetNodeId, state).failure;
+  } else {
+    for (let index = 0; index < graphChildren.length && !childFailure; index += 1) {
+      childFailure = mapBranch(graph, graphChildren[index]!, resolvedChildren[index]!, targetNodeId, state);
+    }
   }
   state.activeGraphNodes.delete(graphNodeId);
-  return null;
+  return childFailure;
 }
 
 /**
- * Pair a flattened authored graph with the already-resolved recipe tree.
- *
- * The graph deliberately retains variable references and opaque template
- * nodes, while the compositor consumes resolved values. Keeping this pairing
- * separate means preview code never guesses how a variable or template should
- * resolve. It also makes a mismatch an explicit unavailable state instead of
- * silently rendering the wrong node.
+ * Pairs a flattened authored graph with the resolved recipe tree. Variables and templates are not
+ * resolved here, and a mismatch returns an explicit unavailable state rather than the wrong node.
  */
 export function mapOperationGraphNodeToRecipe(
   graph: OperationGraph,
@@ -446,7 +415,7 @@ export interface OperationGraphObjectUrlLease {
 }
 
 /** Create an explicitly owned object URL for a preview or exported file. */
-export function createOperationGraphObjectUrl(blob: Blob): OperationGraphObjectUrlLease {
+function createOperationGraphObjectUrl(blob: Blob): OperationGraphObjectUrlLease {
   if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
     throw new Error('Object URLs are not available in this environment.');
   }

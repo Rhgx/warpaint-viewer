@@ -4,12 +4,12 @@ import {
   pushTextureTransformRangeToAllWeapons,
   setTextureTransformRange,
   type TextureTransformTarget,
-} from '../../../src/editor/mutations';
+} from '../../../src/editor/transform/transformMutations';
 import { serializeProtoDefKitMessages } from '../../../src/editor/export/jsonExport';
 import { normalizeProtoDefFragments } from '../../../src/protodefs/jsonFragments';
 import { discoverBaseTextureTransformTarget, discoverTextureTransformTargets } from '../../../src/editor/transform/transformTargets';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
-import { extractKitMessages, getKitWeaponSlots, resolveKitRecipeWithProvenance } from '../../../src/protodefs/decoder';
+import { extractKitMessages, getKitWeaponSlots, resolveKitRecipeWithProvenance } from '../../../src/protodefs/kitQueries';
 import { dig, shippedProtoDefs } from '../fixtures';
 
 // Read-only use of the shared decode: the mutations below run on synthetic fixtures.

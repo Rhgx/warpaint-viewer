@@ -3,7 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 import { Flag, RotateCcw } from 'lucide-react';
 import './SeedRangeField.css';
 
-export type SeedRangeMode = 'fixed' | 'varies';
+type SeedRangeMode = 'fixed' | 'varies';
 
 export interface SeedRangeValue {
   readonly mode: SeedRangeMode;
@@ -39,9 +39,8 @@ type Bound = 'min' | 'max';
 type DragBound = Bound | 'pending';
 
 const GESTURE_DEBOUNCE_MS = 450;
-// A base-texture preview requires a GPU composition. Sampling pointer motion
-// faster than one preview can finish starves the latest-only queue, so keep the
-// control responsive locally while requesting composed frames at 10 FPS.
+// Each base-texture preview needs a GPU composition, and faster requests starve the latest-only queue.
+// Keep the control responsive locally and request composed frames at 10 FPS.
 const LIVE_PREVIEW_MIN_INTERVAL_MS = 1000 / 10;
 const CLOSE_THUMBS_PX = 10;
 const DIRECTION_LOCK_PX = 2;
@@ -61,10 +60,7 @@ function sameValue(a: SeedRangeValue, b: SeedRangeValue): boolean {
   return a.mode === b.mode && a.min === b.min && a.max === b.max;
 }
 
-/**
- * A small non-zero range around the current value: switching to Varies must
- * always leave something to drag, and must never spill past the bounds.
- */
+/** A small non-zero range around the value, so switching to Varies leaves something to drag within bounds. */
 function openVariesRange(min: number, bounds: readonly [number, number]): [number, number] {
   const span = bounds[1] - bounds[0];
   const nudge = span * 0.06;
@@ -78,10 +74,8 @@ function openVariesRange(min: number, bounds: readonly [number, number]): [numbe
 }
 
 /**
- * A dual-range field for one authored quantity that can vary across seeds.
- * "Fixed / Varies" is the primary decision; the numbers below follow from it.
- * "Lock" is deliberately never used here, it stays reserved for the sticker
- * editor's aspect link so the two ideas do not blur together.
+ * Dual-range field for an authored quantity that can vary across seeds.
+ * Fixed / Varies is the primary decision. Lock is reserved for the sticker aspect link.
  */
 export function SeedRangeField({
   label,
@@ -127,11 +121,7 @@ export function SeedRangeField({
     gestureOpenRef.current = false;
     onInteractionEnd?.();
   };
-  /**
-   * A burst of typing or arrow-key stepping is one undoable gesture, closed
-   * once input goes quiet. Mirrors StickerPlacementEditor's noteTyping so a
-   * drag and a burst of keystrokes both collapse to a single history entry.
-   */
+  /** Typing and arrow stepping share one history entry, like a drag, closed once input goes quiet. */
   const noteGesture = () => {
     startGesture();
     if (debounceRef.current !== null) window.clearTimeout(debounceRef.current);
@@ -158,8 +148,9 @@ export function SeedRangeField({
       setPopoverOpen(false);
     };
     const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (popoverRef.current?.contains(target) || divergeButtonRef.current?.contains(target)) return;
+      const target = event.target;
+      if (target instanceof Node
+        && (popoverRef.current?.contains(target) || divergeButtonRef.current?.contains(target))) return;
       setPopoverOpen(false);
     };
     window.addEventListener('keydown', onKeyDown, true);
@@ -181,17 +172,14 @@ export function SeedRangeField({
     let nextMin = value.min;
     let nextMax = value.max;
     if (bound === 'min') nextMin = nextValue; else nextMax = nextValue;
-    // Crossing thumbs swaps roles rather than clamping, matching every other
-    // dual-range control people have used.
+    // Crossing thumbs swaps roles rather than clamping.
     if (nextMin > nextMax) { const swap = nextMin; nextMin = nextMax; nextMax = swap; }
     onChange({ mode: 'varies', min: nextMin, max: nextMax });
   };
 
   const handleRangeInput = (bound: Bound, raw: string) => {
-    // Pointer drags are owned by the track handlers below. Chromium can also
-    // emit a native range change from the thumb during that same gesture. That
-    // event is based on the last rendered prop and can briefly overwrite the
-    // newer dragValueRef preview, which makes the thumb appear to roll back.
+    // Pointer drags are owned by the track handlers. Chromium can also emit a native change
+    // mid-drag, based on the last rendered prop, which would roll the thumb back.
     if (dragBoundRef.current !== null) return;
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return;
@@ -345,9 +333,7 @@ export function SeedRangeField({
     setEditing(null);
     if (parsed === null) return;
     onInteractionStart?.();
-    // Valve parses these fields as unrestricted numeric ranges. The bounds
-    // describe the useful slider span, but typed authoring must remain able to
-    // represent stock and custom values outside that span.
+    // Typed values may exceed the slider bounds; Valve parses these fields as unrestricted ranges.
     commitBound(field, parsed, false);
     onInteractionEnd?.();
   };
@@ -395,7 +381,6 @@ export function SeedRangeField({
     <div
       className="seed-range-field"
       data-mode={displayValue.mode}
-      data-dirty={isDirty ? '' : undefined}
     >
       <div className="seed-range-field-head">
         <span className="seed-range-field-expand">
@@ -486,7 +471,6 @@ export function SeedRangeField({
             ) : null}
             <input
               type="range"
-              data-bound="min"
               aria-label={`${label} minimum`}
               min={bounds[0]}
               max={bounds[1]}
@@ -499,7 +483,6 @@ export function SeedRangeField({
             {isVaries ? (
               <input
                 type="range"
-                data-bound="max"
                 aria-label={`${label} maximum`}
                 min={bounds[0]}
                 max={bounds[1]}

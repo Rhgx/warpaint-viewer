@@ -1,8 +1,6 @@
-// Animated exports besides GIF, all fed the same streamed RGBA frames:
-// APNG (lossless, full alpha), animated WebP (lossy colour, full alpha, small)
-// and MP4 (H.264, no alpha, smallest; what chat apps embed). Each leans on a
-// platform encoder (CompressionStream, the canvas WebP encoder, WebCodecs) and
-// writes the APNG and WebP containers here; MP4 goes through Mediabunny.
+// Animated exports besides GIF, all fed the same RGBA frames: APNG (lossless), animated WebP
+// (lossy colour, full alpha) and MP4 (H.264, no alpha, smallest). The APNG and WebP
+// containers are written here; MP4 goes through Mediabunny.
 import {
   BufferTarget,
   canEncodeVideo,
@@ -25,11 +23,9 @@ export interface AnimationEncoder {
 const ascii = (text: string) => Uint8Array.from(text, (c) => c.charCodeAt(0));
 
 /**
- * Frames a platform encoder may work on at once. Both CompressionStream and
- * the canvas WebP encoder run off the calling thread, so overlapping frames
- * uses more cores; results are still kept in frame order. Phones hold two
- * snapshots instead of four. In the encoder worker TOUCH_ONLY_DEVICE reads
- * false, but there the page's own in-flight limit already bounds the frames.
+ * Frames a platform encoder may work on at once; results stay in frame order. Phones hold
+ * two snapshots instead of four. In the encoder worker TOUCH_ONLY_DEVICE reads false, so
+ * there the page's own in-flight limit bounds the frames.
  */
 const FRAMES_IN_FLIGHT = TOUCH_ONLY_DEVICE ? 2 : 4;
 
@@ -63,8 +59,6 @@ function concat(parts: readonly Uint8Array[]): Uint8Array {
   }
   return out;
 }
-
-// ---------------------------------------------------------------- APNG
 
 /** Paeth-filtered scanlines, which deflate far better than raw rows. */
 function paethScanlines(rgba: Uint8Array, width: number, height: number): Uint8Array {
@@ -114,7 +108,8 @@ export class ApngEncoder implements AnimationEncoder {
     view.setUint32(4, height);
     header.set([8, 6, 0, 0, 0], 8); // 8-bit RGBA
     const actl = new Uint8Array(8);
-    new DataView(actl.buffer).setUint32(0, frames.length); // plays: 0 = forever
+    // num_plays stays 0, which loops forever.
+    new DataView(actl.buffer).setUint32(0, frames.length);
     const chunks = [pngChunk('IHDR', header), pngChunk('acTL', actl)];
     let sequence = 0;
     frames.forEach((data, index) => {
@@ -141,8 +136,6 @@ export class ApngEncoder implements AnimationEncoder {
     return concat([Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10), ...chunks]);
   }
 }
-
-// ---------------------------------------------------------------- WebP
 
 /** Canvas WebP encoder quality per level; alpha is always kept losslessly. */
 const WEBP_QUALITY: Record<TurntableQuality, number> = { standard: 0.8, high: 0.92, maximum: 0.98 };
@@ -231,15 +224,10 @@ export class WebpEncoder implements AnimationEncoder {
   }
 }
 
-// ---------------------------------------------------------------- MP4
-
-// Mediabunny drives WebCodecs (codec strings, per-browser encoder quirks) and
-// writes the MP4, index first so playback can start before the file loads.
-// Frames go in as BT.709 limited-range I420 converted here, the tagging every
-// player and hardware decoder expects; handing the encoder RGBA instead yields
-// full-range, sRGB-tagged video that stricter players mishandle or refuse.
-// Measured on Windows: the hardware encoder also mangles range (darks crushed,
-// colours oversaturated), so encoding prefers software.
+// Mediabunny drives WebCodecs and writes the MP4 index first, so playback can start early.
+// Frames go in as BT.709 limited-range I420 converted here: RGBA input yields full-range,
+// sRGB-tagged video that strict players reject. On Windows the hardware encoder also mangles
+// range, so software is preferred.
 /** Mediabunny quality level per setting; it scales bitrate with size and frame rate. */
 const MP4_QUALITY: Record<TurntableQuality, Quality> = {
   standard: new Quality('medium'),
@@ -251,10 +239,8 @@ const MP4_ENCODING = {
   codec: 'avc',
   keyFrameInterval: 2,
   hardwareAcceleration: 'prefer-software',
-  // Firefox on Windows (Microsoft H.264 Encoder) reports a decoder record
-  // whose SPS and PPS repeat their first byte, so players reject the file.
-  // Annex B output carries the parameter sets in-band instead; Mediabunny then
-  // builds the record from the first key frame and repackages the samples.
+  // Firefox on Windows reports an H.264 decoder record whose SPS and PPS repeat their first
+  // byte, so players reject the file. Annex B carries the parameter sets in-band instead.
   onEncoderConfig: (config: VideoEncoderConfig) => {
     config.avc = { format: 'annexb' };
   },
@@ -263,9 +249,8 @@ const MP4_ENCODING = {
 const BT709_LIMITED: VideoColorSpaceInit = { primaries: 'bt709', transfer: 'bt709', matrix: 'bt709', fullRange: false };
 
 /**
- * Opaque RGBA to BT.709 limited-range I420 (luma 16-235, chroma 16-240), with
- * chroma averaged over each 2x2 block. Odd dimensions round up to the even
- * size H.264 needs by repeating the last row and column.
+ * Opaque RGBA to BT.709 limited-range I420 (luma 16-235, chroma 16-240), chroma averaged
+ * over each 2x2 block. Odd sizes round up to the even size H.264 needs.
  */
 export function rgbaToI420(rgba: Uint8Array, width: number, height: number): Uint8Array {
   const w = width + (width & 1);

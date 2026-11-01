@@ -1,6 +1,5 @@
-// Minimal Source BSP reader for compiled per-leaf HDR ambient cubes.
-// Structures and lookup behavior mirror Source SDK 2013's bspfile.h and
-// vrad/leaf_ambient_lighting.cpp.
+// Minimal Source BSP reader for the compiled HDR ambient cubes and world lights.
+// Structures follow Source SDK 2013's bspfile.h.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -43,9 +42,8 @@ function decompressSourceLzma(data, expectedSize) {
       `--lzma1=lc=${lc},lp=${lp},pb=${pb},dict=${dictionarySize}`,
     ], { input: payload, stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: Math.max(actualSize * 2, 16 * 1024 * 1024) });
   } catch (error) {
-    // Source writes raw LZMA with a known output size and no EOS marker. xz
-    // reports "Unexpected end of input" after still producing the complete
-    // payload, so accept that stdout only when it exactly matches the header.
+    // Source writes raw LZMA with no end marker, so xz reports truncated input after a complete
+    // output. Accept stdout only when it matches the header size.
     if (error.stdout?.length >= actualSize && error.stdout.length <= actualSize + 4) output = error.stdout.subarray(0, actualSize);
     else throw new Error(`Unable to decompress BSP lighting lump; xz returned ${error.stdout?.length ?? 0}/${actualSize} bytes (${error.message})`);
   }
@@ -196,8 +194,8 @@ function readBspWorldLights(bspPath) {
 }
 
 function localLightAtPoint(light, position) {
-  // LightDesc_t::ComputeNonincidenceLightAtPoints in Source SDK 2013. The
-  // surface-normal Lambert term is intentionally left for the model shader.
+  // Mirrors LightDesc_t::ComputeNonincidenceLightAtPoints (Source SDK 2013). The surface-normal
+  // Lambert term is left to the model shader.
   if ((light.type !== 1 && light.type !== 2) || light.style !== 0 || (light.flags & 1)) return null;
   const delta = light.origin.map((value, axis) => value - position[axis]);
   const distanceSquared = Math.max(1, delta.reduce((sum, value) => sum + value * value, 0));

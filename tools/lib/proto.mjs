@@ -10,10 +10,8 @@ import protobuf from 'protobufjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROTO_PATH = path.join(__dirname, '..', 'proto', 'tf_proto_def_messages.proto');
 
-// Container defType values. Empirically the container tags each block with the ProtoDefTypes
-// enum value (NOT the 9..12 from the task brief, which are the CMsgProtoDefID.instance field
-// numbers). Verified against block counts: type 6=0, 7=827 ops, 8=207 item defs, 9=250 paintkits.
-// These same enum values appear in CMsgProtoDefID.type for operation_template references.
+// Container defType values. The container tags each block with the ProtoDefTypes enum, not the
+// CMsgProtoDefID.instance field numbers (9..12). The same values appear in CMsgProtoDefID.type.
 export const DEF_TYPE = {
   PAINTKIT_VARIABLES: 6,
   PAINTKIT_OPERATION: 7,
@@ -28,18 +26,15 @@ const MSG_FOR_DEFTYPE = {
   9: 'CMsgPaintKit_Definition',
 };
 
-// Remove custom options / extends / imports that protobufjs's parser rejects.
-// Exported so tools/generate/protodef-schema.mjs (which produces the browser-side
-// schema.generated.json) can reuse the exact same preprocessing.
+// Remove custom options, extends and imports that protobufjs rejects. Exported so the browser
+// schema generator reuses the same preprocessing.
 export function stripProtoOptions(src) {
   let s = src;
   // Drop the descriptor import (we do not need descriptor.proto for decoding).
   s = s.replace(/import\s+"google\/protobuf\/descriptor\.proto"\s*;/g, '');
-  // Drop the two `extend google.protobuf.*Options { ... }` blocks (no nested braces inside).
   s = s.replace(/extend\s+google\.protobuf\.\w+\s*\{[^}]*\}/g, '');
-  // Drop standalone option statements (top-level and message-level like `option (start_expanded) = false;`).
   s = s.replace(/^\s*option\s+[^;]*;/gm, '');
-  // Drop all field option brackets `[ ... ]` (non-nested, may span multiple lines).
+  // Field option brackets, which may span lines.
   s = s.replace(/\[[\s\S]*?\]/g, '');
   return s;
 }

@@ -9,8 +9,7 @@
   --graph-danger: var(--fail, #bf3d3d);
   --graph-warning: var(--warn, #a56d12);
 
-  /* Stage identity, used by the card stripe, glyph and eyebrow so a stage is
-     recognisable while zoomed too far out to read its name. */
+  /* Stage identity, so a stage stays recognisable when zoomed too far out to read its name. */
   --graph-kind-texture-lookup: #5aa7de;
   --graph-kind-select: #b18ad4;
   --graph-kind-combine-add: #d99553;
@@ -33,7 +32,6 @@
   outline: none;
 }
 
-/* Toolbar ----------------------------------------------------------------- */
 
 .operation-graph-toolbar {
   display: flex;
@@ -167,12 +165,6 @@
   background: var(--graph-surface-2);
 }
 
-.operation-graph-toolbar-button.is-active {
-  border-color: color-mix(in srgb, var(--graph-accent) 55%, var(--graph-border));
-  color: var(--graph-accent);
-  background: color-mix(in srgb, var(--graph-accent) 12%, var(--graph-surface));
-}
-
 .operation-graph-toolbar-button:focus-visible,
 .operation-graph-search-clear:focus-visible,
 .operation-graph-search-step:focus-visible,
@@ -194,8 +186,7 @@
   opacity: .4;
 }
 
-/* Three related choices read better as one segmented control than as three
-   independent toggles that can all be off. */
+/* Three related choices read better as one segmented control than as toggles. */
 .operation-graph-trace {
   display: inline-flex;
   overflow: hidden;
@@ -283,7 +274,6 @@
   background: color-mix(in srgb, var(--graph-kind, var(--graph-border)) 12%, transparent);
 }
 
-/* Canvas ------------------------------------------------------------------ */
 
 .operation-graph-canvas {
   position: relative;
@@ -334,7 +324,6 @@
 .operation-graph-canvas .react-flow__minimap-mask { fill: color-mix(in srgb, var(--graph-accent) 12%, transparent); stroke: var(--graph-accent); }
 .operation-graph-canvas .react-flow__attribution { display: none; }
 
-/* Node card --------------------------------------------------------------- */
 
 .operation-graph-node {
   position: relative;
@@ -351,14 +340,12 @@
   transition: opacity 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
-/* A card that follows the pointer says so before it is grabbed. The output
-   stage and a read-only graph stay put, and keep the plain arrow. */
+/* Draggable cards show a grab cursor; the output stage and read-only graphs keep the arrow. */
 .operation-graph-canvas .react-flow__node.draggable .operation-graph-node { cursor: grab; }
 .operation-graph-canvas .react-flow__node.dragging .operation-graph-node { cursor: grabbing; }
 .operation-graph-canvas .react-flow__node.selectable:not(.draggable) .operation-graph-node { cursor: pointer; }
 
-/* Wiring is a different gesture from panning, so it reads differently
-   everywhere the pointer can land while a connection is in the air. */
+/* Wiring is a different gesture from panning, so the cursor changes while a connection is in the air. */
 .operation-graph-canvas[data-connecting='true'] .react-flow__pane,
 .operation-graph-canvas[data-connecting='true'] .react-flow__node.draggable .operation-graph-node,
 .operation-graph-canvas[data-connecting='true'] .react-flow__node .operation-graph-node,
@@ -462,7 +449,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Ports ------------------------------------------------------------------- */
 
 .operation-graph-inputs {
   display: grid;
@@ -498,8 +484,7 @@
   transition: transform 90ms ease, box-shadow 90ms ease;
 }
 
-/* An oversized transparent ring makes the 9px dot easy to grab without
-   making the row taller. */
+/* An oversized transparent ring makes the 9px dot easy to grab without making the row taller. */
 .operation-graph-port-row .react-flow__handle::after,
 .operation-graph-node > .operation-graph-output-handle::after {
   position: absolute;
@@ -537,8 +522,7 @@
   text-align: right;
 }
 
-/* Empty required inputs are the most common reason a graph will not
-   serialize, so they say so before validation has to. */
+/* Empty required inputs are the most common reason a graph will not serialize. */
 .operation-graph-port-row[data-state='required'] .react-flow__handle { border-color: var(--graph-warning); }
 .operation-graph-port-row[data-state='required'] .operation-graph-port-state { color: var(--graph-warning); }
 .operation-graph-port-row[data-state='open'] { opacity: .72; }
@@ -568,8 +552,7 @@
 .operation-graph-node > .operation-graph-output-handle.operation-graph-port-mask { border-color: var(--graph-type-mask); background: var(--graph-type-mask); }
 .operation-graph-node > .operation-graph-output-handle.operation-graph-port-unknown { border-color: var(--graph-type-unknown); background: var(--graph-type-unknown); }
 
-/* While a connection is being dragged, React Flow marks every handle it is
-   willing to accept. Say so loudly: aiming is the whole interaction. */
+/* While dragging a connection, React Flow marks every handle it accepts; make those loud. */
 .operation-graph-canvas[data-connecting='true'] .react-flow__handle { opacity: .35; }
 .operation-graph-canvas[data-connecting='true'] .react-flow__handle-connecting,
 .operation-graph-canvas[data-connecting='true'] .react-flow__handle-valid {
@@ -582,7 +565,6 @@
 }
 .operation-graph-port-row .react-flow__handle:hover { transform: scale(1.35); }
 
-/* Summary and preview ----------------------------------------------------- */
 
 .operation-graph-node-summary {
   display: grid;
@@ -618,7 +600,6 @@
   object-fit: contain;
 }
 
-/* On-node editing --------------------------------------------------------- */
 
 .operation-graph-node-fields {
   display: grid;
@@ -725,8 +706,7 @@
 .operation-graph-reorder-row > span:last-child { display: flex; flex: none; gap: 2px; }
 .operation-graph-reorder-row .operation-graph-icon-button { width: 20px; height: 20px; }
 
-/* Editing regions take input rather than dragging the card, so they keep the
-   arrow (or the caret) instead of inheriting the grab hand. */
+/* Editing regions take input, so they keep the arrow or caret rather than the grab hand. */
 .operation-graph-node-fields,
 .operation-graph-node-advanced,
 .operation-graph-reorder-list,
@@ -819,7 +799,6 @@
 .operation-graph-export-menu button > span { display: grid; gap: 1px; }
 .operation-graph-export-menu small { color: var(--graph-text-dim); font-size: 8.5px; }
 
-/* Connections ------------------------------------------------------------- */
 
 .operation-graph-canvas .react-flow__edge-path { transition: stroke-width 90ms ease; }
 .operation-graph-edge-hit { stroke: transparent; cursor: pointer; }
@@ -833,8 +812,7 @@
 
 .operation-graph-canvas .react-flow__edge:hover .react-flow__edge-path { stroke-width: 3; }
 
-/* A traced connection fades its own line so the travelling dashes on top of
-   it carry the eye, and thickens where it meets the selected stage. */
+/* A traced connection fades its own line so the travelling dashes carry the eye. */
 .operation-graph-canvas .react-flow__edge.operation-graph-edge-traced .react-flow__edge-path {
   stroke-width: 2;
   opacity: .5;
@@ -889,7 +867,6 @@
 
 .operation-graph-edge-remove:focus-visible { outline: 2px solid var(--graph-accent); outline-offset: 1px; }
 
-/* Footer ------------------------------------------------------------------ */
 
 .operation-graph-footer {
   display: flex;
@@ -924,8 +901,7 @@
   .operation-graph-port-row .react-flow__handle,
   .operation-graph-canvas .react-flow__edge-path { transition: none; }
 
-  /* Without motion the same path still has to read as traced, so the overlay
-     becomes a solid highlight rather than travelling dashes. */
+  /* Without motion, the traced path becomes a solid highlight instead of travelling dashes. */
   .operation-graph-edge-flow {
     stroke-dasharray: none;
     stroke-width: 2;

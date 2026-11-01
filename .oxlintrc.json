@@ -1,8 +1,13 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["react", "typescript", "oxc"],
+  "jsPlugins": ["./tools/lint/oxlint-plugin.mjs"],
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "warpaint/no-low-value-comments": "error",
+    "warpaint/no-dashes": "error",
+    "warpaint/newline-after-imports": "error",
+    "warpaint/import-groups": "error"
   }
 }

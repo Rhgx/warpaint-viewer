@@ -10,7 +10,7 @@ import {
   removeStickerVariant,
   setStickerVariantBase,
   setStickerVariantWeight,
-} from '../../../src/editor/mutations';
+} from '../../../src/editor/sticker/stickerMutations';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
 import { dig } from '../fixtures';
 

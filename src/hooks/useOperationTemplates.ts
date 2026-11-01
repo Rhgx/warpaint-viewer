@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { loadOperationTemplates, peekOperationTemplates } from '../data/loader';
 import type { OperationTemplateData } from '../data/types';
 
-export interface OperationTemplatesStatus {
+interface OperationTemplatesStatus {
   data: OperationTemplateData | null;
   failed: boolean;
   retry: () => void;

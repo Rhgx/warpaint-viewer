@@ -11,12 +11,7 @@ export interface GraphComboboxOption {
   readonly thumbnailUrl?: string;
   /** Options render in the order given, with a heading whenever this changes. */
   readonly group?: string;
-  /**
-   * Background catalogue rather than a suggestion. These are withheld until
-   * somebody searches, and rank below everything else when they do, so a
-   * shipped library of a thousand entries never buries the handful of files
-   * the open paint actually uses.
-   */
+  /** Background catalogue, shown only once someone searches, so a big library never buries the open paint's files. */
   readonly secondary?: boolean;
 }
 
@@ -30,10 +25,7 @@ export interface GraphVariableOption {
   readonly editable?: boolean;
 }
 
-/**
- * How a stage parameter should be entered. Every kind here still writes one
- * authored `VarFieldMsg`, so the choice is purely about the control.
- */
+/** Every kind writes one authored `VarFieldMsg`, so the kind only chooses the control. */
 export type GraphFieldKind = 'texture' | 'range' | 'vector' | 'toggle' | 'text';
 
 const GRAPH_NUMERIC_FIELD_KEYS = [
@@ -45,17 +37,7 @@ const GRAPH_NUMERIC_FIELD_KEYS = [
   'sint64',
 ] as const;
 
-/**
- * Which scalar slot a field already occupies. Authoring must keep writing that
- * slot, because a numeric slot cannot hold the `"min max"` text the compositor
- * reads as a per-seed range.
- */
-/**
- * Whether this field can hold a `"min max"` range. A field already occupying a
- * numeric protobuf slot cannot: writing two numbers there would be rejected by
- * the editing layer, so the control offers a fixed value only. A variable
- * declaration is always text, so binding re-opens the choice.
- */
+/** A `"min max"` range needs a string or variable field; numeric protobuf slots would reject two numbers. */
 export function varFieldSupportsRange(field: VarFieldMsg | undefined): boolean {
   if (field?.variable !== undefined) return true;
   const key = operationGraphVarFieldScalarKey(field);
@@ -79,11 +61,7 @@ export function parseNumberList(text: string): number[] | null {
   return numbers.every(Number.isFinite) ? numbers : null;
 }
 
-/**
- * Splits a path-shaped label into the part that identifies it and the folder
- * it sits in. Texture refs share long prefixes, so leading with the filename
- * is the difference between scanning a list and reading every row.
- */
+/** Splits a path label into file name and folder; leading with the name makes long shared prefixes scannable. */
 export function splitGraphOptionLabel(label: string): { readonly name: string; readonly directory?: string } {
   const index = label.lastIndexOf('/');
   if (index < 0) return { name: label };
@@ -98,7 +76,7 @@ export function formatGraphNumber(value: number): string {
 function optionRank(option: GraphComboboxOption, query: string): number {
   const label = option.label.toLocaleLowerCase();
   if (label === query) return 0;
-  const segment = label.slice(label.lastIndexOf('/') + 1);
+  const segment = splitGraphOptionLabel(label).name;
   if (segment.startsWith(query)) return 1;
   if (label.startsWith(query)) return 2;
   if (label.includes(query)) return 3;
@@ -107,12 +85,8 @@ function optionRank(option: GraphComboboxOption, query: string): number {
 }
 
 /**
- * Case-insensitive ranked filter.
- *
- * With no query this offers only the suggestions: the refs the open paint
- * already uses and whatever the imported package ships, in authored order.
- * Typing opens the secondary catalogue too, still ranked underneath. A list
- * with nothing but secondary entries shows them rather than nothing.
+ * Case-insensitive ranked filter. With no query only suggestions show; typing adds
+ * the secondary catalogue, ranked underneath.
  */
 export function filterGraphOptions(
   options: readonly GraphComboboxOption[],

@@ -3,9 +3,8 @@ import { Compositor } from '../../compositor/compositor';
 import type { RecipeNode } from '../../compositor/types';
 import type { CheckResult } from './compositorChecks';
 
-// A repeatable GPU workload comparing the ordinary export queue with the
-// latest-only preview queue. Timings include JS submission and final readback;
-// they are not GPU timer-query measurements or whole-app frame rates.
+// A repeatable GPU workload comparing the export queue with the latest-only preview queue.
+// Timings include JS submission and readback, so they are not GPU timer-query measurements.
 export async function compositorSchedulingChecks(): Promise<CheckResult[]> {
   const renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.info.autoReset = false;

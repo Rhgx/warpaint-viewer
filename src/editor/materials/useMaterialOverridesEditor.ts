@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { DataSource } from '../../data/loader';
-import { packageHasMaterialOverride, type indexPackageMaterialPaths } from '../../source/vmt';
+import { packageHasMaterialOverride, type PackageMaterialPathIndex } from '../../source/vmt';
 import type { MaterialOverridesPanelProps, MaterialWeaponRow } from '../../ui/editor/MaterialOverridesPanel';
 import { discoverWeaponMaterialTargets, materialPresetPath } from './materialTargets';
 import type { EditorCore } from '../useEditorCore';
@@ -14,7 +14,7 @@ interface UseMaterialOverridesEditorOptions extends
     | 'setSessionWeaponMaterials'
   > {
   data: DataSource | null;
-  mountedMaterialPaths: ReturnType<typeof indexPackageMaterialPaths> | null;
+  mountedMaterialPaths: PackageMaterialPathIndex | null;
 }
 
 /** Per-weapon material overrides for the Materials mode; undefined until the paint names any weapon slot. */
@@ -29,12 +29,8 @@ export function useMaterialOverridesEditor({
 }: UseMaterialOverridesEditorOptions): MaterialOverridesPanelProps | undefined {
   const [materialPresetId, setMaterialPresetId] = useState('macaw-metallic');
 
-  // Some weapons are painted by kits that use material overrides, yet no stock
-  // kit ever gives them one. Bazaar Bargain is the case the community reports
-  // rendering oddly with Macaw materials, and the shipped data agrees: of the
-  // 37 override-using kits that paint it, none override its material. Deriving
-  // the rule from the data rather than naming weapons keeps it correct if a
-  // future game update starts overriding one of them.
+  // Some weapons are painted by override-using kits that never override them (Bazaar Bargain, for one).
+  // Deriving this from the data keeps it correct if a game update starts overriding one.
   const materialExcludedWeapons = useMemo(() => {
     const painted = new Map<string, number>();
     const overridden = new Set<string>();
@@ -45,25 +41,20 @@ export function useMaterialOverridesEditor({
       for (const key of Object.keys(overrides)) overridden.add(key);
     }
     const excluded = new Set<string>();
-    // A single kit skipping a weapon says nothing; a weapon skipped by every
-    // override-using kit that paints it is a deliberate authoring convention.
+    // One kit skipping a weapon says nothing; a weapon skipped by five or more override-using kits is a convention.
     for (const [key, count] of painted) {
       if (count >= 5 && !overridden.has(key)) excluded.add(key);
     }
     return excluded;
   }, [data?.manifest.paintkits]);
 
-  // Real per-weapon material_override rows for the Materials sub-view, driven
-  // by the kit's actual resolved weapon slots (named fields and repeated
-  // `item` entries alike; see materialTargets.ts and weaponSlots in useEditorCore).
+  // Rows come from the kit's resolved weapon slots, named fields and repeated items alike.
   const weaponMaterialTargets = editorCurrent && weaponSlots.length > 0
     ? discoverWeaponMaterialTargets(editorCurrent, weaponSlots)
     : [];
   const materialWeaponRows: MaterialWeaponRow[] = weaponMaterialTargets.map((entry) => {
     const enabled = entry.overridePath !== null;
-    // Only an actually mounted archive can prove a material absent. With none
-    // mounted the honest answer is "unknown", so the row stays unflagged
-    // rather than accusing every weapon of a missing file.
+    // Only a mounted archive can prove a material missing; with none mounted, leave the row unflagged.
     const missing = entry.overridePath !== null && mountedMaterialPaths
       ? !packageHasMaterialOverride(mountedMaterialPaths, entry.overridePath)
       : undefined;
@@ -105,9 +96,7 @@ export function useMaterialOverridesEditor({
     },
     onApplyPreset: () => {
       setSessionWeaponMaterials(weaponMaterialTargets.flatMap((entry) => {
-        // Exclusion stays manual, per the feature request: a flagged weapon is
-        // never switched on by the preset, but the row is still there to tick
-        // by hand for anyone who wants it anyway.
+        // Flagged weapons stay out of the preset but can still be ticked by hand.
         const row = materialWeaponRows.find((candidate) => candidate.key === entry.weaponKey);
         return row?.warning ? [] : [{
           target: entry.target,

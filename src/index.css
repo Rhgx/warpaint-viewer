@@ -44,7 +44,6 @@ button {
   color: var(--fail);
 }
 
-/* ---------- focus ring, shared by interactive controls ---------- */
 .btn:focus-visible,
 .ui-select-trigger:focus-visible,
 .ui-input:focus-visible,
@@ -58,7 +57,6 @@ button {
   outline-offset: 2px;
 }
 
-/* ---------- generic flat button ---------- */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -78,7 +76,6 @@ button {
   background: var(--border);
 }
 
-/* ---------- icon + label rows (select items, weapon/collection pickers) ---------- */
 .asset-icon,
 .asset-icon-empty {
   flex: none;
@@ -97,7 +94,6 @@ button {
   white-space: nowrap;
 }
 
-/* ---------- Base UI: Select ---------- */
 .ui-select-trigger {
   display: inline-flex;
   align-items: center;
@@ -137,8 +133,7 @@ button {
   max-width: var(--available-width);
 }
 
-/* Stepping through a long list one item at a time, without opening it. The
-   buttons sit on the control row so the field keeps its single-row rhythm. */
+/* Step through a long list without opening it; the buttons sit on the control row. */
 .ui-select-stepper {
   display: flex;
   min-width: 0;
@@ -172,7 +167,6 @@ button {
   max-width: var(--available-width);
 }
 
-/* Reuses the catalog filter's shape so the popup does not read as a new idea. */
 .ui-select-search {
   position: sticky;
   z-index: 1;
@@ -241,7 +235,6 @@ button {
   opacity: 0.8;
 }
 
-/* ---------- swatch select (killstreak sheen) ---------- */
 .ui-swatch {
   flex: none;
   width: 16px;
@@ -259,7 +252,6 @@ button {
   border-color: color-mix(in srgb, var(--border-strong) 70%, white 30%);
 }
 
-/* ---------- generic two-way toggle group (e.g. projection) ---------- */
 .ui-toggle-group {
   display: inline-flex;
   min-height: var(--control-h);
@@ -288,7 +280,6 @@ button {
   color: var(--accent-text);
 }
 
-/* ---------- Base UI: Slider ---------- */
 .ui-slider-control {
   display: flex;
   align-items: center;
@@ -329,7 +320,6 @@ button {
   pointer-events: none;
 }
 
-/* ---------- Five-detent wear control ---------- */
 .wear-slider {
   width: 250px;
   padding: 1px 5px 0;
@@ -416,7 +406,6 @@ button {
   font-weight: 700;
 }
 
-/* ---------- Numeric input ---------- */
 .ui-num-input {
   width: 92px;
   border: none;
@@ -427,7 +416,6 @@ button {
   outline: none;
 }
 
-/* ---------- Base UI: Input ---------- */
 .ui-input {
   width: 100%;
   min-height: var(--control-h);
@@ -446,7 +434,6 @@ button {
   border-color: var(--accent);
 }
 
-/* ---------- Team toggle ---------- */
 .ui-team-toggle {
   display: inline-flex;
   min-height: var(--control-h);
@@ -491,8 +478,7 @@ button {
   background: color-mix(in srgb, var(--blu) 56%, var(--panel));
   color: color-mix(in srgb, #fff 76%, var(--muted));
 }
-/* Why the toggle is locked, as a quiet line under it rather than a tooltip
-   that touch screens never show. */
+/* Locked toggles explain themselves in a line under the control, since touch screens never show tooltips. */
 .ui-team-note {
   margin: 0;
   color: var(--text-dim);
@@ -500,7 +486,6 @@ button {
   line-height: 1.35;
 }
 
-/* ---------- Base UI: Switch ---------- */
 .ui-switch {
   width: 34px;
   height: 18px;
@@ -526,11 +511,7 @@ button {
   transform: translateX(16px);
 }
 
-/* ---------- touch targets ---------- */
-/* Touch-only devices: finger-sized list rows and slider grabs (the thumb keeps
-   its look, an invisible box widens what a finger can land on), and 16px text
-   in every text field so iOS does not zoom the page on focus. --control-h
-   grows in tokens.css for the same reason. */
+/* Touch-only: finger-sized rows and slider grabs, and 16px text fields so iOS does not zoom on focus. */
 @media (hover: none) and (pointer: coarse) {
   .ui-select-item {
     min-height: 40px;
@@ -547,7 +528,6 @@ button {
   }
 }
 
-/* ---------- Base UI: ScrollArea ---------- */
 .ui-scroll-root {
   position: relative;
   flex: 1;
@@ -566,8 +546,7 @@ button {
 }
 .ui-scrollbar-thumb {
   width: 100%;
-  /* Mix with the panel instead of transparency so a thumb always reads as a
-     single solid control, independent of whatever sits behind it. */
+  /* Mix with the panel, not transparency, so a thumb reads as one solid control. */
   background: color-mix(in srgb, var(--border-strong) 80%, var(--panel));
   border-radius: var(--radius-sm);
   transition: var(--transition-fast);

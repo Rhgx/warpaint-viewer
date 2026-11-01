@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import type { ComposeResult, Compositor } from '../../compositor/compositor';
 import { resolveRecipe as resolveSeededRecipe } from '../../compositor/resolve';
 import type { DataSource } from '../../data/loader';
@@ -10,7 +11,7 @@ import type { TextureTransformFields, TextureTransformPanelProps } from '../../u
 import type { ControlsState } from '../../viewer/controls';
 import type { Viewer } from '../../viewer/Viewer';
 import { groupByteToCompositorBucket } from '../layers/groupSampling';
-import { readTextureLayerTeamColors } from '../mutations';
+import { readTextureLayerTeamColors } from './transformMutations';
 import { collectResolvedLayerTextureNodes } from '../layers/recipeLayers';
 import { mapResolvedTextureReferences } from '../sticker/stickerSurface';
 import { collectResolvedLayerIsolationNodes, preferredLayerOccurrenceIndex } from './transformIsolation';
@@ -82,11 +83,7 @@ interface UseTransformEditorOptions extends
   resetComposeKey: () => void;
 }
 
-/**
- * Per-layer texture transforms: the discovery of each layer's rotation, scale
- * and offsets, the live draft while a slider is dragged, the UV and on-model
- * isolation previews, and the props for the Transform panel.
- */
+/** Per-layer texture transforms: discovery, the live slider draft, UV and on-model isolation previews, and panel props. */
 export function useTransformEditor({
   editableKitId,
   editorStatus,
@@ -212,9 +209,7 @@ export function useTransformEditor({
       return;
     }
 
-    // The UV pane is capped at 460 CSS pixels. A 512px mask preserves crisp
-    // group edges at its actual display size while avoiding four times the
-    // pixel work and memory of a 1024px intermediate.
+    // 512px keeps group edges crisp at the 460px UV pane without a 1024px intermediate's cost.
     const maxDimension = 512;
     const scale = Math.min(1, maxDimension / Math.max(groupImage.width, groupImage.height));
     const width = Math.max(1, Math.round(groupImage.width * scale));
@@ -265,9 +260,7 @@ export function useTransformEditor({
     transformUvIsolationOverlayUrlRef.current = null;
     if (priorUrl) URL.revokeObjectURL(priorUrl);
   }, []);
-  // Aligned with editorSelectors/groupAssignmentTargets (one entry per visible
-  // layer), unlike transformDiscovery.targets which is aligned with the raw,
-  // undeduplicated groupDiscovery.targets.
+  // Aligned with editorSelectors (one entry per visible layer), not the raw groupDiscovery.targets order.
   const layerTransformInfos = useMemo(() => editableGroupTargets.map((target) => {
     const operationIndex = groupDiscovery
       ? preferredLayerOccurrenceIndex(groupDiscovery.targets, target)
@@ -293,10 +286,8 @@ export function useTransformEditor({
     return layers;
   }, [baseTextureTransform, editableGroupTargets, layerTransformInfos]);
 
-  // Open on the selected weapon whenever this layer actually resolves one of
-  // its transform fields from a weapon-local source. Otherwise show the shared
-  // value. The user can still change scope afterward because scope itself is
-  // deliberately not a dependency of this synchronization.
+  // Open on the weapon scope when this layer resolves a field from a weapon-local source. Scope is not a
+  // dependency, so the user can still change it afterwards.
   useEffect(() => {
     const weaponInfo = weaponBaseLayerActive
       ? baseTextureTransform?.transform
@@ -653,8 +644,7 @@ export function useTransformEditor({
   } : undefined;
 
   const teamColors = (() => {
-    // The base slot is the paint's main texture unless it is
-    // the weapon's own albedo, which belongs to the model.
+    // The base slot is the paint's main texture, unless it is the weapon's own albedo (owned by the model).
     const info = weaponBaseLayerActive && baseTextureTransform?.transformLocked !== false
       ? null
       : activeTransformTargetInfo;

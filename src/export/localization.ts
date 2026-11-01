@@ -1,23 +1,11 @@
 /**
- * Names a spliced war paint in game.
+ * Names a spliced war paint. The definition's loc_desctoken resolves through
+ * resource/tf_proto_obj_defs_<language>.txt, a UTF-16LE KeyValues file with a BOM.
+ * Without an entry the paint shows its raw token.
  *
- * A paint kit's display name is not in proto_defs. The definition carries a
- * token ("9_431_field { field_number: 2 }") that resolves through
- * resource/tf_proto_obj_defs_<language>.txt, a Valve KeyValues file in UTF-16LE
- * with a BOM. Without an entry, a new paint shows its raw token instead of a
- * name.
- *
- * Like proto_defs, this file cannot be shipped as a stub: the engine resolves
- * localization by search-path priority and reads one file, it does not merge
- * them, so a partial copy in tf/custom/ would blank the name of every other war
- * paint in the game. The pack therefore carries a complete file: the snapshot
- * the site ships (public/data/protodefs-loc/<language>.txt) or the player's own,
- * with one token added or replaced.
- *
- * The edit is textual rather than a parse and re-serialize. These files are
- * Valve's, full of escapes and formatting this project has no reason to
- * normalize, and rewriting 1,099 lines to change one of them would be a much
- * larger diff to be confident about than a single line replacement.
+ * The engine reads one proto_defs file and does not merge them, so a copy in
+ * tf/custom/ must be complete or it blanks every other paint name. The edit is
+ * textual, so the rest of Valve's file stays byte for byte.
  */
 
 const BOM = 0xfeff;
@@ -53,7 +41,7 @@ export function encodeLocalization(file: LocalizationFile): Uint8Array {
 }
 
 /** The token a paint kit definition's loc_desctoken points at. */
-/** @public Used by tools/verify/protodefs-write.mjs through its generated SSR entry. */
+/** @public Used by tools/verify/protodefs/protodefs-write.test.mjs. */
 export function paintkitNameToken(defindex: number): string {
   return `9_${defindex}_field { field_number: 2 }`;
 }
@@ -65,11 +53,8 @@ function escapeValue(value: string): string {
 }
 
 /**
- * Adds or replaces one paint kit's name.
- *
- * Returns the file unchanged apart from that single entry, so the other 250-odd
- * paint names, and every other token in the file, are byte for byte what the
- * game shipped.
+ * Adds or replaces one paint kit's name. Everything else in the file stays byte for
+ * byte as the game shipped it.
  */
 export function setPaintkitName(file: LocalizationFile, defindex: number, name: string): LocalizationFile {
   const token = paintkitNameToken(defindex);
@@ -77,8 +62,7 @@ export function setPaintkitName(file: LocalizationFile, defindex: number, name: 
   const newline = file.text.includes('\r\n') ? '\r\n' : '\n';
   const entry = `"${token}"\t\t"${escapeValue(name)}"`;
 
-  // An existing entry for this defindex wins: overwriting a kit means taking
-  // over its name too.
+  // An existing entry for this defindex wins: overwriting a kit takes over its name too.
   const existing = new RegExp(`^[ \\t]*"${escapedToken}"[ \\t]*"(?:[^"\\\\]|\\\\.)*"[ \\t]*$`, 'm');
   if (existing.test(file.text)) {
     return { ...file, text: file.text.replace(existing, entry) };

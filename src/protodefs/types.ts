@@ -1,13 +1,12 @@
-// Contracts shared by the proto_defs decoder, the hook that owns imported
-// definitions, and the UI that lists them.
+// Contracts shared by the proto_defs decoder, the hook that owns imported definitions,
+// and the UI that lists them.
 
 import type { RecipeNode } from '../compositor/types';
 import type { SourceDiagnostic } from '../source/contracts';
 
 /**
- * Catalog ids for imported kits are offset out of the built-in range so a
- * custom kit can never shadow or collide with one of the shipped 250, and so
- * any id in this range is recognisable as memory-only.
+ * Catalog ids for imported kits sit above the built-in range, so they never collide
+ * with a shipped paint and are recognisable as memory-only.
  */
 const CUSTOM_KIT_ID_BASE = 10_000_000;
 
@@ -47,17 +46,14 @@ export interface ProtoDefKit {
   /** RED and BLU textures are used: has_team_textures is set, or the team trees differ. */
   hasTeamTextures: boolean;
   /**
-   * The paint changes per team but has_team_textures is off, so the in-game inspect
-   * panel will not show its team buttons (the legacy "has team color paintkit" item
-   * attribute is not checked here). Matches still use the RED and BLU textures.
+   * The paint differs per team but has_team_textures is off, so the inspect panel shows
+   * no team buttons. Matches still use the RED and BLU textures.
    */
   teamButtonsHidden: boolean;
   /**
-   * True when any item definition template carries more than one per-wear
-   * definition. This is a cheap proxy for the build pipeline's rule (which
-   * compares resolved trees), so it can report per-wear for a kit whose wear
-   * levels happen to resolve identically. That only costs a few extra rows in
-   * the file editor.
+   * True when an item definition carries more than one per-wear entry. A cheap proxy for
+   * the pipeline's rule, which compares resolved trees, so it can over-report; that only
+   * adds rows in the file editor.
    */
   perWear: boolean;
   /** True when this defindex is outside the built-in catalog. */
@@ -80,12 +76,9 @@ export interface ProtoDefRecipe {
 }
 
 /**
- * Where the resolver obtained one effective operation-field value.  Paths are
- * expressed relative to the two editable kit messages. Weapon-slot paths
- * point into the definition message, while wear and external item-definition
- * paths name the non-editable base branch that supplied the override. They
- * deliberately remain data (rather than object references) so
- * they can safely cross the worker boundary.
+ * Where the resolver got one effective operation-field value. Paths are relative to the
+ * two editable kit messages; wear and item-definition paths name the non-editable base
+ * branch. Plain data, not references, so they can cross the worker boundary.
  */
 type ProtoDefValueScope = 'global' | 'weapon' | 'wear' | 'literal';
 
@@ -127,21 +120,14 @@ export interface ProtoDefOpenOptions {
 }
 
 /**
- * One community proto_defs JSON fragment, as read from disk or a ZIP entry:
- * not valid JSON on its own (see src/protodefs/jsonFragments.ts for why), just
- * a name for diagnostics and the raw text.
+ * One community proto_defs JSON fragment as read from disk or a ZIP entry: a name for
+ * diagnostics and the raw text, not valid JSON on its own.
  */
 export interface ProtoDefJsonFragment {
   name: string;
   text: string;
 }
 
-/**
- * Decodes one proto_defs container and resolves recipes out of it on demand.
- * The parsed definitions are large (a stock container decodes to tens of
- * megabytes), so an implementation is expected to hold them off the main
- * thread and release them on dispose().
- */
 /**
  * A kit's two defining messages, as decoded plain objects, for the export
  * builder to re-encode into a spliced container.
@@ -160,10 +146,9 @@ export interface ProtoDefOperationScope {
 }
 
 /**
- * Everything one kit needs to be re-created from JSON fragments. A top-level
- * paint has one operation; a per-wear paint (no top-level operation_template)
- * has the operations its weapon slots read at each wear, plus the item
- * definitions those slots use.
+ * Everything one kit needs to be re-created from JSON fragments. A top-level paint has
+ * one operation; a per-wear paint has the operations its weapon slots read at each wear,
+ * plus the item definitions those slots use.
  */
 export interface ProtoDefKitBundle {
   definition: Record<string, unknown>;
@@ -173,23 +158,25 @@ export interface ProtoDefKitBundle {
 }
 
 /**
- * One weapon slot on a paintkit definition, resolved to the weapon it paints
- * and the authored location of its item message inside the definition
- * message: ['definition', <slotName>] for a named WEAPON_SLOTS field, or
- * ['definition', 'item', <index>] for a repeated `item` entry.
+ * One weapon slot on a paintkit definition: the weapon it paints and where its item
+ * message sits in the definition (['definition', slotName], or ['definition', 'item', index]
+ * for a repeated `item` entry).
  */
 export interface ProtoDefKitWeaponSlot {
   weaponKey: string;
   path: readonly string[];
 }
 
+/**
+ * Decodes one proto_defs container and resolves recipes out of it on demand. The parsed
+ * definitions are large, so implementations hold them off the main thread and release
+ * them on dispose().
+ */
 export interface ProtoDefSource {
   open(bytes: Uint8Array, options: ProtoDefOpenOptions): Promise<ProtoDefIndex>;
   /**
-   * Same result shape as open(), but assembled from community JSON fragments
-   * (an operation file plus a definition file, typically) layered over the
-   * stock operations/item definitions/variables carried in baseBytes
-   * (public/data/protodefs-base.bin), rather than decoded whole from a .vpd.
+   * Same result as open(), built from JSON fragments layered over the stock operations,
+   * item definitions and variables in baseBytes.
    */
   openJsonFragments(
     baseBytes: Uint8Array,
@@ -221,16 +208,20 @@ export interface ProtoDefSource {
    */
   exportKitBundle(defindex: number): Promise<ProtoDefKitBundle | null>;
   /**
-   * Every weapon slot on one kit's definition, resolved to the weapon it
-   * paints and its authored location, so an editor can read or write that
-   * weapon's own material_override without guessing which definition field
-   * holds it. Null when nothing is open or the kit is not found.
+   * Every weapon slot on one kit's definition, with the weapon it paints and its authored
+   * location, so an editor can change that weapon's material_override directly. Null when
+   * nothing is open or the kit is not found.
    */
   exportKitWeaponSlots(defindex: number): Promise<ProtoDefKitWeaponSlot[] | null>;
   dispose(): void;
 }
 
-// UI contract
+/** The editor's in-memory preview of one kit, shown in place of the loaded container. */
+export interface EditedKit {
+  kitId: number;
+  source: ProtoDefSource;
+  bundle: ProtoDefKitBundle;
+}
 
 export interface CustomDefinitionKitRow {
   /** Catalog id, i.e. customKitId(defindex). */

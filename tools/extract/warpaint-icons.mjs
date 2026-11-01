@@ -1,23 +1,16 @@
-// Fetch pre-rendered War Paint backpack icons (spray can + pattern) from the
-// TF2 wiki. The game renders these live from the paintkit, so they cannot be
-// extracted from the VPKs; the wiki hosts the canonical renders. Kits the wiki
-// does not know keep the pattern swatch that warpaints.mjs already generated.
-//
-// By default only fetches kits that need it: no icon file on disk at all, or
-// one warpaints.mjs's staging/swatch_icons.json says is still a generated
-// swatch rather than a real wiki render. Pass --force to refetch every kit.
-// The wiki serves PNG thumbnails; each is transcoded to lossless WebP on write.
+// Fetch pre-rendered War Paint backpack icons from the TF2 wiki; the VPKs lack them because the
+// game renders them live. Kits the wiki lacks keep their swatch from warpaints.mjs.
 //   node tools/extract/warpaint-icons.mjs [--force]
-//
-// This hits the network from update:warpaints, so it must never fail that
-// pipeline or destroy already-good icons: every failure here is caught and
-// logged, never thrown, and a kit's existing file is only overwritten once a
-// replacement has actually downloaded successfully.
+// Only kits with no icon, or a swatch listed in staging/swatch_icons.json, are fetched unless
+// --force is passed. Failures are logged, never thrown; an icon is replaced only after its download.
+// Thumbnails are transcoded to lossless WebP on write.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import sharp from 'sharp';
+
+import { loadSwatchedIds, saveSwatchedIds } from './icons.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
@@ -30,22 +23,9 @@ const WRITE_RETRIES = 5;
 
 const FORCE = process.argv.slice(2).includes('--force');
 
-function loadSwatchedIds() {
-  if (!fs.existsSync(SWATCH_STATE_PATH)) return new Set();
-  try { return new Set(JSON.parse(fs.readFileSync(SWATCH_STATE_PATH, 'utf8'))); } catch { return new Set(); }
-}
-
-function saveSwatchedIds(ids) {
-  fs.mkdirSync(STAGING, { recursive: true });
-  fs.writeFileSync(SWATCH_STATE_PATH, JSON.stringify([...ids].sort((a, b) => a - b)));
-}
-
-// War Paint can icons are per wear level; Factory New is the cleanest render.
-// Most paintkit proto defs below 200 are legacy decorated-weapon paints from
-// Gun Mettle/Tough Break. The first two Jungle Inferno contract collections
-// reuse that range but are actual War Paint items, as are all IDs 200+.
-// Keep those namespaces explicit: similarly named wiki files can exist for
-// both, and a can-first fallback can silently attach the wrong item type.
+// Spray-can renders are per wear level; Factory New is the cleanest. IDs below 200 are mostly
+// decorated-weapon paints, but the collections in EARLY_WAR_PAINT_COLLECTIONS are War Paints.
+// Keep the namespaces apart: similarly named wiki files exist for both.
 const FIRST_WAR_PAINT_ID = 200;
 const EARLY_WAR_PAINT_COLLECTIONS = new Set([
   'Decorated War Hero Collection',
@@ -98,7 +78,7 @@ async function main() {
     return name ? `File:Backpack ${kit.name} ${name} Factory New.png` : null;
   };
 
-  const swatchedIds = loadSwatchedIds();
+  const swatchedIds = loadSwatchedIds(SWATCH_STATE_PATH);
   const needsFetch = (kit) => {
     if (FORCE) return true;
     const iconPath = path.join(PUBLIC_DATA, `icons/paints/${kit.id}.webp`);
@@ -134,7 +114,7 @@ async function main() {
     if (ok % 50 === 0) console.log(`[wiki-icons] downloaded ${ok}...`);
     await new Promise((r) => setTimeout(r, 60)); // stay polite
   }
-  saveSwatchedIds(swatchedIds);
+  saveSwatchedIds(SWATCH_STATE_PATH, swatchedIds);
   console.log(`[wiki-icons] downloaded ${ok}, kept swatch fallback for ${misses.length}`);
   if (misses.length) console.log('  misses:', misses.join(', '));
 }
@@ -142,7 +122,6 @@ async function main() {
 try {
   await main();
 } catch (error) {
-  // Best-effort by design: update:warpaints must still succeed (with whatever
-  // icons already exist) even if the wiki is unreachable or its API changes.
+  // Best-effort: update:warpaints must still succeed if the wiki is unreachable.
   console.log(`[wiki-icons] skipped: ${error.message}`);
 }

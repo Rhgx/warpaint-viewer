@@ -1,4 +1,3 @@
-/* ---------- controls ---------- */
 .control {
   display: flex;
   flex-direction: column;
@@ -18,18 +17,13 @@
   flex: none;
   opacity: 0.85;
 }
-/* The randomize dice and undo buttons live inside the seed field as inline
-   adornments (one visual control instead of a row of buttons);
-   .seed-field-actions is a dedicated slot for both. */
+/* Dice and undo sit inside the seed field as inline adornments. */
 .seed-field {
   position: relative;
   display: flex;
   align-items: center;
 }
-/* The seed is a full 64-bit decimal (up to 20 digits); the generic
-   .ui-num-input width is too narrow to show it without scrolling. The seed
-   field supplies its own panel background and border.
-   padding-right clears the two .seed-field-actions buttons. */
+/* The seed is up to 20 digits, wider than the generic number input; padding clears the action buttons. */
 .seed-input {
   width: 172px;
   min-height: var(--control-h);
@@ -88,10 +82,7 @@
   }
 }
 
-/* ---------- inspector (right panel) ---------- */
-/* Its captions and detent labels are chrome, not content: a drag that misses
-   a slider by a few pixels would otherwise anchor a text selection and sweep
-   it across the panel. Inputs opt back in so the seed stays copyable. */
+/* Captions and detent labels are not selectable, so a missed drag cannot select text. Inputs opt back in. */
 .inspector {
   grid-column: 3;
   display: flex;
@@ -155,8 +146,6 @@
   align-items: stretch;
   gap: 6px;
 }
-/* Short explanatory line under a control, e.g. the turntable background
-   note; text-only, no interaction. */
 .inspector-color-row {
   display: flex;
   align-items: center;
@@ -176,8 +165,7 @@
     height: var(--control-h);
   }
 }
-/* Estimated output of the animated capture: a quiet readout closing the
-   group, with the size as the figure that matters. */
+/* Estimated output of the animated capture: a quiet readout closing the group. */
 .capture-estimate {
   display: flex;
   flex-wrap: wrap;
@@ -214,18 +202,14 @@
 .inspector .ui-select-trigger {
   width: 100%;
 }
-/* The wear control was sized for the old horizontal footer; in the panel it
-   must follow the column width or it forces a horizontal scrollbar. */
+/* The wear control follows the column width, or it forces a horizontal scrollbar. */
 .inspector .wear-slider {
   width: 100%;
 }
 .inspector .ui-team-toggle {
   width: 100%;
 }
-/* ---------- mobile bottom tab strip (mobile layout) ---------- */
-/* Markup always renders; hidden here by default and switched on by the mobile
-   layout rules in layout.css so no matchMedia/JS is needed to show or hide it.
-   The same goes for the backdrop behind the portrait catalog sheet. */
+/* Hidden by default; the mobile rules in layout.css switch it on, so no JS is needed. */
 .mobile-tabstrip,
 .mobile-sheet-backdrop {
   display: none;

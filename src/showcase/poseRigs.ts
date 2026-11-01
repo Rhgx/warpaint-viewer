@@ -1,7 +1,5 @@
-// Weapon features a showcase item can pose. World models are static, but the
-// first-person viewmodel GLBs carry the same mesh skinned to its bones (the
-// bind pose matches the world model), so a rigged weapon loads its viewmodel
-// and these controls drive the bones directly.
+// Posable weapon features for showcase items. A rigged weapon loads its first-person viewmodel GLB,
+// which carries the world model's mesh skinned to bones, and these controls drive those bones.
 
 import * as THREE from 'three';
 
@@ -34,18 +32,12 @@ interface PoseRig {
   apply(bones: ReadonlyMap<string, RestBone>, values: Readonly<Record<string, number>>): void;
 }
 
-/**
- * A separate piece of a weapon that can be taken out and placed on the board
- * by itself, painted like the weapon it came from.
- */
+/** A piece of a weapon that can be taken out and placed on the board by itself, painted like the weapon. */
 export interface WeaponPart {
   id: string;
   label: string;
   bones: readonly string[];
-  /**
-   * Loose pieces only exist in the viewmodel for the reload animation and
-   * float beside the weapon at rest, so they are never drawn on the weapon.
-   */
+  /** Pieces that only show in the reload animation, floating beside the weapon; never drawn on it. */
   loose?: boolean;
 }
 
@@ -61,10 +53,7 @@ function rotateFromRest(rest: RestBone | undefined, axis: THREE.Vector3, degrees
   rest.bone.quaternion.copy(rest.quaternion).multiply(turn);
 }
 
-/**
- * Turn a bone around an axis of the weapon itself (X across, Y up, Z along
- * the barrel), pivoting on the bone, whatever way the bone's own axes point.
- */
+/** Turn a bone around an axis of the weapon (X across, Y up, Z along the barrel), pivoting on the bone. */
 function rotateAboutModel(rest: RestBone | undefined, axis: THREE.Vector3, degrees: number): void {
   if (!rest) return;
   rotateFromRest(rest, localAxis.copy(axis).applyQuaternion(rest.modelInverse), degrees);
@@ -72,11 +61,7 @@ function rotateAboutModel(rest: RestBone | undefined, axis: THREE.Vector3, degre
 
 const pivotTurn = new THREE.Vector3();
 
-/**
- * Like rotateAboutModel, but hinged where the part meets the weapon rather
- * than at the bone, whose origin can sit inside the gun: a flip-up sight folds
- * flat at its foot instead of swinging off the barrel.
- */
+/** Like rotateAboutModel, but hinged where the part meets the weapon, since the bone's origin can sit inside the gun. */
 function foldAboutBase(rest: RestBone | undefined, axis: THREE.Vector3, degrees: number): void {
   if (!rest) return;
   rotateAboutModel(rest, axis, degrees);
@@ -237,12 +222,7 @@ export const POSE_RIGS: Record<string, PoseRig> = {
 const SHELL: WeaponPart = { id: 'shell', label: 'Shell', bones: ['vm_weapon_bone'] };
 const SPARE_GRENADE: WeaponPart = { id: 'grenade', label: 'Spare grenade', bones: ['weapon_bone_4'], loose: true };
 
-/**
- * Pieces allowed past the board's edge, like the Medi Gun's hose, which case boards run off the
- * board so its cut end never shows. They still keep other weapons at a distance. Layouts leave
- * them out of the weapon's height: `sidePose` runs the hose straight off a side edge from a
- * corner, `pose` arcs it off the bottom edge.
- */
+/** Pieces allowed past the board's edge, like the Medi Gun's hose, which still keeps other weapons apart. `sidePose` runs it off a side edge, `pose` arcs it off the bottom. */
 export const HANGING_PARTS: Record<string, { bones: readonly string[]; pose: Record<string, number>; sidePose: Record<string, number> }> = {
   c_medigun: {
     bones: ['joint_hose01', ...HOSE_JOINTS],

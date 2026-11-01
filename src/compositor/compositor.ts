@@ -1,8 +1,12 @@
 import * as THREE from 'three';
+
 import type { PaintSeed, RecipeNode, TextureResolver } from './types';
 import type { ResolvedNode, ResolvedTransform } from './resolve';
-import { isIdentityTransform, resolveRecipe } from './resolve';
+import { IDENTITY_TRANSFORM, isIdentityTransform, resolveRecipe, selectHasActiveGroup } from './resolve';
 import { TextureCache, textureCacheBudgetBytes } from './textureCache';
+import { ConstantTextures } from './constantTextures';
+import { LatestComposeScheduler } from './latestCompose';
+import { RenderTargetPool } from './renderTargets';
 import type { TextureMetadata } from '../data/types';
 export { textureUvMatrix } from './transforms';
 import { textureUvMatrix } from './transforms';
@@ -41,13 +45,6 @@ export interface ComposeDimensions {
   sourceLimit?: number;
 }
 
-function selectHasActiveGroup(values: readonly (number | string)[] | undefined): boolean {
-  return (values ?? []).some((value) => {
-    const parsed = typeof value === 'number' ? value : parseInt(value, 10);
-    return Number.isFinite(parsed) && parsed !== 0;
-  });
-}
-
 export interface GroupStickerArtworkInput {
   readonly mask: string;
   readonly selectorBase: THREE.Texture;
@@ -61,11 +58,6 @@ export interface GroupStickerArtworkInput {
 }
 
 const IDENTITY3 = new THREE.Matrix3();
-const IDENTITY_TRANSFORM: ResolvedTransform = {
-  black: 0, white: 1, gamma: 1,
-  rotationDeg: 0, translateU: 0, translateV: 0, scale: 1,
-  flipU: false, flipV: false,
-};
 
 interface EvaluatedInput {
   texture: THREE.Texture;
@@ -73,20 +65,10 @@ interface EvaluatedInput {
   target: THREE.WebGLRenderTarget | null;
 }
 
-interface LatestComposeRequest {
-  readonly recipe: ResolvedNode;
-  readonly dimensions?: ComposeDimensions;
-  readonly resolve: (result: ComposeResult | null) => void;
-  readonly reject: (cause: unknown) => void;
-  readonly cancelled?: () => boolean;
-  readonly onPreview?: (result: ComposeResult) => void;
-}
-
 /**
- * Lower-detail passes shown while a cold paint's textures stream in: source
- * textures capped at `source` px, composed at no more than `output` px.
- * Low-end machines skip the middle step: its uploads and extra composite cost
- * more smoothness there than the sharper preview is worth.
+ * Lower-detail passes shown while a cold paint's textures stream in: sources capped
+ * at `source` px, composed at no more than `output` px. Low-end machines skip the
+ * middle step, since its uploads cost more smoothness than the sharper preview is worth.
  */
 const LOW_END_DEVICE = (globalThis.navigator?.hardwareConcurrency ?? 8) <= 4
   || ((globalThis.navigator as (Navigator & { deviceMemory?: number }) | undefined)?.deviceMemory ?? 8) <= 4;
@@ -94,19 +76,15 @@ const PREVIEW_TIERS: readonly { source: number; output: number }[] = LOW_END_DEV
   ? [{ source: 256, output: 512 }]
   : [{ source: 256, output: 512 }, { source: 1024, output: 1024 }];
 
-interface LatestComposeChannel {
-  running: boolean;
-  pending: LatestComposeRequest | null;
-}
-
 // Reimplements TF2's paintkit compositor on the GPU via three.js render targets,
 // sharing the viewer's WebGL context. Evaluates a resolved stage tree bottom-up
 // into ping-ponged 8-bit sRGB render targets, with shader math in linear space.
 export class Compositor {
   private renderer: THREE.WebGLRenderer;
   private ownsRenderer: boolean;
-  private width: number;
-  private height: number;
+  private readonly renderTargets: RenderTargetPool;
+  private readonly constantTextures = new ConstantTextures();
+  private readonly latestCompose: LatestComposeScheduler;
   private textures: TextureCache;
 
   private scene = new THREE.Scene();
@@ -114,17 +92,13 @@ export class Compositor {
   private material: THREE.RawShaderMaterial;
   private quad: THREE.Mesh;
 
-  // pool of scratch sRGB-encoded 8-bit render targets
-  private pool: THREE.WebGLRenderTarget[] = [];
-  // The compositor owns one shader/uniform set and render-target pool. Serializing
-  // requests prevents rapid wear/seed changes from interleaving GPU passes.
+  // Serializes requests so rapid wear or seed changes cannot interleave GPU passes.
   private composeQueue: Promise<void> = Promise.resolve();
-  private latestComposeChannels = new Map<string, LatestComposeChannel>();
   // Source textures already uploaded, so warm composes skip the upload yields.
   private uploaded = new WeakSet<THREE.Texture>();
 
   constructor(resolver: TextureResolver, opts: CompositorOptions & { renderer?: THREE.WebGLRenderer } = {}) {
-    this.width = this.height = opts.size ?? 1024;
+    this.renderTargets = new RenderTargetPool(opts.size ?? 1024);
     if (opts.renderer) {
       this.renderer = opts.renderer;
       this.ownsRenderer = false;
@@ -140,6 +114,12 @@ export class Compositor {
       this.renderer.capabilities.getMaxAnisotropy(),
       this.renderer,
     );
+    this.latestCompose = new LatestComposeScheduler({
+      enqueue: (work) => this.enqueue(work),
+      composeResolvedNow: (resolved, dimensions, cancelled, onPreview) => this.composeResolvedNow(resolved, dimensions, cancelled, onPreview),
+      releaseResult: (result) => this.releaseResult(result),
+      prefetchTiers: (recipe, size) => this.prefetchTiers(recipe, size),
+    });
 
     this.material = new THREE.RawShaderMaterial({
       glslVersion: THREE.GLSL3,
@@ -175,9 +155,8 @@ export class Compositor {
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.material);
     this.quad.frustumCulled = false;
     this.scene.add(this.quad);
-    // Link the shader while the first textures download, instead of stalling
-    // the first compose on it (KHR_parallel_shader_compile keeps it off the
-    // main thread where available).
+    // Link the shader while the first textures download, so the first compose does
+    // not stall on it (KHR_parallel_shader_compile keeps it off the main thread).
     void this.renderer.compileAsync(this.scene, this.camera);
     // Uploads died with a lost context. The app recomposes after a restore
     // (render targets come back blank), so only the upload pacing resets here.
@@ -196,46 +175,6 @@ export class Compositor {
 
   private input(ref: string, opts: { nearest?: boolean } = {}): Promise<THREE.Texture> {
     return this.sourceTier === null ? this.textures.load(ref, opts) : this.textures.loadTier(ref, this.sourceTier, opts);
-  }
-
-  private makeTarget(width = this.width, height = this.height): THREE.WebGLRenderTarget {
-    const t = new THREE.WebGLRenderTarget(width, height, {
-      // TF2 composites into an 8-bit target. Matching that format also halves
-      // render-target bandwidth and memory versus the previous half-float path.
-      type: THREE.UnsignedByteType,
-      format: THREE.RGBAFormat,
-      colorSpace: THREE.NoColorSpace,
-      magFilter: THREE.LinearFilter,
-      minFilter: THREE.LinearFilter,
-      depthBuffer: false,
-      stencilBuffer: false,
-      generateMipmaps: false,
-    });
-    t.texture.wrapS = THREE.RepeatWrapping;
-    t.texture.wrapT = THREE.RepeatWrapping;
-    return t;
-  }
-
-  private acquire(): THREE.WebGLRenderTarget {
-    return this.pool.pop() ?? this.makeTarget();
-  }
-
-  private release(t: THREE.WebGLRenderTarget) {
-    // Retain scratch space up to 32 MiB; a complex recipe must not permanently
-    // reserve its peak allocation after its intermediates have been released.
-    if (t.width === this.width && t.height === this.height
-      && (this.pool.length + 1) * t.width * t.height * 4 <= 32 * 1024 * 1024) this.pool.push(t);
-    else t.dispose();
-  }
-
-  private setOutputSize(width: number, height: number) {
-    const nextWidth = Math.max(1, Math.floor(width));
-    const nextHeight = Math.max(1, Math.floor(height));
-    if (nextWidth === this.width && nextHeight === this.height) return;
-    for (const target of this.pool) target.dispose();
-    this.pool.length = 0;
-    this.width = nextWidth;
-    this.height = nextHeight;
   }
 
   // Gather every texture ref in the resolved tree so we can preload before render.
@@ -260,9 +199,8 @@ export class Compositor {
     }
   }
 
-  // Gather refs from the unresolved recipe as well. This includes every
-  // weighted sticker alternative, so a later seed change cannot discover a
-  // new image and stall on decode/upload during composition.
+  // Gather refs from the unresolved recipe, including every weighted sticker
+  // alternative, so a later seed change does not stall on decode or upload.
   private collectRecipeRefs(node: RecipeNode, out: { ref: string; nearest: boolean }[]) {
     switch (node.type) {
       case 'texture_lookup':
@@ -294,10 +232,8 @@ export class Compositor {
     this.prefetchTiers(resolveRecipe(recipe, seed), sourceLimit);
   }
 
-  // Decode and upload inputs while the current paint is already visible. A
-  // supplied seed restricts intent warmups to the inputs the click will use.
-  // The compositor remains GPU-native; no pixel buffers cross back to
-  // JavaScript, a Worker, or WASM.
+  // Decode and upload inputs while the current paint is visible. A supplied seed
+  // limits the warmup to the inputs the click will use; pixels never leave the GPU.
   async preload(recipe: RecipeNode, waitForIdle: () => Promise<void>, cancelled: () => boolean, seed?: PaintSeed): Promise<void> {
     const refs: { ref: string; nearest: boolean }[] = [];
     if (seed === undefined) this.collectRecipeRefs(recipe, refs);
@@ -309,8 +245,7 @@ export class Compositor {
       const unpin = this.textures.pin([this.textures.keyFor(ref.ref, { nearest: ref.nearest })]);
       try {
         const texture = await this.textures.load(ref.ref, { nearest: ref.nearest });
-        // Decode can outlive the idle period or the requesting view. Yield
-        // again before upload and never upload obsolete speculative inputs.
+        // Decode can outlive the idle period or the view, so yield again before upload.
         await waitForIdle();
         if (cancelled()) return;
         this.renderer.initTexture(texture);
@@ -328,41 +263,16 @@ export class Compositor {
     this.renderer.setRenderTarget(prev);
   }
 
-  // Set ALL sampler uniforms for a pass. Unused slots get a dummy texture.
-  // CRITICAL: the fragment shader declares uTex0/1/2 as active samplers in every
-  // mode, so three.js binds whatever the uniforms reference on EVERY draw. If a
-  // stale uniform still points at a pooled render target that a later pass
-  // renders INTO, WebGL detects a framebuffer feedback loop, raises
-  // INVALID_OPERATION, skips the draw, and the target stays cleared-to-black.
-  // That corrupted every composite after the first until this was added.
+  // Set ALL sampler uniforms for a pass; unused slots get a dummy texture. The
+  // fragment shader samples uTex0-3 in every mode, so a stale uniform pointing at a
+  // pooled target this pass renders into is a framebuffer feedback loop: WebGL skips
+  // the draw and the target stays black.
   private setTextures(t0: THREE.Texture, t1: THREE.Texture | null, t2: THREE.Texture | null, t3: THREE.Texture | null = null) {
     const u = this.material.uniforms;
     u.uTex0.value = t0;
-    u.uTex1.value = t1 ?? this.dummyTex();
-    u.uTex2.value = t2 ?? this.dummyTex();
-    u.uTex3.value = t3 ?? this.dummyTex();
-  }
-
-  private _dummy: THREE.DataTexture | null = null;
-  private dummyTex(): THREE.DataTexture {
-    if (!this._dummy) {
-      const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
-      t.colorSpace = THREE.NoColorSpace;
-      t.needsUpdate = true;
-      this._dummy = t;
-    }
-    return this._dummy;
-  }
-
-  private _constWhite: THREE.DataTexture | null = null;
-  private constWhite(): THREE.DataTexture {
-    if (!this._constWhite) {
-      const t = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat);
-      t.colorSpace = THREE.NoColorSpace;
-      t.needsUpdate = true;
-      this._constWhite = t;
-    }
-    return this._constWhite;
+    u.uTex1.value = t1 ?? this.constantTextures.dummyTex();
+    u.uTex2.value = t2 ?? this.constantTextures.dummyTex();
+    u.uTex3.value = t3 ?? this.constantTextures.dummyTex();
   }
 
   private configureInputs(inputs: EvaluatedInput[], safe: THREE.Texture) {
@@ -391,7 +301,7 @@ export class Compositor {
     for (const input of inputs) {
       if (input.target && !released.has(input.target)) {
         released.add(input.target);
-        this.release(input.target);
+        this.renderTargets.release(input.target);
       }
     }
   }
@@ -401,9 +311,8 @@ export class Compositor {
     switch (node.type) {
       case 'texture_lookup': {
         const tex = await this.input(node.texture);
-        // Source feeds texture leaves directly into their parent compositor
-        // stage. Keeping the transform/levels as sampler state avoids an extra
-        // RGBA8 quantization pass for every transformed lookup.
+        // Texture leaves feed their parent stage directly. Keeping the transform and
+        // levels as sampler state avoids an extra RGBA8 pass per transformed lookup.
         return { texture: tex, transform: node, target: null };
       }
       case 'combine_multiply':
@@ -412,30 +321,30 @@ export class Compositor {
         const children = await Promise.all(node.nodes.map((child) => this.evaluate(child)));
         let result: THREE.WebGLRenderTarget;
         if (node.type === 'combine_lerp') {
-          const out = this.acquire();
+          const out = this.renderTargets.acquire();
           u.uMode.value = MODE_LERP;
           const lerpInputs = [
             children[0],
             children[1] ?? children[0],
-            children[2] ?? { texture: this.constHalf(), transform: IDENTITY_TRANSFORM, target: null },
+            children[2] ?? { texture: this.constantTextures.constHalf(), transform: IDENTITY_TRANSFORM, target: null },
           ].filter(Boolean) as EvaluatedInput[];
-          this.configureInputs(lerpInputs, this.constWhite());
+          this.configureInputs(lerpInputs, this.constantTextures.constWhite());
           this.renderInto(out);
           result = out;
         } else {
           const mode = node.type === 'combine_multiply' ? MODE_MULTIPLY : MODE_ADD;
-          const safe = node.type === 'combine_multiply' ? this.constWhite() : this.constZero();
+          const safe = node.type === 'combine_multiply' ? this.constantTextures.constWhite() : this.constantTextures.constZero();
           let pending = [...children];
           let previous: EvaluatedInput | null = null;
           do {
             const capacity = previous ? 3 : 4;
             const batch = pending.splice(0, capacity);
             if (previous) batch.unshift(previous);
-            const out = this.acquire();
+            const out = this.renderTargets.acquire();
             u.uMode.value = mode;
             this.configureInputs(batch, safe);
             this.renderInto(out);
-            if (previous?.target) this.release(previous.target);
+            if (previous?.target) this.renderTargets.release(previous.target);
             previous = { texture: out.texture, transform: IDENTITY_TRANSFORM, target: out };
           } while (pending.length);
           result = previous!.target!;
@@ -445,10 +354,10 @@ export class Compositor {
       }
       case 'select': {
         if (!selectHasActiveGroup(node.select)) {
-          return { texture: this.constZero(), transform: IDENTITY_TRANSFORM, target: null };
+          return { texture: this.constantTextures.constZero(), transform: IDENTITY_TRANSFORM, target: null };
         }
         const groups = await this.input(node.groups);
-        const out = this.acquire();
+        const out = this.renderTargets.acquire();
         u.uMode.value = MODE_SELECT;
         this.setTextures(groups, null, null, null);
         u.uSrgb0.value = 0;
@@ -464,12 +373,12 @@ export class Compositor {
         const base = await this.evaluate(node.nodes[0]);
         const sticker = await this.input(node.base);
         const stickerSpec = node.spec ? await this.input(node.spec) : null;
-        const out = this.acquire();
+        const out = this.renderTargets.acquire();
         u.uMode.value = MODE_BLEND;
         // CTCApplyStickerStage binds black when the optional implicit `_s`
         // texture is unavailable. Black writes a zero phong mask, so stickers
         // without a spec map (such as Sandwich Diner) stay matte.
-        this.setTextures(base.texture, sticker, stickerSpec ?? this.dummyTex(), null);
+        this.setTextures(base.texture, sticker, stickerSpec ?? this.constantTextures.dummyTex(), null);
         const t = base.transform;
         u.uSrgb0.value = 1;
         u.uSrgb1.value = 1;
@@ -486,7 +395,7 @@ export class Compositor {
         (u.uDestTr.value as THREE.Vector2).fromArray(dest.tr);
         (u.uDestBl.value as THREE.Vector2).fromArray(dest.bl);
         this.renderInto(out);
-        if (base.target) this.release(base.target);
+        if (base.target) this.renderTargets.release(base.target);
         return {
           texture: out.texture,
           transform: { ...IDENTITY_TRANSFORM, black: node.black, white: node.white, gamma: node.gamma },
@@ -496,48 +405,29 @@ export class Compositor {
     }
   }
 
-  private _constHalf: THREE.DataTexture | null = null;
-  private constHalf(): THREE.DataTexture {
-    if (!this._constHalf) {
-      const t = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1, THREE.RGBAFormat);
-      t.colorSpace = THREE.NoColorSpace;
-      t.needsUpdate = true;
-      this._constHalf = t;
-    }
-    return this._constHalf;
-  }
-
-  private _constZero: THREE.DataTexture | null = null;
-  private constZero(): THREE.DataTexture {
-    if (!this._constZero) {
-      const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1, THREE.RGBAFormat);
-      t.colorSpace = THREE.NoColorSpace;
-      t.needsUpdate = true;
-      this._constZero = t;
-    }
-    return this._constZero;
+  // Runs GPU work after every earlier task settles. A failed task still releases
+  // the queue for the next one.
+  private enqueue<T>(work: () => T | Promise<T>): Promise<T> {
+    const task = this.composeQueue.then(work);
+    this.composeQueue = task.then(() => undefined, () => undefined);
+    return task;
   }
 
   // Compose a recipe at a seed. Returns a target the caller owns; return it via
   // releaseResult() (preferred, recycles into the pool) or dispose it.
   compose(recipe: RecipeNode, seed: PaintSeed, dimensions?: ComposeDimensions): Promise<ComposeResult> {
-    const task = this.composeQueue.then(() => this.composeNow(recipe, seed, dimensions));
-    this.composeQueue = task.then(() => undefined, () => undefined);
-    return task;
+    return this.enqueue(() => this.composeNow(recipe, seed, dimensions));
   }
 
   /** Compose an already resolved tree without consuming a second RNG stream. */
   composeResolved(recipe: ResolvedNode, dimensions?: ComposeDimensions): Promise<ComposeResult> {
-    const task = this.composeQueue.then(() => this.composeResolvedNow(recipe, dimensions));
-    this.composeQueue = task.then(() => undefined, () => undefined);
-    return task;
+    return this.enqueue(() => this.composeResolvedNow(recipe, dimensions));
   }
 
   /**
-   * Keep at most one pending composition for a continuous interaction. If the
-   * pointer moves again while the GPU is busy, only the newest recipe survives.
-   * `onPreview`, when given, receives lower-detail composites while a cold
-   * paint's textures stream in; each belongs to the caller, like the result.
+   * Keep at most one pending composition per channel; a newer request replaces it.
+   * `onPreview`, when given, receives lower-detail composites while cold textures
+   * stream in. Each result belongs to the caller.
    */
   composeLatest(
     channel: string,
@@ -547,7 +437,7 @@ export class Compositor {
     cancelled?: () => boolean,
     onPreview?: (result: ComposeResult) => void,
   ): Promise<ComposeResult | null> {
-    return this.composeResolvedLatest(channel, resolveRecipe(recipe, seed), dimensions, cancelled, onPreview);
+    return this.latestCompose.composeLatest(channel, recipe, seed, dimensions, cancelled, onPreview);
   }
 
   composeResolvedLatest(
@@ -557,55 +447,16 @@ export class Compositor {
     cancelled?: () => boolean,
     onPreview?: (result: ComposeResult) => void,
   ): Promise<ComposeResult | null> {
-    let state = this.latestComposeChannels.get(channel);
-    if (!state) {
-      state = { running: false, pending: null };
-      this.latestComposeChannels.set(channel, state);
-    }
-    // Composes run one at a time; fetching and decoding a capped compose's
-    // sources need not wait for that, so by its turn it is GPU work alone.
-    if (dimensions?.sourceLimit) this.prefetchTiers(recipe, dimensions.sourceLimit);
-    return new Promise<ComposeResult | null>((resolve, reject) => {
-      state!.pending?.resolve(null);
-      state!.pending = { recipe, dimensions, resolve, reject, cancelled, onPreview };
-      if (!state!.running) void this.runLatestComposeChannel(channel, state!);
-    });
-  }
-
-  private async runLatestComposeChannel(channel: string, state: LatestComposeChannel): Promise<void> {
-    state.running = true;
-    while (state.pending) {
-      const request = state.pending;
-      state.pending = null;
-      try {
-        const task = this.composeQueue.then(() => state.pending || request.cancelled?.()
-          ? null : this.composeResolvedNow(request.recipe, request.dimensions, () => Boolean(state.pending) || Boolean(request.cancelled?.()), request.onPreview));
-        this.composeQueue = task.then(() => undefined, () => undefined);
-        const result = await task;
-        if (!result) {
-          request.resolve(null);
-        } else if (state.pending || request.cancelled?.()) {
-          this.releaseResult(result);
-          request.resolve(null);
-        } else {
-          request.resolve(result);
-        }
-      } catch (cause) {
-        request.reject(cause);
-      }
-    }
-    state.running = false;
-    if (!state.pending) this.latestComposeChannels.delete(channel);
+    return this.latestCompose.composeResolvedLatest(channel, recipe, dimensions, cancelled, onPreview);
   }
 
   /**
-   * Render one selector-writing group sticker as standalone transparent
-   * artwork. This is a single small GPU pass over already retained compositor
-   * endpoints, so selecting a group sticker does not trigger another full
-   * recipe composition and moving it remains uniform-only in the Viewer.
+   * Render one selector-writing group sticker as standalone transparent artwork: a
+   * single small GPU pass over the retained endpoints, so selecting it does not
+   * recompose the recipe. Moving it stays uniform-only in the Viewer.
    */
   composeGroupStickerArtworkDataUrl(input: GroupStickerArtworkInput): Promise<string> {
-    const task = this.composeQueue.then(async () => {
+    return this.enqueue(async () => {
       const size = Number.isFinite(input.size)
         ? Math.max(64, Math.min(1024, Math.floor(input.size!)))
         : 512;
@@ -614,7 +465,7 @@ export class Compositor {
       let target: THREE.WebGLRenderTarget | null = null;
       try {
         const mask = await this.textures.load(input.mask);
-        target = this.makeTarget(size, size);
+        target = this.renderTargets.makeTarget(size, size);
         const u = this.material.uniforms;
         u.uMode.value = MODE_GROUP_STICKER_ARTWORK;
         this.setTextures(input.selectorBase, input.endpointZero, input.endpointOne, mask);
@@ -641,27 +492,6 @@ export class Compositor {
         unpin();
       }
     });
-    this.composeQueue = task.then(() => undefined, () => undefined);
-    return task;
-  }
-
-  /**
-   * Compose and read a PNG preview as one queue task. The editor shares this
-   * renderer with the visible weapon, so keeping GPU evaluation, readback, and
-   * target release together prevents a later compose from reusing compositor
-   * state while a preview still needs it.
-   */
-  composePreviewDataUrl(recipe: RecipeNode, seed: PaintSeed, dimensions?: ComposeDimensions): Promise<string> {
-    const task = this.composeQueue.then(async () => {
-      const result = await this.composeNow(recipe, seed, dimensions);
-      try {
-        return this.toPreviewDataUrl(result.target);
-      } finally {
-        this.releaseResult(result);
-      }
-    });
-    this.composeQueue = task.then(() => undefined, () => undefined);
-    return task;
   }
 
   private async composeNow(recipe: RecipeNode, seed: PaintSeed, dimensions?: ComposeDimensions): Promise<ComposeResult> {
@@ -679,8 +509,8 @@ export class Compositor {
   private composeResolvedNow(resolved: ResolvedNode, dimensions?: ComposeDimensions): Promise<ComposeResult>;
   private composeResolvedNow(resolved: ResolvedNode, dimensions: ComposeDimensions | undefined, cancelled: () => boolean, onPreview?: (result: ComposeResult) => void): Promise<ComposeResult | null>;
   private async composeResolvedNow(resolved: ResolvedNode, dimensions?: ComposeDimensions, cancelled?: () => boolean, onPreview?: (result: ComposeResult) => void): Promise<ComposeResult | null> {
-    const fullWidth = dimensions?.width ?? this.width;
-    const fullHeight = dimensions?.height ?? this.height;
+    const fullWidth = dimensions?.width ?? this.renderTargets.width;
+    const fullHeight = dimensions?.height ?? this.renderTargets.height;
     const refs: { ref: string; nearest: boolean }[] = [];
     this.collectRefs(resolved, refs);
     const uniqueRefs = [...new Map(refs.map((ref) => [this.textures.keyFor(ref.ref, { nearest: ref.nearest }), ref])).values()];
@@ -693,7 +523,7 @@ export class Compositor {
       if (limit && !allReady()) {
         await Promise.all(uniqueRefs.map((r) => this.textures.loadTier(r.ref, limit, { nearest: r.nearest }).catch(() => null)));
         if (cancelled?.()) return null;
-        this.setOutputSize(fullWidth, fullHeight);
+        this.renderTargets.setOutputSize(fullWidth, fullHeight);
         this.sourceTier = limit;
         try {
           return await this.composeRoot(resolved);
@@ -708,7 +538,7 @@ export class Compositor {
           if (cancelled?.()) return null;
           if (allReady()) break;
           const scale = Math.min(1, tier.output / Math.max(fullWidth, fullHeight));
-          this.setOutputSize(fullWidth * scale, fullHeight * scale);
+          this.renderTargets.setOutputSize(fullWidth * scale, fullHeight * scale);
           this.sourceTier = tier.source;
           let preview: ComposeResult;
           try {
@@ -723,7 +553,7 @@ export class Compositor {
           onPreview(preview);
         }
       }
-      this.setOutputSize(fullWidth, fullHeight);
+      this.renderTargets.setOutputSize(fullWidth, fullHeight);
       const loaded = await pending;
       // A newer input may have arrived while the textures were loading.
       if (cancelled?.()) return null;
@@ -748,32 +578,26 @@ export class Compositor {
     // Nested stages apply their transform when sampled by their parent.
     // The root has no parent, so materialize any remaining transform here.
     if (!target || !isIdentityTransform(result.transform)) {
-      target = this.acquire();
+      target = this.renderTargets.acquire();
       const u = this.material.uniforms;
       u.uMode.value = MODE_TEXTURE;
-      this.configureInputs([result], this.constWhite());
+      this.configureInputs([result], this.constantTextures.constWhite());
       this.renderInto(target);
-      if (result.target) this.release(result.target);
+      if (result.target) this.renderTargets.release(result.target);
     }
-    // RGB bytes are sRGB-encoded by the compositor shader, but the target
-    // must remain NoColorSpace. Marking a pooled render target as sRGB makes
-    // WebGL perform a second hardware conversion on later writes/samples.
-    // Viewer decodes these stored bytes exactly once in map_fragment.
-    // colorSpace and wrapping are fixed when the pooled target is created;
-    // never mutate/re-upload a render-target texture after drawing it.
+    // Bytes are sRGB-encoded by the shader, so the target stays NoColorSpace: an
+    // sRGB-tagged pooled target gets a second hardware conversion on later writes and
+    // samples. The Viewer decodes once, in map_fragment. Fix colorSpace and wrapping
+    // at creation; never re-upload a target after drawing it.
     return { texture: target.texture, target };
   }
 
-  // Recycle a compose result's render target instead of destroying it, so the
-  // next compose allocates nothing.
+  // Recycle a result's target into the pool instead of destroying it.
   releaseResult(result: ComposeResult) {
-    this.release(result.target);
+    this.renderTargets.release(result.target);
   }
 
-  // Read back RGBA of a composed target as normalized [0..1] floats. Copies the
-  // (half-float) target into an 8-bit target first so readback works on every
-  // device regardless of EXT_color_buffer_float support. ~1/255 precision is
-  // plenty for the selftest's math assertions.
+  // Read back a composed target as linear [0..1] floats, through a fresh RGBA8 target.
   readPixels(target: THREE.WebGLRenderTarget): Float32Array {
     const width = target.width;
     const height = target.height;
@@ -807,20 +631,10 @@ export class Compositor {
   }
 
   /**
-   * Make a browser-displayable, top-to-bottom PNG preview of a composited
-   * texture. Render targets are read bottom-to-top by WebGL, but the first
-   * readback row is compositor UV v=0. This project uses unflipped Source/
-   * glTF textures, where v=0 is the source image's visual top. Canvas row zero
-   * is also visual top, so copying the rows in their original order preserves
-   * the exact UV coordinate system used by the 2D editor and the weapon.
-   *
-   * The compositor alpha channel carries material/mask information; it is not
-   * literal weapon transparency. Force the editor preview opaque so browsers
-   * do not wash the paint out against the checkerboard.
-   *
-   * This is intended for the editor only. The viewer continues to keep its
-   * paint GPU-resident; opening the sticker editor is the explicit request for
-   * an accurate 2D copy of that same composed surface.
+   * Browser-displayable PNG copy of a composed target, for the editor only. Readback
+   * row zero is UV v=0, the visual top of these unflipped textures, so rows are
+   * copied in their original order. Alpha is a material mask, not transparency, so
+   * it is forced opaque or browsers wash the paint out against the checkerboard.
    */
   private toPreviewCanvas(target: THREE.WebGLRenderTarget, maxDimension = 1024, forceOpaque = true): HTMLCanvasElement {
     const width = target.width;
@@ -835,7 +649,7 @@ export class Compositor {
     let readTarget = target;
     let scaledTarget: THREE.WebGLRenderTarget | null = null;
     if (scale < 1) {
-      scaledTarget = this.makeTarget(previewWidth, previewHeight);
+      scaledTarget = this.renderTargets.makeTarget(previewWidth, previewHeight);
       const u = this.material.uniforms;
       u.uMode.value = MODE_TEXTURE;
       this.setTextures(target.texture, null, null, null);
@@ -878,9 +692,8 @@ export class Compositor {
   }
 
   /**
-   * Copy a composed target into a texture that can be uploaded by another
-   * WebGL renderer. Unlike toPreviewDataUrl(), this preserves alpha because
-   * the viewer interprets it as TF2's phong/environment mask.
+   * Copy a composed target into a texture another WebGL renderer can upload. Unlike
+   * toPreviewDataUrl(), alpha is kept: the viewer reads it as TF2's phong mask.
    */
   toTransferTexture(target: THREE.WebGLRenderTarget): THREE.DataTexture {
     const width = target.width;
@@ -902,11 +715,8 @@ export class Compositor {
     return texture;
   }
 
-  getRenderer() {
-    return this.renderer;
-  }
   getSize() {
-    return this.width;
+    return this.renderTargets.width;
   }
 
   /** Drop package-owned uploads when the Source filesystem is replaced. */
@@ -916,15 +726,11 @@ export class Compositor {
 
   dispose() {
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
-    this.pool.forEach((t) => t.dispose());
-    this.pool = [];
+    this.renderTargets.dispose();
     this.textures.dispose();
     this.material.dispose();
     (this.quad.geometry as THREE.BufferGeometry).dispose();
-    if (this._constHalf) this._constHalf.dispose();
-    if (this._constWhite) this._constWhite.dispose();
-    if (this._constZero) this._constZero.dispose();
-    if (this._dummy) this._dummy.dispose();
+    this.constantTextures.dispose();
     if (this.ownsRenderer) this.renderer.dispose();
   }
 }

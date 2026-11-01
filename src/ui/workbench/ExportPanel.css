@@ -1,17 +1,10 @@
-/* Export tab.
-   The drawer this lives in is wide and short (it starts around 260px tall and
-   the stage above it wants the rest), so the panel reads across rather than
-   down: the decisions sit in columns, the contents summary sits beside them
-   instead of below, and the action bar never scrolls away. The previous stack
-   put the most consequential choice under a long file list, in the one axis
-   this surface does not have. */
+/* Export tab. The drawer is wide and short, so the panel reads across: decisions in columns, the action bar never scrolls away. */
 .export-panel {
   display: flex;
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  /* The stage narrows as the catalog and inspector open, so this panel's width
-     has little to do with the window's. Query the panel itself. */
+  /* The stage narrows as drawers open, so query the panel rather than the window. */
   container-type: inline-size;
 }
 .export-panel[data-status='empty'] {
@@ -107,9 +100,7 @@
   font-size: 10px;
   line-height: 1.5;
 }
-/* A notice, not a selection: accent-soft is reserved for the chosen segment, so
-   this reads as a raised surface instead. One border, evenly rounded: an accent
-   bar down one side of a rounded box reads as a clipped edge rather than a cue. */
+/* A notice, not a selection, so it uses a raised surface rather than an accent edge. */
 .export-callout {
   display: flex;
   align-items: flex-start;
@@ -132,8 +123,7 @@
 .export-callout a { color: var(--accent); }
 
 
-/* The file column scrolls on its own so a long list never pushes the rest of
-   the panel around. */
+/* The file column scrolls on its own. */
 .export-col-files { min-height: 0; }
 .export-list {
   display: flex;
@@ -183,8 +173,7 @@
 .export-picker-search :where(input) { padding-left: 24px; }
 .export-picker-list {
   display: flex;
-  /* Four rows at the shared control height, so the list reads as a list
-     without taking the column over. */
+  /* Four rows at control height, so the list does not take the column over. */
   max-height: 122px;
   flex-direction: column;
   gap: 1px;
@@ -221,8 +210,7 @@
   text-align: center;
 }
 
-/* Messages. A caution is something to decide about before exporting; a result
-   describes the pack that was just built. They used to render identically. */
+/* Cautions are decisions before exporting; results describe the pack just built. */
 .export-messages {
   display: flex;
   flex: none;
@@ -284,9 +272,7 @@
 .export-action { flex: none; }
 .export-action:disabled { opacity: 0.55; cursor: not-allowed; }
 
-/* A narrow stage cannot hold three columns legibly: drop to two, then to one.
-   Keyed to the panel, so opening the inspector reflows this without the window
-   changing size at all. */
+/* A narrow stage cannot hold three columns: drop to two, then to one. */
 @container (max-width: 900px) {
   .export-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .export-col-files { grid-column: 1 / -1; border-right: none; border-top: 1px solid var(--border); }
@@ -304,8 +290,7 @@
   .export-col-files { border-top: none; }
 }
 
-/* Empty state: the three ways to give this tab something to pack, as the
-   actions themselves rather than a sentence describing where to click. */
+/* Empty state: the ways to give this tab something to pack, as actions. */
 .export-empty-routes {
   display: flex;
   flex-wrap: wrap;
@@ -330,9 +315,7 @@
 }
 .export-empty-routes button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Base definitions: a statement of what is already handled, with a way out for
-   the few people who need one. Deliberately not a warning or a required field.
-   Everyone on the shipped snapshot should read this and move on. */
+/* Base definitions: a statement that is already handled, not a warning or a required field. */
 .export-base {
   display: flex;
   align-items: baseline;

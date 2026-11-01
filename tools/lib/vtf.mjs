@@ -1,6 +1,4 @@
-// Node-tool entry point. The parsing and decoding implementation is
-// platform-neutral; this thin facade retains Buffer results for existing Node
-// callers that use Buffer#copy while the browser consumes Uint8Array directly.
+// Node facade over vtf-core.mjs that returns Buffer results, for callers that use Buffer#copy.
 import {
   decodeVTF as decodeCoreVTF,
   decodeVTFAllFrames as decodeCoreVTFAllFrames,

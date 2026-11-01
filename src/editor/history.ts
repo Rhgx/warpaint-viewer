@@ -1,13 +1,7 @@
-/**
- * Undo depth. Snapshots share untouched operations, so this bounds retained
- * memory without limiting what a single edit can change.
- */
+/** Undo depth. Snapshots share untouched operations, so this bounds memory without limiting a single edit. */
 const MAX_UNDO_ENTRIES = 100;
 
-/**
- * Snapshot history for the editor's immutable working messages. The owner
- * supplies already-detached snapshots; this class only owns their ordering.
- */
+/** Snapshot history for immutable working messages. Owners supply detached snapshots; this class only orders them. */
 export class SnapshotHistory<T> {
   private readonly undoStack: T[] = [];
   private readonly redoStack: T[] = [];

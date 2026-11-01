@@ -1,23 +1,14 @@
 import * as THREE from 'three';
 
 // TF2's VertexLitGeneric/Skin controls, layered onto three's MeshPhongMaterial.
+// Not a standalone shader: three compiles its phong program and this module rewrites
+// pieces of it at the `#include <...>` markers. Two chunks patch lines inside three's
+// own text, so the marker-to-source mapping lives here with the GLSL, not in the Viewer.
 //
-// This is not a standalone shader: three compiles its own phong program and
-// this module rewrites pieces of it, keyed to the `#include <...>` markers in
-// the generated source. Two chunks additionally start from three's own text
-// and patch lines inside it, because the parts being replaced sit in the
-// middle of code worth keeping. The marker-to-source mapping therefore lives
-// here with the GLSL rather than beside the Viewer, since neither half means
-// anything without the other.
-//
-// Ports are noted against the SDK file they came from
-// (materialsystem/stdshaders). The uniforms these read are created and driven
-// by the Viewer; adding one here means adding it to tf2Uniforms as well.
+// Ports are noted against their SDK file (materialsystem/stdshaders). Uniforms are created
+// by the Viewer and must also be listed in createTf2Uniforms (materialConfig.ts).
 
-/**
- * three caches compiled programs across materials, so anything that changes
- * the source below has to change this key too or a stale program is reused.
- */
+/** Change this whenever the shader source below changes, or three reuses the stale program. */
 export const TF2_VERTEXLIT_CACHE_KEY = 'tf2-vertexlit-v10-live-sticker-spec';
 
 const PARAMETERS = /* glsl */ `#include <common>
@@ -39,9 +30,8 @@ uniform vec2 uTf2StickerTl, uTf2StickerTr, uTf2StickerBl, uTf2StickerCenter;
 uniform vec4 uTf2SelfIllumFresnelParams;
 uniform vec3 uTf2AmbientCube[6];
 uniform mat3 uTf2AmbientBasis;
-// common_ps_fxc.h TextureCombine, verbatim apart from dropping the modes that
-// need inputs this viewer has no equivalent for (ssbump). Mode numbers are the
-// TCOMBINE_* values a VMT names through $detailblendmode.
+// common_ps_fxc.h TextureCombine, minus the modes needing ssbump inputs this viewer lacks.
+// Mode numbers are the TCOMBINE_* values a VMT names in $detailblendmode.
 vec4 tf2TextureCombine( vec4 baseColor, vec4 detailColor, float mode, float blendFactor ) {
   if ( mode == 7.0 ) { // MOD2X_SELECT_TWO_PATTERNS
     vec3 dc = vec3( mix( detailColor.r, detailColor.a, baseColor.a ) );
@@ -65,9 +55,8 @@ vec4 tf2TextureCombine( vec4 baseColor, vec4 detailColor, float mode, float blen
     baseColor.a = mix( baseColor.a, baseColor.a * detailColor.a, blendFactor );
   return baseColor;
 }
-// TextureCombinePostLighting: modes 5 and 6 leave the albedo alone and add to
-// the lit diffuse instead, which is why a war paint's wear pass shows up as
-// light rather than as a darker albedo.
+// Modes 5 and 6 leave the albedo alone and add to the lit diffuse, so a war paint's wear
+// pass reads as light rather than a darker albedo.
 vec3 tf2TextureCombinePostLighting( vec3 litBaseColor, vec4 detailColor, float mode, float blendFactor ) {
   if ( mode == 5.0 ) // RGB_ADDITIVE_SELFILLUM
     litBaseColor += blendFactor * detailColor.rgb;
@@ -93,14 +82,12 @@ const SPECULAR_MASK = /* glsl */ `float tf2NormalAlpha = 1.0;
 #endif
 float tf2SpecMask = mix( tf2NormalAlpha, diffuseColor.a, uTf2BaseAlphaPhongMask );
 // skin_ps20b.fxc: fEnvMapMask = lerp( baseColor.a, fSpecMask, $normalmapalphaenvmapmask ).
-// The skin (phong) path always masks the cubemap by base alpha, which for
-// warpaints is the composited metal mask; $basealphaenvmapmask is never read.
+// The skin path always masks by base alpha (the composited metal mask on warpaints).
 float tf2EnvMask = mix( diffuseColor.a, tf2SpecMask, uTf2NormalAlphaEnvMask );
 float specularStrength = uTf2PhongEnabled * uTf2PhongBoost * tf2SpecMask;`;
 
-// Compositor targets stay raw RGBA8 so pooled targets never change GPU
-// formats. Their RGB bytes are sRGB-encoded; decode only the base color here
-// while preserving alpha as the Source phong/environment mask.
+// Compositor targets stay raw RGBA8 so pooled targets keep their GPU format. Decode only
+// the RGB (sRGB-encoded) here; alpha stays the Source phong/environment mask.
 const BASE_AND_DETAIL = /* glsl */ `#ifdef USE_MAP
   vec4 sampledDiffuseColor = sRGBTransferEOTF( texture2D( map, vMapUv ) );
   if ( uTf2StickerPreview > 0.5 ) {
@@ -126,9 +113,8 @@ const BASE_AND_DETAIL = /* glsl */ `#ifdef USE_MAP
   }
   diffuseColor *= sampledDiffuseColor;
 #endif
-// $detail, sampled at base UV * $detailscale (the detail transform is the base
-// transform scaled, see BaseVSShader SetVertexShaderTextureScaledTransform).
-// Kept in scope because modes 5 and 6 need it again after lighting.
+// $detail, sampled at base UV * $detailscale (BaseVSShader's scaled transform). Kept in
+// scope because modes 5 and 6 need it again after lighting.
 vec4 tf2DetailColor = vec4( 1.0 );
 #ifdef USE_MAP
 if ( uTf2Detail > 0.0 ) {
@@ -149,14 +135,10 @@ if ( uTf2Detail > 0.0 ) {
 }
 #endif`;
 
-// Source's alpha test, which is a plain compare against the reference. It runs
-// here, against a uniform, so that an imported material switching it on costs
-// no recompile, and because three's own chunk can remap alpha through
-// smoothstep( alphaTest, alphaTest + fwidth( a ), a ) to antialias the cut edge
-// of a foliage-style texture. A war paint's alpha is flat across the whole
-// weapon, so fwidth is zero there and that remap would snap every fragment back
-// to fully opaque, losing exactly the see-through $allowalphatocoverage asks
-// for. Whatever survives the compare keeps its alpha and is blended by it.
+// Source's alpha test is a plain compare, run here against a uniform so switching it on
+// needs no recompile. three's chunk would antialias with smoothstep(alphaTest,
+// alphaTest + fwidth(a), a), and fwidth is zero on a flat war paint, which would snap
+// every fragment opaque. So the compare keeps alpha, and survivors are blended by it.
 const ALPHA_TEST = /* glsl */ `if ( uTf2AlphaTestRef > 0.0 && diffuseColor.a < uTf2AlphaTestRef ) discard;`;
 
 const PHONG_MATERIAL = /* glsl */ `BlinnPhongMaterial material;
@@ -184,10 +166,8 @@ tf2AmbientRimFresnel *= tf2AmbientRimFresnel;
 float tf2AmbientRimMask = material.tf2RimMask * tf2AmbientRimFresnel * uTf2RimLight;
 vec3 tf2AmbientRim = tf2AmbientLight( tf2WorldEyeDir ) * uTf2RimBoost
   * saturate( tf2AmbientRimMask * tf2AmbientWorldNormal.y ) * material.specularColor;
-// skin_ps20b.fxc blends lit diffuse toward an albedo-colored self-illumination
-// target using base alpha and a view-facing Fresnel mask. Macaw override
-// materials (Blackout, Steel Brushed, etc.) use this as their characteristic
-// colored metal sheen; it is separate from the glossy phong highlight.
+// skin_ps20b.fxc blends lit diffuse toward an albedo-colored self-illumination target by
+// base alpha and a view-facing Fresnel mask. Macaw overrides use it as their colored sheen.
 float tf2SelfIllumFacing = saturate( dot( geometryNormal, geometryViewDir ) );
 float tf2SelfIllumFresnelMask = saturate(
   pow( tf2SelfIllumFacing, uTf2SelfIllumFresnelParams.z ) * uTf2SelfIllumFresnelParams.x
@@ -244,10 +224,7 @@ const CHUNKS: readonly [marker: string, source: string][] = [
   ['#include <envmap_fragment>', ENVIRONMENT_MAP],
 ];
 
-/**
- * A tangent normal map is only meaningful when the material is not spending
- * base alpha on the phong mask, so the sampled normal is flattened when it is.
- */
+/** Flattens the sampled tangent normal when base alpha already carries the phong mask. */
 function normalFragmentMaps(): string {
   return THREE.ShaderChunk.normal_fragment_maps
     .replace('mapN.xy *= normalScale;', 'mapN.xy *= normalScale;\n\tmapN = mix( mapN, vec3( 0.0, 0.0, 1.0 ), uTf2BaseAlphaPhongMask );')
@@ -255,10 +232,9 @@ function normalFragmentMaps(): string {
 }
 
 /**
- * Source's direct lighting in place of three's: a half-lambert or lightwarp
- * diffuse term, and a specular highlight built from the reflection vector with
- * a Fresnel ramp, which the rim light then competes with rather than adds to.
- * Patched into three's own chunk because the surrounding light loop stays.
+ * Source's direct lighting in place of three's: half-lambert or lightwarp diffuse, and a
+ * reflection-vector specular with a Fresnel ramp that the rim light competes with.
+ * Patched into three's chunk because the surrounding light loop stays.
  */
 function lightsPhongPars(): string {
   return THREE.ShaderChunk.lights_phong_pars_fragment

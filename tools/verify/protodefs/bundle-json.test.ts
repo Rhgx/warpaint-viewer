@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { serializeProtoDefKitBundle, serializeProtoDefKitMessages } from '../../../src/editor/export/jsonExport';
-import { decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipe } from '../../../src/protodefs/decoder';
+import { decodeProtoDefsFromJson } from '../../../src/protodefs/decoder';
+import { extractKitMessages, resolveKitRecipe } from '../../../src/protodefs/kitQueries';
 import { classifyProtoDefFragment, type ProtoDefFragmentKind } from '../../../src/protodefs/jsonFragments';
 import { shippedProtoDefs } from '../fixtures';
 

@@ -16,9 +16,11 @@ import {
 import { TOUCH_ONLY_DEVICE } from '../../device';
 import './ControlsHelpModal.css';
 
+export type ControlsEditingMode = 'paint' | 'sticker' | 'lighting' | 'graph' | 'showcase' | null;
+
 type ControlsHelpModalProps = {
   open: boolean;
-  editingMode?: 'paint' | 'sticker' | 'lighting' | 'graph' | 'showcase' | null;
+  editingMode?: ControlsEditingMode;
   onClose: () => void;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
 };

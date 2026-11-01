@@ -1,4 +1,3 @@
-/* ---------- showcase board (replaces the 3D stage while open) ---------- */
 .showcase {
   position: absolute;
   inset: 0;
@@ -42,7 +41,6 @@
   pointer-events: none;
 }
 
-/* ---------- weapon tray ---------- */
 .showcase-tray {
   display: flex;
   align-items: stretch;
@@ -123,7 +121,6 @@
   text-align: center;
 }
 
-/* ---------- side panel ---------- */
 .showcase-panel {
   display: contents;
 }
@@ -319,7 +316,6 @@
   color: var(--fail);
 }
 
-/* ---------- layers ---------- */
 .showcase-layers {
   display: flex;
   flex-direction: column;
@@ -421,7 +417,6 @@
   background: var(--panel-2);
 }
 
-/* ---------- rotation gizmo (HTML overlay on the board) ---------- */
 .showcase-gizmo {
   position: absolute;
   inset: 0;
@@ -492,7 +487,6 @@
 .showcase-gizmo-readout-label[data-axis='tilt'] { fill: #e06060; }
 .showcase-gizmo-readout-label[data-axis='turn'] { fill: #46c07a; }
 
-/* ---------- light direction pad ---------- */
 .showcase-lightpad {
   position: relative;
   flex: none;
@@ -520,7 +514,6 @@
   pointer-events: none;
 }
 
-/* ---------- pose handles and parts ---------- */
 .showcase-pose-handle {
   fill: #f0b43c;
   stroke: #0b0d10;

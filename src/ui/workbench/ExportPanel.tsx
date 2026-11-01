@@ -8,10 +8,11 @@ import {
   PackageCheck,
   Search,
 } from 'lucide-react';
+
 import type { TextureMetadata } from '../../data/types';
 import type { ExportCompression } from '../../export/plan';
 import { estimateBytes, exportPathFor, sanitizePackName, warningsFor } from '../../export/plan';
-import { useWarpaintExport } from '../../hooks/useWarpaintExport';
+import { useWarpaintExport } from './useWarpaintExport';
 import type {
   ExportDefinitionsContext,
   ExportItem,
@@ -20,9 +21,7 @@ import { TextField } from '../common/controls';
 import './ExportPanel.css';
 import { formatSize } from '../common/formatSize';
 
-export type { ExportDefinitionsContext, ExportItem } from '../../workbench/exportTypes';
-
-export interface ExportPanelProps {
+interface ExportPanelProps {
   items: ExportItem[];
   /** Asset recipes are still resolving; exporting now could produce a partial pack. */
   loading?: boolean;
@@ -33,25 +32,21 @@ export interface ExportPanelProps {
   /** When the shipped game-data snapshot was taken (manifest generatedAt). */
   snapshotDate?: string | null;
   definitions?: ExportDefinitionsContext;
-  /**
-   * Lets the empty state send people to the tab that fills it. Only the two
-   * tabs that act on the paint already selected: importing definitions adds
-   * catalog entries instead, so it does not fill this tab on its own.
-   */
+  /** Lets the empty state link to the Files and Package tabs, which act on the selected paint. */
   onGoToTab?: (tab: 'files' | 'package') => void;
 }
 
-const CONTAINER_OPTIONS = [
+const CONTAINER_OPTIONS: { value: 'vpk' | 'zip'; label: string }[] = [
   { value: 'vpk', label: 'VPK' },
   { value: 'zip', label: 'Folder' },
 ];
 
-const COMPRESSION_OPTIONS = [
+const COMPRESSION_OPTIONS: { value: ExportCompression; label: string }[] = [
   { value: 'auto', label: 'Match the game (DXT)' },
   { value: 'lossless', label: 'Lossless (larger)' },
 ];
 
-const DEFINITIONS_OPTIONS = [
+const DEFINITIONS_OPTIONS: { value: 'overwrite' | 'append'; label: string }[] = [
   { value: 'overwrite', label: 'Replace a war paint I own' },
   { value: 'append', label: 'Add as a new war paint' },
 ];
@@ -60,20 +55,16 @@ const DEFINITIONS_PLUGIN_URL = 'https://github.com/ficool2/custom_items_games/re
 const WARPAINT_SERVER_PLUGIN_URL = 'https://github.com/Mince1844/tf2warpaints';
 const PAINT_PICKER_INITIAL_RESULTS = 40;
 
-/**
- * Two-option choices read better as one visible pair than as a dropdown that
- * hides the alternative, and this drawer is short enough that saving a click
- * and a popup matters.
- */
-function Segmented({
+/** Two options read better as a visible pair than as a dropdown that hides the alternative. */
+function Segmented<T extends string>({
   value,
   onChange,
   options,
   label,
 }: {
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  options: { value: T; label: string }[];
   label: string;
 }) {
   return (
@@ -95,12 +86,7 @@ function Segmented({
   );
 }
 
-/**
- * Choosing which of 250 war paints to take over is a search problem, not a
- * dropdown problem: nobody scrolls an alphabetical list to find the one they
- * happen to own. Filtering in place also keeps the choice and its result on
- * screen together, which a popup would cover.
- */
+/** Picking a war paint to take over is a search, not a dropdown: nobody scrolls an alphabetical list for one they own. */
 function PaintPicker({
   kits,
   value,
@@ -122,9 +108,7 @@ function PaintPicker({
   const visibleMatches = useMemo(() => {
     if (matches.length <= PAINT_PICKER_INITIAL_RESULTS) return matches;
     const firstMatches = matches.slice(0, PAINT_PICKER_INITIAL_RESULTS);
-    // Keep the current choice visible when the picker is reopened after a
-    // selection that falls outside the first page. Searching still exposes
-    // every kit, while this prevents the selected label from disappearing.
+    // Keep the selected kit listed even when it falls outside the first page.
     if (selected && !firstMatches.some((kit) => kit.defindex === selected.defindex)) {
       return [selected, ...firstMatches.slice(0, PAINT_PICKER_INITIAL_RESULTS - 1)];
     }
@@ -170,33 +154,23 @@ function PaintPicker({
   );
 }
 
-/**
- * "TF2 build 10828683" means nothing to most people; "17 Jul 2026" answers the
- * only question they have, which is whether this is older than their game. The
- * build number stays on hover for anyone who does want to match it exactly.
- */
+/** Shows a date, since "17 Jul 2026" answers whether a pack is older than the game, unlike a build number. */
 function formatSnapshotDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
-  // Fixed to en-GB rather than the browser locale: the rest of this interface
-  // is English, and a localized month inside an English sentence reads as a
-  // glitch rather than as a courtesy.
+  // Fixed to en-GB, not the browser locale, to match the English interface.
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/**
- * Definitions carry an authoring name (`flak_furnished`), which is not a thing
- * to put in front of a player. Title-case it for the in-game name field, where
- * whatever is typed becomes the paint's actual label.
- */
+/** Title-cases an authoring name like `flak_furnished`, since the in-game name field becomes the paint's label. */
 function humanizePaintName(name: string | undefined): string {
   if (!name) return '';
   return name
     .replace(/[_-]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ')
-    .replace(/[a-z]/g, (character) => character.toUpperCase());
+    .replace(/\b[a-z]/g, (character) => character.toUpperCase());
 }
 
 function defaultPackName(paintName: string | undefined): string {
@@ -215,20 +189,17 @@ export function ExportPanel({
   onGoToTab,
 }: ExportPanelProps) {
   const [packName, setPackName] = useState(() => defaultPackName(paintName));
-  const [container, setContainer] = useState('vpk');
-  const [compression, setCompression] = useState('auto');
-  const [definitionsMode, setDefinitionsMode] = useState('overwrite');
+  const [container, setContainer] = useState<'zip' | 'vpk'>('vpk');
+  const [compression, setCompression] = useState<ExportCompression>('auto');
+  const [definitionsMode, setDefinitionsMode] = useState<'overwrite' | 'append'>('overwrite');
   const [targetDefindex, setTargetDefindex] = useState('');
   const [inGameName, setInGameName] = useState(() => humanizePaintName(paintName));
   // Null means the shipped snapshot, which is the case for almost everyone.
   const [baseContainer, setBaseContainer] = useState<{ name: string; bytes: Uint8Array } | null>(null);
   const [baseError, setBaseError] = useState('');
 
-  // The app already knows which of the two situations it is in, so it does not
-  // ask. A paint from imported definitions has to carry them or it cannot show
-  // up in game at all; a stock paint already exists there and only needs its
-  // textures replaced. There is nothing to splice in the second case, so the
-  // whole section stays out of the way.
+  // A paint from imported definitions must carry them or it cannot show up in game.
+  // A stock paint already exists there, so the whole section stays hidden for it.
   const writesDefinitions = Boolean(definitions?.isImported);
   const { busy, error, done, buildNotes, runExport } = useWarpaintExport({
     items,
@@ -258,18 +229,15 @@ export function ExportPanel({
       path: exportPathFor(item.ref),
       lossless: compression === 'lossless' || item.kind === 'mask' || item.kind === 'sticker-mask',
       bytes: item.size
-        ? estimateBytes(item.kind, compression as ExportCompression, item.size.width, item.size.height)
+        ? estimateBytes(item.kind, compression, item.size.width, item.size.height)
         : undefined,
       size: item.size,
     }));
     const warnings = items.flatMap((item) =>
       warningsFor(item.ref, item.size?.width, item.size?.height, textureMetadata?.[item.ref]),
     );
-    // A definition with no artwork behind it installs cleanly and then renders
-    // nothing. The two ways to get here need different advice, and the second
-    // is common: several published packs name texture paths their own archive
-    // does not use, so the viewer is already drawing stock textures and the
-    // export has nothing of the author's to carry.
+    // A definition with no artwork installs cleanly and then renders nothing.
+    // Published packs often name texture paths their archive lacks; the viewer then draws stock textures.
     if (writesDefinitions && items.length === 0 && !definitions?.packageFileCount) {
       warnings.push(
         definitions?.packageMounted
@@ -296,9 +264,7 @@ export function ExportPanel({
     definitions?.unresolvedTextureRefs,
   ]);
 
-  // Checked when it is picked, not when the export runs: a file that turns out
-  // not to be a container should say so while the person still has the file
-  // picker in mind.
+  // Checked on pick, not at export, so a non-container file is reported while the picker is open.
   const adoptBaseContainer = async (file: File) => {
     setBaseError('');
     try {
@@ -314,8 +280,7 @@ export function ExportPanel({
     }
   };
 
-  // The one thing that must be answered before exporting. Surfaced on the
-  // control and on the button rather than thrown when the build runs.
+  // Must be answered before exporting; shown on the control and button, not thrown at build.
   const blocker = writesDefinitions && definitionsMode === 'overwrite' && !targetDefindex
     ? 'Choose the war paint this replaces'
     : '';
@@ -477,9 +442,7 @@ export function ExportPanel({
 
       {(plan.warnings.length > 0 || buildNotes.length > 0) && (
         <div className="export-messages">
-          {/* Things to know before exporting, then what happened during the
-              last export. They read as one list today, which makes a note
-              about the finished pack look like a problem with the next one. */}
+          {/* Cautions before exporting, then results from the last export. */}
           {plan.warnings.map((warning) => (
             <p className="export-message" data-kind="caution" key={warning}>
               <AlertTriangle size={11} />

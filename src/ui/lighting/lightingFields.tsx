@@ -5,11 +5,7 @@ import { SliderField } from '../common/controls';
 import type { CustomLightType, FrameVector } from '../../viewer/lighting/customLighting';
 import { AXES, TYPE_LABELS, clampScalar, formatScalar } from './lightingRig';
 
-/**
- * One glyph per light type. Three types is a small enough set to recognise at a
- * glance, which is faster than reading the word in a dense list, so the two are
- * shown together and the glyph alone carries the badge when space is tight.
- */
+/** One glyph per light type, shown with its word. The glyph alone serves as the badge when space is tight. */
 export function LightIcon({ type, size = 12 }: { type: CustomLightType; size?: number }) {
   if (type === 'directional') return <Sun size={size} aria-hidden="true" />;
   if (type === 'spot') return <Lightbulb size={size} aria-hidden="true" />;
@@ -26,12 +22,7 @@ export function LightTypeBadge({ type }: { type: CustomLightType }) {
   );
 }
 
-/**
- * The numeric half of every scalar control. The slider owns the coarse gesture
- * and this keeps exact entry available: while focused it holds a free-typed
- * draft so the field can be cleared and retyped, and it only commits on Enter
- * or blur. An out-of-range or unparseable draft reverts to the live value.
- */
+/** Exact entry for a scalar control. The slider keeps the coarse gesture; invalid drafts revert. */
 function NumberReadout({
   value,
   min,
@@ -125,11 +116,7 @@ export function ScalarRow({
   );
 }
 
-/**
- * X/Y/Z entry for a light's source or aim point. The axis letters carry the
- * same three colors as the viewport gizmo arrows, so a number here and an arrow
- * out there are visibly the same axis.
- */
+/** X/Y/Z entry for a light point. The axis letters use the viewport gizmo colors. */
 export function VectorRow({
   label,
   value,
@@ -166,12 +153,7 @@ export function VectorRow({
   );
 }
 
-/**
- * Swatch plus hex entry; the hex only commits once it parses. The swatch scrubs
- * through preview updates and commits on blur, the same split the sliders use:
- * the native picker fires an input event per pointer move, so committing each
- * one would land a separate undo entry for a single colour pick.
- */
+/** Swatch plus hex entry. The swatch previews while dragging and commits on blur, one undo entry per pick. */
 export function ColorRow({
   value,
   onChange,

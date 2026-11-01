@@ -1,10 +1,8 @@
 import type { Manifest, Team } from '../../data/types';
 import type { RecipeNode } from '../../compositor/types';
 
-// Handcrafted mock so the whole pipeline (gallery -> composite -> mesh) runs with
-// zero pipeline output. Two paintkits, one weapon. Recipes exercise
-// texture_lookup + combine_lerp + select (kit 9001) and texture_lookup +
-// combine_multiply with seeded adjust ranges (kit 9002).
+// Handcrafted mock so the pipeline (gallery, composite, mesh) runs without build output.
+// Kit 9001 uses lerp and select; kit 9002 uses multiply with seeded adjust ranges.
 
 export const mockManifest: Manifest = {
   generatedAt: new Date(0).toISOString(),
@@ -45,8 +43,7 @@ export const mockManifest: Manifest = {
   wearNames: ['Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn', 'Battle Scarred'],
 };
 
-// Recipes follow the amended pipeline schema: combines carry the full transform
-// set, selects are leaves with raw 0..255 group ids, flips are plain booleans.
+// Recipes use the amended schema: full transforms on combines, leaf selects with raw 0..255 group ids.
 function hazardRecipe(team: Team): RecipeNode {
   const baseTex = team === 'red' ? 'mock/camo' : 'mock/rust';
   return {
@@ -121,7 +118,7 @@ function rustRecipe(): RecipeNode {
   };
 }
 
-export function mockRecipe(paintkitId: number, _weaponKey: string, team: Team): RecipeNode | null {
+export function mockRecipe(paintkitId: number, team: Team): RecipeNode | null {
   if (paintkitId === 9001) return hazardRecipe(team);
   if (paintkitId === 9002) return rustRecipe();
   return null;

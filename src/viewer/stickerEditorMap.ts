@@ -1,7 +1,6 @@
 /**
- * Select the material texture visible while editing a sticker. The last full
- * compositor result is always retained, but a temporary stripped recipe takes
- * precedence until the editor explicitly releases it.
+ * Picks the texture shown while editing a sticker: the editor's stripped recipe
+ * when it has one, otherwise the composed map.
  */
 export function visibleStickerEditorMap<Texture>(
   composedMap: Texture | null,

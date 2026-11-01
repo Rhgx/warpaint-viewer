@@ -7,7 +7,8 @@ import path from 'node:path';
 import { test } from 'vitest';
 import { discoverGroupSelectTargets } from '../../../src/editor/layers/groupTargets';
 import { discoverStickerPlacementTargets } from '../../../src/editor/sticker/stickerTargets';
-import { decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipeWithProvenance } from '../../../src/protodefs/decoder';
+import { decodeProtoDefsFromJson } from '../../../src/protodefs/decoder';
+import { extractKitMessages, resolveKitRecipeWithProvenance } from '../../../src/protodefs/kitQueries';
 import { fixtureFragments, ROOT, shippedProtoDefs } from '../fixtures';
 
 const EXAMPLES = path.join(ROOT, '.tmp', 'example-warpaints');

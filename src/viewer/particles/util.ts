@@ -1,9 +1,7 @@
 import * as THREE from 'three';
 
-// Embedded VTF 7.3+ sprite-sheet resource, converted at extraction time to
-// just clamp + uv rect per frame (see tools/extract/effects.mjs
-// sheetToIndexShape). Every sheet currently extracted has frameCount 1 per
-// sequence (no intra-sheet animation), so "frames" here is a single [x0,y0,x1,y1].
+// Embedded VTF 7.3+ sprite sheet, converted at extraction time to a clamp and uv rect
+// per frame. Every extracted sheet has one frame per sequence, so a frame is [x0,y0,x1,y1].
 export interface ParticleSheet {
   sequences: Array<{ clamp: boolean; frames: Array<[number, number, number, number]> }>;
 }
@@ -16,23 +14,17 @@ interface ParticleIndexEntry {
   additive?: boolean;
   shader?: string | null;
   sheet?: ParticleSheet;
-  // Set for materials confirmed absent from the TF2 install itself (see extract-effects.mjs'
-  // KNOWN_MISSING_MATERIALS - currently empty; kept as real infrastructure for the day a genuinely
-  // missing material shows up in a correctly-extracted .pcf). No `file` exists for these entries;
-  // SystemInstance keeps simulating particles that use this material but skips creating their
-  // render side, matching how the real game silently fails to draw a particle system whose
-  // material can't be resolved.
+  // Set for materials confirmed absent from the TF2 install. These have no `file`, so
+  // SystemInstance simulates their particles but skips the render side, as the game does.
   missing?: boolean;
 }
 
 export type ParticleIndex = Record<string, ParticleIndexEntry>;
 
-// Per-weapon attachment control points, in GEOMETRY space (the same space as
-// the glb vertex positions: raw, uncentered). v2 entries carry the attachment
-// orientation ({pos, quat}); v3 also retains the authored parent bone. v1
-// entries are bare [x, y, z] positions and get the fixed Source-to-glb axis
-// convention as their frame.
-export type AttachmentEntryJson = [number, number, number] | {
+// Per-weapon attachment control points in geometry space (raw, uncentered, like the glb
+// vertices). v2 adds an orientation ({pos, quat}); v3 also keeps the parent bone. v1 is
+// bare [x, y, z] and gets the fixed Source-to-glb frame (DEFAULT_ATTACHMENT_QUAT).
+type AttachmentEntryJson = [number, number, number] | {
   pos: [number, number, number];
   quat: [number, number, number, number];
   bone?: string;
@@ -113,8 +105,7 @@ export async function resolveParticleTexture(
     try {
       const index = await loadParticleIndex();
       const entry = index[materialRef];
-      // entry.missing (no `file`) is resolved synchronously before this ever runs - see the
-      // materialMissing check in SystemInstance's constructor - so this branch is defensive only.
+      // Missing entries are resolved in SystemInstance's constructor, so this is defensive only.
       if (entry && !entry.missing && entry.file) {
         const texture = await loadParticleTexture(entry.file);
         const additive = typeof entry.additive === 'boolean' ? entry.additive : true;
@@ -143,11 +134,8 @@ export function warnOnce(key: string, msg: string) {
   console.warn(`[warpaint-viewer] ${msg}`);
 }
 
-// Fixed attachment frame used when attachments.json still carries bare [x,y,z]
-// positions (format v1): Source attachment-local +X (forward) maps to glb +Z,
-// +Y (left) to glb -X, +Z (up) to glb +Y. This is the same convention the old
-// mapAttachmentLocal swizzle encoded, expressed as a rotation so all CP-local
-// math can go through one quaternion path.
+// Frame for v1 bare [x, y, z] attachments: Source +X (forward) maps to glb +Z, +Y (left)
+// to glb -X, and +Z (up) to glb +Y. Stored as a quaternion so all CP math takes one path.
 export const DEFAULT_ATTACHMENT_QUAT = new THREE.Quaternion().setFromRotationMatrix(
   new THREE.Matrix4().set(
     0, -1, 0, 0,

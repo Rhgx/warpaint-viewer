@@ -1,4 +1,3 @@
-/* ---------- sidebar / warpaint list ---------- */
 .warpaint-list {
   display: flex;
   flex-direction: column;
@@ -34,7 +33,6 @@
   color: var(--text-dim);
 }
 
-/* ---------- view toggle (list / grid) ---------- */
 .view-toggle {
   display: inline-flex;
   flex: none;
@@ -65,7 +63,6 @@
   color: var(--accent-text);
 }
 
-/* ---------- search field ---------- */
 .search-field {
   position: relative;
   display: flex;
@@ -118,7 +115,6 @@
   }
 }
 
-/* ---------- collection filter ---------- */
 .collection-filter {
   margin-top: 8px;
 }
@@ -126,9 +122,7 @@
   width: 100%;
 }
 
-/* Reserve a dedicated rail for the paint-list scrollbar. Base UI positions
-   the track over the scroll area by default; the root padding keeps rows and
-   sticky collection headers out from underneath it. */
+/* Reserve a rail for the paint-list scrollbar, so rows and sticky headers stay clear of it. */
 .paint-list-scroll {
   --paint-list-scrollbar-gutter: 12px;
   padding-right: var(--paint-list-scrollbar-gutter);
@@ -233,10 +227,7 @@
   height: 100%;
   object-fit: contain;
 }
-/* Grade color plumbing: an item's data-grade attribute selects the raw grade
-   color. The list rule blends it toward --text for the item name; the grid
-   tile rule (below) blends it toward --border for the tile outline instead.
-   Items with no known grade render exactly as before. */
+/* Grade colors: list items blend the grade toward --text, grid tiles toward --border. */
 .warpaint-item[data-grade],
 .warpaint-tile[data-grade] {
   --item-grade-text: color-mix(in srgb, var(--item-grade-raw) var(--grade-tint-strength), var(--text));
@@ -266,15 +257,13 @@
   --item-grade-raw: var(--grade-elite);
 }
 
-/* ---------- grid view tiles ---------- */
 .warpaint-tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
   gap: 6px;
   padding: 6px 12px 8px 8px;
 }
-/* Touch-only devices: larger tiles (four or five columns on a phone) so the
-   icons are readable and easy to hit. After the base rule so it wins. */
+/* Touch-only: larger tiles (four or five per row on a phone) so icons are easy to hit. */
 @media (hover: none) and (pointer: coarse) {
   .warpaint-tile-grid {
     grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));

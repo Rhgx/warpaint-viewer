@@ -27,6 +27,7 @@ export function UpdateToast({
   const waitingForDraft = editorDirty
     && draftStatus !== 'saved'
     && draftStatus !== 'error';
+  const draftFailed = editorDirty && draftStatus === 'error';
   const copy = !editorDirty
     ? 'A newer version was deployed. Reload to continue.'
     : draftStatus === 'saved'
@@ -35,7 +36,7 @@ export function UpdateToast({
         ? 'Your editor draft could not be saved. Download a copy of your definition edits before reloading.'
         : 'Saving your editor draft before reloading...';
   const actions = useMemo(() => [
-    ...(editorDirty && draftStatus === 'error' ? [{
+    ...(draftFailed ? [{
       label: 'Download definitions',
       onClick: onDownloadRecovery,
       icon: <Download size={14} strokeWidth={2} aria-hidden="true" />,
@@ -44,10 +45,10 @@ export function UpdateToast({
       label: 'Reload',
       onClick: () => window.location.reload(),
       disabled: waitingForDraft,
-      primary: !(editorDirty && draftStatus === 'error'),
+      primary: !draftFailed,
       icon: <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />,
     },
-  ], [draftStatus, editorDirty, onDownloadRecovery, waitingForDraft]);
+  ], [draftFailed, onDownloadRecovery, waitingForDraft]);
 
   return (
     <ManagedToast
@@ -57,7 +58,7 @@ export function UpdateToast({
       description={copy}
       actions={actions}
       priority="high"
-      tone={editorDirty && draftStatus === 'error' ? 'error' : 'default'}
+      tone={draftFailed ? 'error' : 'default'}
     />
   );
 }

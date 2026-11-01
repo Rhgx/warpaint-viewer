@@ -3,13 +3,15 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'vitest';
+
 import { writeVpk } from '../../../src/export/vpkWrite';
 import { encodeVtf } from '../../../src/export/vtfEncode';
+import { VPK_EXE as INSTALLED_VPK_EXE } from '../../lib/vpk.mjs';
 import { decodeVTF } from '../../lib/vtf.mjs';
 import { ROOT } from '../fixtures';
 
 const STAGING = path.join(ROOT, 'staging');
-const VPK_EXE = process.env.TF2_VPK_EXE ?? 'C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2/bin/vpk.exe';
+const VPK_EXE = process.env.TF2_VPK_EXE ?? INSTALLED_VPK_EXE;
 
 // Deterministic content, so a slipped offset or a swapped entry shows up as a mismatch.
 function fillPattern(size) {

@@ -1,15 +1,8 @@
-// Shared logic for turning an unusual-effect PCF systems map (as parsed from
-// weapon_unusual_hot.pcf etc., see extractUnusuals() in tools/extract/effects.mjs) into
-// pre-resolved per-(effect, weapon) bundles: { root: "<systemName>", systems: {
-// "<name>": <systemDef>, ... } }, where systems holds the root plus its transitive
-// children copied verbatim.
-//
-// Used by tools/extract/effects.mjs, which emits bundles directly from
-// freshly-parsed PCF data, so the selection/closure logic
-// exists exactly once.
+// Turns an unusual-effect PCF systems map (from extractUnusuals() in tools/extract/effects.mjs)
+// into pre-resolved per-(effect, weapon) bundles: { root, systems }, where systems holds the root
+// and its transitive children, copied verbatim.
 
-// Maps a viewer effect id to the .pcf's top-level key in the old unusuals.json /
-// extractUnusuals()'s `unusuals` object (both keyed by pcf basename).
+// Viewer effect id -> PCF basename key in extractUnusuals()'s output.
 export const EFFECT_PCF_KEY = {
   hot: 'weapon_unusual_hot',
   isotope: 'weapon_unusual_isotope',
@@ -18,16 +11,10 @@ export const EFFECT_PCF_KEY = {
   sparkle: 'item_fx',
 };
 
-// System selection: the game (items_game use_suffix_name) spawns the system named
-// weapon_unusual_<effect>_<weapon> directly, not the authoring _unusual_parent_*
-// container (which holds BOTH the world-model subtree and the _vm viewmodel
-// subtree, and would render doubled if instantiated whole). Ported verbatim from
-// the runtime heuristic formerly in src/viewer/particles/index.ts's
-// selectSystemName(), which called console.warn on the fallback path; here the
-// fallback is reported back to the caller instead so it can be logged/summarized
-// once per migration run rather than once per instance.
+// Pick weapon_unusual_<effect>_<weapon> (or its _vm variant), not the _unusual_parent_* container:
+// the container holds both world and viewmodel subtrees, so instancing it whole renders doubled.
+// A fallback to the first matching name is reported via `fallback`.
 function selectSystemName(systems, effectId, weaponKey) {
-  if (effectId === 'sparkle') return { name: systems.community_sparkle ? 'community_sparkle' : null, fallback: false };
   const base = `weapon_unusual_${effectId === 'energy_orb' ? 'energyorb' : effectId}`;
   const weapon = weaponKey.replace(/^c_/, '');
   const worldName = `${base}_${weapon}`;
@@ -42,13 +29,8 @@ function selectSystemName(systems, effectId, weaponKey) {
   return { name: pool[0], fallback: true };
 }
 
-// Walks sysDef.children recursively from `rootName`, collecting every reachable
-// system (root included), copied verbatim from `systems`. Mirrors build() in the
-// old src/viewer/particles/index.ts: a child name with no entry in `systems` is
-// skipped (not an error) since the runtime treated an unresolvable child the same
-// way; onMissingChild, if given, is called once per such reference so callers can
-// log it. Cycles (a child eventually referencing an ancestor) terminate safely
-// because a name already present in the output is never revisited.
+// Collect rootName and every system reachable through children, copied verbatim. Unknown children
+// are skipped and reported via onMissingChild. Cycles stop because each name is visited once.
 export function transitiveClosure(systems, rootName, onMissingChild) {
   const out = {};
   const visit = (name) => {
@@ -65,11 +47,8 @@ export function transitiveClosure(systems, rootName, onMissingChild) {
   return out;
 }
 
-// Builds every (effectId, weaponKey) bundle for one effect's systems map. Returns
-// an array of { effectId, weaponKey, root, systems, fallback } entries; callers
-// decide how to serialize/write them and how to report `fallback`/missing
-// children (via the same onMissingChild hook threaded through to
-// transitiveClosure).
+// One { effectId, weaponKey, root, systems, fallback } entry per weapon. onMissingChild is passed
+// through to transitiveClosure.
 export function buildBundlesForEffect(systems, effectId, weaponKeys, onMissingChild) {
   const out = [];
   for (const weaponKey of weaponKeys) {

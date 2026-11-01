@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentProps } from 'react';
+
 import type { DataSource } from '../../data/loader';
 import type { useCustomDefinitions } from '../../hooks/useCustomDefinitions';
 import type { SourceTextureProvider } from '../../source/provider';
@@ -25,7 +26,7 @@ import {
   type RgbaImageDataLike,
 } from './groupSampling';
 import { loadRgbaImageData, loadRgbaThumbnail, rgbaThumbnailDataUrl } from './imageData';
-import { chooseEditorLayerColors, EDITOR_LAYER_MAP_COLORS, linearLayerColorToCss } from './layerMap';
+import { chooseEditorLayerColors, fallbackColor, linearLayerColorToCss } from './layerMap';
 import type { EditorCore } from '../useEditorCore';
 import type { EditorLayers } from './useEditorLayers';
 
@@ -106,10 +107,7 @@ interface UsePartsEditorOptions extends
   activeTextureOverrides: Record<string, string>;
 }
 
-/**
- * A group map image shared through `cache`, keyed by the package generation and
- * the override in force. A failed load leaves nothing behind so it can retry.
- */
+/** Loads a group map through `cache`, keyed by package generation and override. Failed loads are evicted so they can retry. */
 function loadGroupImage(
   cache: Map<string, Promise<RgbaImageDataLike>>,
   ref: string,
@@ -130,11 +128,7 @@ function loadGroupImage(
   return pending;
 }
 
-/**
- * Part selection on the weapon surface: which editable areas exist, which of
- * them the active layer owns, the Shift+click sampling, and the layer map and
- * highlight overlays drawn on the model.
- */
+/** Part selection on the weapon surface: editable areas, the active layer's parts, Shift+click sampling and layer map overlays. */
 export function usePartsEditor({
   workbenchOpen,
   workbenchTab,
@@ -199,8 +193,7 @@ export function usePartsEditor({
   const layerThumbnailGenerationRef = useRef('');
   const [panelPreviewGroup, setPanelPreviewGroup] = useState<number | null>(null);
   const groupPointerRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  // Only the bucket under the pointer is kept: a per-texel sample would render
-  // the whole app on every pointer move, and nothing reads it.
+  // Keep only the hovered bucket; a per-texel sample would re-render the app on every pointer move.
   const [hoverBucket, setHoverBucket] = useState<number | null>(null);
 
   useEffect(() => {
@@ -255,9 +248,7 @@ export function usePartsEditor({
     () => groupImage ? groupBucketsInImage(groupImage) : [],
     [groupImage],
   );
-  // The operation can inherit its starting selector values from the selected
-  // weapon or wear. Show the values the model is actually using until an edit
-  // intentionally locks those slots into the draft operation.
+  // Inherited selector values show what the model uses until an edit locks them into the draft.
   const explicitActiveSelectedRawGroupIds = useMemo(() => (
     activeGroupTarget?.hasInheritedVariableValues
       ? activeResolvedGroupSelect?.select
@@ -315,9 +306,7 @@ export function usePartsEditor({
       autoAlbedoAssignmentKeysRef.current.add(assignmentKey);
     }
   }, [activeGroupBuckets, assignSessionGroups, displayedGroupRef, editableKitId, groupAssignmentTargets, groupImage, state.weaponKey]);
-  // The parts board needs to know which layer every assigned part belongs to,
-  // not just the active one, so it can render each chip's true state (in this
-  // layer / in another layer / unassigned) rather than only a binary toggle.
+  // The parts board needs every part's owning layer, not only the active one, to show each chip's true state.
   const groupBucketLayerIndex = useMemo(() => {
     const map: Record<number, number> = {};
     groupAssignmentTargets.forEach((target, layerIndex) => {
@@ -334,9 +323,7 @@ export function usePartsEditor({
     }
     return map;
   }, [activeGroupBuckets, baseTextureTransform, groupAssignmentTargets]);
-  // Selection edits recreate the assignment target objects, but preserve this
-  // layer order and each texture reference. The chooser is deterministic, so
-  // re-evaluation after an assignment cannot reshuffle layer colours.
+  // Target objects are recreated on each edit, but layer order and texture refs stay stable, so colours do not reshuffle.
   const editableLayerTextureRefs = useMemo(
     () => groupAssignmentTargets.map((target) => target.textureRef),
     [groupAssignmentTargets],
@@ -379,16 +366,12 @@ export function usePartsEditor({
         };
         let url = stockThumbnailUrl ?? overrideUrl ?? await sourceProvider.resolveThumbnail(ref);
         let pixels = await load(url);
-        // Community definitions may assign a shipped texture that no stock
-        // paint uses as a layer. Such refs have no generated thumbnail, so use
-        // the same lazy exact path as an imported image instead of showing grey.
+        // Community definitions may use shipped textures with no generated thumbnail; fall back to the exact image, not grey.
         if (!pixels && stockThumbnailUrl) {
           url = await sourceProvider.resolveThumbnail(ref);
           pixels = await load(url);
         }
-        // Layer rows are identification aids, not a composited preview. Show
-        // the authored RGB at full opacity so translucent masks remain easy to
-        // tell apart at this small size.
+        // Layer rows are identification aids: show authored RGB at full opacity so translucent masks stay distinct.
         return [
           ref,
           pixels,
@@ -399,8 +382,8 @@ export function usePartsEditor({
       }
     })).then((entries) => {
       if (cancelled) return;
-      const next = Object.fromEntries(entries.map(([ref, thumbnail]) => [ref, thumbnail]));
-      const nextUrls = Object.fromEntries(entries.map(([ref, , url]) => [ref, url]));
+      const next = Object.fromEntries(entries.map(([ref, thumbnail]) => [ref, thumbnail] as const));
+      const nextUrls = Object.fromEntries(entries.map(([ref, , url]) => [ref, url] as const));
       setLayerTextureThumbnails((current) => {
         const keys = Object.keys(next);
         return keys.length === Object.keys(current).length
@@ -428,11 +411,8 @@ export function usePartsEditor({
     })),
   ), [layerColorTextureRefs, layerTextureThumbnails]);
   const activeEditorLayerColor = editorLayerColors[activeEditorLayerIndex]
-    ?? EDITOR_LAYER_MAP_COLORS[activeEditorLayerIndex % EDITOR_LAYER_MAP_COLORS.length];
-  // editorLayerColors are linear 0..1 triples, matching the shader math the
-  // Viewer overlay uses. CSS colours are sRGB, so the context column swatches
-  // and the parts board squares need their own converted copy or they will
-  // read lighter than the on-model layer map they are meant to match.
+    ?? fallbackColor(activeEditorLayerIndex);
+  // Layer colours are linear 0..1 for the shader; CSS needs sRGB copies or swatches read lighter than the on-model map.
   const editorLayerCssColors = useMemo(
     () => editorLayerColors.map((color) => linearLayerColorToCss(color, 1.35)),
     [editorLayerColors],
@@ -442,9 +422,7 @@ export function usePartsEditor({
     [editorLayerColors],
   );
 
-  // Cache entries are keyed by the override they resolved, so a new overrides
-  // object with the same paths (every edit builds one) must not flush the
-  // decoded group images; only a change in the paths does.
+  // Key on the override paths, not object identity, so each edit does not flush decoded group images.
   const activeTextureOverridesKey = useMemo(() => JSON.stringify(activeTextureOverrides), [activeTextureOverrides]);
   useEffect(() => {
     groupImageCacheRef.current.clear();
@@ -553,7 +531,7 @@ export function usePartsEditor({
       const layers = groupAssignmentTargets.flatMap((target, layerIndex) => {
         if (target.groupsRef !== groupsRef) return [];
         const color = editorLayerColors[layerIndex]
-          ?? EDITOR_LAYER_MAP_COLORS[layerIndex % EDITOR_LAYER_MAP_COLORS.length];
+          ?? fallbackColor(layerIndex);
         return target.selectedGroupIds
           .map(groupByteToCompositorBucket)
           .filter((bucket): bucket is number => bucket !== null && bucket > 0)
@@ -634,10 +612,8 @@ export function usePartsEditor({
         const part = formatGroupNameForDisplay(activeGroupLabels[bucket] ?? 'Part');
         moveNotice = `${part} moved from ${from}.`;
       }
-      // The marker is only a targeting aid. Once an edit lands, remove it so
-      // the recomposed paint itself is immediately readable. This also covers
-      // a chip being clicked while hovered: its unmount does not reliably
-      // produce a mouse-leave event for the preview callback.
+      // The hover marker is only a targeting aid, so clear it once an edit lands. This also covers a chip
+      // clicked while hovered, which may not get a mouse-leave.
       setHoverBucket(null);
       setPanelPreviewGroup(null);
       setEditorAssignmentNotice(moveNotice);

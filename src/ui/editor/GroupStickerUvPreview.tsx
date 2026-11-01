@@ -241,8 +241,6 @@ export function GroupStickerUvPreview({
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
     const controller = new AbortController();
-    runtimeRef.current?.dispose();
-    runtimeRef.current = null;
     void createRuntime(canvas, {
       maskSrc,
       selectorBaseSrc,
@@ -257,8 +255,7 @@ export function GroupStickerUvPreview({
       runtimeRef.current = runtime;
       runtime.draw(quadRef.current);
     }).catch(() => {
-      // The editor remains usable through its handles and exact values if a
-      // browser cannot create this optional live visual.
+      // The editor stays usable via handles and exact values if this optional visual fails.
     });
     return () => {
       controller.abort();

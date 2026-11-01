@@ -1,5 +1,5 @@
 import type { OperationMsg, OperationNodeMsg, VarDefMsg } from '../../protodefs/messages';
-import type { OperationGraphParameterAddress } from './editing';
+import type { OperationGraphParameterAddress } from './editing/parameters';
 import type { OperationGraph, OperationGraphNode } from './types';
 
 export function isRecordValue(value: unknown): value is Record<string, unknown> {
@@ -26,8 +26,7 @@ export function operationMessageForGraph(value: Record<string, unknown>): Operat
   return {
     header: {
       defindex: header.defindex,
-      // Carried through so a binding onto an operation-scope variable can be
-      // resolved, and edited, without leaving the graph.
+      // Kept so operation-scope variable bindings can be resolved and edited from the graph.
       ...(variables.length > 0 ? { variables: Array.isArray(header.variables) ? variables : variables[0] } : {}),
     },
     ...(value.operation_node !== undefined ? { operation_node: value.operation_node } : {}),
@@ -44,11 +43,7 @@ export function varDefList(value: unknown): VarDefMsg[] {
 
 const GRAPH_TEXTURE_EXTENSION = /\.(vtf|vmt|tga|psd|png|webp)$/i;
 
-/**
- * The compositor addresses textures without the `materials/` prefix or an
- * extension, so both the shipped catalogue and an imported package have to be
- * folded back to that form before either can be offered as a choice.
- */
+/** Folds a texture path to the compositor's ref form: no materials/textures prefix and no extension. */
 export function graphTextureRef(path: string): string | null {
   const trimmed = path.trim().replaceAll('\\', '/').replace(/^\/+/, '').toLowerCase();
   const withoutRoot = trimmed.replace(/^materials\//, '').replace(/^textures\//, '');

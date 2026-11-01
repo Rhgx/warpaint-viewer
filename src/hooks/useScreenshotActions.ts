@@ -1,30 +1,19 @@
 import { useCallback } from 'react';
 import type { RefObject } from 'react';
-import { TurntableStoppedError, type TurntableSink, type Viewer } from '../viewer/Viewer';
+import type { Viewer } from '../viewer/Viewer';
+import { TurntableStoppedError, type TurntableSink } from '../viewer/capture/viewerCapture';
 import { TURNTABLE_SECONDS, type ControlsState, type TurntableFormat, type TurntableProfile } from '../viewer/controls';
 import type { TurntableWorkerRequest, TurntableWorkerResponse } from '../export/turntable.worker';
 import { downloadBlob } from '../ui/common/download';
 import { canEncodeMp4, canEncodeWebp, WebpEncoder } from '../export/animated';
 import { TOUCH_ONLY_DEVICE } from '../device';
 
-export type TurntableSettings = Pick<
+type TurntableSettings = Pick<
   ControlsState,
   'turntableFormat' | 'turntableProfiles' | 'turntableTransparent' | 'turntableColor'
 >;
 
-/**
- * How each animated format is written, what it can hold, which settings it
- * offers, its defaults and a size estimate, from captures measured on Taxi
- * Cabbed (12 s spin; error is mean |difference| out of 255 against the render):
- *   GIF   480 px 25 fps            3.6 MB
- *   WebP  640 px 30 fps standard   4.1 MB, error 3.7
- *                       high       5.7 MB, error 2.5
- *                       maximum    7.8 MB, error 2.1 (quality 1.0 would be lossless and 36 MB)
- *   APNG  480 px 25 fps           12.9 MB, lossless
- *   MP4  1080 px 60 fps standard   1.9 MB, error 1.7
- *                       high       3.6 MB, error 1.4 (same size as 30 fps: the bitrate follows size, not rate)
- *                       maximum    6.8 MB, error 1.3
- */
+/** Per-format options and size estimates, measured on Taxi Cabbed. MP4 bitrate follows size, not frame rate. */
 export const TURNTABLE_FORMATS: Record<TurntableFormat, {
   readonly label: string;
   readonly extension: string;
@@ -40,7 +29,6 @@ export const TURNTABLE_FORMATS: Record<TurntableFormat, {
   /** Rough, content-dependent size for `frames` frames over `seconds`. */
   readonly estimateBytes: (profile: TurntableProfile, frames: number, seconds: number) => number;
 }> = {
-  // GIF timing is in hundredths of a second, so 33 fps really plays at 33.3.
   gif: {
     label: 'GIF', extension: 'gif', mime: 'image/gif', alpha: 'binary',
     sizes: [360, 480, 640, 800], frameRates: [20, 25, 33, 50], hasQuality: false,
@@ -89,17 +77,12 @@ export type TurntableStatus =
   | { readonly phase: 'stopped'; readonly reason: string }
   | { readonly phase: 'failed'; readonly message: string };
 
-// Frames the encoder may have queued before rendering waits for it, which
-// bounds memory to a handful of frames plus the output file itself. A raw
-// 1440 px MP4 frame is about 8 MB, so phones keep two.
+// Frames the encoder may queue before rendering waits, so memory stays bounded.
+// A raw 1440 px MP4 frame is about 8 MB, so phones keep two.
 const MAX_FRAMES_IN_FLIGHT = TOUCH_ONLY_DEVICE ? 2 : 4;
 const PROGRESS_INTERVAL_MS = 100;
 
-/**
- * WebP encodes on this thread: the browser runs main-thread canvas encodes on
- * a background pool, so frames overlap, while in a worker each encode blocks
- * the worker thread (measured about 5x slower at 640 px).
- */
+/** WebP encodes on the main thread: in a worker each encode blocks it (about 5x slower at 640 px). */
 function createWebpSession(quality: TurntableProfile['quality'], onProgress: (encoded: number) => void) {
   let encoder: WebpEncoder | null = null;
   let encoded = 0;
@@ -203,8 +186,7 @@ export function useScreenshotActions({
 
   const { turntableFormat, turntableProfiles, turntableTransparent, turntableColor } = turntable;
   const profile = turntableProfiles[turntableFormat];
-  // Reports progress and failures through `onStatus` instead of throwing.
-  // Aborting `signal` stops the capture; its reason becomes the stop reason.
+  // Reports through onStatus instead of throwing; aborting signal stops the capture with its reason.
   const saveTurntable = useCallback(async (onStatus: (status: TurntableStatus) => void, signal?: AbortSignal) => {
     const format = TURNTABLE_FORMATS[turntableFormat];
     const fps = turntablePlaybackFps(turntableFormat, profile.fps);

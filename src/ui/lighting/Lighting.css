@@ -1,8 +1,4 @@
-/* ---------- shared lighting fields ---------- */
-/* Used by both the stage lights panel and the inspector rig summary, so the
-   same value reads the same in either place. Every continuous value is a drag
-   track with an exact readout beside it: the track is for "make it brighter
-   until it looks right", the readout is for typing a number you already know. */
+/* Shared by the stage lights panel and the inspector rig summary. Each value is a drag track with an exact readout. */
 .lighting-scalar,
 .lighting-vector,
 .lighting-row {
@@ -22,8 +18,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The shared slider is sized for the inspector column; here it just fills
-   whatever is left between the label and the readout. */
+/* The shared slider fills the space between label and readout in the inspector column. */
 .lighting-scalar-track {
   display: flex;
   flex: 1;
@@ -69,10 +64,7 @@
   outline: none;
 }
 
-/* The axis letter and its value are one control, bordered together, so a
-   vector reads as three fields instead of six loose boxes. The letter colors
-   are the viewport gizmo's arrow colors, so a number here and an arrow out
-   there are visibly the same axis. */
+/* Axis letter and value form one bordered control; letter colors match the viewport gizmo arrows. */
 .lighting-axis {
   display: flex;
   flex: 1;
@@ -143,15 +135,11 @@
   opacity: 0.28;
 }
 
-/* ---------- stage lights panel ---------- */
-/* Docked under the stage toolbar, over the render it edits. Mounted only while
-   the Custom preset is selected; open/closed doubles as the viewport edit mode,
-   so there is one concept to learn instead of a panel plus a separate toggle. */
+/* Docked under the stage toolbar. Mounted only for the Custom preset; its open state also drives the viewport edit mode. */
 .lighting-panel {
   position: absolute;
   z-index: 3;
-  /* Toolbar top offset, its height (button plus 10px of padding and border)
-     and an 8px gap; 56px at the desktop button size. */
+  /* Toolbar top offset: button height plus padding, border and an 8px gap. */
   top: calc(28px + var(--stage-toolbar-btn));
   right: 10px;
   display: none;
@@ -249,8 +237,7 @@
   border-radius: var(--radius-sm);
   transition: var(--transition-fast);
 }
-/* Same selected treatment as the inspector chips, so one rig reads the same
-   in both places. */
+/* Selected style matches the inspector chips, so one rig reads the same in both places. */
 .lighting-list-row[data-selected] {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -359,8 +346,7 @@
   cursor: default;
   opacity: 0.5;
 }
-/* Templates are shown, not hidden behind a select, so picking a starter role
-   is one click and the six options are legible at a glance. */
+/* Starter roles are shown as buttons, not behind a select, so one click picks one. */
 .lighting-add-menu {
   display: flex;
   flex-direction: column;
@@ -507,10 +493,7 @@
   color: var(--fail);
 }
 
-/* ---------- inspector rig summary ---------- */
-/* The settings column keeps the rig-wide values and a chip per light, so the
-   rig stays readable and selectable without the per-light editor pushing
-   Sheen, Effect and the whole Camera section off screen. */
+/* The settings column keeps rig-wide values and a chip per light, without pushing Camera off screen. */
 .lighting-summary {
   display: flex;
   flex-direction: column;
@@ -625,9 +608,7 @@
   outline-offset: 1px;
 }
 
-/* Mobile layout. The panel only lives over the canvas, so the sheets (fixed,
-   above the stage) cover it while open and the tab strip never overlaps it.
-   Landscape keeps it under the toolbar on the right, clear of the notch. */
+/* Mobile: the panel lives over the canvas, under the sheets, and clear of the tab strip. */
 @media (max-width: 860px), (max-height: 500px) {
   .lighting-panel {
     top: calc(26px + var(--stage-toolbar-btn) + env(safe-area-inset-top));
@@ -639,8 +620,7 @@
     overscroll-behavior: contain;
   }
 }
-/* Touch-only devices: finger-sized rows and buttons, and 16px text in the
-   number and name fields so iOS does not zoom the page on focus. */
+/* Touch-only: finger-sized rows and buttons, and 16px fields so iOS does not zoom on focus. */
 @media (hover: none) and (pointer: coarse) {
   .lighting-panel {
     width: min(300px, calc(100vw - 16px));
@@ -686,9 +666,7 @@
     min-height: 36px;
   }
 }
-/* Portrait: docked along the bottom of the canvas at full width, so the
-   weapon, header and toolbar above stay visible for the gizmo. Placed after
-   the touch rule so its width wins. */
+/* Portrait: docked along the bottom of the canvas. Placed after the touch rule so its width wins. */
 @media (max-width: 860px) and (orientation: portrait) {
   .lighting-panel {
     top: auto;

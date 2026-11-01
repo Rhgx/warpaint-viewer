@@ -10,7 +10,15 @@ export const MAX_CUSTOM_LIGHTS = 8;
 export const CUSTOM_LIGHT_POSITION_LIMIT = 10;
 const CUSTOM_LIGHT_INTENSITY_LIMIT = 20;
 export const CUSTOM_LIGHT_RANGE_LIMIT = 20;
-const MAX_SPOT_ANGLE_DEGREES = 90;
+/** Validator bounds, shared with the lighting UI sliders so both enforce the same range. */
+export const MIN_SPOT_ANGLE_DEGREES = 1;
+// Leaves room for the Inspect preset's cone (about 116.6 degrees) so a reset rig survives validation.
+export const MAX_SPOT_ANGLE_DEGREES = 120;
+export const CUSTOM_DIRECTION_LIMIT = 1;
+export const CUSTOM_AMBIENT_MAX = 1;
+export const CUSTOM_EXPOSURE_MIN = 0.1;
+export const CUSTOM_EXPOSURE_MAX = 4;
+export const CUSTOM_SOFTNESS_MAX = 1;
 
 export type CustomLightType = 'point' | 'spot' | 'directional';
 export type FrameVector = readonly [number, number, number];
@@ -131,7 +139,7 @@ function readVector(value: unknown, fallback: FrameVector, limit = CUSTOM_LIGHT_
 }
 
 function readDirection(value: unknown): FrameVector {
-  const candidate = readVector(value, DEFAULT_DIRECTION, 1);
+  const candidate = readVector(value, DEFAULT_DIRECTION, CUSTOM_DIRECTION_LIMIT);
   const length = Math.hypot(candidate[0], candidate[1], candidate[2]);
   if (length < 1e-5) return DEFAULT_DIRECTION;
   return [candidate[0] / length, candidate[1] / length, candidate[2] / length];
@@ -180,10 +188,10 @@ function readLight(value: unknown, index: number): CustomLight {
         position: readVector(object.position, DEFAULT_POSITION),
         target: readVector(object.target, DEFAULT_POSITION),
         range: readRange(object.range),
-        // Three's spot light expects at most a quarter turn from its axis;
-        // wider cones flip the cosine term in the shader and go dark.
-        angleDegrees: clampNumber(object.angleDegrees, 1, MAX_SPOT_ANGLE_DEGREES, 45),
-        softness: clampNumber(object.softness, 0, 1, 0.35),
+        // Three's spot attenuation is a smoothstep on cos(angle), so cones wider
+        // than 90 degrees are valid; MAX_SPOT_ANGLE_DEGREES sets the upper bound.
+        angleDegrees: clampNumber(object.angleDegrees, MIN_SPOT_ANGLE_DEGREES, MAX_SPOT_ANGLE_DEGREES, 45),
+        softness: clampNumber(object.softness, 0, CUSTOM_SOFTNESS_MAX, 0.35),
       };
     case 'directional':
       return {
@@ -204,19 +212,18 @@ function readLight(value: unknown, index: number): CustomLight {
 
 function uniqueLights(lights: readonly CustomLight[]): CustomLight[] {
   const ids = new Set<string>();
-  return lights.map((light, index) => {
-    let id = light.id || `light-${index + 1}`;
+  return lights.map((light) => {
+    let id = light.id;
     let suffix = 2;
-    while (ids.has(id)) id = `${light.id || `light-${index + 1}`}-${suffix++}`;
+    while (ids.has(id)) id = `${light.id}-${suffix++}`;
     ids.add(id);
     return id === light.id ? light : { ...light, id };
   });
 }
 
 /**
- * Sanitize an unknown value at the persistence/import boundary. This keeps
- * malformed shared state from reaching Three.js while preserving as much of
- * a partially valid rig as possible.
+ * Sanitizes an unknown value at the persistence and import boundary, keeping as much
+ * of a partly valid rig as possible so malformed state never reaches three.js.
  */
 export function validateCustomLightingRig(value: unknown): CustomLightingRig {
   const object = value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -225,8 +232,8 @@ export function validateCustomLightingRig(value: unknown): CustomLightingRig {
   return {
     version: CUSTOM_LIGHTING_VERSION,
     lights,
-    ambient: clampNumber(object.ambient, 0, 1, DEFAULT_AMBIENT),
-    exposure: clampNumber(object.exposure, 0.1, 4, DEFAULT_EXPOSURE),
+    ambient: clampNumber(object.ambient, 0, CUSTOM_AMBIENT_MAX, DEFAULT_AMBIENT),
+    exposure: clampNumber(object.exposure, CUSTOM_EXPOSURE_MIN, CUSTOM_EXPOSURE_MAX, DEFAULT_EXPOSURE),
     cameraRimLight: object.cameraRimLight === true,
   };
 }
@@ -283,10 +290,9 @@ function buildCustomLight(light: CustomLight, frame?: Pick<LightingFrame, 'dimen
     ? vector(light.direction).multiplyScalar(-10 * frameScale)
     : framePositionToWorld(light.position, frame);
   if (light.type === 'point') {
-    // Point and spot lights use inverse-square falloff. Their positions are
-    // authored in normalized weapon units but rendered in model units, so
-    // intensity must grow by scale squared to preserve the authored brightness
-    // at the same normalized distance.
+    // Point and spot lights fall off with inverse square. Positions are authored in
+    // normalized weapon units but rendered in model units, so intensity grows with the
+    // square of the scale to keep the authored brightness.
     const result = new THREE.PointLight(
       makeColor(light.color),
       light.intensity * frameScale * frameScale,

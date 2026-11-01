@@ -49,6 +49,20 @@ export interface ResolvedSticker {
 
 export type ResolvedNode = ResolvedTexture | ResolvedCombine | ResolvedSelect | ResolvedSticker;
 
+export const IDENTITY_TRANSFORM: ResolvedTransform = {
+  black: 0, white: 1, gamma: 1,
+  rotationDeg: 0, translateU: 0, translateV: 0, scale: 1,
+  flipU: false, flipV: false,
+};
+
+// A select node is active when any of its group ids is non-zero; zero marks an unused slot.
+export function selectHasActiveGroup(values: readonly (number | string)[] | undefined): boolean {
+  return (values ?? []).some((value) => {
+    const parsed = typeof value === 'number' ? value : parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed !== 0;
+  });
+}
+
 // Identity check used by the compositor to skip no-op output passes.
 export function isIdentityTransform(t: ResolvedTransform): boolean {
   return (
@@ -62,6 +76,15 @@ export function isIdentityTransform(t: ResolvedTransform): boolean {
     !t.flipU &&
     !t.flipV
   );
+}
+
+// Photoshop levels: black, then white = black + offset, then gamma. The draw order is part
+// of the seeded output, so every stage resolves levels here.
+function resolveLevels(node: StageTransform, rng: UniformRandomStream): { black: number; white: number; gamma: number } {
+  const black = resolveRange(rng, node.adjustBlack, 0);
+  const offset = resolveRange(rng, node.adjustOffset, 1);
+  const gamma = resolveRange(rng, node.adjustGamma, 1);
+  return { black, white: black + offset, gamma };
 }
 
 function resolveTextureTransform(node: StageTransform, rng: UniformRandomStream): ResolvedTransform {
@@ -78,13 +101,9 @@ function resolveTextureTransform(node: StageTransform, rng: UniformRandomStream)
   const translateV = resolveRange(rng, node.translateV, 0);
   const rotationDeg = resolveRange(rng, node.rotation, 0);
   const scale = resolveRange(rng, node.scaleUV, 1);
-  const black = resolveRange(rng, node.adjustBlack, 0);
-  const offset = resolveRange(rng, node.adjustOffset, 1);
-  const gamma = resolveRange(rng, node.adjustGamma, 1);
+  const levels = resolveLevels(node, rng);
   return {
-    black,
-    white: black + offset,
-    gamma,
+    ...levels,
     rotationDeg,
     translateU,
     translateV,
@@ -97,20 +116,7 @@ function resolveTextureTransform(node: StageTransform, rng: UniformRandomStream)
 function resolveCombineTransform(node: StageTransform, rng: UniformRandomStream): ResolvedTransform {
   // CTCCombineStage parses UV fields but only resolves its three level ranges.
   // Its output record always carries an identity texture matrix.
-  const black = resolveRange(rng, node.adjustBlack, 0);
-  const offset = resolveRange(rng, node.adjustOffset, 1);
-  const gamma = resolveRange(rng, node.adjustGamma, 1);
-  return {
-    black,
-    white: black + offset,
-    gamma,
-    rotationDeg: 0,
-    translateU: 0,
-    translateV: 0,
-    scale: 1,
-    flipU: false,
-    flipV: false,
-  };
+  return { ...IDENTITY_TRANSFORM, ...resolveLevels(node, rng) };
 }
 
 function resolveNode(node: RecipeNode, state: PaintkitRandomState): ResolvedNode {
@@ -131,15 +137,7 @@ function resolveNode(node: RecipeNode, state: PaintkitRandomState): ResolvedNode
       if (node.rootCopy) {
         return {
           type: node.type,
-          black: 0,
-          white: 1,
-          gamma: 1,
-          rotationDeg: 0,
-          translateU: 0,
-          translateV: 0,
-          scale: 1,
-          flipU: false,
-          flipV: false,
+          ...IDENTITY_TRANSFORM,
           nodes: node.nodes.map((n) => resolveNode(n, state)),
         };
       }
@@ -155,8 +153,7 @@ function resolveNode(node: RecipeNode, state: PaintkitRandomState): ResolvedNode
       return {
         type: 'select',
         groups: node.groups,
-        // atoi() semantics for the occasional string value with trailing junk
-        // (see SelectNode comment); non-parsable entries become 0 (= unused).
+        // atoi() semantics for junk-suffixed strings; unparsable entries become 0 (unused).
         select: (node.select ?? []).map((v) => {
           const n = typeof v === 'number' ? v : parseInt(v, 10);
           return Number.isFinite(n) ? n : 0;
@@ -176,22 +173,17 @@ function resolveNode(node: RecipeNode, state: PaintkitRandomState): ResolvedNode
         }
         pick -= weight;
       }
-      const black = resolveRange(rng, node.adjustBlack, 0);
-      const offset = resolveRange(rng, node.adjustOffset, 1);
-      const gamma = resolveRange(rng, node.adjustGamma, 1);
+      const levels = resolveLevels(node, rng);
       advancePaintkitStream(state);
       return {
         type: 'apply_sticker',
         base: chosen ? chosen.base : '',
         spec: chosen ? chosen.spec : undefined,
-        // Defaults in v-down composite space (image top at v=0), matching the
-        // game's UV convention; real data always provides all three corners.
+        // Defaults are in v-down composite space (image top at v=0), as the game's UVs are.
         destTl: node.destTl ?? [0, 0],
         destTr: node.destTr ?? [1, 0],
         destBl: node.destBl ?? [0, 1],
-        black,
-        white: black + offset,
-        gamma,
+        ...levels,
         nodes: node.nodes.map((n) => resolveNode(n, state)),
       };
     }

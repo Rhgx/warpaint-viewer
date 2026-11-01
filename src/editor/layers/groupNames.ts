@@ -1,4 +1,5 @@
 import { texturePublicPath } from '../../protodefs/values';
+import { rawGroupIdForBucket } from './groupSampling';
 
 interface GroupNameEntry {
   readonly weapon: string;
@@ -27,8 +28,7 @@ export function loadGroupNameReference(): Promise<void> {
   return groupNameReferencePromise;
 }
 
-// The community weapon guide does not cover the War Paint preview item. These
-// names describe its stable texture-atlas regions and three visible paint cans.
+// The community guide omits the War Paint preview item; these names cover its texture-atlas regions and paint cans.
 const PAINTKIT_TOOL_GROUP_NAMES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   'models/items/paintkit_tool/p_paintkit_tool_groups_two': {
     16: 'Upper Display', 32: 'Lower Display', 192: 'Canvas Back Cross Brace', 208: 'Paint Can Bodies',
@@ -79,24 +79,17 @@ export function preferredAlbedoGroupIds(groupsRef: string): readonly number[] {
   return defaults.filter((groupId) => groups[String(groupId)] !== undefined);
 }
 
-/**
- * The reference guide deliberately names every small element covered by a
- * group. That is invaluable documentation, but it makes a poor chip label.
- * Keep the guide's wording for titles and assistive labels, and use this
- * compact, deterministic summary for the visible editor UI.
- */
-export function formatGroupNameForDisplay(name: string, maxLength = 42): string {
+/** Compact chip label for a guide name. The guide keeps full wording for titles and assistive labels. */
+export function formatGroupNameForDisplay(name: string): string {
+  const maxLength = 42;
   const normalized = name.replace(/\s+/g, ' ').trim();
   if (normalized.length <= maxLength) return normalized;
 
-  // Parenthetical notes are useful reference detail, but not part of the
-  // immediate identity of a paintable part (for example, wear-map caveats).
+  // Drop parenthetical notes (such as wear-map caveats); they are not part of a part's identity.
   const withoutNotes = normalized.replace(/\s*\([^)]*\)/g, '').trim();
   if (withoutNotes.length <= maxLength) return withoutNotes;
 
-  // Prefer retaining complete named parts over a character-level ellipsis.
-  // A precise "+ N more" is short without pretending those parts do not
-  // exist, and the full guide wording remains available in the tooltip.
+  // Prefer whole parts and a precise "+ N more" over a character-level ellipsis.
   const parts = withoutNotes.split(/\s+\+\s+/).filter(Boolean);
   if (parts.length > 1) {
     for (let visibleCount = parts.length - 1; visibleCount >= 1; visibleCount -= 1) {
@@ -106,8 +99,7 @@ export function formatGroupNameForDisplay(name: string, maxLength = 42): string 
     }
   }
 
-  // Single, unusually descriptive guide entries have no safe semantic split.
-  // Stop at a word boundary so their visible prefix remains exact.
+  // Single long entries have no safe split; cut at a word boundary.
   const ellipsis = '…';
   const cutAt = Math.max(1, maxLength - ellipsis.length);
   const prefix = withoutNotes.slice(0, cutAt);
@@ -115,11 +107,7 @@ export function formatGroupNameForDisplay(name: string, maxLength = 42): string 
   return `${(boundary > 0 ? prefix.slice(0, boundary) : prefix).trimEnd()}${ellipsis}`;
 }
 
-/**
- * Canonicalize a source-engine material reference for the local name table.
- * The compositor accepts several filename spellings (with extension, leading
- * `materials/`, or Windows separators); the guide lists the material path.
- */
+/** Canonicalize a material reference for the local name table, whatever filename spelling it arrived in. */
 export function normalizeGroupTextureReference(value: string): string {
   return value
     .trim()
@@ -131,24 +119,16 @@ export function normalizeGroupTextureReference(value: string): string {
     .toLowerCase();
 }
 
-/**
- * The loadable spelling of a group texture picked from the layout list. The
- * list carries normalized material paths, which name no file; the recipe and
- * the texture resolver address the public `textures/....webp` form.
- */
+/** The loadable spelling of a layout-list group texture: the public `textures/....webp` form the resolver addresses. */
 export function groupTextureLoadRef(value: string): string {
   return texturePublicPath(value) ?? value;
 }
 
-/**
- * Look up the visible part represented by a compositor bucket. Source group
- * maps occasionally use a nearby red value rather than an exact multiple of
- * 16, so the editor must compare with the same rounded bucket rule as the
- * shader instead of manufacturing a raw id from the bucket.
- */
+/** Visible part for a compositor bucket. Compares with the shader's rounded bucket rule, since red values are not always multiples of 16. */
 export function lookupGroupNameForBucket(groupsRef: string, bucket: number): string | null {
-  if (!Number.isInteger(bucket) || bucket < 1 || bucket > 16) return null;
-  const supplemental = additionalGroupName(groupsRef, bucket === 16 ? 255 : bucket * 16);
+  const rawGroupId = rawGroupIdForBucket(bucket);
+  if (rawGroupId === null) return null;
+  const supplemental = additionalGroupName(groupsRef, rawGroupId);
   if (supplemental) return supplemental;
   const texture = groupNameReference?.textures[normalizeGroupTextureReference(groupsRef)];
   if (!texture) return null;
@@ -158,24 +138,13 @@ export function lookupGroupNameForBucket(groupsRef: string, bucket: number): str
   return names.size === 1 ? [...names][0] : null;
 }
 
-/**
- * Return the curated visible name for one raw group-map id, if one is known.
- * `null` means the reference does not cover this texture/id; callers should
- * use a neutral fallback rather than imply that the game supplied a name.
- */
+/** Curated name for one raw group-map id, or null when the reference does not cover it. Callers use a neutral fallback. */
 export function lookupGroupName(groupsRef: string, rawGroupId: number): string | null {
   if (!Number.isInteger(rawGroupId) || rawGroupId < 1 || rawGroupId > 255) return null;
   const supplemental = additionalGroupName(groupsRef, rawGroupId);
   if (supplemental) return supplemental;
   const texture = groupNameReference?.textures[normalizeGroupTextureReference(groupsRef)];
   return texture?.groups[String(rawGroupId)] ?? null;
-}
-
-/** The named weapon represented by a reference texture, when the guide has it. */
-export function lookupGroupNameWeapon(groupsRef: string): string | null {
-  const normalized = normalizeGroupTextureReference(groupsRef);
-  if (PAINTKIT_TOOL_GROUP_NAMES[normalized]) return 'War Paint';
-  return groupNameReference?.textures[normalized]?.weapon ?? null;
 }
 
 export interface CompatibleGroupTexture {

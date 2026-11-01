@@ -2,14 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
+
 import type { ComposeResult, Compositor } from '../../compositor/compositor';
 import type { ResolvedNode } from '../../compositor/resolve';
 import type { DataSource } from '../../data/loader';
 import { applyTextureOverrides } from '../../hooks/useComposedPaint';
 import type { SourceTextureProvider } from '../../source/provider';
-import type { StickerTransformTool } from '../../ui/editor/StickerPlacementEditor';
+import type { StickerTransformTool } from '../../ui/editor/stickerPlacementEditorTypes';
 import type { ControlsState } from '../../viewer/controls';
-import type { StickerGizmoDrag } from '../../viewer/stickerOverlay';
+import type { StickerGizmoDrag } from '../../viewer/overlays/stickerOverlay';
 import type { Viewer } from '../../viewer/Viewer';
 import { protoTextureReference, isStickerArtworkReference, stickerTargetLabel, textureChoiceLabel, discoverStickerPlacementTargets, type StickerPlacementTarget } from './stickerTargets';
 import { stickerWeightFromString, texturePublicPath } from '../../protodefs/values';
@@ -29,6 +30,7 @@ import {
   mapResolvedTextureReferences,
   recipeWithoutStickerOccurrences,
   resolvedGroupStickerContext,
+  type ResolvedGroupStickerContext,
 } from './stickerSurface';
 import {
   matchResolvedStickerArtworkGroups,
@@ -91,11 +93,7 @@ function resolvedVariantWeights(variants: readonly StickerVariantSource[]): numb
   return variants.map((variant) => stickerWeightFromString(variant.weight.resolvedValue));
 }
 
-/**
- * Rows for the active sticker's variants. The picked row is the variant whose
- * artwork the current seed drew, marked only when that artwork is unambiguous.
- * The previewing row is the variant pinned for preview, or -1 for none.
- */
+/** Variant rows for the active sticker. `picked` marks the seeded artwork only when it is unambiguous. */
 function stickerVariantRows(
   variants: readonly StickerVariantSource[],
   pickedBase: string | undefined,
@@ -119,11 +117,8 @@ function stickerVariantRows(
 }
 
 /**
- * Sticker placement: the sticker targets of the working definition, the
- * retained bases and artwork the UV and on-model previews draw from, the
- * direct-manipulation draft, model-part picking, and the sticker panel props.
- * Owns the history actions too, since undo, redo and reset must discard a
- * draft that a stale gesture could otherwise restore.
+ * Sticker placement: targets, preview artwork, the direct-manipulation draft and panel props.
+ * Also owns undo, redo and reset so a stale gesture cannot restore a discarded draft.
  */
 export function useStickerEditor({
   editableKitId,
@@ -161,16 +156,13 @@ export function useStickerEditor({
   mountedSourcePackage,
   setHintDismissed,
 }: UseStickerEditorOptions) {
-  // One mode drives both UV and on-model controls. Keeping it above either
-  // surface prevents a scale handle in one view from silently moving in the
-  // other.
+  // One mode for both UV and on-model controls, so a handle in one view never moves the other.
   const [stickerTransformTool, setStickerTransformTool] = useState<StickerTransformTool>('move');
   const [stickerAspectLocked, setStickerAspectLocked] = useState(true);
   const [modelPartPickingActive, setModelPartPickingActive] = useState(false);
   const [hiddenModelPartCount, setHiddenModelPartCount] = useState(0);
   const [activeStickerTarget, setActiveStickerTarget] = useState(0);
-  // The variant pinned for preview. It names its sticker, so a stale pin on
-  // another sticker never applies.
+  // Pinned preview variant. It names its sticker, so a stale pin never applies elsewhere.
   const [previewVariant, setPreviewVariant] = useState<{ targetId: string; index: number } | null>(null);
   const [pendingAddedStickerRef, setPendingAddedStickerRef] = useState<string | null>(null);
   const [stickerTargetThumbnails, setStickerTargetThumbnails] = useState<Record<string, string>>({});
@@ -201,7 +193,7 @@ export function useStickerEditor({
   } | null>(null);
   const groupStickerPreparationRef = useRef<{
     targetId: string;
-    context: NonNullable<ReturnType<typeof resolvedGroupStickerContext>>;
+    context: ResolvedGroupStickerContext;
   } | null>(null);
   const stickerArtworkCacheRef = useRef(new Map<string, { url: string; dispose(): void }>());
   const stickerGestureRef = useRef<{
@@ -228,9 +220,7 @@ export function useStickerEditor({
     stickerDraftStore.setState(quad, true);
   }, [stickerDraftStore]);
   const discardStickerDraft = useCallback(() => {
-    // Draft coordinates exist only while a direct-manipulation gesture is in
-    // flight. History actions replace the authored proto snapshot, so a stale
-    // draft must never continue to win over the restored destination.
+    // Draft coordinates live only during a gesture. History replaces the authored proto, so a stale draft must not win.
     stickerGestureRef.current = null;
     stickerGizmoGestureRef.current = null;
     updateStickerDraft(null);
@@ -317,15 +307,11 @@ export function useStickerEditor({
   const previewedVariant = selectedStickerTarget && previewedVariantIndex >= 0
     ? selectedStickerTarget.stickers[previewedVariantIndex]
     : null;
-  // Resolved stages carry public texture paths (textures/....webp), while a
-  // variant's field holds the definition's raw reference, so convert it the
-  // same way the picked-variant match does.
+  // Resolved stages use public texture paths, so convert the variant's raw reference the same way.
   const previewedVariantBase = previewedVariant
     ? texturePublicPath(previewedVariant.base.resolvedValue ?? previewedVariant.base.authoredValue) ?? undefined
     : undefined;
-  // A pinned variant stands in for the artwork the seed drew, for its sticker
-  // only. The resolved stage itself is kept as is, since the group context
-  // finds it by identity in the resolved tree.
+  // A pinned variant replaces the seeded artwork for its sticker only. Keep the resolved stage object: the group context finds it by identity.
   const matchedStickerStages = useMemo(() => matchedStickerStageGroups.map((stages, index) => {
     const stage = stages[0] ?? null;
     if (!stage || index !== selectedStickerIndex || !previewedVariant || !previewedVariantBase) return stage;
@@ -378,18 +364,14 @@ export function useStickerEditor({
   const stickerPlacement = stickerPlacementRead.placement;
   const stickerTargetEditable = Boolean(selectedStickerTarget?.editable && authoredStickerQuad);
   const stickerEditorEnabled = Boolean(stickerTargetEditable && stickerPlacement);
-  // Retain the complete paint recipe and remove only this exact sticker
-  // occurrence. A selected stage can sit within combines or beside other
-  // stickers, so composing only its immediate child would lose visible work.
+  // Remove only this sticker occurrence from the full recipe; composing just its child would lose visible work.
   const stickerSurfaceNode = useMemo(
     () => selectedStickerTarget
       ? recipeWithoutStickerOccurrences(provenanceRecipe?.tree ?? null, selectedStickerTarget.occurrences)
       : null,
     [selectedStickerTarget, provenanceRecipe],
   );
-  // Destination points are absent from this replacement recipe. It therefore
-  // remains stable while a sticker moves, but changes for a distinct base,
-  // weapon, seed, or texture override.
+  // Destination points are absent, so the key stays stable while a sticker moves.
   const stickerSurfaceComposeKey = useMemo(() => {
     if (!stickerSurfaceNode) return null;
     return JSON.stringify({
@@ -420,11 +402,8 @@ export function useStickerEditor({
   const exactGroupStickerResources = groupStickerResourcesKey === groupStickerComposeKey
     ? groupStickerResourcesRef.current
     : null;
-  // The local draft remains authoritative from pointer release until the
-  // asynchronous provenance recipe exposes the committed destination. The
-  // selected sticker's base and artwork are destination-independent, so keep
-  // using the retained resources during that handoff instead of briefly
-  // disabling the editor and flashing the preparation state.
+  // The draft stays authoritative until the provenance recipe reports the committed destination.
+  // The base does not depend on destination, so retained resources avoid a preparation flash.
   const destinationEditSettling = Boolean(stickerDraftActive && selectedStickerTarget);
   const retainedGroupStickerResources = destinationEditSettling
     && groupStickerResourcesRef.current?.targetId === selectedStickerTarget?.id
@@ -460,9 +439,7 @@ export function useStickerEditor({
         levels: activeGroupStickerResources.levels,
       }
     : null;
-  // A direct manipulation must always have the same stripped base in both
-  // views. Until that target and the artwork are ready, show preparation - not
-  // a draggable sticker whose 3D preview can disagree with the UV editor.
+  // Both views need the same stripped base, so show preparation until the target and artwork are ready.
   const stickerEditorReady = Boolean(
     stickerEditorEnabled
     && effectiveStickerTextureUrl
@@ -502,11 +479,8 @@ export function useStickerEditor({
   }, [selectedStickerTarget?.id, editableKitId, state.weaponKey, viewerRef]);
 
   useEffect(() => {
-    // A completed gesture stays visually authoritative while the edited
-    // proto source re-resolves. Releasing it merely because an intermediate
-    // recipe still exposes the old quad causes a one-frame snap backwards.
-    // History actions clear drafts explicitly through the synchronized
-    // wrappers above, so retire this draft only after authored state catches up.
+    // Keep a completed gesture's draft until the authored quad catches up, or it snaps back for a frame.
+    // History actions clear drafts through the synchronized wrappers above.
     if (stickerGestureRef.current || stickerGizmoGestureRef.current) return;
     const draft = stickerDraftRef.current;
     if (draft && authoredStickerQuad && stickerQuadsEqual(draft, authoredStickerQuad)) {
@@ -514,9 +488,7 @@ export function useStickerEditor({
     }
   }, [authoredStickerQuad, discardStickerDraft]);
 
-  // The sticker list and live decal both show the stage output, not its raw
-  // source file. Some Flak Furnished stickers are white masks whose authored
-  // levels supply the actual visible colour.
+  // Show the stage output, not the raw source: some Flak Furnished stickers are white masks that only their levels make visible.
   useEffect(() => {
     let cancelled = false;
     const created = new Map<string, { url: string; dispose(): void }>();
@@ -528,9 +500,7 @@ export function useStickerEditor({
         const ref = resolved?.base ?? target.stickers[0]?.base.resolvedValue;
         if (!ref) return [target.id, null] as const;
         try {
-          // Group artwork is generated by the compositor effect below from
-          // the original mask plus both selector endpoints. A raw c0/c1 source
-          // is not a truthful preview, most visibly for black selector blocks.
+          // Group artwork comes from the compositor effect below; raw c0/c1 sources are untruthful previews, most visibly for black selectors.
           if (composedStickerTargetIds.has(target.id)) return [target.id, null] as const;
           const sourceUrl = activeTextureOverrides[ref] ?? await sourceProvider.resolvePreview(ref);
           const levels = {
@@ -587,9 +557,7 @@ export function useStickerEditor({
     stickerTargets,
   ]);
 
-  // A prepared group image is tied to its paint/weapon/seed context, but not
-  // to its destination. Destination-only edits keep the isolated artwork and
-  // therefore stay instantaneous.
+  // Prepared group artwork depends on paint, weapon and seed, not destination, so destination-only edits stay instant.
   useEffect(() => {
     setGroupStickerArtwork({});
   }, [editableKitId, packageGeneration, state.seed, state.team, state.wearIndex, state.weaponKey]);
@@ -599,9 +567,7 @@ export function useStickerEditor({
     stickerArtworkCacheRef.current.clear();
   }, []);
 
-  // Every sticker uses a retained base with its stage removed plus a lightweight
-  // UV overlay. Group stickers keep the same base, but reconstruct their layer
-  // selector from the full source mask instead of a destination crop.
+  // Stickers use a retained base with their stage removed. Group stickers rebuild their layer selector from the full source mask.
   useEffect(() => {
     const viewer = viewerRef.current;
     const compositor = compositorRef.current;
@@ -621,9 +587,7 @@ export function useStickerEditor({
     }
     const weapon = data.manifest.weapons.find((entry) => entry.key === state.weaponKey);
     if (!compositor || !weapon) return;
-    // A destination-only edit leaves the stripped recipe unchanged. Retain the
-    // base texture so a committed new location never drops its live overlay
-    // while the normal full composite catches up asynchronously.
+    // A destination-only edit keeps the stripped recipe, so keep the base until the new location's composite arrives.
     if (stickerBaseSurfaceKey === stickerSurfaceComposeKey && stickerBaseSurfaceResultRef.current) return;
 
     discardCurrentBase();
@@ -664,10 +628,7 @@ export function useStickerEditor({
     compositorRef,
   ]);
 
-  // A group sticker writes into a layer selector, rather than behaving like a
-  // normal RGBA decal. Compose the selector without this sticker and the two
-  // final selector endpoints once. Live movement then samples these retained
-  // textures in Viewer and changes only destination uniforms.
+  // Group stickers write a layer selector, not RGBA. Retain the selector and both endpoints so movement only changes destination uniforms.
   useEffect(() => {
     const compositor = compositorRef.current;
     const viewer = viewerRef.current;
@@ -778,10 +739,7 @@ export function useStickerEditor({
     compositorRef,
   ]);
 
-  // The composed target is owned by the editor while its texture is installed
-  // as Viewer's temporary base. Release it only when the base is abandoned or
-  // the app unmounts - not on ordinary state renders, which would leave a live
-  // material pointing at a render target returned to the compositor pool.
+  // The editor owns the composed base while Viewer uses it. Release it only when abandoned or unmounted, not on ordinary renders.
   useEffect(() => () => {
     const result = stickerBaseSurfaceResultRef.current;
     stickerBaseSurfaceResultRef.current = null;
@@ -874,11 +832,8 @@ export function useStickerEditor({
       ? applyStickerPlacementToQuad(base, constrained)
       : stickerPlacementToQuad(constrained);
     if (!quad) return;
-    // The 2D editor owns its lightweight local transform while dragging. Push
-    // the matching shader uniforms now instead of waiting for React's effect
-    // phase, so a dense pointer stream cannot make the model preview trail the
-    // box. This never changes the composed base; the destination is committed
-    // to the editor session only at interaction end.
+    // Push shader uniforms now, not in an effect, so a dense pointer stream cannot make the model preview trail the box.
+    // The composed base is unchanged; the destination commits at interaction end.
     previewStickerDraft(quad);
     updateStickerDraft(quad);
   }, [authoredStickerQuad, previewStickerDraft, updateStickerDraft]);
@@ -902,8 +857,7 @@ export function useStickerEditor({
   const setModelPartPicking = useCallback((active: boolean) => {
     if (!stickerEditingActive) return;
     setModelPartPickingActive(active);
-    // Entering the picker is a mode change worth re-explaining; leaving it
-    // should not resurrect a hint the user already dismissed.
+    // Entering the picker re-shows the hint; leaving it does not.
     if (active) setHintDismissed(false);
   }, [setHintDismissed, stickerEditingActive]);
 
@@ -924,8 +878,7 @@ export function useStickerEditor({
   );
   const stickerEditorProps: StickerEditorProps | undefined = stickerTargets.length > 0 ? {
     targets: (() => {
-      // Several stickers can share a source, so a repeated
-      // name gets its ordinal back to stay distinguishable.
+      // Repeated labels get an ordinal, so stickers sharing a source stay distinguishable.
       const seen = new Map<string, number>();
       const bases = stickerTargets.map((target) => {
         const base = target.stickers[0]?.base;
@@ -1031,7 +984,6 @@ export function useStickerEditor({
     groupPreview: groupStickerUvPreview,
     renderStickerArtwork: !selectedStickerUsesComposedArtwork,
     textureAspect: stickerSurfaceAspect,
-    stickerAspect,
     onCreatePlacement: selectedStickerTarget?.editable && !stickerPlacementRead.editable
       ? () => {
           const quad = stickerPlacementToQuad(fitStickerPlacement(stickerAspect));

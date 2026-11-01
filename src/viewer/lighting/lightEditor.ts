@@ -7,13 +7,20 @@ import {
   type CustomLight,
   type CustomLightRuntime,
   type CustomLightingRig,
-  type FrameVector,
   validateCustomLightingRig,
   updateCustomLightRuntime,
   worldPositionToFrame,
 } from './customLighting';
-
-export type LightEditorHandle = 'source' | 'target';
+import {
+  clientToNdc,
+  createAimHandleTexture,
+  disposeObjectResources,
+  isSecondaryTouch,
+  pointDistanceToClient,
+  setObjectColor,
+  updateDefinition,
+  type LightEditorHandle,
+} from './lightEditorHelpers';
 
 export interface LightEditorPick {
   readonly id: string;
@@ -49,100 +56,9 @@ const UNSELECTED_SOURCE_SIZE = 11;
 const DISABLED_SOURCE_SIZE = 10;
 const AIM_HANDLE_SIZE = 26;
 
-function createAimHandleTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const context = canvas.getContext('2d');
-  if (!context) return new THREE.CanvasTexture(canvas);
-
-  context.strokeStyle = '#ffffff';
-  context.fillStyle = '#ffffff';
-  context.lineWidth = 6;
-  context.beginPath();
-  context.arc(32, 32, 21, 0, Math.PI * 2);
-  context.stroke();
-  context.beginPath();
-  context.moveTo(32, 3);
-  context.lineTo(32, 16);
-  context.moveTo(32, 48);
-  context.lineTo(32, 61);
-  context.moveTo(3, 32);
-  context.lineTo(16, 32);
-  context.moveTo(48, 32);
-  context.lineTo(61, 32);
-  context.stroke();
-  context.beginPath();
-  context.arc(32, 32, 4, 0, Math.PI * 2);
-  context.fill();
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-/** Later fingers of a multi-touch gesture belong to the camera, never to a light. */
-function isSecondaryTouch(event: PointerEvent): boolean {
-  return event.pointerType === 'touch' && !event.isPrimary;
-}
-
-function clientToNdc(canvas: HTMLCanvasElement, clientX: number, clientY: number): THREE.Vector2 {
-  const bounds = canvas.getBoundingClientRect();
-  return new THREE.Vector2(
-    ((clientX - bounds.left) / Math.max(1, bounds.width)) * 2 - 1,
-    -((clientY - bounds.top) / Math.max(1, bounds.height)) * 2 + 1,
-  );
-}
-
-function pointDistanceToClient(
-  point: THREE.Vector3,
-  camera: THREE.Camera,
-  canvas: HTMLCanvasElement,
-  clientX: number,
-  clientY: number,
-): number {
-  const projected = point.clone().project(camera);
-  const bounds = canvas.getBoundingClientRect();
-  const x = bounds.left + (projected.x + 1) * 0.5 * bounds.width;
-  const y = bounds.top + (1 - projected.y) * 0.5 * bounds.height;
-  return Math.hypot(x - clientX, y - clientY);
-}
-
-function setObjectColor(object: THREE.Object3D, color: number): void {
-  object.traverse((child) => {
-    const material = (child as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
-    if (!material) return;
-    if (Array.isArray(material)) {
-      for (const item of material) setMaterialColor(item, color);
-    } else {
-      setMaterialColor(material, color);
-    }
-  });
-}
-
-function setMaterialColor(material: THREE.Material, color: number): void {
-  if (
-    material instanceof THREE.MeshBasicMaterial
-    || material instanceof THREE.LineBasicMaterial
-    || material instanceof THREE.MeshPhongMaterial
-  ) {
-    material.color.setHex(color);
-  }
-}
-
-function disposeObjectResources(object: THREE.Object3D, disposeGeometry = true): void {
-  object.traverse((child) => {
-    const mesh = child as THREE.Mesh;
-    if (disposeGeometry && mesh.geometry) mesh.geometry.dispose();
-    const material = mesh.material;
-    if (Array.isArray(material)) material.forEach((item) => item.dispose());
-    else if (material) material.dispose();
-  });
-}
-
 /**
- * Small, viewer-specific lighting editor. It intentionally keeps authored
- * values separate from Three.js objects so rigs can be serialized directly.
+ * Viewer-specific lighting editor. Authored values stay separate from Three.js
+ * objects so rigs serialize directly.
  */
 export class LightEditor {
   private readonly canvas: HTMLCanvasElement;
@@ -196,18 +112,16 @@ export class LightEditor {
     this.onSelectionChange = options.onSelectionChange ?? (() => undefined);
     this.transformControls = new TransformControls(this.getCamera(), this.canvas);
     this.transformControls.setMode('translate');
-    // Local space, not world: while the editor is open the rig rotates with the
-    // model, and only local keeps each arrow pointing along the axis its
-    // matching X/Y/Z field writes to. With an unrotated rig the two are equal.
+    // Local space, not world: the rig rotates with the model while the editor is open, and
+    // only local keeps each arrow along the axis its X/Y/Z field writes.
     this.transformControls.setSpace('local');
     this.transformControls.setColors(0xb8383b, 0x1f8a4c, 0x3a6ea5, SELECTED_HELPER_COLOR);
     this.transformControls.enabled = false;
     this.transformControls.addEventListener('mouseDown', this.onTransformMouseDown);
     this.transformControls.addEventListener('mouseUp', this.onTransformMouseUp);
     this.transformControls.addEventListener('objectChange', this.onTransformObjectChange);
-    // TransformControls reacts to every pointer, so a second finger could
-    // steal or jump an active light drag. Route its input here instead, from
-    // the same listener position, and only for the gesture's first pointer.
+    // TransformControls reacts to every pointer, so a second finger could jump an active
+    // light drag. Its input is routed here, for the gesture's first pointer only.
     const touchAction = this.canvas.style.touchAction;
     this.transformControls.disconnect();
     this.canvas.style.touchAction = touchAction;
@@ -257,7 +171,7 @@ export class LightEditor {
     this.updateHelperColors();
   }
 
-  setFrame(frame: Pick<LightingFrame, 'dimensions'> | null = this.getFrame()): void {
+  setFrame(frame: Pick<LightingFrame, 'dimensions'> | null): void {
     this.frame = frame;
     this.rebuild();
     this.invalidate();
@@ -343,9 +257,8 @@ export class LightEditor {
     this.root.updateWorldMatrix(true, true);
     for (const visual of this.visuals.values()) {
       if (visual.helper instanceof THREE.PointLightHelper) {
-        // PointLightHelper normally borrows the light's world matrix and is
-        // intended to live directly in the scene. Ours shares the editable
-        // rig's transformed parent, so keep it in that parent's local space.
+        // PointLightHelper normally borrows the light's world matrix. Ours sits under the
+        // editable rig's transformed parent, so it stays in that parent's local space.
         visual.helper.position.copy(visual.runtime.light.position);
       } else if (visual.helper instanceof THREE.SpotLightHelper) visual.helper.update();
       else if (visual.helper instanceof THREE.DirectionalLightHelper) visual.helper.update();
@@ -355,21 +268,6 @@ export class LightEditor {
         visual.line.geometry.setFromPoints([source, target]);
       }
     }
-  }
-
-  private updateDefinition(light: CustomLight, handle: LightEditorHandle, value: FrameVector): CustomLight | null {
-    if (light.type === 'point') return handle === 'source' ? { ...light, position: value } : null;
-    if (light.type === 'spot') return handle === 'source' ? { ...light, position: value } : { ...light, target: value };
-    if (handle === 'source') {
-      const direction = new THREE.Vector3(...value);
-      if (direction.lengthSq() < 1e-5) return light;
-      direction.normalize().multiplyScalar(-1);
-      return { ...light, direction: [direction.x, direction.y, direction.z] };
-    }
-    const source = new THREE.Vector3(...light.direction).multiplyScalar(-10);
-    const target = new THREE.Vector3(...value);
-    const direction = target.sub(source).normalize();
-    return { ...light, direction: [direction.x, direction.y, direction.z] };
   }
 
   private beginTargetTransform(pick: LightEditorPick, pointerId: number): boolean {
@@ -401,12 +299,9 @@ export class LightEditor {
     const frameValue = worldPositionToFrame(local, this.frame);
     const current = this.rig.lights.find((light) => light.id === drag.gesture.id);
     if (!current) return;
-    const updated = this.updateDefinition(current, 'target', frameValue);
+    const updated = updateDefinition(current, 'target', frameValue);
     if (!updated) return;
-    this.rig = validateCustomLightingRig({
-      ...this.rig,
-      lights: this.rig.lights.map((light) => light.id === updated.id ? updated : light),
-    });
+    this.replaceLight(updated);
     const visual = this.visuals.get(updated.id);
     if (!visual?.targetHandle || !visual.runtime.targetPosition) return;
     const targetWorld = framePositionToWorld(
@@ -475,12 +370,9 @@ export class LightEditor {
     const framePosition = worldPositionToFrame(localPosition, this.frame);
     const current = this.rig.lights.find((light) => light.id === visual.runtime.definition.id);
     if (!current) return;
-    const updated = this.updateDefinition(current, 'source', framePosition);
+    const updated = updateDefinition(current, 'source', framePosition);
     if (!updated || !('position' in updated)) return;
-    this.rig = validateCustomLightingRig({
-      ...this.rig,
-      lights: this.rig.lights.map((light) => light.id === updated.id ? updated : light),
-    });
+    this.replaceLight(updated);
     const lightPosition = framePositionToWorld(updated.position, this.frame);
     visual.sourceHandle.position.copy(lightPosition);
     visual.runtime.light.position.copy(lightPosition);
@@ -516,9 +408,8 @@ export class LightEditor {
     for (const runtime of runtimes) {
       this.lightsRoot.add(runtime.light);
       if (runtime.target) this.lightsRoot.add(runtime.target);
-      // Blender-style object markers retain a useful viewport-pixel size as
-      // the camera moves. A world-space sphere becomes effectively invisible
-      // when a normalized light is several model lengths from the weapon.
+      // Object markers keep a viewport-pixel size as the camera moves; a world-space sphere
+      // would vanish when a normalized light is several model lengths from the weapon.
       const sourceHandle = new THREE.Points(
         this.markerGeometry,
         new THREE.PointsMaterial({
@@ -573,9 +464,8 @@ export class LightEditor {
       const enabled = visual.runtime.definition.enabled;
       const passiveColor = enabled ? DEFAULT_HELPER_COLOR : DISABLED_HELPER_COLOR;
 
-      // Keep every light easy to find, but reserve its full cone/direction and
-      // aim affordances for selection. Showing every helper at once turns a
-      // three-light rig into a web of equally prominent lines.
+      // Keep every light easy to find, but show its cone and aim handles only when selected;
+      // all at once they turn a rig into a web of equally prominent lines.
       visual.sourceHandle.visible = true;
       visual.helper.visible = selected;
       if (visual.targetHandle) {
@@ -603,9 +493,8 @@ export class LightEditor {
   // Mirrors TransformControls' own pointer listeners, gated to one pointer.
   private onTransformPointerDown = (event: PointerEvent): void => {
     if (!this.transformControls.enabled || this.transformPointerId !== null || isSecondaryTouch(event)) return;
-    // Owning a pointer requires its capture (except under Pointer Lock, which
-    // already routes everything here), so its release or lost capture always
-    // reaches this canvas and can never leave the id occupied.
+    // Owning a pointer requires its capture (Pointer Lock already routes everything here),
+    // so a release or lost capture always reaches this canvas and frees the id.
     if (!document.pointerLockElement) {
       try {
         this.canvas.setPointerCapture(event.pointerId);
@@ -673,24 +562,16 @@ export class LightEditor {
     if (this.canvas.hasPointerCapture?.(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId);
   };
 
-  // Shared by pointercancel and lostpointercapture. Only the pointer that owns
-  // a light gesture can cancel it; another finger leaves the drag running.
-  // Aim drags end on the window's pointerup wherever it lands, so only a real
-  // cancel reverts them; a capture released during that pointerup must not.
+  // Shared by pointercancel and lostpointercapture. Only the owning pointer cancels a
+  // gesture. Aim drags end on the window's pointerup, so only a real cancel reverts them;
+  // a capture released during that pointerup must not.
   private onPointerCancel = (event: PointerEvent): void => {
     if (event.type === 'pointercancel' && this.targetDrag && event.pointerId === this.targetDrag.pointerId) {
       this.commitTargetTransform(true);
     }
     if (event.pointerId !== this.transformPointerId) return;
     this.transformPointerId = null;
-    if (this.sourceTransformInitialRig) {
-      this.transformControls.detach();
-      this.rig = this.sourceTransformInitialRig;
-      this.sourceTransformInitialRig = null;
-      this.sourceTransformChanged = false;
-      this.rebuild();
-      this.onChange(this.rig);
-    }
+    this.revertSourceTransform();
     // TransformControls has no cancel path. End its drag only now, after the
     // restore above, so the mouseUp it may emit cannot commit the moved light.
     this.transformControls.pointerUp(null);
@@ -704,15 +585,29 @@ export class LightEditor {
       return;
     }
     if (this.sourceTransformInitialRig) {
-      this.transformControls.detach();
-      this.rig = this.sourceTransformInitialRig;
-      this.sourceTransformInitialRig = null;
-      this.sourceTransformChanged = false;
-      this.rebuild();
-      this.onChange(this.rig);
+      this.revertSourceTransform();
       event.preventDefault();
     }
   };
+
+  /** Restore the rig from before a source-handle drag and drop that drag. */
+  private revertSourceTransform(): void {
+    const initialRig = this.sourceTransformInitialRig;
+    if (!initialRig) return;
+    this.transformControls.detach();
+    this.rig = initialRig;
+    this.sourceTransformInitialRig = null;
+    this.sourceTransformChanged = false;
+    this.rebuild();
+    this.onChange(this.rig);
+  }
+
+  private replaceLight(updated: CustomLight): void {
+    this.rig = validateCustomLightingRig({
+      ...this.rig,
+      lights: this.rig.lights.map((light) => light.id === updated.id ? updated : light),
+    });
+  }
 
   dispose(): void {
     this.canvas.removeEventListener('pointerdown', this.onTransformPointerDown);

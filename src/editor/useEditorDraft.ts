@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { WORKSHOP_ENABLED } from '../device';
 import type { ProtoDefKitBundle } from '../protodefs/types';
 import {
+  DRAFT_VERSION,
   deleteEditorDraft,
   readEditorDraft,
   writeEditorDraft,
@@ -34,7 +35,6 @@ interface UseEditorDraftOptions {
 
 export interface EditorDraftState {
   status: EditorDraftStatus;
-  savedAt?: number;
   recovery?: EditorDraftRecovery;
   save: () => void;
 }
@@ -58,7 +58,6 @@ export function useEditorDraft({
   const key = enabled ? requestedKey : null;
   const [candidate, setCandidate] = useState<EditorDraftRecord | null>(null);
   const [storageStatus, setStorageStatus] = useState<EditorDraftStatus>('idle');
-  const [savedAt, setSavedAt] = useState<number | undefined>();
   const [savedRevision, setSavedRevision] = useState<number | null>(null);
   const settledKeyRef = useRef<string | null>(null);
   const operationRef = useRef(0);
@@ -76,7 +75,7 @@ export function useEditorDraft({
     const timestamp = Date.now();
     setStorageStatus('saving');
     const record: EditorDraftRecord = {
-      version: 2,
+      version: DRAFT_VERSION,
       key,
       kitId,
       ...(paintName ? { paintName } : {}),
@@ -85,7 +84,6 @@ export function useEditorDraft({
     };
     void enqueue(() => writeEditorDraft(record)).then(() => {
       if (operation !== operationRef.current) return;
-      setSavedAt(timestamp);
       setSavedRevision(revision);
       setStorageStatus('saved');
     }).catch(() => {
@@ -97,7 +95,6 @@ export function useEditorDraft({
     const operation = ++operationRef.current;
     settledKeyRef.current = null;
     setCandidate(null);
-    setSavedAt(undefined);
     setSavedRevision(null);
     if (!key || kitId === null || !original) {
       setStorageStatus('idle');
@@ -110,7 +107,6 @@ export function useEditorDraft({
       settledKeyRef.current = key;
       if (draft && !bundlesEqual(draft.bundle, original)) {
         setCandidate(draft);
-        setSavedAt(draft.savedAt);
       } else if (draft) {
         void enqueue(() => deleteEditorDraft(key)).catch(() => undefined);
       }
@@ -127,7 +123,6 @@ export function useEditorDraft({
     const operation = ++operationRef.current;
     if (!dirty) {
       setStorageStatus('idle');
-      setSavedAt(undefined);
       setSavedRevision(null);
       void enqueue(() => deleteEditorDraft(key)).catch(() => {
         if (operation === operationRef.current) setStorageStatus('error');
@@ -145,18 +140,14 @@ export function useEditorDraft({
   const restoreCandidate = useCallback(() => {
     if (!candidate || !restore(candidate.bundle)) return;
     setCandidate(null);
-    setSavedAt(candidate.savedAt);
     setStorageStatus('saved');
   }, [candidate, restore]);
 
   const discardCandidate = useCallback(() => {
     if (!candidate) return;
     setCandidate(null);
-    setSavedAt(undefined);
     setStorageStatus('idle');
-    // Deleting here rather than leaning on the clean-state effect below. That
-    // effect only deletes while `dirty` is false, which makes discard's
-    // contract depend on a condition it does not control.
+    // Delete here, not in the clean-state effect, which deletes only while dirty is false.
     void enqueue(() => deleteEditorDraft(candidate.key)).catch(() => undefined);
   }, [candidate, enqueue]);
 
@@ -173,7 +164,6 @@ export function useEditorDraft({
   return {
     status,
     save,
-    ...(savedAt === undefined ? {} : { savedAt }),
     ...(recovery ? { recovery } : {}),
   };
 }

@@ -70,5 +70,5 @@ test('resize, snap and texture constraints', () => {
   const edgeLogo = { tl: [0.634, 0.177], tr: [0.428, 0.177], bl: [0.634, -0.029] } as const;
   const placement = geometry.stickerPlacementFromQuad(edgeLogo).placement;
   assert.ok(placement, 'Flak Furnished edge logo remains a supported placement');
-  close(geometry.stickerPlacementToQuad(geometry.clampStickerPlacement(placement)), edgeLogo, 'authored edge clipping is preserved');
+  close(geometry.stickerPlacementToQuad(geometry.constrainStickerPlacementToTexture(placement)), edgeLogo, 'authored edge clipping is preserved');
 });

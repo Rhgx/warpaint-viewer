@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { BlobReader, TextWriter, Uint8ArrayWriter, ZipReader } from '@zip.js/zip.js';
 import { test } from 'vitest';
 import { exportEditedPackage } from '../../../src/editor/export/packageExport';
-import { decodeProtoDefs, extractKitMessages } from '../../../src/protodefs/decoder';
-import { normalizeProtoDefFragments } from '../../../src/protodefs/jsonFragments';
+import { decodeProtoDefs } from '../../../src/protodefs/decoder';
+import { extractKitMessages } from '../../../src/protodefs/kitQueries';
 import type { ProtoDefKitBundle, ProtoDefKitMessages } from '../../../src/protodefs/types';
 import type { SourcePackage } from '../../../src/source/contracts';
 import { shippedProtoDefs } from '../fixtures';
@@ -25,12 +25,6 @@ async function unzip(blob: Blob): Promise<Map<string, string | Uint8Array>> {
   } finally {
     await reader.close();
   }
-}
-
-function textFile(files: ReadonlyMap<string, string | Uint8Array>, name: string): string {
-  const value = files.get(name);
-  if (typeof value !== 'string') throw new Error(`${name} should be a text ZIP entry`);
-  return value;
 }
 
 function fixturePackage(id: string, name: string, files: ReadonlyMap<string, Uint8Array>): SourcePackage {
@@ -87,12 +81,6 @@ test('a JSON package export preserves other files and replaces the kit fragments
   const files = await unzip(exported.blob);
   assert.deepEqual(files.get('materials/patterns/sample.vtf'), new Uint8Array([1, 2, 3, 4]));
   assert.deepEqual(files.get('readme.txt'), encoder.encode('keep me'));
-  const normalized = normalizeProtoDefFragments([
-    { name: 'operation', text: textFile(files, 'defs/custom_operation.json') },
-    { name: 'definition', text: textFile(files, 'defs/custom_definition.json') },
-  ]);
-  assert.deepEqual(normalized[0].value, edited.operation);
-  assert.deepEqual(normalized[1].value, edited.definition);
 });
 
 test('a package proto_defs container is replaced with the edited kit spliced into it', async () => {

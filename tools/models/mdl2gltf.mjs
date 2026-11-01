@@ -5,8 +5,7 @@
 //   node tools/models/mdl2gltf.mjs <vpkRelativeMdlPath...> --out public/data/models
 //   node tools/models/mdl2gltf.mjs --from-manifest [--out public/data/models]
 //
-// Meets DESIGN.md "Models": positions, normals, UV0, indices; one primitive per
-// material (material name preserved); LOD0; bodygroup 0; skin 0; Y-up; no textures.
+// Writes LOD0 geometry with one primitive per material, bodygroup 0 and skin 0. No textures.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -15,17 +14,14 @@ import { parseMDL, resolveMaterialName, rootFrameTransforms } from './lib/mdl.mj
 import { parseVVD } from './lib/vvd.mjs';
 import { parseVTX } from './lib/vtx.mjs';
 import { buildGLB } from './lib/glb.mjs';
+import { VPK_EXE, MISC_VPK } from '../lib/vpk.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..', '..');
 
-const TF2 = 'C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2';
-const VPK_EXE = path.join(TF2, 'bin', 'vpk.exe');
-const MISC_VPK = path.join(TF2, 'tf', 'tf2_misc_dir.vpk');
 const STAGING = path.join(REPO, 'staging', 'models');
 const MANIFEST = path.join(REPO, 'staging', 'weapon_models.json');
 
-// --- CLI parsing ---
 function parseArgs(argv) {
   const out = { mdlPaths: [], outDir: null, fromManifest: false };
   for (let i = 0; i < argv.length; i++) {
@@ -37,8 +33,7 @@ function parseArgs(argv) {
   return out;
 }
 
-// Ensure a model's MDL/VVD/VTX triple is present in staging, extracting from the
-// VPK if needed. `vpkRel` is like models/weapons/c_models/c_shotgun/c_shotgun.mdl
+// Make sure the MDL, VVD and VTX triple is in staging, extracting missing files from the VPK.
 function ensureExtracted(vpkRel) {
   vpkRel = vpkRel.replace(/\\/g, '/').replace(/^\/+/, '');
   const stem = vpkRel.replace(/\.mdl$/i, '');
@@ -57,13 +52,6 @@ function ensureExtracted(vpkRel) {
     vtx: path.join(STAGING, `${stem}.dx90.vtx`),
   };
 }
-
-// Orientation: TF2 c_model weapons are NOT authored in Source world space
-// (Z-up). They are authored in the weapon_bone attachment frame, which is
-// bonemerged onto the player's hand in-game. See rootFrameTransforms() in
-// lib/mdl.mjs for the full derivation and evidence; it is shared with
-// tools/extract/attachments.mjs so mesh geometry and attachment points land in the
-// identical frame.
 
 function normalize3(x, y, z) {
   const len = Math.hypot(x, y, z) || 1;
@@ -85,8 +73,7 @@ function convert(vpkRel) {
 
   const xform = rootFrameTransforms(mdl);
 
-  // Group geometry by resolved material name (one primitive per material).
-  // bodygroup 0 => submodel 0 of each bodypart; skin 0 => skin family 0.
+  // One primitive per material. Bodygroup 0 (submodel 0) and skin family 0 only.
   const groups = new Map(); // materialName -> { positions:[], normals:[], uvs:[], indices:[], vmap:Map }
   const materialOrder = [];
 
@@ -118,10 +105,8 @@ function convert(vpkRel) {
       // Global VVD index base for this mesh.
       const meshVertBase = model.vertexStart + mesh.vertexoffset;
 
-      // Emit triangles; dedupe by the global VVD vertex index. VTX's
-      // origMeshVertID restarts at zero for every mesh/bodypart, so using it as
-      // the material-wide key welded Medigun's separate hose onto vertices 0..
-      // of the gun body (and can corrupt any repeated-material bodypart).
+      // Dedupe by global VVD index. origMeshVertID restarts per mesh, so keying by it welded
+      // separate geometry together (the Medigun hose).
       const localOf = (orig) => {
         const globalIdx = meshVertBase + orig;
         let li = g.vmap.get(globalIdx);
@@ -150,8 +135,7 @@ function convert(vpkRel) {
     }
   }
 
-  // Fix winding: compare geometric normals to shading normals; flip if the
-  // majority disagree (keeps glTF CCW front faces regardless of source order).
+  // Flip winding when most triangles disagree with their shading normals, so glTF front faces are CCW.
   for (const [, g] of groups) fixWinding(g);
 
   // Build GLB primitives.
@@ -181,7 +165,7 @@ function convert(vpkRel) {
     bones: mdl.bones.length,
     multiBoneWeighted: countMultiBone(vvd),
   };
-  return { glb, stats, stem };
+  return { glb, stats };
 }
 
 function countMultiBone(vvd) {

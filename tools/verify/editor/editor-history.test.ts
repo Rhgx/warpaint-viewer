@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { SnapshotHistory } from '../../../src/editor/history';
-import { assignSelectGroupExclusively, clearSelectGroupIds } from '../../../src/editor/mutations';
+import { assignSelectGroupExclusively, clearSelectGroupIds } from '../../../src/editor/layers/groupMutations';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
 
 const layerTarget = (occurrence: number) => ({ groupsValue: 'models/example_groups', occurrence });

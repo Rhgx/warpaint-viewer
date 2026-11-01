@@ -1,17 +1,8 @@
 /**
- * Exact RGBA readback for the export builder.
- *
- * Every obvious way to get pixels out of an image in a browser goes through a
- * 2D canvas, whose backing store is premultiplied. That destroys RGB wherever
- * alpha is 0, and in a TF2 paint texture RGB and alpha are two independent data
- * channels: a pattern carries its wear mask in alpha, a sticker carries its
- * spec there. src/source/png.ts already documents the same trap on the write
- * side, and the WebP pipeline hit it once too (lossless without `exact` drops
- * the same pixels).
- *
- * So decoding runs through WebGL instead: an unpremultiplied ImageBitmap into a
- * texture, one passthrough draw into a byte framebuffer, and readPixels. The
- * whole app is a WebGL renderer, so requiring a context here costs nothing.
+ * Exact RGBA readback for the export builder. A 2D canvas is premultiplied, which destroys RGB
+ * wherever alpha is 0. In a TF2 paint texture RGB and alpha are independent data (a pattern's
+ * wear mask, a sticker's spec), so decoding goes through WebGL: an unpremultiplied ImageBitmap,
+ * one passthrough draw into a byte framebuffer, then readPixels.
  */
 
 import { encodeRgbaPng } from '../source/png';
@@ -44,11 +35,8 @@ interface ReadbackContext {
   gl: WebGL2RenderingContext;
   program: WebGLProgram;
   /**
-   * Whether readPixels comes back in the opposite row order to the source
-   * image. GL's framebuffer origin is bottom left while an ImageBitmap's is top
-   * left, and which way that lands depends on the unpack settings and the draw.
-   * Rather than reason about it, the context probes itself once at startup with
-   * a two-pixel image whose rows are known, and trusts the answer.
+   * Whether readPixels returns rows in the opposite order to the image. GL's origin is
+   * bottom-left and the bitmap's top-left, so this is measured once by probeRowOrder.
    */
   flipRows: boolean;
 }
@@ -94,8 +82,7 @@ function createContext(): ReadbackContext {
   gl.deleteShader(vertex);
   gl.deleteShader(fragment);
 
-  // One triangle covering clip space, so there is no seam down the diagonal of
-  // a quad and no vertex buffer larger than it needs to be.
+  // One triangle covers clip space: no diagonal seam, and the smallest buffer.
   const buffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -136,9 +123,8 @@ function readBitmap(
   try {
     gl.bindTexture(gl.TEXTURE_2D, texture);
     const filter = outputWidth === width && outputHeight === height ? gl.NEAREST : gl.LINEAR;
-    // Exact export stays 1:1 and unfiltered. Thumbnail callers can ask the GPU
-    // to downsample before readback without passing through a premultiplied 2D
-    // canvas, which would erase RGB stored beneath TF2's wear alpha channel.
+    // Exact export stays 1:1 and unfiltered. Thumbnails may downsample on the GPU, which avoids
+    // the premultiplied 2D canvas that would erase RGB under the wear alpha.
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -218,8 +204,7 @@ async function getContext(): Promise<ReadbackContext> {
       context.flipRows = await probeRowOrder(context);
       return context;
     })().catch((cause: unknown) => {
-      // A failed probe must not poison every later export with a cached
-      // rejection: the next call gets a fresh attempt.
+      // A failed probe must not poison later exports with a cached rejection.
       contextPromise = null;
       throw cause;
     });

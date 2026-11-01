@@ -41,7 +41,7 @@
   gap: 12px;
 }
 
-.app-toast[data-tone='error'] {
+.app-toast[data-type='error'] {
   border-color: color-mix(in srgb, var(--fail) 55%, var(--border-strong));
 }
 
@@ -140,10 +140,7 @@
   }
 }
 
-/* Mobile layout: the stage header moves under the toolbar there, so toasts
-   take the top edge instead (above the toolbar, clear of the notch). They
-   stack over every stage overlay, so a toast can briefly cover the header
-   but never slips underneath it. */
+/* Mobile: toasts take the top edge, above the toolbar and clear of the notch, over every stage overlay. */
 @media (max-width: 860px), (max-height: 500px) {
   .toast-viewport {
     top: calc(10px + env(safe-area-inset-top));
@@ -159,8 +156,7 @@
   }
 }
 
-/* Progress toasts keep one width so the counter updating underneath does not
-   resize them, and use even-width digits for the same reason. */
+/* Progress toasts keep one width and even-width digits, so the counter does not resize them. */
 .app-toast-with-progress {
   width: min(340px, 100%);
 }

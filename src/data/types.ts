@@ -30,15 +30,13 @@ export interface WeaponMaterial {
   selfIllumFresnel?: boolean;
   selfIllumFresnelMinMaxExp?: [number, number, number];
   modelGlowColor?: boolean;
-  // The fields below are only ever set by a material imported from a Source
-  // package (src/source/vmt.ts). No stock weapon VMT uses them, so the
-  // pipeline never writes them into manifest.json.
+  // Set only on materials imported from a Source package (src/source/vmt.ts); stock weapon
+  // materials in manifest.json never use them.
   alphaTest?: boolean;
   alphaTestReference?: number;
   /**
-   * $allowalphatocoverage. Turns the tested alpha into multisample coverage,
-   * so a material whose alpha sits just above the reference renders partly
-   * see-through instead of simply passing the test.
+   * $allowalphatocoverage: multisample coverage from the tested alpha, so a material just
+   * above the reference renders partly see-through instead of passing outright.
    */
   alphaToCoverage?: boolean;
   /** Viewmodel shader flags retained from the Source material. */
@@ -170,9 +168,8 @@ export interface OperationTemplateData {
 export interface Manifest {
   generatedAt: string;
   /**
-   * TF2 PatchVersion the shipped game-data snapshots came from (steam.inf), or
-   * null when the pipeline could not read it. The export builder shows this so
-   * anyone on a newer build knows to point it at their own files instead.
+   * TF2 PatchVersion the shipped game data came from (steam.inf), or null if unreadable.
+   * The export builder shows it so players on a newer build can supply their own files.
    */
   gameBuild?: string | null;
   paintkits: PaintkitEntry[];

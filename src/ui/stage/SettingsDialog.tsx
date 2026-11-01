@@ -9,8 +9,7 @@ import './SettingsDialog.css';
 
 const TEXTURE_DIRECTORY_URL = 'https://pyxell.neocities.org/paintersworkshop/texturedirectory';
 
-// Toolbar button plus the modal it opens. Self-contained so the toolbar only
-// has to place it.
+// Toolbar button plus the modal it opens; self-contained so the toolbar only places it.
 export function SettingsDialog() {
   const showPaintkitDetails = useSettings((s) => s.showPaintkitDetails);
   const setShowPaintkitDetails = useSettings((s) => s.setShowPaintkitDetails);

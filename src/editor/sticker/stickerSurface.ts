@@ -1,5 +1,5 @@
 import type { ResolvedNode, ResolvedSticker, ResolvedTexture } from '../../compositor/resolve';
-import type { ApplyStickerNode, RecipeNode } from '../../compositor/types';
+import type { RecipeNode } from '../../compositor/types';
 
 const BLACK_PIXEL = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%221%22 height=%221%22%3E%3Cpath d=%22M0 0h1v1H0z%22/%3E%3C/svg%3E';
 const WHITE_PIXEL = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%221%22 height=%221%22%3E%3Cpath fill=%22white%22 d=%22M0 0h1v1H0z%22/%3E%3C/svg%3E';
@@ -75,13 +75,8 @@ function replaceResolvedNode(root: ResolvedNode, path: readonly number[], replac
 }
 
 /**
- * Describe one group sticker without sampling its authored destination.
- *
- * A group sticker edits the selector branch of a combine_lerp. The old editor
- * cropped the final weapon at the authored destination, which permanently
- * baked in nearby stickers and permanently lost source pixels clipped by that
- * destination. These four resolved trees let the Viewer reconstruct the
- * selector change from the original mask at any destination instead.
+ * Describe one group sticker without sampling its destination. The Viewer rebuilds the selector change
+ * from the original mask at any destination, so nearby stickers and clipped source pixels are not baked in.
  */
 export function resolvedGroupStickerContext(
   root: ResolvedNode | null | undefined,
@@ -143,14 +138,8 @@ export function resolvedGroupStickerContext(
 }
 
 /**
- * Convert a compositor render-target readback into the image rows used by the
- * 2D sticker canvas.
- *
- * WebGL returns render-target rows from its lower edge upwards. The
- * compositor's first row is nevertheless UV v=0: Source/glTF textures are
- * uploaded unflipped, so v=0 means the image's visual top. Canvas ImageData's
- * first row is visual top too. Keeping the rows in their original order makes
- * the 2D editor, compositor, and mesh all use one UV convention.
+ * Convert a compositor readback to 2D canvas rows. Rows stay in compositor order, where the first row is
+ * UV v=0 and the visual top, so the 2D editor, compositor and mesh share one UV convention.
  */
 export function compositorReadbackToEditorPixels(
   readback: Uint8ClampedArray,
@@ -164,34 +153,11 @@ export function compositorReadbackToEditorPixels(
   const expectedLength = width * height * 4;
   if (readback.length !== expectedLength) throw new Error('The composed surface readback has an invalid size.');
   const pixels = new Uint8ClampedArray(readback);
-  // Ordinary compositor alpha carries a material mask rather than literal
-  // image transparency. Isolated group-sticker artwork is the exception: its
-  // alpha deliberately marks the affected local block.
+  // Compositor alpha is a material mask, not transparency; isolated group-sticker artwork uses alpha to mark its block.
   if (forceOpaque) {
     for (let alpha = 3; alpha < pixels.length; alpha += 4) pixels[alpha] = 255;
   }
   return pixels;
-}
-
-/**
- * The 2D canvas for an apply_sticker stage is its first child, not a leaf
- * chosen from somewhere below it. Keeping this as a tiny explicit helper
- * prevents the editor from regressing to a misleading arbitrary texture when
- * the child is a nested composite.
- */
-export function preStickerSurface(stage: Pick<ApplyStickerNode, 'nodes'> | null | undefined): RecipeNode | null {
-  return stage?.nodes[0] ?? null;
-}
-
-/**
- * Return the full paint recipe with exactly one depth-first apply_sticker
- * occurrence replaced by its own pre-sticker input. Outer combine stages and
- * every other sticker remain intact. This is the temporary 3D base used while
- * moving a decal: rendering the full recipe and adding another overlay would
- * otherwise leave the authored decal visible underneath its live position.
- */
-export function recipeWithoutStickerOccurrence(root: RecipeNode | null | undefined, occurrence: number): RecipeNode | null {
-  return recipeWithoutStickerOccurrences(root, [occurrence]);
 }
 
 /** Remove every authored wear-branch occurrence owned by one logical sticker. */

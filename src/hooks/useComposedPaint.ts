@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import type { Viewer } from '../viewer/Viewer';
 import type { Compositor, ComposeResult } from '../compositor/compositor';
 import type { RecipeNode } from '../compositor/types';
@@ -8,19 +9,17 @@ import type { ControlsState } from '../viewer/controls';
 import type { WarpaintAssetOverrides } from '../workbench/types';
 import { isCustomKitId } from '../protodefs/types';
 import { stickerSpecularRef } from '../workbench/assetSlots';
+import { requestIdle } from './idle';
 
 const COMPOSE_BADGE_DELAY_MS = 250;
 const IDLE_TIMEOUT_MS = 2_000;
 const IDLE_FALLBACK_DELAY_MS = 250;
+// Leave headroom for browser bookkeeping. Warmups retry in a later idle period
+// rather than start GPU work at the deadline.
+const IDLE_BUDGET_MS = 12;
 const INTERACTIVE_COMPOSE_MAX_DIMENSION = 256;
 
-/**
- * Recipes are resolved from immutable definition data. Cache the serialized
- * fingerprint by object identity so repeated consumers of the same resolved
- * tree do not pay for JSON serialization and hashing again. The value itself
- * remains structural, so separately allocated but equivalent recipe trees
- * continue to produce the same cache key.
- */
+/** Keyed by object identity so a repeated tree skips serialization. Values stay structural. */
 const recipeFingerprintCache = new WeakMap<object, string>();
 
 /** Stable, compact identity for a resolved recipe used by the GPU-result LRU. */
@@ -46,16 +45,6 @@ export function textureOverridesFingerprint(textures: Record<string, string>): s
   return JSON.stringify(Object.entries(textures).sort(([left], [right]) => left.localeCompare(right)));
 }
 
-interface IdleDeadlineLike {
-  didTimeout: boolean;
-  timeRemaining(): number;
-}
-
-type IdleCallbackWindow = Window & {
-  requestIdleCallback?: (callback: (deadline: IdleDeadlineLike) => void, options?: { timeout?: number }) => number;
-  cancelIdleCallback?: (handle: number) => void;
-};
-
 type ResourceAwareNavigator = Navigator & {
   deviceMemory?: number;
   connection?: {
@@ -63,9 +52,7 @@ type ResourceAwareNavigator = Navigator & {
   };
 };
 
-// A 2048 px composite occupies 16 MiB of GPU memory. Retain the fast-path LRU on
-// desktop machines, but do not reserve eight render targets on constrained
-// devices simply to make infrequently-used wear variants instantaneous.
+// A 2048 px composite is 16 MiB of GPU memory, so constrained devices keep fewer.
 function composeCacheLimit(): number {
   const nav = navigator as ResourceAwareNavigator;
   if ((nav.deviceMemory !== undefined && nav.deviceMemory <= 4) || nav.hardwareConcurrency <= 4) return 4;
@@ -144,11 +131,7 @@ export function applyTextureOverrides(node: RecipeNode, textures: Record<string,
   return applyTextureOverridesInTree(node, textures);
 }
 
-/**
- * The retained-result refs and their invalidation callbacks. These are needed
- * by the renderer lifecycle before the compose effect's own inputs exist, so
- * they are created first and handed to useComposedPaint.
- */
+/** Retained compose results and their reset callbacks, shared with useComposedPaint. */
 export function useComposeCache(compositorRef: React.RefObject<Compositor | null>) {
   const lastResultRef = useRef<ComposeResult | null>(null);
   const interactiveResultRef = useRef<ComposeResult | null>(null);
@@ -187,10 +170,7 @@ export function useComposeCache(compositorRef: React.RefObject<Compositor | null
   };
 }
 
-/**
- * Recipe lookup for the selected kit. Built-in kits fetch a shipped bundle
- * and imported definitions resolve out of memory, so the caller decides.
- */
+/** Resolves a kit's recipe. Built-in kits fetch a bundle; imported kits resolve in memory. */
 export type ResolveRecipe = (
   kit: PaintkitEntry,
   weaponKey: string,
@@ -206,7 +186,6 @@ interface UseComposedPaintOptions {
   interactive?: boolean;
   /** Detached recipe used only while a continuous editor gesture is active. */
   interactiveRecipe?: RecipeNode | null;
-  /** Stable value key for the detached interactive recipe. */
   interactiveKey?: string;
   /** Receives the exact accepted target already installed on the 3D weapon. */
   onVisibleResult?: (result: ComposeResult, context: { interactive: boolean }) => void;
@@ -266,8 +245,7 @@ export function useComposedPaint({
 
   const [composing, setComposing] = useState(false);
   const [visibleDefinitionGeneration, setVisibleDefinitionGeneration] = useState(-1);
-  // A lower-detail composite on the mesh while a cold paint streams in. It is
-  // released once anything else replaces it on the mesh.
+  // Lower-detail composite shown while a cold paint streams in; released when replaced.
   const previewRef = useRef<{ result: ComposeResult; compositor: Compositor } | null>(null);
   const dropPreview = useCallback(() => {
     const preview = previewRef.current;
@@ -276,8 +254,7 @@ export function useComposedPaint({
   }, []);
   useEffect(() => dropPreview, [dropPreview]);
 
-  // Recompose when recipe inputs change: debounced, deduped, and the previous
-  // texture stays on the mesh until the new one is ready (no untextured flash).
+  // Recompose on recipe input changes; the previous texture stays until the new one is ready.
   useEffect(() => {
     if (suspended) {
       setComposing(false);
@@ -302,14 +279,11 @@ export function useComposedPaint({
     const overrideFingerprint = textureOverridesFingerprint(activeTextureOverrides);
     const requestKey = `${ds.kind}|${selectedKit.id}|${state.weaponKey}|${state.team}|${state.wearIndex}|${state.seed}|files:${assetOverrides.revision}|package:${packageGeneration}|definition:${definitionGeneration}|overrides:${overrideFingerprint}|interactive:${interactive ? interactiveKey : '0'}`;
     if (requestKey === lastRequestKeyRef.current) {
-      // The consumer can become active after the texture was already accepted
-      // (for example, opening Transform from Parts). Replay the retained GPU
-      // result instead of forcing an identical composition just to populate a
-      // secondary preview surface.
+      // A consumer that activates after the texture was accepted (opening Transform
+      // from Parts) replays the retained result instead of recomposing.
       const retained = lastResultRef.current;
       if (retained) {
-        // A cancelled request may have left its lower-detail preview on the
-        // mesh; the accepted result for this request goes back on.
+        // Put the accepted result back if a cancelled request left its preview on the mesh.
         if (previewRef.current) {
           viewerRef.current?.setMap(retained.texture);
           dropPreview();
@@ -335,8 +309,7 @@ export function useComposedPaint({
       if (old && old !== result) comp.releaseResult(old);
       cache.delete(key);
       cache.set(key, result);
-      // Sized for 2048 px composites (16 MiB each), which most weapons use, so
-      // the count limit is what binds; a 4 MiB slot only ever fit two of them.
+      // Sized for 2048 px composites (16 MiB each); the count limit usually binds first.
       const byteBudget = composeCacheLimit() * 2048 * 2048 * 4;
       let bytes = [...cache.values()].reduce((sum, entry) => sum + entry.target.width * entry.target.height * 4, 0);
       while (cache.size > composeCacheLimit() || bytes > byteBudget) {
@@ -353,8 +326,7 @@ export function useComposedPaint({
 
     const likelyVariant = (): { team: ControlsState['team']; wear: number } | null => {
       if (interactive || Object.keys(activeTextureOverrides).length || !allowSpeculativeCompose()) return null;
-      // A team toggle preserves every other control and is the strongest next
-      // interaction. Otherwise warm only the closest wear category.
+      // A team toggle is the likeliest next interaction; otherwise warm the adjacent wear.
       if (selectedKit.hasTeamTextures) {
         return { team: state.team === 'red' ? 'blu' : 'red', wear: state.wearIndex };
       }
@@ -364,41 +336,19 @@ export function useComposedPaint({
       return adjacentWear >= 0 ? { team: state.team, wear: adjacentWear } : null;
     };
 
-    // Keep speculative decoding and rendering off the first-paint path. The
-    // timeout lets browsers without requestIdleCallback make progress, while
-    // requestIdleCallback itself prevents a sequence of warmups from competing
-    // with input and animation work on supported browsers.
+    // Keep speculative work off the first-paint path. The timeout lets browsers
+    // without requestIdleCallback progress; the idle wait stops warmups competing with input.
     const waitForIdle = () => new Promise<void>((resolve) => {
-      const idleWindow = window as IdleCallbackWindow;
-      let idleHandle = 0;
-      let fallbackTimer = 0;
-      let finished = false;
-      const finish = () => {
-        if (finished) return;
-        finished = true;
-        if (idleHandle) idleWindow.cancelIdleCallback?.(idleHandle);
-        if (fallbackTimer) window.clearTimeout(fallbackTimer);
-        cancelPendingIdle = null;
+      const cancelRequest = requestIdle(() => resolve(), {
+        timeoutMs: IDLE_TIMEOUT_MS,
+        fallbackDelayMs: IDLE_FALLBACK_DELAY_MS,
+        minRemainingMs: IDLE_BUDGET_MS,
+      });
+      // A cancelled wait still resolves, so the warmup chain that awaits it can unwind.
+      cancelPendingIdle = () => {
+        cancelRequest();
         resolve();
       };
-      const request = () => {
-        if (idleWindow.requestIdleCallback) {
-          idleHandle = idleWindow.requestIdleCallback((deadline) => {
-            idleHandle = 0;
-            // Leave a small budget for the browser's own bookkeeping; retry on
-            // a later idle period instead of starting GPU work at the deadline.
-            if (!cancelled && !deadline.didTimeout && deadline.timeRemaining() < 12) {
-              request();
-              return;
-            }
-            finish();
-          }, { timeout: IDLE_TIMEOUT_MS });
-        } else {
-          fallbackTimer = window.setTimeout(finish, IDLE_FALLBACK_DELAY_MS);
-        }
-      };
-      cancelPendingIdle = finish;
-      request();
     });
 
     const timer = window.setTimeout(async () => {
@@ -447,19 +397,15 @@ export function useComposedPaint({
         return;
       }
 
-      // Warm compositions normally finish without showing any loading UI.
-      // Preserve feedback for genuinely cold/network-bound requests only.
+      // Show the badge only for cold or network-bound requests; warm composes finish silently.
       badgeTimer = window.setTimeout(() => {
         if (!cancelled) setComposing(true);
       }, COMPOSE_BADGE_DELAY_MS);
       try {
-        // compose() loads precisely the textures selected by this seed. Do not
-        // block the first visible paint on every possible sticker alternative.
+        // Load only the textures this seed selects; do not block first paint on every alternative.
         if (!firstPaintLoggedRef.current) advanceBoot(70, 'Composing initial warpaint…');
-        // TF2 selects the complete paint-kit recipe for the wear category; it
-        // does not crossfade that result with Factory New.
-        // Cold paints show at rising detail as their textures stream in;
-        // pointer previews are already low resolution and skip this.
+        // The wear category selects a whole recipe, with no crossfade. Cold paints
+        // show at rising detail as their textures stream in; pointer previews skip this.
         const showPreview = interactive ? undefined : (preview: ComposeResult) => {
           viewer.setMap(preview.texture);
           dropPreview();
@@ -483,9 +429,7 @@ export function useComposedPaint({
         interactiveResultRef.current = interactive ? result : null;
         if (priorInteractive && priorInteractive !== result) comp.releaseResult(priorInteractive);
         setVisibleDefinitionGeneration(definitionGeneration);
-        // Pointer previews are transient. Retaining every sampled slider value
-        // in the normal LRU wastes render targets and forces later frames to
-        // allocate instead of immediately recycling the previous preview.
+        // Pointer previews are transient; caching every slider sample would waste render targets.
         if (!interactive) cacheResult(composeKey, result, comp);
         lastResultRef.current = result;
         lastComposeKeyRef.current = composeKey;
@@ -494,8 +438,7 @@ export function useComposedPaint({
           firstPaintLoggedRef.current = true;
           advanceBoot(100, 'Ready');
           if (import.meta.env.DEV) console.log(`[perf] first painted weapon at ${performance.now().toFixed(0)}ms since navigation`);
-          // ?perftest=1: exercise warm recomposites (seed changes) automatically
-          // so headless runs can measure them without interaction.
+          // ?perftest=1 drives seed changes so headless runs can time warm recomposes.
           if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('perftest') === '1') {
             let n = 0;
             const iv = window.setInterval(() => {
@@ -509,9 +452,8 @@ export function useComposedPaint({
           }
         }
 
-        // Once the requested paint is visible, warm at most one likely variant
-        // during browser idle periods. Avoid speculative downloads and GPU
-        // targets on hidden tabs, data-saver connections, and low-end devices.
+        // Warm at most one likely variant once the paint is visible, during idle time.
+        // allowSpeculativeCompose skips hidden tabs, data-saver connections and low-end devices.
         void (async () => {
           const variant = likelyVariant();
           if (!variant || cancelled || compositorRef.current !== comp) return;
@@ -539,10 +481,8 @@ export function useComposedPaint({
         });
       } catch (e) {
         console.error('[warpaint-viewer] compose failed:', e);
-        // A failure on the built-in catalogue means the shipped data is broken,
-        // which is worth the fatal screen. An imported paint is user input and
-        // must never be able to take the app down: leave the previous paint on
-        // the mesh and let the drawer report what went wrong.
+        // A built-in paint failing means shipped data is broken, so show the fatal screen.
+        // An imported paint is user input: keep the previous paint and let the drawer report it.
         if (!firstPaintLoggedRef.current && !isCustomKitId(selectedKit.id)) {
           setError(`Failed to prepare initial warpaint: ${String(e)}`);
         }

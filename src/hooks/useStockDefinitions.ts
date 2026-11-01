@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Manifest, Team } from '../data/types';
 import type { RecipeNode } from '../compositor/types';
 import type {
+  EditedKit,
   ProtoDefKitBundle,
   ProtoDefKitMessages,
   ProtoDefKitWeaponSlot,
@@ -10,58 +11,26 @@ import type {
 } from '../protodefs/types';
 import { topLevelMessages } from '../editor/kitBundle';
 import { loadSnapshotContainer } from '../export/snapshot';
+import { loadBaseProtoDefs, loadItemDefinitionMap } from '../data/loader';
+import { openKitPreviewSource } from './kitPreview';
 
-interface EditedKit {
-  kitId: number;
-  source: ProtoDefSource;
-  bundle: ProtoDefKitBundle;
-}
-
-/**
- * Lazily exposes the shipped stock proto_defs container to the editor. Normal
- * viewing keeps using the small recipe bundles and never pays this decode cost.
- */
+/** Lazily exposes the shipped stock proto_defs container to the editor; normal viewing never decodes it. */
 export function useStockDefinitions(manifest: Manifest | null, getAssetUrl: (rel: string) => string | null) {
   const sourceRef = useRef<ProtoDefSource | null>(null);
   const sourcePromiseRef = useRef<Promise<ProtoDefSource> | null>(null);
   const editedRef = useRef<EditedKit | null>(null);
   const editOperationRef = useRef(0);
-  const baseBytesRef = useRef<Promise<Uint8Array> | null>(null);
-  const weaponsRef = useRef<Promise<Record<string, string>> | null>(null);
   const [editGeneration, setEditGeneration] = useState(0);
 
-  const loadBytes = useCallback((rel: string, label: string, cache: typeof baseBytesRef) => {
-    if (cache.current) return cache.current;
-    const url = getAssetUrl(rel);
-    const pending = (async () => {
-      if (!url) throw new Error(`This data source has no ${label}.`);
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`The ${label} could not be loaded (${response.status}).`);
-      return new Uint8Array(await response.arrayBuffer());
-    })();
-    cache.current = pending;
-    pending.catch(() => { cache.current = null; });
-    return pending;
-  }, [getAssetUrl]);
-
   const loadBaseBytes = useCallback(
-    () => loadBytes('protodefs-base.bin', 'base war paint definitions', baseBytesRef),
-    [loadBytes],
+    () => loadBaseProtoDefs(getAssetUrl('protodefs-base.bin')),
+    [getAssetUrl],
   );
 
-  const loadWeapons = useCallback(() => {
-    if (weaponsRef.current) return weaponsRef.current;
-    const url = getAssetUrl('item-defs.json');
-    const pending = (async () => {
-      if (!url) throw new Error('This data source has no item definition map.');
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`The item definition map could not be loaded (${response.status}).`);
-      return (await response.json()) as Record<string, string>;
-    })();
-    weaponsRef.current = pending;
-    pending.catch(() => { weaponsRef.current = null; });
-    return pending;
-  }, [getAssetUrl]);
+  const loadWeapons = useCallback(
+    () => loadItemDefinitionMap(getAssetUrl('item-defs.json')),
+    [getAssetUrl],
+  );
 
   const openSource = useCallback(async () => {
     if (sourceRef.current) return sourceRef.current;
@@ -133,23 +102,15 @@ export function useStockDefinitions(manifest: Manifest | null, getAssetUrl: (rel
     setEditGeneration((value) => value + 1);
   }, []);
 
-  // Overlays every operation and item definition of the bundle on the stock base, so a
-  // per-wear paint's edited operation resolves for the weapon and wear that reads it.
   const previewKitBundle = useCallback(async (kitId: number, bundle: ProtoDefKitBundle) => {
     const operation = ++editOperationRef.current;
-    const [{ createProtoDefSource }, { serializeProtoDefKitBundlePreview }, baseBytes, weaponsByItemDef] = await Promise.all([
-      import('../protodefs/client'),
-      import('../editor/export/jsonExport'),
+    const { source } = await openKitPreviewSource(
+      bundle,
       loadBaseBytes(),
       loadWeapons(),
-    ]);
-    const source = createProtoDefSource();
+      manifest?.paintkits.map((kit) => kit.id) ?? [],
+    );
     try {
-      await source.openJsonFragments(baseBytes, serializeProtoDefKitBundlePreview(bundle).fragments, {
-        weaponsByItemDef,
-        builtInIds: manifest?.paintkits.map((kit) => kit.id) ?? [],
-        computeTeamFlags: false,
-      });
       if (operation !== editOperationRef.current) {
         source.dispose();
         return;

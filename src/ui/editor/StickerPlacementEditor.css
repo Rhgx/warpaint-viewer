@@ -12,7 +12,6 @@
 .sticker-placement-editor-heading,
 .sticker-placement-editor-heading-actions,
 .sticker-placement-editor-snap,
-.sticker-placement-editor-fit,
 .sticker-placement-editor-viewport-controls {
   display: flex;
   align-items: center;
@@ -67,21 +66,6 @@
 .sticker-placement-editor-snap input { width: 13px; height: 13px; margin: 0; accent-color: var(--accent); }
 .sticker-placement-editor-snap:has(input:disabled) { cursor: default; opacity: .45; }
 
-.sticker-placement-editor-fit {
-  min-height: 32px;
-  justify-content: center;
-  gap: 5px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--panel-2);
-  color: var(--text-dim);
-  font: inherit;
-  font-size: 10px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
 .sticker-placement-editor-viewport-controls {
   gap: 3px;
   min-height: 32px;
@@ -121,17 +105,14 @@
   text-align: center;
 }
 
-.sticker-placement-editor-fit:hover:not(:disabled),
 .sticker-placement-editor-tool:hover:not(:disabled) {
   border-color: var(--border-strong);
   color: var(--text);
 }
 
-.sticker-placement-editor-fit:disabled,
 .sticker-placement-editor-tool:disabled { cursor: default; opacity: .45; }
 
-/* Values sit beside the surface, never over it, and the surface still takes
-   every pixel the drawer leaves rather than a fixed box. */
+/* Values sit beside the surface, never over it. */
 .sticker-placement-editor-workspace {
   position: relative;
   flex: 1;
@@ -207,9 +188,7 @@
   gap: 5px;
 }
 
-/* Five boxed fields stacked in a column read as a form. These are readings the
-   user occasionally corrects, so they are laid out as data: a quiet label, a
-   right-aligned figure, and a border that only appears when you reach for it. */
+/* Values read as data, not a form: quiet label, right-aligned figure, border on focus only. */
 .sticker-placement-editor-values label {
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr);
@@ -300,9 +279,7 @@
   cursor: help;
 }
 
-/* Per-row copy is a square icon so it lines up with the field beside it. The
-   panel-level action is a full-width labelled button, because a lone glyph
-   floating under the rows reads as a stray control rather than a command. */
+/* Per-row copy is a square icon; the panel action is a labelled button, as a lone glyph reads as stray. */
 .sticker-placement-editor-corner-row button {
   display: grid;
   width: 26px;
@@ -470,9 +447,7 @@
 
 .sticker-placement-editor-surface {
   position: relative;
-  /* Fill the pane in both directions, capped only by the texture's real aspect
-     ratio so the unwrapped weapon never stretches. Pointer-to-UV maths reads
-     this element's box, so it has to stay the aspect-correct canvas. */
+  /* Fills the pane, capped by the texture's aspect ratio; pointer-to-UV maths reads this box. */
   height: 100%;
   width: auto;
   max-width: 100%;
@@ -482,8 +457,7 @@
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  /* Deliberately square cells: this is a transparent-asset fallback, not a
-     decorative texture. The prior diagonal pattern read as rows of triangles. */
+  /* Square cells: a transparent-asset fallback. A diagonal pattern read as triangles. */
   background-color: color-mix(in srgb, var(--panel) 82%, var(--text));
   background-image: conic-gradient(
     from 90deg,
@@ -643,11 +617,7 @@
 
 .sticker-placement-editor-unavailable button:hover { background: color-mix(in srgb, var(--accent) 24%, var(--panel-2)); }
 
-.sticker-placement-editor-fit:focus-visible,
-.sticker-placement-editor-unavailable button:focus-visible,
-/* Variants: each artwork choice the seed draws between. Two lines per row so
-   the name keeps the inspector's width; the figure beside the weight states
-   the chance it buys, which is what makes the weights read as relative. */
+/* Variants: two lines per row so the name keeps the inspector width; the figure states the chance. */
 .sticker-placement-editor-variants { display: grid; align-content: start; gap: 2px; }
 
 .sticker-placement-editor-variant {
@@ -753,6 +723,7 @@
 .sticker-placement-editor-tool:focus-visible,
 .sticker-placement-editor-handle:focus-visible,
 .sticker-placement-editor-axis-handle:focus-visible,
+.sticker-placement-editor-unavailable button:focus-visible,
 .sticker-placement-editor-rotate:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 @media (max-width: 620px) {

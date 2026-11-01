@@ -12,10 +12,7 @@ export const EDITOR_LAYER_MAP_COLORS = [
 
 type Rgb = readonly [number, number, number];
 
-/**
- * A broader, deliberately separated categorical set for texture-aware cues.
- * Missing textures still use the historic indexed fallback above.
- */
+/** Separated categorical set for texture-aware cues. Missing textures use the indexed fallback above. */
 const LAYER_COLOR_CANDIDATES = [
   [0.92, 0.25, 0.28],
   [0.20, 0.48, 0.95],
@@ -95,7 +92,8 @@ function oklabDistance(first: Oklab, second: Oklab): number {
   return Math.hypot(first.l - second.l, first.a - second.a, first.b - second.b);
 }
 
-function fallbackColor(index: number): Rgb {
+/** The historic indexed tint for a layer, wrapping after the palette runs out. */
+export function fallbackColor(index: number): Rgb {
   return EDITOR_LAYER_MAP_COLORS[Math.max(0, index) % EDITOR_LAYER_MAP_COLORS.length];
 }
 
@@ -103,11 +101,7 @@ function fallbackCandidateIndex(index: number): number {
   return Math.max(0, index) % EDITOR_LAYER_MAP_COLORS.length;
 }
 
-/**
- * Read at most one representative sample per thumbnail texel. Transparent
- * source pixels are ignored, while translucent ones are blended toward a
- * neutral dark base and contribute less to the robustness score.
- */
+/** Up to one sample per thumbnail texel. Transparent pixels are skipped; translucent ones blend toward a dark base. */
 function textureSamples(thumbnail: RgbaImageDataLike | null | undefined): Array<{ color: Rgb; weight: number }> {
   if (!thumbnail
     || !Number.isSafeInteger(thumbnail.width) || thumbnail.width <= 0
@@ -125,9 +119,7 @@ function textureSamples(thumbnail: RgbaImageDataLike | null | undefined): Array<
     const blue = Number(thumbnail.data[offset + 2]);
     if (![alphaByte, red, green, blue].every(Number.isFinite) || alphaByte < MIN_VISIBLE_ALPHA) continue;
     const alpha = clampUnit(alphaByte / 255);
-    // Low-alpha source texels should not claim a strong texture identity.
-    // Compositing them over this neutral near-black avoids transparent white
-    // padding making a dark paint look deceptively bright.
+    // Blend low-alpha texels over near-black so transparent white padding does not make dark paint look bright.
     const neutral = 0.04;
     output.push({
       color: [
@@ -150,17 +142,13 @@ function candidateScore(candidate: Rgb, samples: readonly { color: Rgb; weight: 
     ];
     return oklabDistance(toOklab(color), toOklab(overlay)) * weight;
   }).sort((left, right) => left - right);
-  // Optimise the lower fifth rather than the average. A candidate that is
-  // excellent on a few pixels but vanishes into a common texture colour is a
-  // poor selection cue.
+  // Score the lower fifth, not the average: a candidate that vanishes into common texture colours is a poor cue.
   return contrasts[Math.floor((contrasts.length - 1) * 0.2)] ?? Number.NEGATIVE_INFINITY;
 }
 
 /**
- * Deterministically choose restrained layer colours that remain legible over
- * each layer's own texture at the Viewer overlay's 16% opacity. The layer
- * order is intentional: it gives equal textures distinct colours without
- * changing assignment colours when the user selects or deselects parts.
+ * Deterministically picks layer colours that stay legible over each layer's texture at overlay opacity.
+ * Layer order keeps colours stable when parts are selected or deselected.
  */
 export function chooseEditorLayerColors(inputs: readonly EditorLayerColorInput[]): Rgb[] {
   const usedCandidateIndexes = new Set<number>();
@@ -198,8 +186,7 @@ export function chooseEditorLayerColors(inputs: readonly EditorLayerColorInput[]
     for (const candidateIndex of candidateIndexes) {
       const score = candidateScore(LAYER_COLOR_CANDIDATES[candidateIndex], samples)
         + separationFromSelected(candidateIndex) * SEPARATION_SCORE_WEIGHT;
-      // Strict comparison deliberately makes palette order the stable tie
-      // break, including flat/near-flat thumbnails.
+      // Strict comparison: palette order breaks ties, including on flat thumbnails.
       if (score > selectedScore) {
         selectedIndex = candidateIndex;
         selectedScore = score;

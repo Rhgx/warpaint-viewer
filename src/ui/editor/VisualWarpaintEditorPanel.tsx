@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Select } from '@base-ui/react/select';
 import { Check, ChevronDown, Eye, Trash2 } from 'lucide-react';
 import { formatGroupNameForDisplay, type CompatibleGroupTexture } from '../../editor/layers/groupNames';
 import { rawGroupIdForBucket } from '../../editor/layers/groupSampling';
+import { useArmedConfirm } from '../../hooks/useArmedConfirm';
 import './VisualWarpaintEditorPanel.css';
 
 const CLEAR_CONFIRM_MS = 3000;
@@ -45,11 +46,7 @@ export interface VisualWarpaintEditorPanelProps {
     readonly active: boolean;
     readonly onSelect: () => void;
   }>;
-  /**
-   * The Parts/Transform switch, supplied by the workbench. It sits in this
-   * head so the sub-views share one header row instead of stacking a second
-   * bar above the panel.
-   */
+  /** Parts/Transform switch from the workbench, placed in this head so sub-views share one header row. */
   readonly headerSlot?: ReactNode;
   /** Layer-level actions from the workbench, shown at the start of this head's action group. */
   readonly headerActions?: ReactNode;
@@ -78,7 +75,7 @@ export function VisualWarpaintEditorPanel({
   headerSlot,
   headerActions,
 }: VisualWarpaintEditorPanelProps) {
-  const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmClear, armClear, disarmClear] = useArmedConfirm(CLEAR_CONFIRM_MS);
   const clearButtonRef = useRef<HTMLButtonElement>(null);
   const areaCount = selectedGroupIds.length;
   const layerLabel = activeLayerLabel ?? `Layer ${(activeLayerIndex ?? 0) + 1}`;
@@ -111,21 +108,14 @@ export function VisualWarpaintEditorPanel({
 
   const selectionKey = selectedGroupIds.join(',');
 
+  // A layer or parts change makes a pending destructive action ambiguous, so disarm it.
   useEffect(() => {
-    if (!confirmClear) return;
-    const timer = window.setTimeout(() => setConfirmClear(false), CLEAR_CONFIRM_MS);
-    return () => window.clearTimeout(timer);
-  }, [confirmClear]);
-
-  // Moving to another layer or changing its parts makes the original action
-  // ambiguous, so a pending destructive action never follows that context.
-  useEffect(() => {
-    setConfirmClear(false);
-  }, [selectionContextId, selectionKey]);
+    disarmClear();
+  }, [selectionContextId, selectionKey, disarmClear]);
 
   useEffect(() => {
     if (!confirmClear) return;
-    const cancel = () => setConfirmClear(false);
+    const cancel = () => disarmClear();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       // Escape should cancel the armed action, not also close the workbench.
@@ -133,7 +123,9 @@ export function VisualWarpaintEditorPanel({
       cancel();
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (!clearButtonRef.current?.contains(event.target as Node)) cancel();
+      const target = event.target;
+      if (target instanceof Node && clearButtonRef.current?.contains(target)) return;
+      cancel();
     };
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('blur', cancel);
@@ -143,14 +135,14 @@ export function VisualWarpaintEditorPanel({
       window.removeEventListener('blur', cancel);
       document.removeEventListener('pointerdown', onPointerDown, true);
     };
-  }, [confirmClear]);
+  }, [confirmClear, disarmClear]);
 
   const clearAreas = () => {
     if (!confirmClear) {
-      setConfirmClear(true);
+      armClear();
       return;
     }
-    setConfirmClear(false);
+    disarmClear();
     onPreviewGroup?.(null);
     onClearSelection();
   };
@@ -234,7 +226,7 @@ export function VisualWarpaintEditorPanel({
           disabled={areaCount === 0 || clearSelectionDisabled}
           data-confirm={confirmClear ? '' : undefined}
           onClick={clearAreas}
-          onBlur={() => setConfirmClear(false)}
+          onBlur={() => disarmClear()}
           aria-label={confirmClear
             ? `Confirm clearing ${areaCount} included ${areaCount === 1 ? 'part' : 'parts'}`
             : `Clear ${areaCount} included ${areaCount === 1 ? 'part' : 'parts'}`}

@@ -154,9 +154,7 @@
   color: var(--fail);
 }
 
-/* An always-mounted live region: committed assignment changes are announced
-   through it, but it only takes visible space while it has something to say,
-   so it never becomes the persistent instructional line the redesign removed. */
+/* Always mounted as a live region; it takes visible space only while it has a message. */
 .visual-warpaint-editor-notice {
   flex: none;
   height: 0;

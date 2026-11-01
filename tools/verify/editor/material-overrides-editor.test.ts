@@ -3,7 +3,7 @@ import { test } from 'vitest';
 import {
   setWeaponMaterialOverrides,
   type WeaponMaterialUpdate,
-} from '../../../src/editor/mutations';
+} from '../../../src/editor/materials/materialMutations';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
 import { dig } from '../fixtures';
 

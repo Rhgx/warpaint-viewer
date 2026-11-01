@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'vitest';
-import { decodeProtoDefsFromJson, resolveKitRecipe } from '../../../src/protodefs/decoder';
+import { decodeProtoDefsFromJson } from '../../../src/protodefs/decoder';
+import { resolveKitRecipe } from '../../../src/protodefs/kitQueries';
 import { classifyProtoDefFragment } from '../../../src/protodefs/jsonFragments';
 import { ROOT, shippedProtoDefs } from '../fixtures';
 

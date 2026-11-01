@@ -1,5 +1,4 @@
-// Quiet support link in the viewport's bottom-right corner. It lives in the
-// page, not the WebGL canvas, so it never appears in captures.
+// Quiet support link in the bottom-right corner. It lives in the page, not the canvas, so captures exclude it.
 export function SupportLink() {
   return (
     <a

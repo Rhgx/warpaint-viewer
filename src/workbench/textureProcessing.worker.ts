@@ -1,8 +1,7 @@
 /// <reference lib="webworker" />
 
-import { applyAlphaMask } from './alphaMask';
 import { TGALoader } from 'three/addons/loaders/TGALoader.js';
-import { encodeRgbaPng } from '../source/png';
+import { encodeTgaPixels, mergeAlphaPixels } from './texturePixels';
 
 interface DecodeTgaRequest {
   id: number;
@@ -36,19 +35,8 @@ function fail(id: number, cause: unknown): void {
 }
 
 async function decodeTga(request: DecodeTgaRequest): Promise<void> {
-  const parsed = new TGALoader().parse(request.bytes);
-  if (!parsed.data || !parsed.width || !parsed.height) {
-    throw new Error('This TGA has no readable pixel data.');
-  }
-  const png = await encodeRgbaPng(
-    Uint8Array.from(parsed.data as ArrayLike<number>),
-    parsed.width,
-    parsed.height,
-  );
-  self.postMessage(
-    { id: request.id, ok: true, kind: request.kind, png, width: parsed.width, height: parsed.height },
-    [png],
-  );
+  const png = await encodeTgaPixels(new TGALoader().parse(request.bytes));
+  self.postMessage({ id: request.id, ok: true, png }, [png]);
 }
 
 async function mergeAlpha(request: MergeAlphaRequest): Promise<void> {
@@ -66,17 +54,11 @@ async function mergeAlpha(request: MergeAlphaRequest): Promise<void> {
     const canvas = new OffscreenCanvas(width, height);
     const context = canvas.getContext('2d', { willReadFrequently: true });
     if (!context) throw new Error('The browser could not merge the alpha mask.');
-    context.drawImage(color, 0, 0);
-    const colorPixels = context.getImageData(0, 0, width, height);
-    context.clearRect(0, 0, width, height);
-    context.drawImage(alpha, 0, 0, width, height);
-    const maskPixels = context.getImageData(0, 0, width, height);
-    applyAlphaMask(colorPixels.data, maskPixels.data);
+    const colorPixels = mergeAlphaPixels(context, color, alpha, width, height);
     context.putImageData(colorPixels, 0, 0);
-    // The browser's native encoder is substantially faster for a canvas that
-    // already lives in the worker and avoids another full RGBA traversal.
+    // The native encoder is faster for a canvas already in the worker and skips an RGBA pass.
     const png = await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer();
-    self.postMessage({ id: request.id, ok: true, kind: request.kind, png, width, height }, [png]);
+    self.postMessage({ id: request.id, ok: true, png }, [png]);
   } finally {
     color.close();
     alpha.close();

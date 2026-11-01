@@ -1,15 +1,9 @@
 /**
- * Turns the workbench's replaced textures into a mod TF2 loads from tf/custom/.
- *
- * The viewer's texture refs are already the game's material paths, so a slot
- * the user replaced maps straight onto the file the engine reads:
- *   textures/patterns/camo/australia.webp -> materials/patterns/camo/australia.vtf
- * sourceTextureIdentity() does that half, which is the same mapping the Source
- * package mount uses in reverse.
- *
- * Only files the user supplied are written. Nothing built in is re-emitted:
- * those already sit in the player's game, and a pack that carried them would be
- * both larger and a redistribution of Valve's assets.
+ * Turns the workbench's replaced textures into a mod TF2 loads from tf/custom/. Viewer texture
+ * refs are already game material paths, so textures/patterns/camo/australia.webp maps to
+ * materials/patterns/camo/australia.vtf (sourceTextureIdentity()). Only user-supplied files
+ * are written: built-in textures already sit in the player's game, and re-emitting them would
+ * bloat the pack and redistribute Valve's assets.
  */
 
 import { BlobWriter, TextReader, Uint8ArrayReader, ZipWriter } from '@zip.js/zip.js';
@@ -18,7 +12,7 @@ import { collectVmtTextureRefs, exportPathFor, formatFor, sanitizePackName, warn
 import { sourceTextureCandidates } from '../source/paths';
 import type { ExportCompression, ExportTextureKind } from './plan';
 import { decodeImageExact } from './decodeImage';
-import { encodeVtf } from './vtfEncode';
+import { encodeVtf, hasTransparency } from './vtfEncode';
 import { writeVpk } from './vpkWrite';
 
 export interface ExportTextureInput {
@@ -36,8 +30,8 @@ export interface ExportOptions {
   packName: string;
   container: 'zip' | 'vpk';
   /**
-   * 'auto' follows the game's own choices: DXT for artwork, uncompressed for
-   * masks. 'lossless' keeps every texture uncompressed.
+   * 'auto' uses DXT for artwork and uncompressed for masks. 'lossless' keeps everything
+   * uncompressed.
    */
   compression: ExportCompression;
   paintName?: string;
@@ -47,8 +41,8 @@ export interface ExportOptions {
   /** When that snapshot was taken, which is what a reader can compare against. */
   snapshotDate?: string | null;
   /**
-   * The pack contains an unsigned proto_defs.vpd and therefore needs the
-   * custom_items_games client plugin plus an -insecure TF2 launch.
+   * The pack contains an unsigned proto_defs.vpd, so it needs the custom_items_games plugin
+   * and an -insecure TF2 launch.
    */
   requiresDefinitionBypass?: boolean;
 }
@@ -72,11 +66,6 @@ export interface ExportResult {
   fileName: string;
   files: ExportedFile[];
   warnings: string[];
-}
-
-function hasTransparency(pixels: Uint8Array): boolean {
-  for (let i = 3; i < pixels.length; i += 4) if (pixels[i] !== 255) return true;
-  return false;
 }
 
 /**
@@ -214,12 +203,9 @@ async function encodeTexture(
 }
 
 /**
- * Copies those textures into the pack byte for byte.
- *
- * No decode and re-encode: a VTF the author made keeps its exact mip chain,
- * format and flags, and nothing this exporter does can degrade it. A slot the
- * user replaced by hand wins over the package copy, matching what the viewer
- * renders.
+ * Copies package textures into the pack byte for byte: no decode and re-encode, so an
+ * author's VTF keeps its mip chain, format and flags. A slot the user replaced by hand wins
+ * over the package copy, as in the viewer.
  */
 export async function collectPackageFiles(
   entries: readonly {
@@ -237,20 +223,16 @@ export async function collectPackageFiles(
     try {
       files.push({ path: writeAs, data: await read(path) });
     } catch {
-      // A single unreadable entry should not sink the export: the pack simply
-      // goes out without it, and the game falls back to its built-in file.
+      // One unreadable entry should not sink the export; the game falls back to its built-in file.
     }
   }
   return files;
 }
 
 /**
- * Carries a definition's materials, and whatever those materials reference.
- *
- * A new paint kit names one VMT per weapon it paints. Those VMTs in turn name
- * their own textures (an exponent mask, a lightwarp). None of it appears in the
- * recipe, so this follows the definition's references directly, one level deep
- * into each material, and takes whatever the package actually holds.
+ * Carries a definition's materials and the textures those materials name, one level deep.
+ * None of these appear in the recipe, so they are followed from the definition directly, and
+ * whatever the package holds is taken.
  */
 export async function collectMaterialFiles(
   overrides: readonly string[],
@@ -280,13 +262,9 @@ export async function collectMaterialFiles(
     const materialPath = `materials/${override.replace(/\\/g, '/').replace(/^materials\//i, '').replace(/\.vmt$/i, '')}.vmt`.toLowerCase();
     let data = await take(materialPath);
     if (!data && !taken.has(materialPath)) {
-      // Packs are inconsistent about the "c_" prefix on this one file, and the
-      // game itself uses both spellings (paintkits/macaw/paintkit_tool.vmt but
-      // paintkits/c_dragons_fury/c_paintkit_tool_gold.vmt). When a definition
-      // names one and the archive ships the other, the reference dangles and
-      // whatever draws with it has nothing to load. The bytes are right there,
-      // so carry them under the name the definition actually asks for and say
-      // so, rather than shipping a pack with a hole in it.
+      // Packs disagree on the "c_" prefix of this file, and the game uses both spellings. When
+      // the definition and archive differ, carry the bytes under the name the definition asks
+      // for, so the reference does not dangle.
       const slash = materialPath.lastIndexOf('/');
       const directory = materialPath.slice(0, slash + 1);
       const filename = materialPath.slice(slash + 1);
@@ -324,10 +302,8 @@ export async function buildWarpaintExport(
     entry: { path: string; data: Uint8Array },
     file: ExportedFile,
   ): void => {
-    // Inputs are added before package/generated extras, so a hand-edited
-    // texture wins if several collectors converge on the same Source path.
-    // This also keeps ZIPs unambiguous and prevents writeVpk() from rejecting
-    // duplicate normalized entries.
+    // Inputs are added before extras, so a hand-edited texture wins when collectors converge on
+    // one Source path. Duplicates would also make the ZIP ambiguous and make writeVpk() throw.
     const identity = entry.path.replace(/\\/g, '/').toLowerCase();
     if (payloadPaths.has(identity)) return;
     payloadPaths.add(identity);
@@ -352,9 +328,8 @@ export async function buildWarpaintExport(
   const readme = buildReadme(options, packName, files, warnings);
 
   if (options.container === 'vpk') {
-    // A README embedded in a VPK is invisible to almost everyone installing
-    // it. Wrap the game-ready archive and its instructions in a normal zip so
-    // the user sees both before moving only the VPK into tf/custom/.
+    // A README inside a VPK is invisible to most installers, so the VPK ships in a zip beside
+    // its instructions.
     const vpk = writeVpk(payload);
     const writer = new ZipWriter(new BlobWriter('application/zip'));
     await writer.add(`${packName}.vpk`, new Uint8ArrayReader(vpk));

@@ -17,7 +17,7 @@ export interface WarpaintAssetState {
     dataUrl: string;
     fileName: string;
     isTga: boolean;
-    hasEmbeddedAlpha?: boolean;
+    hasEmbeddedAlpha: boolean;
   };
   alpha?: { dataUrl: string; fileName: string };
   output?: string;

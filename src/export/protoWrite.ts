@@ -1,37 +1,23 @@
 /**
- * Writes a proto_defs container with one extra war paint spliced into it, so a
- * paint the viewer only knows about in memory can exist in someone's game.
+ * Writes a proto_defs container with one war paint spliced in, so a paint held only
+ * in memory can exist in someone's game. The layout must match src/protodefs/container.ts.
  *
- * The container is the flat block format src/protodefs/container.ts reads:
- * repeated { int32 defType; int32 numDefs; numDefs * (int32 size; byte[size]) }
- * until EOF. This module is its inverse, plus the defindex bookkeeping a splice
- * needs.
- *
- * Two rules keep this honest:
- *
- *  1. Blocks that are not being changed are copied byte for byte, never decoded
- *     and re-encoded. A container holds 250 paint definitions and 800-odd
- *     operations of Valve's data; round-tripping all of that through protobufjs
- *     would risk changing bytes for no reason (field ordering, defaults, unknown
- *     fields). Only the one or two messages being added are ever serialized.
- *  2. The output must reproduce its input exactly when nothing is spliced. The
- *     verification harness asserts that against the real 9.8 MB file, so the
- *     writer cannot drift from the parser.
- *
- * A container in tf/custom/ SHADOWS the game's own copy rather than merging with
- * it, so the base has to be a complete file: either the snapshot the site ships
- * (public/data/protodefs-full.bin) or the player's own.
+ * Unchanged blocks are copied byte for byte, never decoded and re-encoded, so the rest
+ * of Valve's data cannot drift and, with nothing spliced, the output equals the input.
+ * The base must be complete: a container in tf/custom/ shadows the game's copy instead
+ * of merging with it.
  */
 
 import { Root } from 'protobufjs/light';
 import type { INamespace, Type } from 'protobufjs/light';
 import schemaJson from '../protodefs/schema.generated.json';
 import type { ProtoDefKitBundle } from '../protodefs/types';
+import { paintkitNameToken } from './localization';
 
-/** Container defType values, mirroring src/protodefs/decoder.ts DEF_TYPE. */
-/** @public Used by tools/verify/protodefs-write.mjs through its generated SSR entry. */
+/** Container defType values, mirroring src/protodefs/decodeContainer.ts DEF_TYPE. */
+/** @public Used by tools/verify/protodefs/protodefs-write.test.mjs. */
 export const DEF_TYPE_PAINTKIT_OPERATION = 7;
-/** @public Used by tools/verify/protodefs-write.mjs through its generated SSR entry. */
+/** @public Used by tools/verify/protodefs/protodefs-write.test.mjs. */
 export const DEF_TYPE_PAINTKIT_DEFINITION = 9;
 
 const MSG_FOR_DEFTYPE: Record<number, string> = {
@@ -42,10 +28,8 @@ const MSG_FOR_DEFTYPE: Record<number, string> = {
 };
 
 /**
- * One block as it appears in the file. Kept as an ordered list rather than a
- * map by defType (which is all the reader needs) because rewriting a container
- * has to put the blocks back in the order they were found, or the output would
- * differ from the input for no reason.
+ * One block as it appears in the file. An ordered list, not a map by defType, so a
+ * rewrite keeps the blocks in their original order.
  */
 export interface ProtoDefGroup {
   defType: number;
@@ -84,7 +68,7 @@ export function parseProtoDefGroups(bytes: Uint8Array): ProtoDefGroup[] {
   return groups;
 }
 
-/** @public Used by tools/verify/protodefs-write.mjs through its generated SSR entry. */
+/** @public Used by tools/verify/protodefs/protodefs-write.test.mjs. */
 export function writeProtoDefGroups(groups: readonly ProtoDefGroup[]): Uint8Array {
   let total = 0;
   for (const group of groups) {
@@ -120,8 +104,8 @@ function encodeProtoDefMessage(defType: number, value: Record<string, unknown>):
   const typeName = MSG_FOR_DEFTYPE[defType];
   if (!typeName) throw new Error(`No message mapping for defType ${defType}.`);
   const message: Type = loadRoot().lookupType(typeName);
-  // fromObject before verify: the decoded shape uses plain numbers and strings
-  // where the schema wants enums and longs, exactly as decodeType() produced it.
+  // fromObject before verify: decoded messages hold plain numbers and strings where
+  // the schema wants enums and longs.
   const prepared = message.fromObject(value);
   const invalid = message.verify(prepared);
   if (invalid) throw new Error(`This war paint's definition does not fit the game's schema: ${invalid}`);
@@ -136,7 +120,7 @@ function headerDefindex(value: Record<string, unknown>): number | undefined {
 }
 
 /** Reads every defindex a container already uses for one defType. */
-/** @public Used by tools/verify/protodefs-write.mjs through its generated SSR entry. */
+/** @public Used by tools/verify/protodefs/protodefs-write.test.mjs and tools/verify/protodefs/bundle-splice.test.ts. */
 export function usedDefindexes(groups: readonly ProtoDefGroup[], defType: number): Set<number> {
   const typeName = MSG_FOR_DEFTYPE[defType];
   if (!typeName) throw new Error(`No message mapping for defType ${defType}.`);
@@ -145,10 +129,9 @@ export function usedDefindexes(groups: readonly ProtoDefGroup[], defType: number
   for (const group of groups) {
     if (group.defType !== defType) continue;
     for (const payload of group.payloads) {
-      // Only the header is of interest, but protobuf has no way to stop early,
-      // so this decodes the message and reads the one field.
+      // Protobuf cannot stop early, so decode the whole message and read one field.
       const decoded = message.toObject(message.decode(payload), { longs: Number, enums: Number, defaults: false });
-      const defindex = headerDefindex(decoded as Record<string, unknown>);
+      const defindex = headerDefindex(decoded);
       if (defindex !== undefined) used.add(defindex);
     }
   }
@@ -171,16 +154,9 @@ function setHeaderDefindex(value: Record<string, unknown>, defindex: number): vo
 }
 
 /**
- * Re-points a definition's `operation_template` reference at a new operation.
- *
- * Deliberately narrow. A definition is full of defindexes that mean different
- * things: `item_definition_template` refs into defType 8, `operation_template`
- * into defType 7, and its own header id. Rewriting every field called
- * "defindex" that happens to hold a given number would corrupt all of them the
- * moment the number is a common one like 0, so only `operation_template`
- * objects still pointing at `from` are moved. A paint that reuses a stock
- * operation keeps pointing at it, which is what a paint built on a Valve
- * template needs.
+ * Re-points each `operation_template` reference that still names `from` at `to`.
+ * Only that field is touched: other defindex fields hold different id spaces, and a
+ * common number such as 0 would corrupt them.
  */
 function retargetOperation(value: unknown, from: number, to: number): void {
   if (Array.isArray(value)) {
@@ -202,21 +178,13 @@ function retargetOperation(value: unknown, from: number, to: number): void {
 }
 
 /**
- * Writes the canonical localization token for the final defindex.
- *
- * The token is the paint's display name in game, and its text embeds the kit's
- * defindex: "9_431_field { field_number: 2 }" resolves through
- * resource/tf_proto_obj_defs_<language>.txt. Point it at the new id so the name
- * this pack ships (see src/export/localization.ts) is the one the game looks up.
- *
- * Do not try to replace the previous numeric id in the string. Community JSON
- * definitions commonly retain an authored placeholder such as
- * "9_###_field { field_number: 2 }" even after their header.defindex has been
- * assigned a synthetic numeric id by the importer. Constructing the token from
- * the final id handles both compiled VPDs and those JSON fragments.
+ * Points the name token at the final defindex, since the token embeds it
+ * ("9_431_field { field_number: 2 }") and the game looks the name up by it.
+ * Community JSON often keeps an authored placeholder ("9_###_field ...") after the
+ * importer assigns a numeric id, so the token is rebuilt rather than substituted.
  */
 function retargetLocToken(definition: Record<string, unknown>, to: number): void {
-  definition.loc_desctoken = `9_${to}_field { field_number: 2 }`;
+  definition.loc_desctoken = paintkitNameToken(to);
 }
 
 export type SpliceMode = 'append' | 'overwrite';
@@ -229,10 +197,9 @@ export interface SpliceProtoDefsOptions {
   /** Decoded CMsgPaintKit_Definition for the paint being added. */
   definition: Record<string, unknown>;
   /**
-   * 'append' adds the paint under a fresh defindex, which is the shape a
-   * submission or a shared pack wants and which needs a plugin to equip in
-   * game. 'overwrite' writes it over a paint kit that already exists, so an
-   * item the player already owns renders as theirs.
+   * 'append' adds the paint under a fresh defindex, which needs a plugin to equip in
+   * game. 'overwrite' replaces an existing paint kit, so an item the player owns
+   * renders as this paint.
    */
   mode: SpliceMode;
   /** Paint kit defindex to replace. Required when mode is 'overwrite'. */
@@ -273,9 +240,7 @@ export function spliceProtoDefs(options: SpliceProtoDefsOptions): SpliceProtoDef
     paintkitDefindex = nextFreeDefindex(usedDefindexes(groups, DEF_TYPE_PAINTKIT_DEFINITION));
   }
 
-  // Each of these touches exactly one thing: the operation's own id, the
-  // definition's pointer at that operation, the definition's own id, and the
-  // name token that embeds it. Nothing else in either message is rewritten.
+  // Each step rewrites exactly one id or name token; nothing else in either message changes.
   setHeaderDefindex(operation, operationDefindex);
   retargetOperation(definition, oldOperationDefindex, operationDefindex);
   setHeaderDefindex(definition, paintkitDefindex);
@@ -294,7 +259,7 @@ export function spliceProtoDefs(options: SpliceProtoDefsOptions): SpliceProtoDef
       let found = false;
       const payloads = group.payloads.map((payload) => {
         const decoded = message.toObject(message.decode(payload), { longs: Number, enums: Number, defaults: false });
-        if (headerDefindex(decoded as Record<string, unknown>) !== paintkitDefindex) return payload;
+        if (headerDefindex(decoded) !== paintkitDefindex) return payload;
         found = true;
         return definitionPayload;
       });
@@ -309,7 +274,7 @@ export function spliceProtoDefs(options: SpliceProtoDefsOptions): SpliceProtoDef
   return { bytes: writeProtoDefGroups(spliced), paintkitDefindex, operationDefindex, replaced };
 }
 
-/** Item definitions are defType 8, mirroring src/protodefs/decoder.ts DEF_TYPE. */
+/** Item definitions are defType 8, mirroring src/protodefs/decodeContainer.ts DEF_TYPE. */
 const DEF_TYPE_PAINTKIT_ITEM_DEFINITION = 8;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -437,9 +402,8 @@ function allocateIds(bundle: ProtoDefKitBundle, groups: readonly ProtoDefGroup[]
 }
 
 /**
- * Ids for an overwrite: the target's own item definitions and operations. Its
- * weapon slots are paired with the bundle's by items_game item_definition_index
- * (the same weapon in both), and each wear is paired by position.
+ * Ids for an overwrite: the target's own item definitions and operations. Weapon
+ * slots pair by items_game item_definition_index, and each wear pairs by position.
  */
 function pairWithTarget(
   bundle: ProtoDefKitBundle,
@@ -471,13 +435,10 @@ function pairWithTarget(
 }
 
 /**
- * spliceProtoDefs for a paint that may be per-wear: its weapon slots point at
- * item definitions, and each item definition points at one operation per wear.
- *
- * A top-level paint (one operation, no item definitions) is handed to
- * spliceProtoDefs unchanged. Append writes every operation and item definition
- * under fresh ids. Overwrite replaces the target's own item definitions and
- * operations in place, so nothing new is allocated and nothing else changes.
+ * spliceProtoDefs for a paint that may be per-wear: its weapon slots point at item
+ * definitions, and each item definition points at one operation per wear. A
+ * top-level paint (one operation, no item definitions) goes to spliceProtoDefs
+ * unchanged. Append allocates fresh ids; overwrite reuses the target's own.
  */
 export function spliceProtoDefBundle(options: SpliceProtoDefBundleOptions): SpliceProtoDefBundleResult {
   const { bundle } = options;
@@ -559,9 +520,8 @@ export function spliceProtoDefBundle(options: SpliceProtoDefBundleOptions): Spli
     });
     return { defType: group.defType, payloads };
   });
-  // Overwrite can only replace ids that exist, so a shortfall means the base is
-  // not the container the target came from. Refuse rather than leave the new
-  // operation or item definition unreferenced.
+  // Overwrite can only replace ids that exist, so a shortfall means the base is not the
+  // target's container. Refuse rather than leave new entries unreferenced.
   if (written !== total) {
     throw new Error('The base definitions are missing a block or entry this war paint is written to.');
   }

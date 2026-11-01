@@ -21,7 +21,6 @@
 .first-person-fov-value { color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: normal; }
 .first-person-controls [role='alert'] { color: var(--fail); overflow-wrap: anywhere; }
 .first-person-controls [role='status'] { color: var(--text-dim); font-size: 11px; line-height: 1.5; }
-.canvas-wrap:has(.first-person-input-shield) ~ .canvas-hint { display: none; }
 .canvas-wrap:has(.first-person-input-shield) .canvas-hint { display: none; }
 @media (hover: none) and (pointer: coarse) {
   .first-person-animation-option,

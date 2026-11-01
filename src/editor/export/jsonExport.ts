@@ -1,10 +1,6 @@
 /**
- * JSON export for the editor's canonical proto_defs messages.
- *
- * Community definition packs use one JSON object per file: an operation and a
- * paint-kit definition.  The importer deliberately accepts slightly malformed
- * snippets for convenience, but editor output is intentionally strict JSON so
- * it is portable and can be imported without synthetic placeholder ids.
+ * JSON export for the editor's proto_defs messages. Output is strict JSON, unlike the importer,
+ * which accepts malformed snippets, so it imports without placeholder ids.
  */
 
 import { normalizeProtoDefFragments, type ProtoDefFragmentKind } from '../../protodefs/jsonFragments';
@@ -26,10 +22,7 @@ export interface ProtoDefKitBundleJsonExport {
 }
 
 export interface SerializeProtoDefKitOptions {
-  /**
-   * File-name stem. It is only used for the two returned names; it never
-   * changes message content. The default is derived from the numeric kit id.
-   */
+  /** File-name stem for the returned names. Message content is never changed. */
   name?: string;
 }
 
@@ -85,9 +78,7 @@ function equivalent(left: unknown, right: unknown): boolean {
 }
 
 function stemFor(definitionDefindex: number, requestedName?: string): string {
-  // These names become browser downloads in the editor. Reuse the pack-name
-  // contract so a paint name cannot smuggle path separators or platform-
-  // invalid punctuation into the suggested filename.
+  // These names become browser downloads, so reuse the pack-name contract to block path separators.
   return requestedName?.trim()
     ? sanitizePackName(requestedName)
     : `paintkit-${definitionDefindex}`;
@@ -99,13 +90,8 @@ function namesFor(definitionDefindex: number, requestedName?: string): [string, 
 }
 
 /**
- * Serializes an editor kit into the two strict JSON fragments understood by
- * normalizeProtoDefFragments(). The supplied messages are never modified.
- *
- * This intentionally rejects absent, string, fractional, or mismatched ids:
- * emitted files always use their original numeric ids and the definition
- * points at the emitted operation, rather than relying on importer-only
- * placeholders such as `###`.
+ * Serializes an editor kit into the two strict JSON fragments normalizeProtoDefFragments() reads.
+ * Absent, string, fractional or mismatched ids are rejected, so no importer placeholders such as `###` are emitted.
  */
 export function serializeProtoDefKitMessages(
   kit: ProtoDefKitMessages,
@@ -125,9 +111,7 @@ export function serializeProtoDefKitMessages(
   const definition: ProtoDefJsonFragment = { name: definitionName, text: serializeJson(kit.definition, 'definition') };
   const fragments: readonly [ProtoDefJsonFragment, ProtoDefJsonFragment] = [operation, definition];
 
-  // Normalizing our own output protects the public contract from drifting away
-  // from the importer. It also verifies that the messages still have the
-  // structural operation/definition shapes required by the current importer.
+  // Round-trip our own output through the importer so the contract cannot drift from it.
   const normalized = normalizeProtoDefFragments([...fragments]);
   if (normalized.length !== 2
     || normalized[0].kind !== 'operation'
@@ -141,11 +125,8 @@ export function serializeProtoDefKitMessages(
 }
 
 /**
- * Serializes a kit bundle (see ProtoDefKitBundle) into one strict JSON fragment
- * per operation, one per item definition, and one for the definition. A
- * top-level paint with a single operation and no item definitions is delegated
- * to serializeProtoDefKitMessages, so its files are unchanged. The supplied
- * bundle is never modified.
+ * Serializes a kit bundle into one strict JSON fragment per operation, item definition and the definition.
+ * A single-operation paint with no item definitions delegates to serializeProtoDefKitMessages, so its files are unchanged.
  */
 export function serializeProtoDefKitBundle(
   bundle: ProtoDefKitBundle,
@@ -198,12 +179,7 @@ export function serializeProtoDefKitBundle(
   return { fragments };
 }
 
-/**
- * Compact fragments for the editor's live preview. The input is the session's
- * own frozen snapshot, and the preview decoder rejects malformed fragments on
- * its own, so this skips the pretty-printing and round-trip guard that exports
- * run. File names match serializeProtoDefKitBundle.
- */
+/** Compact fragments for the live preview. Skips pretty-printing and the round-trip guard, since the preview decoder rejects bad fragments itself. */
 export function serializeProtoDefKitBundlePreview(bundle: ProtoDefKitBundle): ProtoDefKitBundleJsonExport {
   if (bundle.operations.length === 0) {
     throw new Error('A kit bundle must include at least one operation.');

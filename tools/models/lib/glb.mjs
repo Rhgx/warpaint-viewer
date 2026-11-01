@@ -1,5 +1,20 @@
-// Minimal glTF 2.0 binary (GLB) writer. No external deps.
-// Supports interleaved-free layout: one buffer, separate bufferViews per accessor.
+// Minimal glTF 2.0 binary (GLB) writer and chunk reader. One buffer, one bufferView per accessor.
+
+// Split a GLB into its JSON and BIN chunks. The 12-byte header is not checked; callers do that.
+export function readGLB(buf) {
+  let json = null;
+  let bin;
+  let off = 12;
+  while (off < buf.length) {
+    const len = buf.readUInt32LE(off);
+    const type = buf.toString('ascii', off + 4, off + 8);
+    const data = buf.subarray(off + 8, off + 8 + len);
+    if (type === 'JSON') json = JSON.parse(data.toString('utf8'));
+    else if (type.startsWith('BIN')) bin = data;
+    off += 8 + len;
+  }
+  return { json, bin };
+}
 
 const COMPONENT = {
   FLOAT: 5126,
@@ -12,10 +27,7 @@ function align4(n) {
   return (n + 3) & ~3;
 }
 
-// Build a GLB Buffer (Node Buffer) from a scene description.
-// primitives: [{ material: <index>, positions:Float32Array, normals:Float32Array,
-//                uvs:Float32Array, indices:Uint32Array }]
-// materials: [{ name }]
+// Build a GLB Buffer. primitives: [{ material, positions, normals, uvs, indices }]; materials: [{ name }].
 export function buildGLB({ primitives, materials, meta }) {
   const bin = [];       // list of { data: Buffer, byteOffset }
   let binLength = 0;
@@ -132,7 +144,7 @@ export function buildGLB({ primitives, materials, meta }) {
 
   const header = Buffer.alloc(12);
   header.write('glTF', 0, 'ascii');
-  header.writeUInt32LE(2, 4); // version
+  header.writeUInt32LE(2, 4);
   const totalLength = 12 + 8 + jsonPadded.length + 8 + binPadded.length;
   header.writeUInt32LE(totalLength, 8);
 

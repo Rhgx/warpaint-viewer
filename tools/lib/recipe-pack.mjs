@@ -1,15 +1,8 @@
 // Recipe tree compaction and per-kit bundling.
 //
-// A recipe tree carries 9 transform fields (adjustBlack/adjustOffset/adjustGamma/
-// rotation/translateU/translateV/scaleUV/flipU/flipV) on texture_lookup, combine_*
-// and apply_sticker nodes. src/compositor/resolve.ts + rng.ts resolveRange() treat
-// an absent field exactly like its default value (a degenerate [d,d] float range
-// still consumes one RNG draw; a fixed [0,0] flip range consumes none), so
-// dropping default-valued fields is runtime-safe and shrinks the data considerably.
-//
-// A bundle groups every variant of one paintkit into one file:
-//   { trees: [<node>, ...], variants: { "<weaponKey>_<team>[_w<n>]": <index into trees> } }
-// Identical compacted trees (same canonical JSON) share one `trees` entry.
+// The runtime reads an absent transform field as its default and draws the same RNG values, so
+// default-valued fields are dropped. A bundle is { trees, variants }: variants maps
+// "<weaponKey>_<team>[_w<n>]" to an index into trees, and identical trees share one entry.
 
 const DEFAULTS = {
   adjustBlack: [0, 0],
@@ -37,10 +30,7 @@ function deepEqual(a, b) {
   return false;
 }
 
-// Deep-copies `value`, dropping any of the 9 default-valued transform fields
-// (see DEFAULTS) from plain objects encountered anywhere in the tree, including
-// nested `nodes` arrays and every node type. Every other field passes through
-// byte-for-byte unmodified.
+// Deep copy that drops default-valued transform fields (see DEFAULTS) at every depth.
 function compactNode(value) {
   if (Array.isArray(value)) return value.map(compactNode);
   if (value && typeof value === 'object') {
@@ -54,9 +44,7 @@ function compactNode(value) {
   return value;
 }
 
-// Builds a { trees, variants } bundle from a flat list of { key, tree } entries
-// (one per old per-variant filename, key = filename without ".json"). Trees are
-// compacted first, then deduplicated by JSON.stringify of the compacted form.
+// Compact each tree, then deduplicate by its JSON.
 export function buildBundle(entries) {
   const trees = [];
   const variants = {};

@@ -1,16 +1,9 @@
-// TF2 Warpaint Viewer - unusual/killstreak effect asset extraction.
+// TF2 Warpaint Viewer unusual/killstreak effect asset extraction.
 //   node tools/extract/effects.mjs
 //
-// Produces:
-//   public/data/effects/sheen/mask_strip.png            (killstreak sheen mask frames, stacked vertically)
-//   public/data/effects/sheen/sheen.json                ({ maskFrames, maskWidth, maskHeight })
-//   public/data/effects/sheen/cubemap/{px,nx,py,ny,pz,nz}.png
-//   public/data/effects/unusuals/<effectId>/<weaponKey>.json
-//                                                        (pre-resolved weapon_unusual_*.pcf particle
-//                                                        definitions: { root, systems }, one bundle
-//                                                        per effect/weapon pair, see lib/unusual-pack.mjs)
-//   public/data/effects/particles/<flat-name>.png
-//   public/data/effects/particles/index.json   (materialPath -> { file, frames, width, height })
+// Writes public/data/effects/: sheen/ (mask_strip.png, sheen.json, cubemap/), unusuals/<effectId>/
+// <weaponKey>.json (pre-resolved { root, systems } bundles, see lib/unusual-pack.mjs), and
+// particles/ (sprite PNGs and index.json).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,10 +25,6 @@ const OUT = path.join(ROOT, 'public', 'data', 'effects');
 function log(...a) { console.log('[effects]', ...a); }
 function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
 
-// ---------------------------------------------------------------------------
-// 1. Killstreak sheen mask frames -> vertical sprite strip PNG.
-// ---------------------------------------------------------------------------
-
 function extractSheenMask(texList, miscList) {
   const rel = 'materials/effects/animatedsheen/animatedsheen0.vtf';
   const src = texList.has(rel) ? TEXTURES_VPK : (miscList.has(rel) ? MISC_VPK : null);
@@ -55,10 +44,6 @@ function extractSheenMask(texList, miscList) {
   log(`sheen mask: ${frames.length} frames, ${width}x${height} -> sheen/mask_strip.png`);
   return meta;
 }
-
-// ---------------------------------------------------------------------------
-// 2. Stock material cubemaps -> 6 face PNGs.
-// ---------------------------------------------------------------------------
 
 function extractMaterialCubemaps(texList) {
   const paths = [...texList].filter((entry) => (
@@ -94,12 +79,7 @@ function extractMaterialCubemaps(texList) {
   return { size, count: paths.length };
 }
 
-// ---------------------------------------------------------------------------
-// 3. Weapon unusual particle definitions.
-// ---------------------------------------------------------------------------
-
-// Attributes that describe structure (child/operator lists) rather than plain particle-system
-// parameters; kept out of the generic "attributes" bag and surfaced through their own fields.
+// Structural lists, kept out of the generic attributes bag and surfaced as their own fields.
 const STRUCTURAL_KEYS = new Set([
   'renderers', 'operators', 'initializers', 'emitters', 'forces', 'constraints',
   'children', 'preventNameBasedLookup',
@@ -133,14 +113,9 @@ function buildFunctionList(arr) {
   return out;
 }
 
-// A .pcf's particle system definitions form a forest: each weapon category has a
-// "_unusual_parent_<weapon>" root whose sole child is "weapon_unusual_<effect>_<weapon>", which
-// in turn has several leaf children (the glow/embers/etc. systems that actually carry material,
-// color, and particle behavior). There is no single system named e.g. "weapon_unusual_hot" in
-// the file - the effect is authored per weapon. `roots` lists the true entry points (systems
-// never referenced as another system's child); `systems` is every DmeParticleSystemDefinition in
-// the file, keyed by name, fully resolved and self-contained (children are name references into
-// this same map) so a consumer can walk any root down to its leaves.
+// A PCF's systems form a forest: "_unusual_parent_<weapon>" roots lead to per-weapon effect
+// systems whose leaves carry the material and behaviour. roots are the systems no other system
+// references; systems maps every definition by name, with children as name references into it.
 function buildParticleFile(elements) {
   const defs = elements.filter((e) => e.type === 'DmeParticleSystemDefinition');
 
@@ -191,9 +166,7 @@ function buildParticleFile(elements) {
 
 const UNUSUAL_PCFS = ['weapon_unusual_hot', 'weapon_unusual_isotope', 'weapon_unusual_cool', 'weapon_unusual_energyorb', 'item_fx'];
 
-// Weapon keys the effects get bundled for: every weapon the composited-texture
-// pipeline knows about (public/data/manifest.json's weapons[].key), same set the
-// viewer can ever request an unusual effect for.
+// Every weapon in the manifest: the same set the viewer can request an unusual effect for.
 function loadManifestWeaponKeys() {
   const manifestPath = path.join(ROOT, 'public', 'data', 'manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -212,8 +185,7 @@ function extractUnusuals(miscList) {
     const buf = fs.readFileSync(path.join(STAGING, 'particles', `${name}.pcf`));
     const { elements } = parsePCF(buf);
     let { roots, systems, materials } = buildParticleFile(elements);
-    // item_fx contains many unrelated effects. Ship only Community Sparkle and
-    // its child closure, as the dedicated weapon PCFs already do per bundle.
+    // item_fx holds many unrelated effects; keep only Community Sparkle and its child closure.
     if (name === 'item_fx') {
       systems = transitiveClosure(systems, 'community_sparkle');
       roots = ['community_sparkle'];
@@ -225,10 +197,7 @@ function extractUnusuals(miscList) {
     log(`${name}: ${roots.length} weapon roots, ${Object.keys(systems).length} systems, ${totalOps} operator/initializer instances, ${materials.size} unique materials`);
   }
 
-  // Bundle per (effect, weapon): the viewer fetches only the one { root, systems }
-  // bundle it needs for a given effect/weapon pair instead of the whole
-  // multi-effect systems forest. Selection/closure logic lives in
-  // lib/unusual-pack.mjs.
+  // One bundle per effect/weapon pair, so the viewer fetches only the bundle it needs.
   const weaponKeys = loadManifestWeaponKeys();
   const unusualsOutDir = path.join(OUT, 'unusuals');
   let bundleCount = 0;
@@ -264,32 +233,16 @@ function extractUnusuals(miscList) {
   return { unusuals, materials: allMaterials };
 }
 
-// ---------------------------------------------------------------------------
-// 4. Particle sprite textures referenced by the unusual definitions' "material" attributes.
-// ---------------------------------------------------------------------------
-
 function flattenMaterialName(materialRef) {
   return materialRef.replace(/\\/g, '/').replace(/^materials\//i, '').replace(/\.vmt$/i, '')
     .replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase();
 }
 
-// Staged PCFs may reflect locally installed mods. Verify anomalous assets
-// against a clean VPK extraction before adding missing-material fallbacks.
-const MATERIAL_FALLBACKS = {};
-
-// Materials confirmed absent from the entire TF2+HL2 install that should be recorded as a real
-// "missing" entry in index.json rather than silently omitted, so effects.ts can tell "the game
-// itself can't render this either" apart from "extraction failed to resolve it". Currently empty -
-// see MATERIAL_FALLBACKS' comment above for why circle_half was removed from here (it was never a
-// real reference). Kept narrow and explicit on purpose: anything added here should be independently
-// verified against a clean, freshly-extracted .pcf, not a possibly-stale staging/ copy.
+// Materials verified absent from the whole TF2+HL2 install; recorded as { missing: true } in index.json.
 const KNOWN_MISSING_MATERIALS = new Set([]);
 
-// Ordered VPK search list threaded through material/texture resolution: TF2 misc, TF2 textures,
-// then the HL2 base-game VPKs TF2 mounts (hl2/hl2_misc_dir.vpk, hl2/hl2_textures_dir.vpk). Several
-// particle materials referenced by the unusual effects (particle/smokesprites_0001, vgui/white,
-// effects/fleck_glass3) are HL2 base content with no TF2-local copy and only resolve once HL2 is
-// searched too.
+// Search order for material and texture lookup. The HL2 VPKs are needed: several particle
+// materials (vgui/white, smokesprites, fleck_glass3) exist only there.
 function buildVpkSources(texList, miscList, hl2TexList, hl2MiscList) {
   return [
     { vpk: MISC_VPK, list: miscList, label: 'tf2 misc' },
@@ -305,20 +258,11 @@ function findInSources(relPath, sources) {
   return null;
 }
 
-// Resolve a particle "material" attribute (e.g. "effects\\fire_embers1.vmt" or "vgui/white") to a
-// vpk-relative .vtf path, plus the VMT's blend/shader flags. Prefers reading $basetexture out of
-// the material's .vmt (following a PatchShader's "insert" block if present); a few materials (e.g.
-// effects/conc_warp, a refract/heat-warp shader) carry no $basetexture at all, only $normalmap, so
-// that is tried next as the best available texture. Several particle materials referenced by these
-// pcf files have no .vmt on disk anywhere in TF2+HL2 (removed/consolidated assets), so this finally
-// falls back to treating the material's own path as the texture name, which is a common Source
-// convention and matches several of the missing-vmt cases actually seen in these files.
-//
-// Returns { vtfRel, src, shader, additive, viaNormalMap } where shader/additive are null when no
-// .vmt could be found or parsed at all (distinct from a .vmt that was found but omits $additive,
-// which means additive is false per Source's default). Callers apply the conservative additive:true
-// default for the "vmt not found" case per the effects spec (glow effects should default to
-// additive). viaNormalMap flags the conc_warp-style case for logging.
+// Resolve a particle material to a vpk-relative .vtf plus the VMT's blend flags. Reads $basetexture
+// from the VMT (or $normalmap when absent, as with conc_warp), following a PatchShader insert block.
+// With no VMT on disk, falls back to the material path itself as the texture name.
+// shader and additive are null when no VMT was found or parsed; a VMT without $additive is additive=false.
+// viaNormalMap marks the $normalmap fallback, for logging.
 function resolveMaterialToVtf(materialRef, sources) {
   const norm = materialRef.replace(/\\/g, '/').replace(/^materials\//i, '').replace(/\.vmt$/i, '');
   const vmtRel = `materials/${norm}.vmt`.toLowerCase();
@@ -360,20 +304,14 @@ function resolveMaterialToVtf(materialRef, sources) {
   return null;
 }
 
-// Convert a validated vtf.mjs sheet ({ version, sequences: [{ sequenceNumber, clamp, totalTime,
-// frames: [{displayTime, uv}] }] }) into the index.json "sheet" shape: just clamp + uv per frame.
+// Reduce a vtf.mjs sheet to the index.json shape: clamp and per-frame uv.
 function sheetToIndexShape(sheet) {
   return { sequences: sheet.sequences.map((s) => ({ clamp: s.clamp, frames: s.frames.map((f) => f.uv) })) };
 }
 
-// Some additive VTFs (e.g. effects/fire_embers1) don't have a true-black background baked
-// in - fire_embers1's is RGB(10,2,0), near-black but not zero. Under additive blending every
-// quad using that texture contributes that background color, so a large or overlapping quad
-// shows up as a faint hard-edged square on screen even though the sprite art itself looks fine.
-// If the frame's 1-pixel border is a near-uniform dark color, treat it as that stray floor and
-// rescale the frame so the floor maps to true black, stretching the remaining range back to
-// [0,255]. Returns the cleaned RGBA buffer (and the floor used) or null if the border doesn't
-// look like an unintentional floor (not uniform, not dark enough, or already zero).
+// Additive VTFs can have a near-black border (fire_embers1 is RGB(10,2,0)) that shows as a faint
+// square where quads overlap. A uniform dark border is taken as that floor and rescaled to black.
+// Returns { rgba, floor }, or null when the border is not such a floor.
 function cleanBackgroundFloor(rgba, width, height) {
   const BORDER_TOLERANCE = 6;
   const FLOOR_MAX_CHANNEL = 24;
@@ -426,25 +364,12 @@ function extractParticleTextures(materials, sources) {
   let additiveFalseCount = 0;
   let noVmtCount = 0;
   let sheetCount = 0;
-  let fallbackCount = 0;
   for (const materialRef of materials) {
-    let resolved = resolveMaterialToVtf(materialRef, sources);
-    if (!resolved && MATERIAL_FALLBACKS[materialRef]) {
-      const fallbackRef = MATERIAL_FALLBACKS[materialRef];
-      const fallbackResolved = resolveMaterialToVtf(fallbackRef, sources);
-      if (fallbackResolved) {
-        log(`  material "${materialRef}" not found anywhere in the TF2 install (searched tf2/hl2/platform vpks + loose files) - using documented fallback "${fallbackRef}"`);
-        resolved = fallbackResolved;
-        fallbackCount++;
-      }
-    }
+    const resolved = resolveMaterialToVtf(materialRef, sources);
     if (!resolved) {
       fail++;
       if (KNOWN_MISSING_MATERIALS.has(materialRef)) {
-        // Source parity, not an extraction failure: the game can't render this material either
-        // (see KNOWN_MISSING_MATERIALS' comment), so record that explicitly instead of silently
-        // omitting the key - effects.ts uses this to keep a system's simulation running while
-        // skipping only its render step.
+        // Explicit entry so the viewer can skip only the render step; the game cannot render this either.
         index[materialRef] = { missing: true };
         log(`  material "${materialRef}" confirmed missing from the TF2 install - recording index.json entry as { missing: true } (no substitute texture, matches Source's own broken reference)`);
       } else {
@@ -463,8 +388,7 @@ function extractParticleTextures(materials, sources) {
       const frames = decodeVTFAllFrames(buf);
       const flat = flattenMaterialName(materialRef);
 
-      // Deliverable 2: blend/render flags from the VMT. Conservative additive:true default when
-      // no .vmt could be found/parsed at all, per spec (these are all glow-type effects).
+      // Blend/render flags from the VMT. A missing or unparsed VMT defaults to additive (glow effects).
       const additive = resolved.additive === null ? true : resolved.additive;
       const shader = resolved.shader;
       if (resolved.shader === null) {
@@ -475,8 +399,7 @@ function extractParticleTextures(materials, sources) {
         log(`  additive=false for "${materialRef}" (shader=${shader})`);
       }
 
-      // Only additive materials get their background floor scrubbed - a non-additive
-      // texture's border is real edge content, not a stray floor.
+      // Only additive materials are floor-scrubbed; a non-additive border is real edge content.
       const outFrames = additive
         ? frames.map((f) => {
           const cleaned = cleanBackgroundFloor(f.rgba, f.width, f.height);
@@ -505,9 +428,7 @@ function extractParticleTextures(materials, sources) {
       entry.additive = additive;
       entry.shader = shader;
 
-      // Deliverable 3: embedded sprite-sheet resource (VTF 7.3+ resource 0x10). vtf.mjs already
-      // validates uv in [0,1] and sequenceCount in [1,64], returning null on any failure - treat
-      // that identically to "no sheet".
+      // VTF 7.3+ sprite-sheet resource (0x10); parseVTFSpriteSheet returns null on any failure.
       const sheet = parseVTFSpriteSheet(buf);
       if (sheet) {
         entry.sheet = sheetToIndexShape(sheet);
@@ -525,13 +446,9 @@ function extractParticleTextures(materials, sources) {
   }
   fs.writeFileSync(path.join(outDir, 'index.json'), JSON.stringify(index, null, 1));
   log(`particle sprites: ${ok} written, ${fail} unresolved (of ${materials.size} unique materials)`);
-  log(`particle flags: ${additiveFalseCount} additive=false, ${noVmtCount} no-vmt (defaulted additive=true), ${sheetCount} with sprite sheet, ${fallbackCount} using a documented fallback material`);
+  log(`particle flags: ${additiveFalseCount} additive=false, ${noVmtCount} no-vmt (defaulted additive=true), ${sheetCount} with sprite sheet`);
   return index;
 }
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 function main() {
   ensureDir(OUT);
@@ -552,7 +469,6 @@ function main() {
   log('\nextracting weapon attachment points ...');
   const attachments = extractAttachments();
 
-  // ---- verification -------------------------------------------------------
   log('\n===== VERIFICATION =====');
   const stripPath = path.join(OUT, 'sheen', 'mask_strip.png');
   log(`sheen mask strip exists: ${fs.existsSync(stripPath)}, frames=${sheenMeta.maskFrames}, ${sheenMeta.maskWidth}x${sheenMeta.maskHeight}`);

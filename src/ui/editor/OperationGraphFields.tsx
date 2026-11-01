@@ -34,13 +34,8 @@ interface GraphComboboxProps {
 }
 
 /**
- * A searchable dropdown for the values the graph already knows about.
- *
- * The parameters people change most (texture paths, group masks, variable
- * bindings) all come from a closed, discoverable set, so typing the exact
- * string should never be the only way in. Free text stays available for
- * texture-shaped fields because community packs ship paths the viewer has
- * not indexed yet.
+ * Searchable dropdown for values the graph already knows. Free text stays available
+ * for texture fields, since community packs ship paths the viewer has not indexed.
  */
 function GraphCombobox({
   value,
@@ -60,8 +55,7 @@ function GraphCombobox({
   const matches = useMemo(() => filterGraphOptions(options, query), [options, query]);
   const shown = useMemo(() => matches.slice(0, MAX_VISIBLE_OPTIONS), [matches]);
   const hiddenCount = matches.length - shown.length;
-  // Entries the list is deliberately holding back until somebody searches,
-  // as opposed to matches that simply ran past the visible cap.
+  // Entries held back until a search, as opposed to matches cut off by the visible cap.
   const deferredCount = query ? 0 : options.length - matches.length;
 
   useEffect(() => {
@@ -255,11 +249,7 @@ interface GraphRangeInputProps {
   readonly onCommit: (numbers: readonly number[]) => void;
 }
 
-/**
- * The compositor reads these fields as `min max` and picks a value per seed, so
- * the control makes that the primary decision instead of leaving people to
- * discover that a space in a text box means "randomize".
- */
+/** The compositor picks a value per seed from `min max`, so the range is the primary control. */
 function GraphRangeInput({ numbers, ariaLabel, step, disabled, canVary, onCommit }: GraphRangeInputProps): React.JSX.Element {
   const min = numbers[0] ?? 0;
   const max = numbers.length > 1 ? numbers[1] : min;
@@ -357,7 +347,7 @@ function GraphToggle({ on, ariaLabel, disabled, onCommit }: GraphToggleProps): R
   );
 }
 
-export interface GraphValueFieldProps {
+interface GraphValueFieldProps {
   readonly label: string;
   readonly kind: GraphFieldKind;
   readonly field?: VarFieldMsg;
@@ -370,11 +360,7 @@ export interface GraphValueFieldProps {
   readonly onChange: (value: OperationGraphParameterValue) => void;
 }
 
-/**
- * One authored stage parameter, entered with a control that matches what the
- * compositor actually accepts, and bindable to a declared variable without
- * losing sight of the value the binding resolves to.
- */
+/** One authored stage parameter: a control matching what the compositor accepts, bindable to a variable. */
 export function GraphValueField({
   label,
   kind,
@@ -416,8 +402,7 @@ export function GraphValueField({
     ...(variable.scope ? { group: variable.scope } : {}),
   })), [variables]);
 
-  // A binding whose declaration lives outside this editor can still be
-  // re-pointed or detached, but its value has to be read where it is declared.
+  // A binding declared outside this editor can be re-pointed, but its value is read where it is declared.
   const declarationLocked = Boolean(boundVariable) && declaration?.editable === false;
   const controlsDisabled = readOnly || declarationLocked;
   const bindingActionLabel = boundVariable

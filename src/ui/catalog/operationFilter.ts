@@ -1,10 +1,8 @@
 import type { OperationTemplateData, PaintkitEntry } from '../../data/types';
 import { isCustomKitId } from '../../protodefs/types';
 
-// Stock paints that use an operation whose name matches the query. An exact
-// name match wins over substring matches, so "ao" finds only an operation
-// named "ao" and not every name containing it. Imported kits never match: their
-// ids are offset, and their usage must not be read from stock defindexes.
+// Stock paints using an operation whose name matches the query exactly, so "ao" does not match "hao".
+// Imported kits never match; their usage must not be read from stock defindexes.
 export function operationFilterKits(
   paintkits: readonly PaintkitEntry[],
   data: OperationTemplateData,

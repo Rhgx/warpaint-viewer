@@ -18,12 +18,8 @@ export interface GroupSample extends GroupTexel {
 }
 
 /**
- * Maps normalized UV coordinates to a source-image texel.
- *
- * Group textures are loaded with `flipY = false`, so their V axis follows
- * ImageData rows: `v = 0` is the top row and V increases downward. Exact
- * right/bottom edge coordinates are clamped to the last texel, matching a
- * clamp-to-edge texture sample.
+ * Maps normalized UV to a source texel. Group textures are unflipped, so v = 0 is the top row,
+ * and edge coordinates clamp to the last texel.
  */
 export function groupTexelAtUv(image: RgbaImageDataLike, u: number, v: number): GroupTexel | null {
   if (!isValidImage(image) || !Number.isFinite(u) || !Number.isFinite(v)

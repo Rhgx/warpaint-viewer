@@ -1,8 +1,7 @@
-// Port of CPaintKitDefinition::GetItemPaintKitDefinitionKV (econ_paintkit.cpp) to JS.
-// Produces, for each (paintkit definition, supported weapon slot, wear level, team), a fully
-// resolved compositor operation-stage tree with all variables substituted.
+// Port of CPaintKitDefinition::GetItemPaintKitDefinitionKV (econ_paintkit.cpp). For each
+// (paintkit, weapon slot, wear, team) it builds a compositor stage tree with variables substituted.
 
-// The paint tool, 15 stock, repeated `item`, and workshop weapon slot field names on CMsgPaintKit_Definition.
+// Named weapon slot fields on CMsgPaintKit_Definition (the repeated item[] is handled separately).
 export const WEAPON_SLOTS = [
   'paintkit_tool', 'flamethrower', 'grenadelauncher', 'knife', 'medigun', 'minigun', 'pistol', 'revolver',
   'rocketlauncher', 'scattergun', 'shotgun', 'smg', 'sniperrifle', 'stickybomb_launcher',
@@ -14,18 +13,13 @@ export const WEAPON_SLOTS = [
   'trenchgun', 'winger_pistol',
 ];
 
-// Build indexes for fast reference resolution.
-export function buildIndex(operations, itemDefs, variables) {
+export function buildIndex(operations, itemDefs) {
   const opByIdx = new Map();
   for (const o of operations) opByIdx.set(o.header.defindex, o);
   const itemDefByIdx = new Map();
   for (const it of itemDefs) itemDefByIdx.set(it.header.defindex, it);
-  const varByIdx = new Map();
-  for (const v of variables) varByIdx.set(v.header.defindex, v);
-  return { opByIdx, itemDefByIdx, varByIdx };
+  return { opByIdx, itemDefByIdx };
 }
-
-// ---- value parsing helpers (mirror the KV->compositor parse functions named in the proto) ----
 
 function toNums(str) {
   if (str == null) return [];
@@ -59,8 +53,7 @@ function parseVec2(str, dflt) {
   return dflt.slice();
 }
 
-// Convert a raw compositor texture reference (no "materials/" prefix, no ".vtf") into the
-// public recipe path "textures/<path>.webp".
+// Compositor texture ref (no materials/ prefix or extension) -> recipe path textures/<path>.webp.
 export function texturePublicPath(ref) {
   if (!ref) return null;
   let p = String(ref).trim().replace(/\\/g, '/');
@@ -70,10 +63,7 @@ export function texturePublicPath(ref) {
   return `textures/${p}.webp`;
 }
 
-// ---- variable dictionary construction ----
-
-// A CMsgVarField holds either a `variable` reference (name) plus optional baked default value,
-// or a literal value in one of the oneof fields. Resolve to a string using the var dict.
+// A CMsgVarField is a variable reference with a baked default, or a literal oneof value.
 function varFieldValue(field, dict) {
   if (field == null) return undefined;
   if (field.variable !== undefined && field.variable !== '') {
@@ -125,8 +115,6 @@ function applyVarDefOverrides(dict, varDefs) {
   }
 }
 
-// ---- operation tree -> resolved recipe node tree ----
-
 const DEFAULTS = {
   adjustBlack: [0, 0],
   adjustOffset: [1, 1],
@@ -137,11 +125,11 @@ const DEFAULTS = {
   scaleUV: [1, 1],
 };
 
-function resolveTextureRef(stage, dict, team, field) {
+function resolveTextureRef(stage, dict, team) {
   // team texture selection: red uses texture_red||texture, blu uses texture_blue||texture
   let chosen;
-  if (team === 'blu') chosen = stage.texture_blue || stage[field] || stage.texture;
-  else chosen = stage.texture_red || stage[field] || stage.texture;
+  if (team === 'blu') chosen = stage.texture_blue || stage.texture;
+  else chosen = stage.texture_red || stage.texture;
   const val = varFieldValue(chosen, dict);
   return texturePublicPath(val);
 }
@@ -191,7 +179,7 @@ function resolveStage(stage, ctx, dict, team, textureRefs) {
   const s = stage[key];
 
   if (key === 'texture_lookup') {
-    const tex = resolveTextureRef(s, dict, team, 'texture');
+    const tex = resolveTextureRef(s, dict, team);
     if (tex) textureRefs.add(tex);
     return { type: 'texture_lookup', texture: tex, ...commonTransforms(s, dict) };
   }
@@ -242,10 +230,9 @@ function resolveStage(stage, ctx, dict, team, textureRefs) {
   return null;
 }
 
-// Resolve one (paintkitDef, slotItem, itemDef, wearIdx, team) into a recipe tree.
-// Returns { tree, textureRefs:Set } or null if it cannot resolve.
+// Resolve one (paintkit, slot, item def, wear, team) to { tree, textureRefs }, or null if no operation applies.
 export function resolveRecipe(paintkitDef, slotItem, itemDef, wearIdx, team, ctx) {
-  // Determine operation message + base variable header (per GetItemPaintKitDefinitionKV).
+  // Operation and base variables; a per-wear template overrides both.
   let operationMsg = null;
   let baseHeaderVars = paintkitDef.header.variables;
   if (paintkitDef.operation_template) {
@@ -271,8 +258,7 @@ export function resolveRecipe(paintkitDef, slotItem, itemDef, wearIdx, team, ctx
 
   const textureRefs = new Set();
   const nodes = resolveNodes(operationMsg.operation_node, ctx, dict, team, textureRefs);
-  // The operation root is an implicit list of nodes; a paintkit operation is a single tree,
-  // so if there is exactly one root node use it directly, else wrap in a passthrough combine.
+  // One root node is used directly; several are wrapped in a passthrough combine.
   let tree;
   if (nodes.length === 1) tree = nodes[0];
   else tree = { type: 'combine_multiply', rootCopy: true, nodes };

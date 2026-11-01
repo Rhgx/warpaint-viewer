@@ -1,4 +1,5 @@
 import type { ResolvedNode } from '../../compositor/resolve';
+import { isLayerSourceNode } from '../layers/recipeLayers';
 
 const BLACK_PIXEL = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%221%22 height=%221%22%3E%3Cpath d=%22M0 0h1v1H0z%22/%3E%3C/svg%3E';
 
@@ -18,11 +19,7 @@ function blackBackground(): ResolvedNode {
   };
 }
 
-/**
- * A single authored layer can appear in an early technical wear branch and
- * again in the final colour branch. Both occurrences share a source key, but
- * the later one is the texture the user recognises on the finished paint.
- */
+/** A layer can appear in an early wear branch and again in the final colour branch. Pick the last, which the finished paint shows. */
 export function preferredLayerOccurrenceIndex(
   targets: readonly { readonly sourceKey: string }[],
   active: { readonly sourceKey: string } | null,
@@ -47,12 +44,7 @@ export function collectResolvedLayerIsolationNodes(
       return;
     }
     const preceding = index > 0 ? node.nodes[index - 1] : undefined;
-    output.push(preceding && (
-      preceding.type === 'texture_lookup'
-      || preceding.type === 'combine_multiply'
-      || preceding.type === 'combine_add'
-      || preceding.type === 'combine_lerp'
-    ) ? {
+    output.push(preceding && isLayerSourceNode(preceding) ? {
       type: 'combine_lerp',
       black: 0,
       white: 1,

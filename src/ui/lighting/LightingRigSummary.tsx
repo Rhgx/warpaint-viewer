@@ -1,16 +1,12 @@
 import { Aperture, SlidersHorizontal } from 'lucide-react';
 import { useStore } from 'zustand';
+import { CUSTOM_AMBIENT_MAX, CUSTOM_EXPOSURE_MAX, CUSTOM_EXPOSURE_MIN } from '../../viewer/lighting/customLighting';
 import type { LightingStore } from '../../viewer/lighting/lightingStore';
 import { SwitchField } from '../common/controls';
 import { LightIcon, ScalarRow } from './lightingFields';
 import './Lighting.css';
 
-/**
- * The inspector half of custom lighting. It keeps only what belongs in a
- * settings column: the rig-wide ambient and exposure, plus a chip per light so
- * the rig stays readable and selectable without leaving the panel. Per-light
- * authoring lives in the stage panel, next to the render it changes.
- */
+/** Inspector half of custom lighting: rig-wide values and a chip per light. Per-light editing is on the stage. */
 export function LightingRigSummary({
   store,
   onTogglePanel,
@@ -64,7 +60,7 @@ export function LightingRigSummary({
         label="Ambient"
         value={rig.ambient}
         min={0}
-        max={1}
+        max={CUSTOM_AMBIENT_MAX}
         step={0.01}
         onPreviewChange={(ambient) => onPreviewChange({ ...rig, ambient })}
         onChange={(ambient) => onChange({ ...rig, ambient })}
@@ -72,8 +68,8 @@ export function LightingRigSummary({
       <ScalarRow
         label="Exposure"
         value={rig.exposure}
-        min={0.1}
-        max={4}
+        min={CUSTOM_EXPOSURE_MIN}
+        max={CUSTOM_EXPOSURE_MAX}
         step={0.05}
         onPreviewChange={(exposure) => onPreviewChange({ ...rig, exposure })}
         onChange={(exposure) => onChange({ ...rig, exposure })}

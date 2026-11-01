@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore, type StoreApi } from 'zustand';
 import type { CSSProperties, ReactNode } from 'react';
-import { Braces, Copy, Expand, Eye, EyeOff, Link2, Magnet, Minus, MoreHorizontal, Move, Plus, RotateCw, Unlink2 } from 'lucide-react';
+import { Braces, Copy, Eye, EyeOff, Link2, Magnet, Minus, MoreHorizontal, Plus, Unlink2 } from 'lucide-react';
+
 import {
-  clampStickerPlacement,
+  constrainStickerPlacementToTexture,
   moveStickerPlacement,
   resizeStickerFromCorner,
   resizeStickerFromEdge,
@@ -34,16 +35,25 @@ import {
 } from './GroupStickerUvPreview';
 import { WeaponUvSurface } from './WeaponUvSurface';
 import { formatStickerValue } from './stickerValueFormat';
+import {
+  adaptiveSnapStep,
+  nextNumber,
+  pointerInSurface,
+  rotationForPointer,
+  surfaceSize,
+} from './stickerPlacementEditorHelpers';
+import {
+  CORNER_ROWS,
+  CORNERS,
+  EDGES,
+  TOOLS,
+  TOOL_SHORTCUTS,
+  type PointerInteraction,
+  type StickerPlacementChangeReason,
+  type StickerSelectionTarget,
+  type StickerTransformTool,
+} from './stickerPlacementEditorTypes';
 import './StickerPlacementEditor.css';
-
-export type StickerPlacementChangeReason = 'move' | 'resize' | 'rotate' | 'nudge' | 'value' | 'fit';
-export type StickerTransformTool = 'move' | 'scale' | 'turn';
-
-export interface StickerSelectionTarget {
-  readonly id: string;
-  readonly label: string;
-  readonly placement: StickerPlacement;
-}
 
 export interface StickerPlacementEditorProps {
   readonly draftStore: StoreApi<StickerAffineQuad | null>;
@@ -62,11 +72,7 @@ export interface StickerPlacementEditorProps {
   readonly onPlacementChange: (placement: StickerPlacement, reason: StickerPlacementChangeReason) => void;
   readonly onQuadChange?: (quad: StickerAffineQuad) => void;
   readonly protoVariableNames?: Partial<Record<'tl' | 'tr' | 'bl', string>>;
-  /**
-   * Changes when the owner selects a different sticker. The view then frames
-   * that sticker, because a shallow, very wide drawer cannot show a whole
-   * texture atlas and a workable decal at the same time.
-   */
+  /** Changes when the owner picks another sticker; the view then frames it, as a wide drawer cannot show atlas and decal together. */
   readonly focusKey?: string;
   /** Lets the owner make one history item for a drag rather than one per frame. */
   readonly onInteractionStart?: () => void;
@@ -76,7 +82,6 @@ export interface StickerPlacementEditorProps {
   readonly label?: string;
   /** Optional source dimensions ratio so the preview does not distort the texture. */
   readonly textureAspect?: number;
-  readonly stickerAspect?: number;
   /** Creates a valid authored quad when the current one is writable but degenerate. */
   readonly onCreatePlacement?: () => void;
   readonly notice?: string | null;
@@ -104,78 +109,7 @@ export interface StickerPlacementEditorProps {
   readonly variantCount?: number;
 }
 
-type PointerInteraction =
-  | { readonly kind: 'move'; readonly initial: StickerPlacement; readonly pointer: StickerPoint }
-  | { readonly kind: 'resize'; readonly initial: StickerPlacement; readonly corner: StickerCorner; readonly preserveAspect: boolean }
-  | { readonly kind: 'resize-axis'; readonly initial: StickerPlacement; readonly edge: StickerEdge; readonly preserveAspect: boolean }
-  | { readonly kind: 'rotate'; readonly initial: StickerPlacement }
-  | { readonly kind: 'pan'; readonly initial: StickerViewport; readonly pointer: StickerPoint };
-
-const CORNERS: readonly StickerCorner[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
-const EDGES: readonly StickerEdge[] = ['top', 'right', 'bottom', 'left'];
-const TOOLS: readonly { readonly id: StickerTransformTool; readonly label: string; readonly Icon: typeof Move }[] = [
-  { id: 'move', label: 'Move', Icon: Move },
-  { id: 'scale', label: 'Scale', Icon: Expand },
-  { id: 'turn', label: 'Turn', Icon: RotateCw },
-];
-
-const CORNER_ROWS = [
-  { corner: 'tl' as const, label: 'Top left', short: 'TL', x: 'tlX' as const, y: 'tlY' as const, field: 'dest_tl' },
-  { corner: 'tr' as const, label: 'Top right', short: 'TR', x: 'trX' as const, y: 'trY' as const, field: 'dest_tr' },
-  { corner: 'bl' as const, label: 'Bottom left', short: 'BL', x: 'blX' as const, y: 'blY' as const, field: 'dest_bl' },
-];
-
-/**
- * Power-of-two fractions of the texture. Halving keeps every coarser grid a
- * superset of every finer one, so zooming never moves an already-snapped edge.
- */
-const SNAP_LADDER = [1 / 8, 1 / 16, 1 / 32, 1 / 64, 1 / 128, 1 / 256] as const;
-/** Roughly how many grid cells should span the visible area at any zoom. */
-const SNAP_CELLS_ACROSS_VIEW = 16;
-
-/**
- * A grid fixed in texture space is drawn inside the zoomed canvas, so it grows
- * on screen as the user zooms in and a single cell can swallow the sticker.
- * Pick the ladder rung nearest a constant on-screen density instead: the grid
- * stays legible, and zooming in genuinely buys finer snapping.
- */
-function adaptiveSnapStep(zoom: number): number {
-  const target = 1 / (SNAP_CELLS_ACROSS_VIEW * Math.max(zoom, 0.01));
-  let best: number = SNAP_LADDER[0];
-  for (const step of SNAP_LADDER) {
-    if (Math.abs(Math.log(step / target)) < Math.abs(Math.log(best / target))) best = step;
-  }
-  return best;
-}
-
-function pointerInSurface(event: Pick<React.MouseEvent<HTMLElement>, 'clientX' | 'clientY'>, surface: HTMLElement): StickerPoint {
-  const bounds = surface.getBoundingClientRect();
-  return {
-    x: event.clientX - bounds.left,
-    y: event.clientY - bounds.top,
-  };
-}
-
-function surfaceSize(surface: HTMLElement): StickerViewportSize {
-  const bounds = surface.getBoundingClientRect();
-  return { width: Math.max(bounds.width, 1), height: Math.max(bounds.height, 1) };
-}
-
-function rotationForPointer(pointer: StickerPoint, placement: StickerPlacement): number {
-  return Math.atan2(pointer.y - placement.y, pointer.x - placement.x) * (180 / Math.PI) + 90;
-}
-
-function nextNumber(value: string): number | null {
-  if (!value.trim()) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-/**
- * A compact, texture-space decal editor. Its placement is shared verbatim by
- * the model-side interaction, keeping 2D precision work and 3D placement in
- * lockstep without exposing implementation detail to the user.
- */
+/** Shared verbatim with the model-side interaction, so 2D edits and 3D placement stay in lockstep. */
 export function StickerPlacementEditor({
   draftStore,
   textureSrc,
@@ -225,11 +159,9 @@ export function StickerPlacementEditor({
   const revertRef = useRef<StickerPlacement | null>(null);
   const [internalTool, setInternalTool] = useState<StickerTransformTool>('move');
   const [internalAspectLocked, setInternalAspectLocked] = useState(true);
-  // Precision work is a normal part of placing a decal, so the numbers are
-  // present by default and only dismissed when the surface is wanted clear.
+  // Numbers show by default; they are hidden only when the surface is wanted clear.
   const [valuesOpen, setValuesOpen] = useState(true);
   const [valueMode, setValueMode] = useState<'simple' | 'proto' | 'variants'>('simple');
-  // A sticker without a variants panel falls back to placement values.
   const shownMode = valueMode === 'variants' && !variantsPanel ? 'simple' : valueMode;
   const [editingValue, setEditingValue] = useState<{ field: keyof StickerPlacement; text: string } | null>(null);
   const [cornerError, setCornerError] = useState<string | null>(null);
@@ -237,7 +169,7 @@ export function StickerPlacementEditor({
   const [internalSnapEnabled, setInternalSnapEnabled] = useState(false);
   const [viewport, setViewport] = useState<StickerViewport>(DEFAULT_STICKER_VIEWPORT);
   const [texturePixels, setTexturePixels] = useState<StickerViewportSize | null>(null);
-  const placementValue = clampStickerPlacement(placement);
+  const placementValue = constrainStickerPlacementToTexture(placement);
   const quadValue = quad ?? stickerPlacementToQuad(placementValue);
   const quadKey = quadValue ? [quadValue.tl, quadValue.tr, quadValue.bl].flat().join('|') : '';
   const [cornerDraft, setCornerDraft] = useState({ tlX: '', tlY: '', trX: '', trY: '', blX: '', blY: '' });
@@ -283,8 +215,7 @@ export function StickerPlacementEditor({
     const surface = surfaceRef.current;
     if (!surface || typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(() => {
-      // Re-frame rather than merely clamp while the framing is still pending,
-      // otherwise a drawer that grows after mount leaves the sticker off-screen.
+      // Re-frame, not just clamp, while framing is pending; a drawer that grows after mount would hide the sticker.
       if (pendingFrameRef.current && frameRef.current) {
         frameRef.current();
         return;
@@ -302,15 +233,15 @@ export function StickerPlacementEditor({
 
   const emit = (next: StickerPlacement, reason: StickerPlacementChangeReason, snap = false) => {
     exitModelPartPicking();
-    const limited = clampStickerPlacement(next);
+    const limited = constrainStickerPlacementToTexture(next);
     onPlacementChange(snap ? snapStickerPlacement(limited, safeSnapStep) : limited, reason);
   };
 
-  const setTool = (nextTool: StickerTransformTool) => {
+  const setTool = useCallback((nextTool: StickerTransformTool) => {
     setInternalTool(nextTool);
     onActiveToolChange?.(nextTool);
     onModelPartPickingChange?.(false);
-  };
+  }, [onActiveToolChange, onModelPartPickingChange]);
 
   useEffect(() => {
     if (unavailable) return;
@@ -325,16 +256,14 @@ export function StickerPlacementEditor({
         onModelPartPickingChange?.(false);
         return;
       }
-      const nextTool = ({ '1': 'move', '2': 'scale', '3': 'turn' } as const)[event.key as '1' | '2' | '3'];
+      const nextTool = TOOL_SHORTCUTS[event.key];
       if (!nextTool) return;
       event.preventDefault();
-      setInternalTool(nextTool);
-      onActiveToolChange?.(nextTool);
-      onModelPartPickingChange?.(false);
+      setTool(nextTool);
     };
     window.addEventListener('keydown', onShortcut);
     return () => window.removeEventListener('keydown', onShortcut);
-  }, [modelPartPickingActive, onActiveToolChange, onModelPartPickingChange, unavailable]);
+  }, [modelPartPickingActive, onModelPartPickingChange, setTool, unavailable]);
 
   const setSnap = (enabled: boolean) => {
     setInternalSnapEnabled(enabled);
@@ -531,11 +460,7 @@ export function StickerPlacementEditor({
     onInteractionEnd?.();
   };
 
-  /**
-   * Typing is a gesture, not a stream of separate edits. The first keystroke
-   * opens one history entry and a pause closes it, so a burst of typing undoes
-   * in a single step exactly like a drag does.
-   */
+  /** A burst of typing is one history entry: the first keystroke opens it and a pause closes it. */
   const noteTyping = () => {
     const current = typingRef.current;
     if (current.timer === null) onInteractionStart?.();
@@ -615,14 +540,11 @@ export function StickerPlacementEditor({
       return;
     }
     const size = surfaceSize(surface);
-    // The texture canvas at Fit is aspect-correct. This factor makes one
-    // source texel one CSS pixel, instead of calling the fitted view 100%.
+    // This factor makes one source texel one CSS pixel, not 100% of the fitted view.
     setViewportZoom(clampStickerViewportZoom(texturePixels.width / size.width));
   };
 
-  // React delegates wheel events through the document, where browsers may
-  // treat them as passive. Own the viewport wheel natively so preventDefault
-  // reliably stops the workbench/page from scrolling while zooming.
+  // React wheel listeners are passive, so attach natively for preventDefault to stop page scroll.
   useEffect(() => {
     const surface = surfaceRef.current;
     if (!surface || unavailable) return;
@@ -642,9 +564,7 @@ export function StickerPlacementEditor({
         );
         const interaction = interactionRef.current;
         if (interaction?.kind === 'pan') {
-          // Pointer moves calculate pan from the gesture's baseline. Rebase
-          // that baseline after wheel zoom so the next right-drag event does
-          // not restore the zoom and pan values from before the wheel event.
+          // Pan is measured from the gesture baseline; rebase it so right-drag does not undo the zoom.
           interactionRef.current = { kind: 'pan', initial: next, pointer };
         }
         return next;
@@ -654,20 +574,14 @@ export function StickerPlacementEditor({
     return () => surface.removeEventListener('wheel', zoom);
   }, [unavailable]);
 
-  /**
-   * Frame the selected sticker. The drawer is wide but shallow, so fitting the
-   * whole texture leaves the decal a few pixels across. Showing the sticker at
-   * a workable size is what the user actually came here to do, and Fit is one
-   * click away when they want the overview back.
-   */
+  /** Frames the selected sticker at a workable size; Fit restores the whole-texture view. */
   useEffect(() => {
     if (!quadKey) return;
-    const format = (value: number) => String(Number(value.toFixed(6)));
     const [tlX, tlY, trX, trY, blX, blY] = quadKey.split('|').map(Number);
     setCornerDraft({
-      tlX: format(tlX), tlY: format(tlY),
-      trX: format(trX), trY: format(trY),
-      blX: format(blX), blY: format(blY),
+      tlX: formatStickerValue(tlX), tlY: formatStickerValue(tlY),
+      trX: formatStickerValue(trX), trY: formatStickerValue(trY),
+      blX: formatStickerValue(blX), blY: formatStickerValue(blY),
     });
     setCornerError(null);
   }, [quadKey]);
@@ -722,7 +636,7 @@ export function StickerPlacementEditor({
     }, size));
   };
 
-  frameRef.current = () => frameSticker(clampStickerPlacement(placement));
+  frameRef.current = () => frameSticker(constrainStickerPlacementToTexture(placement));
 
   const focusRef = useRef<string | null>(null);
   useEffect(() => {
@@ -730,12 +644,10 @@ export function StickerPlacementEditor({
     const key = focusKey ?? null;
     if (focusRef.current === key) return;
     focusRef.current = key;
-    // The drawer and the surface may still be settling into their final size,
-    // so stay armed until the box stops changing or the user takes over.
+    // The drawer and surface may still be settling, so stay armed until the box stops changing.
     pendingFrameRef.current = true;
-    frameSticker(clampStickerPlacement(placement));
-    // Framing follows the selected sticker, not every placement edit, so the
-    // view stays still while the user drags.
+    frameSticker(constrainStickerPlacementToTexture(placement));
+    // Frame on sticker change, not every placement edit, so the view stays still while dragging.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey, unavailable, texturePixels]);
 
@@ -883,8 +795,7 @@ export function StickerPlacementEditor({
               ['rotation', 'Turn', 'Sticker rotation in degrees', 1, undefined],
             ] as const).map(([field, visibleLabel, ariaLabel, step, minimum]) => {
               const display = formatStickerValue(placementValue[field]);
-              // While a field is focused it shows exactly what was typed, so a
-              // live commit cannot reformat the text under the caret.
+              // A focused field shows the typed text, so a live commit cannot reformat it under the caret.
               const shown = editingValue?.field === field ? editingValue.text : display;
               return (
                 <label key={field} title={ariaLabel}>

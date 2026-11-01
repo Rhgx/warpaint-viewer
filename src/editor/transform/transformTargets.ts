@@ -8,9 +8,10 @@ import {
   type VarDefMsg,
   type VarFieldMsg,
 } from '../../protodefs/messages';
-import type { TextureTransformFlipField, TextureTransformRangeField, TextureTransformTarget } from '../mutations';
+import type { TextureTransformFlipField, TextureTransformRangeField, TextureTransformTarget } from './transformMutations';
+import { collectVariables } from '../layers/groupTargets';
 
-/** Proto defaults for the four range fields (tools/lib/resolve.mjs DEFAULTS, mirrored here for parsing). */
+/** Proto defaults for the four range fields, mirrored from the resolver for parsing. */
 const RANGE_DEFAULTS: Record<TextureTransformRangeField, readonly [number, number]> = {
   rotation: [0, 0],
   scale_uv: [1, 1],
@@ -24,16 +25,11 @@ export interface TextureTransformRangeFieldState {
   readonly mode: 'fixed' | 'varies';
   readonly min: number;
   readonly max: number;
-  readonly isVariable: boolean;
-  /** True while a weapon/wear scope could still override this field's shared default. */
-  readonly inheritable: boolean;
   readonly blockers: readonly TextureTransformFieldBlocker[];
 }
 
 interface TextureTransformFlipFieldState {
   readonly allowed: boolean;
-  readonly isVariable: boolean;
-  readonly inheritable: boolean;
   readonly blockers: readonly TextureTransformFieldBlocker[];
 }
 
@@ -59,13 +55,7 @@ export interface TextureTransformTargetInfo {
 }
 
 export interface TextureTransformDiscovery {
-  /**
-   * Aligned by position with discoverGroupSelectTargets()'s own `targets`
-   * array: both walk the same operation tree in the same left-to-right,
-   * depth-first order, so `targets[i]` here describes the stage masked by the
-   * select stage at `targets[i]` there. Never null in practice (every select
-   * stage encountered produces exactly one entry); kept nullable defensively.
-   */
+  /** Aligned by position with discoverGroupSelectTargets().targets (same traversal order). Never null in practice. */
   targets: (TextureTransformTargetInfo | null)[];
 }
 
@@ -84,28 +74,9 @@ function literalFieldValue(field: VarFieldMsg): string | undefined {
   return undefined;
 }
 
-/** Same collection shape discoverGroupSelectTargets() builds, duplicated here rather than imported since it is a private detail of that module. */
-function collectVariables(messages: ProtoDefKitMessages): Map<string, VarDefMsg[]> {
-  const variables = new Map<string, VarDefMsg[]>();
-  for (const message of [messages.definition, messages.operation]) {
-    const header = message.header as { variables?: Many<VarDefMsg> } | undefined;
-    for (const variable of many(header?.variables)) {
-      if (variables.has(variable.name)) continue;
-      const sameHeader = many(header?.variables).filter((entry) => entry.name === variable.name);
-      variables.set(variable.name, sameHeader);
-    }
-  }
-  return variables;
-}
-
 /**
- * A weapon-local variable override collection, valid for any field on the
- * active weapon regardless of which specific variable it names: decoder.ts's
- * traceResolvedValues() gives every weapon-scoped variable on one weapon the
- * identical sourceRoot (`[...slotPath, 'data', 'variable']`), so any trace
- * with that shape reveals where a brand new override can be written even when
- * the particular transform field being edited has never been overridden.
- * Left undefined when the traces disagree, rather than guessing between them.
+ * Weapon-local variable collection where a new override can be written for the active weapon.
+ * Every weapon-scoped trace shares one source root, so this is undefined when traces disagree.
  */
 function findWeaponOverrideCollectionPath(
   provenance: readonly ProtoDefValueTrace[] | undefined,
@@ -149,7 +120,6 @@ function parseAuthoredBool(raw: string | undefined): boolean {
 
 interface ResolvedFieldValue {
   value?: string;
-  inheritable: boolean;
   /** Exact weapon-local source, when this field's variable already has one. */
   sourcePath?: readonly string[];
 }
@@ -182,32 +152,25 @@ function weaponOverrideValue(
   };
 }
 
-/**
- * Reads one transform field's currently effective value. A variable-backed
- * field prefers the resolved value the active weapon is actually showing
- * (from provenance, matched by the same fieldPath convention decoder.ts's
- * traceNodes() writes), and falls back to the shared header default when no
- * per-weapon trace is available (e.g. the harness path with no provenance).
- */
+/** Reads a field's effective value: the active weapon's traced value when available, else the shared header default. */
 function resolveFieldValue(
   field: VarFieldMsg | undefined,
   fieldPath: readonly string[],
   variables: ReadonlyMap<string, VarDefMsg[]>,
   provenance: readonly ProtoDefValueTrace[] | undefined,
 ): ResolvedFieldValue {
-  if (!field) return { inheritable: false };
-  if (!field.variable) return { value: literalFieldValue(field), inheritable: false };
+  if (!field) return {};
+  if (!field.variable) return { value: literalFieldValue(field) };
 
   const marker = fieldPath.join('\0');
   const trace = provenance?.find((entry) => entry.fieldPath.join('\0') === marker);
   const matches = variables.get(field.variable);
-  const inheritable = matches?.length === 1 && matches[0].inherit !== false;
   if (trace) {
     const editable = trace.provenance.editableSourcePath;
     const sourcePath = editable && editable[0] === 'definition' && editable[1] !== 'header' ? editable : undefined;
-    return { value: trace.provenance.effectiveValue, inheritable, sourcePath };
+    return { value: trace.provenance.effectiveValue, sourcePath };
   }
-  return { value: matches?.length === 1 ? matches[0].value : undefined, inheritable };
+  return { value: matches?.length === 1 ? matches[0].value : undefined };
 }
 
 function buildRangeField(
@@ -221,10 +184,7 @@ function buildRangeField(
 ): { state: TextureTransformRangeFieldState; sourcePath?: readonly string[] } {
   const fallback = RANGE_DEFAULTS[fieldName];
   const traced = resolveFieldValue(field, [...stagePath, fieldName], variables, provenance);
-  const local = weaponOverrideValue(messages, weaponOverridePath, field?.variable);
-  const resolved = local
-    ? { value: local.value, inheritable: traced.inheritable, sourcePath: local.sourcePath }
-    : traced;
+  const resolved = weaponOverrideValue(messages, weaponOverridePath, field?.variable) ?? traced;
   const parsed = field === undefined ? { mode: 'fixed' as const, min: fallback[0], max: fallback[1] } : parseAuthoredRange(resolved.value, fallback);
   const blockers: TextureTransformFieldBlocker[] = [];
   if (field !== undefined && parsed === null) blockers.push('invalid-value');
@@ -234,8 +194,6 @@ function buildRangeField(
       mode: parsed?.mode ?? 'fixed',
       min: parsed?.min ?? fallback[0],
       max: parsed?.max ?? fallback[1],
-      isVariable: field?.variable !== undefined,
-      inheritable: resolved.inheritable,
       blockers,
     },
     sourcePath: resolved.sourcePath,
@@ -252,17 +210,12 @@ function buildFlipField(
   weaponOverridePath: readonly string[] | undefined,
 ): { state: TextureTransformFlipFieldState; sourcePath?: readonly string[] } {
   const traced = resolveFieldValue(field, [...stagePath, fieldName], variables, provenance);
-  const local = weaponOverrideValue(messages, weaponOverridePath, field?.variable);
-  const resolved = local
-    ? { value: local.value, inheritable: traced.inheritable, sourcePath: local.sourcePath }
-    : traced;
+  const resolved = weaponOverrideValue(messages, weaponOverridePath, field?.variable) ?? traced;
   const blockers: TextureTransformFieldBlocker[] = [];
   if (field?.variable !== undefined && resolved.value === undefined) blockers.push('unresolved-value');
   return {
     state: {
       allowed: parseAuthoredBool(resolved.value),
-      isVariable: field?.variable !== undefined,
-      inheritable: resolved.inheritable,
       blockers,
     },
     sourcePath: resolved.sourcePath,
@@ -284,8 +237,8 @@ function textureFieldRef(field: VarFieldMsg, variables: ReadonlyMap<string, VarD
 }
 
 function blockedTarget(reason: TextureTransformTargetBlocker): TextureTransformTargetInfo {
-  const emptyRange: TextureTransformRangeFieldState = { mode: 'fixed', min: 0, max: 0, isVariable: false, inheritable: false, blockers: [] };
-  const emptyFlip: TextureTransformFlipFieldState = { allowed: false, isVariable: false, inheritable: false, blockers: [] };
+  const emptyRange: TextureTransformRangeFieldState = { mode: 'fixed', min: 0, max: 0, blockers: [] };
+  const emptyFlip: TextureTransformFlipFieldState = { allowed: false, blockers: [] };
   return {
     target: { stagePath: [] },
     rotation: emptyRange,
@@ -309,13 +262,10 @@ function buildTarget(
   if (!precedingNode || !precedingPath) return blockedTarget('no-texture-lookup-stage');
   const authoredStage = precedingNode.stage;
   if (!authoredStage) return blockedTarget('ambiguous-source-stage');
-  const stageEntry: readonly [string, TextureStageMsg] | null = authoredStage.texture_lookup
-    ? ['texture_lookup', authoredStage.texture_lookup]
-    : null;
-  if (!stageEntry) return blockedTarget('ambiguous-source-stage');
-  const [stageName, transformStage] = stageEntry;
+  const transformStage = authoredStage.texture_lookup;
+  if (!transformStage) return blockedTarget('ambiguous-source-stage');
 
-  const stagePath = [...precedingPath, 'stage', stageName];
+  const stagePath = [...precedingPath, 'stage', 'texture_lookup'];
   const rotation = buildRangeField(messages, transformStage.rotation, stagePath, 'rotation', variables, provenance, weaponOverridePath);
   const scaleUv = buildRangeField(messages, transformStage.scale_uv, stagePath, 'scale_uv', variables, provenance, weaponOverridePath);
   const translateU = buildRangeField(messages, transformStage.translate_u, stagePath, 'translate_u', variables, provenance, weaponOverridePath);
@@ -355,12 +305,8 @@ function buildTarget(
 }
 
 /**
- * A multiply layer masks a combine of its own texture and a multiply texture
- * (`texture_layer_4` x `multiply_layer_1` in stock paints), and TF2 ignores a
- * combine's UV fields. The layer's placement then lives on the combine child
- * its selector names: `texture_layer_4_select_1` names `texture_layer_4`, and
- * team textures add a suffix such as `texture_layer_4_blue`. Returns null
- * unless exactly one direct child texture matches.
+ * TF2 ignores a combine's UV fields, so a multiply layer's transform lives on the child its
+ * selector names (`texture_layer_4_select_1` names `texture_layer_4`). Null unless exactly one child matches.
  */
 function combineLayerChild(
   combineNode: OperationNodeMsg,
@@ -384,12 +330,7 @@ function combineLayerChild(
   return { node: child, path: isArray ? [...childrenPath, String(index)] : childrenPath, index };
 }
 
-/**
- * Visits select stages in exactly the traversal order
- * discoverGroupSelectTargets()'s selectTextureReferences() uses (array order,
- * combine children before the next sibling, sticker children last), so the
- * two discoveries stay index-aligned without sharing state.
- */
+/** Visits select stages in the same order as discoverGroupSelectTargets(), keeping the two index-aligned. */
 function walk(
   nodes: Many<OperationNodeMsg>,
   path: readonly string[],
@@ -495,12 +436,7 @@ export function discoverBaseTextureTransformTarget(
   return matches.findLast((match) => match.transform.blockers.length === 0) ?? matches.at(-1) ?? null;
 }
 
-/**
- * Per paint layer, find the texture stage whose transform fields the layer's
- * selector masks: the immediately preceding texture sibling, or the child of
- * a preceding combine that the selector names (see combineLayerChild). Other
- * combines, stickers and other sibling types remain ambiguous here.
- */
+/** Per paint layer, the texture stage its selector masks: the preceding texture sibling, or the combine child the selector names. */
 export function discoverTextureTransformTargets(
   messages: ProtoDefKitMessages,
   provenance?: readonly ProtoDefValueTrace[],

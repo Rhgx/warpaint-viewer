@@ -3,8 +3,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import {
-  preStickerSurface,
-  recipeWithoutStickerOccurrence,
   recipeWithoutStickerOccurrences,
   resolvedGroupStickerContext,
 } from '../../../src/editor/sticker/stickerSurface';
@@ -15,17 +13,6 @@ import { dig } from '../fixtures';
 const SVG = /^data:image\/svg\+xml/;
 
 test('sticker surface preview source contract', () => {
-  const nested: CombineNode = {
-    type: 'combine_multiply',
-    nodes: [
-      { type: 'texture_lookup', texture: 'patterns/colour' },
-      { type: 'select', groups: 'patterns/groups', select: [1] },
-    ],
-  };
-  const stage: Pick<ApplyStickerNode, 'nodes'> = { nodes: [nested] };
-  assert.equal(preStickerSurface(stage), nested, 'the complete nested pre-sticker tree is preserved');
-  assert.equal(preStickerSurface({ nodes: [] }), null, 'a missing surface is not replaced with an invented preview');
-
   const firstSticker: ApplyStickerNode = {
     type: 'apply_sticker', stickers: [{ base: 'stickers/first' }],
     destTl: [0.1, 0.1], destTr: [0.2, 0.1], destBl: [0.1, 0.2], nodes: [{ type: 'texture_lookup', texture: 'base/first' }],
@@ -35,12 +22,12 @@ test('sticker surface preview source contract', () => {
     destTl: [0.6, 0.6], destTr: [0.7, 0.6], destBl: [0.6, 0.7], nodes: [{ type: 'texture_lookup', texture: 'base/second' }],
   };
   const completeRecipe: CombineNode = { type: 'combine_add', nodes: [firstSticker, secondSticker] };
-  const withoutSecond = recipeWithoutStickerOccurrence(completeRecipe, 1);
+  const withoutSecond = recipeWithoutStickerOccurrences(completeRecipe, [1]);
   assert.ok(withoutSecond, 'a known sticker occurrence can be removed');
   if (withoutSecond.type !== 'combine_add') throw new Error('expected combine recipe');
   assert.equal(withoutSecond.nodes[0], firstSticker, 'other sticker stages stay in the full recipe');
   assert.equal(withoutSecond.nodes[1], secondSticker.nodes[0], 'only the selected sticker is replaced by its base');
-  assert.equal(recipeWithoutStickerOccurrence(completeRecipe, 2), null, 'a missing occurrence never returns a misleading base');
+  assert.equal(recipeWithoutStickerOccurrences(completeRecipe, [2]), null, 'a missing occurrence never returns a misleading base');
   const withoutLogicalSticker = recipeWithoutStickerOccurrences(completeRecipe, [0, 1]);
   assert.ok(withoutLogicalSticker);
   if (withoutLogicalSticker.type !== 'combine_add') throw new Error('expected combine recipe');

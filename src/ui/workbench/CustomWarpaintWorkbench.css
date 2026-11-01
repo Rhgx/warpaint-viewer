@@ -32,14 +32,11 @@
   transform: none;
 }
 .custom-workbench-slot[data-expanded] .custom-workbench-resizer { display: none; }
-/* Files and Export are lists and read fine in a shallow drawer. Edit is a
-   workspace, so it opens taller by default. Dragging the handle still wins,
-   because that sets --workbench-h. */
+/* Edit opens taller by default; dragging the handle still wins, as it sets --workbench-h. */
 .custom-workbench-slot[data-open]:has(.custom-workbench[data-tab='editor']) {
   flex-basis: var(--workbench-h, clamp(320px, 46vh, 560px));
 }
-/* Dragging the top edge writes --workbench-h every pointermove; an eased
-   flex-basis would lag a frame behind the cursor. */
+/* Dragging writes --workbench-h on every pointermove; an eased flex-basis would lag the cursor. */
 .custom-workbench-slot:has(.custom-workbench-resizer[data-resizing]) { transition: none; }
 .custom-workbench {
   position: relative;
@@ -79,9 +76,7 @@
 }
 .custom-workbench-resizer:hover::after,
 .custom-workbench-resizer[data-resizing]::after { opacity: 1; }
-/* Header holds only the tab row and the close button, kept compact so the
-   drawer's own toolbar (filter/summary or the package/definitions bar) still
-   fits underneath it at the minimum panel height. */
+/* Header holds only the tab row and close button, so the drawer toolbar still fits at minimum height. */
 .custom-workbench-tabs-root {
   display: flex;
   flex: 1;
@@ -133,12 +128,6 @@
   font-variant-numeric: tabular-nums;
 }
 .custom-workbench-tab[data-active] .custom-workbench-tab-badge { color: var(--text); }
-.custom-workbench-tab-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-}
 .custom-workbench-close,
 .custom-workbench-expand {
   display: grid;
@@ -157,8 +146,7 @@
 .custom-workbench-expand:hover { background: var(--panel-2); color: var(--text); }
 .custom-workbench-expand[aria-pressed='true'] { background: var(--panel-2); color: var(--text); }
 
-/* Each tab panel owns its own toolbar/body pair, filling whatever height the
-   header left behind. */
+/* Each tab panel fills the height the header leaves. */
 .custom-workbench-panel {
   display: flex;
   flex: 1;
@@ -280,8 +268,7 @@
 .custom-asset-preview {
   position: relative;
   min-height: 116px;
-  /* Checkerboard so an imported texture's alpha channel is readable at a
-     glance instead of blending into a flat backdrop. */
+  /* Checkerboard so an imported texture's alpha is readable at a glance. */
   background-color: #23262b;
   background-image:
     linear-gradient(45deg, #2f333a 25%, transparent 25%),
@@ -334,8 +321,7 @@
 .custom-asset-name { gap: 4px; font-size: 11px; font-weight: 650; text-transform: capitalize; }
 .custom-asset-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .custom-asset-path { margin-top: 2px; overflow: hidden; color: var(--text-dim); font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
-/* The action row is pinned to the bottom of every card so the buttons line
-   up across the grid no matter how much file detail sits above them. */
+/* The action row is pinned to the bottom of every card, so buttons align across the grid. */
 .custom-asset-actions { gap: 5px; margin-top: auto; padding-top: 9px; }
 .custom-file-button,
 .custom-asset-reset {
@@ -418,16 +404,8 @@
   .custom-workbench-spinner { animation: none; }
 }
 
-/* One control size across every tab in this drawer.
-   These grew apart: text inputs sat at 28px with 13px text, select triggers at
-   29px, the export segments at 23px/10px and the buttons at 24px/9.5px, so a
-   single row could hold three different heights. Everything interactive here is
-   now --control-h tall with the same label size, scoped to the workbench so the
-   inspector's own density is left alone.
-
-   Written as compound selectors rather than :where(), which contributes no
-   specificity: these have to outrank the per-panel rules they normalize, and
-   those live in stylesheets that load after this one. */
+/* One control size across every tab here, so inputs, selects and buttons align.
+   Compound selectors, not :where(), so they outrank the per-panel rules they normalize. */
 .custom-workbench .definitions-btn,
 .custom-workbench .source-package-btn,
 .custom-workbench .custom-file-button,
@@ -445,12 +423,7 @@
   padding-inline: 9px;
 }
 
-/* Source chips.
-   Sources are state, not destinations: an archive and a set of definitions are
-   things you have, while Files and Export are things you do. Keeping them in the
-   header means what is loaded stays readable from whichever tab you are working
-   in, and costs no vertical space in a drawer that has none to spare. Selecting
-   one still opens its detail in the panel below, so nothing is lost. */
+/* Source chips: state you have, readable from any tab, using no vertical space. */
 .workbench-sources {
   display: flex;
   flex: 0 1 auto;
@@ -521,8 +494,7 @@
 @container (max-width: 720px) {
   .workbench-source:not(.workbench-source-import) span { display: none; }
 }
-/* Phone width: the tabs keep their full labels and the rest goes icon-only,
-   instead of the source chips sliding over Edit and Export. */
+/* Phone width: tabs keep their labels, and source chips do not slide over Edit and Export. */
 @container (max-width: 480px) {
   .custom-workbench-tablist { flex-shrink: 0; }
   .custom-workbench-tab > svg,
@@ -531,11 +503,7 @@
   .workbench-sources { padding-right: 2px; }
 }
 
-/* ---------- Edit tab: two-pane workbench split ----------
-   The Edit panel has no full-width action row. A fixed context column
-   (layer/sticker list, session-level history and save actions) sits beside a
-   content pane that gets every remaining pixel, matching the drawer's wide,
-   short shape better than a toolbar strip ever could. */
+/* Edit tab: a fixed context column beside a content pane that takes every remaining pixel. */
 .custom-workbench-editor-panel { container-type: inline-size; }
 
 .visual-warpaint-editor-dirty-dot[data-state='pending'],
@@ -690,8 +658,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Findable without opening every layer in turn: a layer with a non-default
-   transform range carries this marker beside its name in the list. */
+/* Marks a layer with a non-default transform range, so it is findable without opening each one. */
 .custom-workbench-edit-layer-vary {
   display: inline-grid;
   width: 16px;
@@ -727,9 +694,7 @@
   flex: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  /* Sticker art is transparent and can be any tone, including the greys a flat
-     backing would swallow. A checker reads as "no background" and keeps light,
-     dark and mid-grey art equally legible, matching the editor surface. */
+  /* A checker backing keeps light, dark and mid-grey sticker art equally legible. */
   background-color: color-mix(in srgb, var(--panel) 84%, var(--text));
   background-image: conic-gradient(
     from 90deg,
@@ -932,9 +897,7 @@
   transform: rotate(45deg);
 }
 
-/* Add variant opens from the sticker inspector, so the picker sits just right
-   of it (sidebar 260px, editor gap 12px, inspector 208px, gap 12px), under the
-   editor header, keeping the variant list in view. No arrow points anywhere. */
+/* The variant picker sits just right of the sticker inspector, under the editor header. */
 .custom-workbench-sticker-picker[data-purpose='variant'] {
   top: 46px;
   bottom: auto;
@@ -1170,10 +1133,7 @@
   flex: 1;
 }
 
-/* Rendered into whichever sub-view is showing, through its headerSlot, so the
-   two views share one header row and the switch never shifts position. Absent
-   entirely when there is no transform view to switch to, leaving the paint
-   panel exactly as it was before. */
+/* Rendered through headerSlot so both sub-views share one header row and the switch never moves. */
 .custom-workbench-paint-subview {
   display: inline-flex;
   min-width: 0;
@@ -1203,9 +1163,7 @@
     grid-template-columns: none;
     grid-template-rows: auto minmax(0, 1fr);
   }
-  /* Two rows instead of one squeezed strip: tools on top (mode, sticker
-     actions, history, download), the layer or sticker list below at full
-     width so it never has to scroll behind the buttons. */
+  /* Two rows: tools on top, the layer or sticker list below at full width. */
   .custom-workbench-edit-context {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -1285,8 +1243,7 @@
 
 @container (max-width: 620px) {
   .custom-workbench-sticker-picker-list { grid-template-columns: minmax(0, 1fr); }
-  /* Too narrow for mode, sticker tools and history in one line: history and
-     download take their own line under the mode switch. */
+  /* Too narrow for one line: history and download take their own line. */
   .custom-workbench-edit-context {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+
 import type { ResolveRecipe } from './useComposedPaint';
 import type { DataSource } from '../data/loader';
 import type { PaintkitEntry } from '../data/types';
@@ -44,12 +45,9 @@ export function useWorkbenchRecipes({
   const editorRecipeVariantRef = useRef('');
   const editorRecipeCompleteRef = useRef(false);
 
-  // Files and Export list every input the paint can use, not just the ones the
-  // current wear or team happens to reach. Team-aware operation stages resolve
-  // texture_red and texture_blue to different refs; collecting only the
-  // selected team produced packs whose definition referenced BLU artwork that
-  // was never included. Package and Definitions do not consume recipes at all,
-  // while Edit only needs the active team/wear recipe for group assignments.
+  // Files and Export need every input the paint can use, across wears and teams.
+  // Team-aware stages resolve texture_red and texture_blue to different refs, so
+  // one team alone drops artwork. Edit needs only the active team and wear.
   useEffect(() => {
     const clearEditorRecipes = () => {
       editorRecipesRef.current = [];
@@ -58,9 +56,7 @@ export function useWorkbenchRecipes({
       editorRecipeCompleteRef.current = false;
       setEditorRecipes([]);
     };
-    // Keep this workbench-only fan-out off the normal viewer path and pause it
-    // while the mounted drawer is closed. Reopening or changing surface
-    // refreshes only the recipes that surface consumes.
+    // Workbench-only: paused while the drawer is closed. A surface change refreshes only its own recipes.
     if (!workbenchMounted || !data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) {
       clearEditorRecipes();
       setEditorLoading(false);
@@ -136,14 +132,10 @@ export function useExportDefinitions({
   editorRecipes,
   manualTextureOverrides,
 }: UseExportDefinitionsOptions) {
-  // What the Export tab needs beyond the hand-replaced textures: the selected
-  // paint's own definitions, and the package textures the compositor read.
-  // Both are fetched only when an export actually runs, so opening the tab
-  // costs nothing.
+  // Export needs the paint's own definitions and the package textures it reads.
+  // Both load only when an export runs, so opening the tab costs nothing.
   return useMemo(() => {
-    // Which of this paint's textures the mounted package supplies, answered
-    // from the recipe rather than from what has been rendered so far, so the
-    // count is right the moment the tab opens.
+    // Counts this paint's package-supplied textures from the recipe, so the count is right on open.
     const pkg = sourceProvider.package;
     const refs = collectTextureRefs(editorRecipes.map((entry) => entry.recipe));
     const packageSpecularRefs = pkg
@@ -168,8 +160,7 @@ export function useExportDefinitions({
       packageFiles: async () => {
         if (!pkg) return [];
         const { collectPackageFiles } = await import('../export/bundle');
-        // Files the user replaced by hand win over the package's copy, matching
-        // what the viewer is rendering.
+        // Hand-replaced files win over the package copy, as in the viewer.
         const replaced = new Set(
           Object.keys(manualTextureOverrides).map((ref) => `${sourceTextureIdentity(ref)}.vtf`),
         );
@@ -192,9 +183,7 @@ export function useExportDefinitions({
       packageMounted: Boolean(pkg),
       unresolvedTextureRefs,
     };
-    // packageGeneration is what marks a mount or removal: the provider keeps
-    // its own identity across both, so without it this would keep answering for
-    // whatever archive was mounted first.
+    // packageGeneration marks a mount or removal; the provider keeps its identity across both.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [data, selectedKit, exportImportedKitBundle, sourceProvider, packageGeneration, editorRecipes, manualTextureOverrides]);
 }

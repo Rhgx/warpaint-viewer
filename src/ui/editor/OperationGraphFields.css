@@ -98,7 +98,6 @@
   line-height: 1.35;
 }
 
-/* Combobox ---------------------------------------------------------------- */
 
 .graph-combobox { position: relative; min-width: 0; }
 
@@ -166,9 +165,7 @@
   box-shadow: var(--shadow-pop, 0 10px 26px rgb(0 0 0 / 26%));
 }
 
-/* Matching the field's width would squeeze a texture path, its folder and the
-   key hints into 246px, so the list takes the room it needs and only falls
-   back to the anchor when the field is the wider of the two. */
+/* The list takes the room it needs; matching the field width would squeeze the path and hints. */
 .graph-combobox-positioner {
   z-index: 1200;
   width: max(var(--anchor-width), 320px);
@@ -178,8 +175,7 @@
 .graph-combobox-list {
   max-height: min(254px, var(--available-height, 254px));
   overflow-y: auto;
-  /* Keeps a row clear of the sticky group heading when the list scrolls to
-     reach it, rather than parking it half under the header. */
+  /* Keeps a scrolled-to row clear of the sticky group heading. */
   scroll-padding-block: 22px 0;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -193,8 +189,7 @@
   line-height: 1.4;
 }
 
-/* Sticky headings keep the answer to "where am I in this list" on screen
-   while scrolling a few hundred texture paths. */
+/* Sticky headings keep the list's place visible while scrolling hundreds of paths. */
 .graph-combobox-group {
   position: sticky;
   z-index: 1;
@@ -241,8 +236,7 @@
   gap: 1px;
 }
 
-/* The filename identifies the entry; the folder only disambiguates it, so it
-   sits underneath at a lower weight instead of pushing the name off-screen. */
+/* The filename identifies the entry; the folder sits beneath at a lower weight. */
 .graph-combobox-name {
   overflow: hidden;
   font-size: 11px;
@@ -290,8 +284,7 @@
   font-size: 9px;
 }
 
-/* The count yields first when both halves cannot fit; the key hints are the
-   part nobody can guess. */
+/* The count yields first when space is tight; the key hints are the part nobody can guess. */
 .graph-combobox-status {
   display: inline-flex;
   min-width: 0;
@@ -313,7 +306,6 @@
   font-size: 8.5px;
 }
 
-/* Numbers ----------------------------------------------------------------- */
 
 .graph-range {
   display: flex;
@@ -381,7 +373,6 @@
   background: var(--accent-soft);
 }
 
-/* Segmented toggle -------------------------------------------------------- */
 
 .graph-segmented {
   display: inline-flex;

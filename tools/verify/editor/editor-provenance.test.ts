@@ -7,10 +7,10 @@ import { test } from 'vitest';
 import type { RecipeNode } from '../../../src/compositor/types';
 import {
   assignSelectGroupExclusively,
-  EditorMutationAmbiguityError,
   toggleSelectGroupId,
-} from '../../../src/editor/mutations';
-import { resolveKitRecipeWithProvenance } from '../../../src/protodefs/decoder';
+} from '../../../src/editor/layers/groupMutations';
+import { EditorMutationAmbiguityError } from '../../../src/editor/mutationCore';
+import { resolveKitRecipeWithProvenance } from '../../../src/protodefs/kitQueries';
 import type { ItemDefinitionMsg, OperationNodeMsg, VarDefMsg, VarFieldMsg } from '../../../src/protodefs/messages';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
 import { dig, syntheticContainer } from '../fixtures';

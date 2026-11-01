@@ -21,7 +21,6 @@ export function stickerSpecularRef(baseRef: string): string {
 }
 
 export function collectSlots(recipes: WearRecipe[]): AssetSlot[] {
-  if (recipes.length === 0) return [];
   type Draft = Omit<AssetSlot, 'group'>;
   const slots = new Map<string, Draft>();
   const add = (ref: string | undefined, kind: AssetSlot['kind'], specularRef?: string) => {
@@ -60,19 +59,15 @@ export function collectSlots(recipes: WearRecipe[]): AssetSlot[] {
     return 5;
   };
   return [...slots.values()]
-    .sort((a, b) => priority(a) - priority(b))
-    .map((slot) => {
-      const rank = priority(slot);
+    .map((slot) => ({ slot, rank: priority(slot) }))
+    .sort((a, b) => a.rank - b.rank)
+    .map(({ slot, rank }) => {
       const group: SlotGroup = rank <= 2 ? 'artwork' : rank === 4 ? 'mask' : 'support';
       return { ...slot, group };
     });
 }
 
-/**
- * Marks inferred package companions as available without reading or decoding
- * them. Values intentionally retain the canonical ref so normal compositor
- * resolution stays lazy and seed-selective.
- */
+/** Marks inferred companions as available without decoding them; refs stay canonical so resolution stays lazy. */
 export function collectPackageStickerSpecularOverrides(
   recipes: WearRecipe[],
   hasTexture: (ref: string) => boolean,

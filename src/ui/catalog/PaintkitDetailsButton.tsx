@@ -3,14 +3,12 @@ import { Popover } from '@base-ui/react/popover';
 import { Copy, Info } from 'lucide-react';
 import type { OperationTemplateData, PaintkitEntry, TextureDirectory, TextureDirectoryEntry } from '../../data/types';
 import { isCustomKitId } from '../../protodefs/types';
-import { useCopyText } from '../../hooks/useCopyText';
+import { useCopyText } from './useCopyText';
 import { useOperationTemplates } from '../../hooks/useOperationTemplates';
 import { useSettings } from '../../settings';
 import './PaintkitDetailsButton.css';
 
-// Pyxell's base names carry footnote asterisks and sometimes drop accents
-// ("Pina Polished" for Piña Polished). Names that match no stock paint, such
-// as "Original", stay plain text.
+// Pyxell's names carry footnote asterisks and sometimes drop accents. Names matching no stock paint stay plain text.
 const foldName = (name: string) => name.replace(/\*+$/, '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
 function findBaseKit(paintkits: readonly PaintkitEntry[], baseName: string) {
@@ -18,9 +16,8 @@ function findBaseKit(paintkits: readonly PaintkitEntry[], baseName: string) {
   return paintkits.find((kit) => !isCustomKitId(kit.id) && foldName(kit.name) === folded);
 }
 
-// 'TL_3 & TL_4 - "patterns/a" & "patterns/b"*' -> slot label, quoted paths,
-// and anything after the last path (the page's footnote asterisks). Lines that
-// do not have this shape are shown as written.
+// Splits lines like 'TL_3 & TL_4 - "patterns/a"*' into slot label, quoted paths and footnote
+// asterisks. Lines of any other shape are shown as written.
 function splitTextureLine(line: string) {
   const split = line.indexOf(' - ');
   if (split < 0) return null;
@@ -37,8 +34,7 @@ interface OperationUsage {
   users: ReadonlySet<number>;
 }
 
-// Top-level templates whose usage list holds this stock paint, with how many
-// other stock paints share each one.
+// Top-level templates that use this stock paint, with how many other paints share each.
 function operationsFor(data: OperationTemplateData | null, defindex: number): OperationUsage[] {
   if (!data) return [];
   return data.templates.flatMap((template) => {
@@ -56,9 +52,7 @@ function sharedSuffix(others: number): string {
 
 const SHARED_LIST_LIMIT = 12;
 
-// The Operation row, with each shared count expandable into the other stock
-// paints on that operation. The open state lives here, so every opened card
-// starts collapsed.
+// Each shared count expands to the other paints on that operation. Cards start collapsed.
 function OperationRow({ defindex, operations, paintkits, onSelectKit }: {
   defindex: number;
   operations: OperationUsage[];
@@ -146,8 +140,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function DirectoryEntry({ entry, directory }: { entry: TextureDirectoryEntry; directory: TextureDirectory }) {
   const textures = entry.textures.map((line) => ({ line, parsed: splitTextureLine(line) }));
-  // Two-letter terms (TL, IL, SL, ML) name texture slots; the legend lists the
-  // ones this entry uses. Longer terms name features and become tooltips.
+  // Two-letter terms name texture slots and are listed in the legend; longer terms are tooltips.
   const slotTerms = directory.legend.filter((item) => item.term.length <= 2
     && textures.some(({ parsed }) => parsed?.slot.includes(`${item.term}_`)));
   const featureTerms = directory.legend.filter((item) => item.term.length > 2);
@@ -215,8 +208,7 @@ function DirectoryEntry({ entry, directory }: { entry: TextureDirectoryEntry; di
   );
 }
 
-// The popup body. Popover.Portal mounts its children only while the popover is
-// open, so the operation template data is fetched on the first open, not on hover.
+// Popover.Portal mounts children only while open, so operation data loads on first open.
 function PaintkitDetailsContent({
   defindex,
   kitName,
@@ -283,9 +275,7 @@ function PaintkitDetailsContent({
   );
 }
 
-// Info button plus the card it opens: the paint kit ID and, when Pyxell's
-// texture directory covers the paint, its entry. Opens on hover for mouse
-// users and on click for touch.
+// Info button and its card. Opens on hover for mouse users and on click for touch.
 export function PaintkitDetailsButton({
   defindex,
   kitName,

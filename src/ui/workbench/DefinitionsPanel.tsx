@@ -9,6 +9,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+
 import type { OperationTemplateInfo } from '../../data/types';
 import { useOperationTemplatesStatus } from '../../hooks/useOperationTemplates';
 import type {
@@ -16,6 +17,7 @@ import type {
   CustomDefinitionsState,
 } from '../../protodefs/types';
 import { PROTO_DEFS_ACCEPT } from '../../protodefs/types';
+import { useArmedConfirm } from '../../hooks/useArmedConfirm';
 import { Control, SelectField, TextField } from '../common/controls';
 import './DefinitionsPanel.css';
 import { DiagnosticsList } from './DiagnosticItem';
@@ -24,8 +26,7 @@ function plural(count: number, noun: string): string {
   return `${count.toLocaleString()} ${noun}${count === 1 ? '' : 's'}`;
 }
 
-// custom_uv is the only stock template with no texture layers, so its bare name
-// says little on its own.
+// custom_uv is the only stock template without texture layers, so its bare name says little.
 function templateLabel(template: OperationTemplateInfo): string {
   return template.name === 'custom_uv' ? 'custom_uv (UV paint)' : template.name;
 }
@@ -40,8 +41,7 @@ function templateGroup(template: OperationTemplateInfo): TemplateGroup {
   return 'Plain';
 }
 
-// SelectField has no option groups, so the picker is a flat list sorted by
-// group (the sort is stable, so templates keep their order within a group).
+// SelectField has no option groups, so this is a flat list sorted by group (the sort is stable).
 function sortByGroup(templates: OperationTemplateInfo[]): OperationTemplateInfo[] {
   const rank = (template: OperationTemplateInfo) => TEMPLATE_GROUPS.indexOf(templateGroup(template));
   return [...templates].sort((a, b) => rank(a) - rank(b));
@@ -91,8 +91,7 @@ function ImportPicker({
       <input
         type="file"
         accept={PROTO_DEFS_ACCEPT}
-        // A community war paint is two JSON files (its operation and its
-        // definition), which have to arrive together to resolve.
+        // A community paint's operation and definition JSON must arrive together to resolve.
         multiple
         disabled={busy}
         aria-label="Import war paint definitions"
@@ -106,8 +105,7 @@ function ImportPicker({
   );
 }
 
-// Enter and blur commit, Escape cancels. The guard stops the blur that comes
-// with unmounting the field after Enter or Escape from committing a second time.
+// Enter and blur commit, Escape cancels; the guard stops the unmount blur from committing twice.
 function RenameField({
   name,
   onCommit,
@@ -252,11 +250,7 @@ function DefinitionRow({
   );
 }
 
-/**
- * Definitions tab: an imported proto_defs container's kits. Its empty state,
- * import control and diagnostics mirror the package panel's so the two
- * "mount a file, see what's inside" panels read as one family.
- */
+/** Definitions tab: a proto_defs container's kits. Mirrors the package panel so both read as one family. */
 export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
   const {
     status,
@@ -272,11 +266,10 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
     onRemove,
   } = state;
   const [filter, setFilter] = useState('');
-  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [confirmRemove, armRemove] = useArmedConfirm();
   // The defindex of the paint whose delete is waiting for a second click.
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
-  // Held here rather than in the form so a failed create, which passes through
-  // the importing state and remounts the panel body, keeps what was typed.
+  // Held here, not in the form, so a failed create that remounts the body keeps the typed text.
   const [creating, setCreating] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState<number | null>(null);
   const [creatingName, setCreatingName] = useState('New war paint');
@@ -289,12 +282,6 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
     ?? templates?.templates[0];
   const stockKit = state.selectedStockKit;
   const copying = creatingFrom === 'copy' && stockKit !== undefined && state.exportSelectedStockKit !== undefined;
-
-  useEffect(() => {
-    if (!confirmRemove) return;
-    const timer = window.setTimeout(() => setConfirmRemove(false), 3000);
-    return () => window.clearTimeout(timer);
-  }, [confirmRemove]);
 
   useEffect(() => {
     if (confirmDelete === null) return;
@@ -573,7 +560,7 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
           type="button"
           className="definitions-btn definitions-remove"
           data-confirm={confirmRemove ? '' : undefined}
-          onClick={() => (confirmRemove ? onRemove() : setConfirmRemove(true))}
+          onClick={() => (confirmRemove ? onRemove() : armRemove())}
         >
           <Trash2 size={12} />
           {confirmRemove ? 'Remove it?' : 'Remove'}

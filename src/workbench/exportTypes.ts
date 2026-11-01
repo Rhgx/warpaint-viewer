@@ -1,6 +1,6 @@
 import type { TextureMetadata } from '../data/types';
 import type { ProtoDefKitBundle } from '../protodefs/types';
-import type { ExportTextureKind } from '../export/plan';
+import type { ExportCompression, ExportTextureKind } from '../export/plan';
 
 export interface ExportItem {
   ref: string;
@@ -29,12 +29,12 @@ export interface WarpaintExportInputs {
   textureMetadata?: Record<string, TextureMetadata>;
   definitions?: ExportDefinitionsContext;
   writesDefinitions: boolean;
-  definitionsMode: string;
+  definitionsMode: 'overwrite' | 'append';
   targetDefindex: string;
   inGameName: string;
   packName: string;
-  container: string;
-  compression: string;
+  container: 'zip' | 'vpk';
+  compression: ExportCompression;
   paintName?: string;
   weaponName?: string;
   gameBuild?: string | null;

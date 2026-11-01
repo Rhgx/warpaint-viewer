@@ -1,28 +1,8 @@
-// Streaming animated GIF encoder for turntable captures. Quality comes from the
-// palette, never from dithering: one shared palette is fitted to representative
-// frames (weighted variance median cut in Oklab, refined with k-means) and
-// pixels map to their perceptually nearest entry. Sharing one palette keeps
-// flat areas from shimmering between frames; a frame the shared palette fits
-// badly (glow falloff, mostly) gets a local palette in which only the entries
-// it never uses are refitted, so its stable colours stay exact.
-// Size comes from inter-frame diffing: every frame after the first only covers
-// the rectangle that changed, with unchanged pixels left transparent when that
-// compresses smaller. Index 255 is transparent both for "unchanged" and for
-// empty pixels; a frame whose successor needs pixels cleared back to empty is
-// widened over them and disposed to background afterwards. Frames are encoded
-// as they arrive, so memory stays near the size of the output.
-
-export interface GifAnimation {
-  readonly width: number;
-  readonly height: number;
-  /**
-   * sRGB pixels, 4 bytes per pixel, row-major from the top left. Alpha is
-   * 1-bit: below 128 is transparent, anything else opaque.
-   */
-  readonly frames: readonly Uint8Array[];
-  /** Per-frame delay in hundredths of a second (browsers clamp below 2). */
-  readonly delayCs: number;
-}
+// Streaming animated GIF encoder for turntable captures. Quality comes from the palette, not
+// dithering: one shared palette is fitted to sample frames (weighted median cut in Oklab,
+// refined with k-means). A frame it fits badly gets a local palette that refits only the
+// entries it never uses, so stable colours stay exact. Each frame after the first covers only
+// its changed rectangle. Index 255 is transparent both for "unchanged" and for empty pixels.
 
 const TRANSPARENT = 255;
 const MAX_COLORS = 255; // index 255 is reserved for "unchanged since last frame"
@@ -31,10 +11,9 @@ const HIST_BITS = 6;
 /** Canvas colour of a transparent pixel (real colours are 0xRRGGBB). */
 const EMPTY = -1;
 /**
- * Oklab distance past which a pixel counts as badly matched, a little over
- * one just-noticeable difference. Tuned on a glow-heavy capture: it removes
- * the banding tail (99.9th-percentile error 0.078 down to 0.028) for about 7%
- * more bytes; 0.02 buys nothing further at twice the cost.
+ * Oklab distance past which a pixel counts as badly matched, a little over one
+ * just-noticeable difference. Tuned on a glow-heavy capture: this removes the banding tail
+ * for about 7% more bytes, and 0.02 cost twice as much for nothing further.
  */
 const POOR_FIT = 0.03;
 /** A frame earns a local palette once this share of its pixels fits poorly. */
@@ -97,16 +76,19 @@ function nearest(lab: Float64Array, i: number, palette: Float64Array, count: num
   return best;
 }
 
-/** Fits up to `maxColors` sRGB colours to the frames; returns packed RGB triples. */
-// Histogram in 6-bit bins that keep exact colour sums, so bin means are true
-// averages rather than bin centres. Reused between calls (local palettes build
-// one per refitted frame); `histKeys` lists the bins in use so reading and
-// clearing them never scans the whole table.
+/**
+ * Histogram in 6-bit bins that keep exact colour sums, so bin means are true averages. Reused
+ * across calls; each bin is cleared after it is read.
+ */
 const HIST_BINS = 1 << (HIST_BITS * 3);
+/** Pixel count per bin. */
 const histCount = new Float64Array(HIST_BINS);
+/** Running R, G, B sums per bin, three entries per bin. */
 const histSums = new Float64Array(HIST_BINS * 3);
+/** Bins in use by the current call, so reading and clearing never scans the whole table. */
 const histKeys = new Int32Array(HIST_BINS);
 
+/** Fits up to `maxColors` sRGB colours to the frames; returns packed RGB triples. */
 export function buildPalette(frames: readonly Uint8Array[], maxColors = MAX_COLORS): Uint8Array {
   const shift = 8 - HIST_BITS;
   let n = 0;
@@ -537,9 +519,8 @@ function colorTable(palette: Uint8Array): Uint8Array {
 }
 
 /**
- * Encodes frames one at a time against a shared palette fitted up front.
- * Each frame is written once the next is known, since that decides whether it
- * must clear pixels behind itself.
+ * Encodes frames one at a time against a shared palette fitted up front. Each frame is written
+ * once the next is known, since that decides whether it must clear pixels behind it.
  */
 export class GifEncoder {
   private readonly writer = new ByteWriter();
@@ -616,11 +597,4 @@ export class GifEncoder {
     }
     this.pending = { frame: next, palette, rect: changedRect(this.base, next.colors, width, height, false) };
   }
-}
-
-/** Encodes a whole animation, fitting the shared palette to every frame. */
-export function encodeGif({ width, height, frames, delayCs }: GifAnimation): Uint8Array {
-  const encoder = new GifEncoder(width, height, delayCs, buildPalette(frames));
-  for (const frame of frames) encoder.addFrame(frame);
-  return encoder.finish();
 }

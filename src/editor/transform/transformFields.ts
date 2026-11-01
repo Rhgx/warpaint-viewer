@@ -1,7 +1,7 @@
 import type { RecipeNode } from '../../compositor/types';
 import type { SeedRangeValue } from '../../ui/editor/SeedRangeField';
 import type { TextureTransformFields } from '../../ui/editor/TextureTransformPanel';
-import type { TextureTransformRangeField, TextureTransformTarget } from '../mutations';
+import type { TextureTransformRangeField, TextureTransformTarget } from './transformMutations';
 import { protoTextureReference } from '../sticker/stickerTargets';
 import type { TextureTransformRangeFieldState, TextureTransformTargetInfo } from './transformTargets';
 

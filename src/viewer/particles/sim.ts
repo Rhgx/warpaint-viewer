@@ -1,93 +1,40 @@
 import * as THREE from 'three';
+
 import type { EmitterConfig, ParsedConstraint, ParsedInit, ParsedOp, UnusualSystemDef } from './parse';
 import type { HitboxJson } from './util';
 import { parseConstraints, parseEmitters, parseInitializers, parseOperators } from './parse';
 import type { ParticleIndex, ParticleSheet } from './util';
-import { colorFromArray, dotTexture, numOr, resolveParticleTexture, warnOnce } from './util';
+import { colorFromArray, numOr, resolveParticleTexture, warnOnce } from './util';
 import { ControlPoint } from './controlPoint';
-import {
-  PARTICLE_FRAGMENT,
-  PARTICLE_VERTEX,
-  applyAdditiveBlending,
-  particlePointScale,
-} from './particleRenderer';
+import { applyAdditiveBlending } from './particleRenderer';
 import { applyParticleConstraints } from './constraints';
-import { biasCurve, lerp, lerpExp, randInUnitBall, smooth } from './math';
+import { biasCurve, lerp, smooth } from './math';
+import { releaseParticleMaterial, takeParticleMaterial } from './particleMaterialPool';
+import type { SimParticle } from './simShared';
+import { applyInitializer } from './simInitializers';
+import { DEG2RAD, tmpC1, tmpV1, tmpV2 } from './simShared';
+
 export { ControlPoint } from './controlPoint';
 export { setParticlePointScale } from './particleRenderer';
 
 const MAX_PARTICLES_CAP = 512;
-const DEG2RAD = Math.PI / 180;
 
-interface SimParticle {
-  alive: boolean;
-  age: number;
-  lifetime: number;
-  systemAgeAtSpawn: number;
-  spawnIndex: number;
-  pos: THREE.Vector3;
-  vel: THREE.Vector3;
-  baseRadius: number;
-  alphaBase: number;
-  rotationDeg: number;
-  colorInit: THREE.Color;
-  // Per-particle randomness frozen at spawn so the fade/lock windows do not
-  // reshuffle every tick (the SDK derives these from the particle id).
-  rndFadeIn: number;
-  rndFadeOut: number;
-  rndLockStart: number;
-  rndLockEnd: number;
-  rndPhase: number;
-  // Sprite-sheet UV rect [x0,y0,x1,y1] chosen at spawn by a Sequence Random
-  // initializer, or the full-texture default when the particle's material
-  // has no sheet (or no such initializer at all).
-  uvRect: [number, number, number, number];
-}
-
-const tmpV1 = new THREE.Vector3();
-const tmpV2 = new THREE.Vector3();
-const tmpV3 = new THREE.Vector3();
-const tmpC1 = new THREE.Color();
-
-
-// Every system uses the same shader. Disposing a material when an effect is
-// torn down drops that program to zero users, and the replacement effect
-// (whose definitions load asynchronously) then compiles it from scratch: a
-// blocking shader compile on every weapon switch. Recycled materials keep the
-// program alive.
-const particleMaterialPool: THREE.ShaderMaterial[] = [];
-
-function takeParticleMaterial(): THREE.ShaderMaterial {
-  const material = particleMaterialPool.pop() ?? new THREE.ShaderMaterial({
-    uniforms: {
-      uMap: { value: dotTexture() },
-      uFrames: { value: 1 },
-      uPointScale: particlePointScale,
-    },
-    vertexShader: PARTICLE_VERTEX,
-    fragmentShader: PARTICLE_FRAGMENT,
-    transparent: true,
-    depthWrite: false,
-    depthTest: true,
-  });
-  material.uniforms.uMap.value = dotTexture();
-  material.uniforms.uFrames.value = 1;
-  applyAdditiveBlending(material);
-  material.needsUpdate = true;
-  return material;
-}
-
-function releaseParticleMaterial(material: THREE.ShaderMaterial) {
-  particleMaterialPool.push(material);
+interface ParticleAttributes {
+  readonly position: THREE.BufferAttribute;
+  readonly size: THREE.BufferAttribute;
+  readonly alpha: THREE.BufferAttribute;
+  readonly color: THREE.BufferAttribute;
+  readonly frame: THREE.BufferAttribute;
+  readonly rotation: THREE.BufferAttribute;
+  readonly uvRect: THREE.BufferAttribute;
 }
 
 export class SystemInstance {
   readonly name: string;
   readonly children: SystemInstance[] = [];
   points: THREE.Points | null = null;
-  // Dynamic CP overrides layered over the effect's shared anchored table
-  // (written into this system by its PARENT's Set-child-control-points op,
-  // or by its own Set Control Point Positions op).
+  // Dynamic CP overrides over the effect's shared anchored table, written by the parent's
+  // Set-child-control-points op or this system's own Set Control Point Positions op.
   readonly cpOverrides = new Map<number, ControlPoint>();
 
   private geometry: THREE.BufferGeometry | null = null;
@@ -99,11 +46,12 @@ export class SystemInstance {
   private frames!: Float32Array;
   private rotations!: Float32Array;
   private uvRects!: Float32Array;
+  // Handles to the geometry's per-particle attributes, flagged for upload each frame.
+  private attributes: ParticleAttributes | null = null;
 
-  // Set once the material's particle index entry resolves; null until then
-  // and for every material with no embedded sprite-sheet resource (only
-  // particle/smoke1/smoke1_additive.vmt has one among the extracted VTFs).
-  private sheet: ParticleSheet | null = null;
+  // Set once the material's index entry resolves; null for materials without an embedded
+  // sprite sheet (only particle/smoke1/smoke1_additive.vmt has one among the extracted VTFs).
+  sheet: ParticleSheet | null = null;
 
   private inits: ParsedInit[];
   private ops: ParsedOp[];
@@ -111,9 +59,8 @@ export class SystemInstance {
   private emitters: EmitterConfig[];
   private hasKillOp: boolean;
   private particles: SimParticle[];
-  // Reused by setChildCps. Kept sorted by spawnIndex and bounded to only
-  // the prefix an operator can address, avoiding filter/sort allocations in
-  // the per-frame hot path.
+  // Reused by setChildCps. Kept sorted by spawnIndex and bounded to the prefix an operator
+  // can address, which avoids per-frame filter/sort allocations.
   private oldestAliveScratch: SimParticle[] = [];
   private slotCount: number;
   private uvRectsDirty = false;
@@ -122,8 +69,8 @@ export class SystemInstance {
   private defaultColor: THREE.Color;
   private defaultAlpha: number;
   private safeRadius: number;
-  private hitboxes: HitboxJson[];
-  private geometryToWorld: (point: THREE.Vector3) => THREE.Vector3;
+  hitboxes: HitboxJson[];
+  geometryToWorld: (point: THREE.Vector3) => THREE.Vector3;
 
   private systemAge = 0;
   private spawnCounter = 0;
@@ -131,7 +78,7 @@ export class SystemInstance {
   private instantsFired: boolean[];
   private disposed = false;
 
-  private getCp: (index: number, forSystem: SystemInstance) => ControlPoint;
+  getCp: (index: number, forSystem: SystemInstance) => ControlPoint;
   private createDynamicCp: (index: number) => ControlPoint;
 
   constructor(
@@ -153,9 +100,8 @@ export class SystemInstance {
     this.ops = parseOperators(def.operators);
     this.constraints = parseConstraints(def.constraints ?? []);
     this.emitters = parseEmitters(def.emitters);
-    // Source particles only die through decay operators; systems without one
-    // (cool's pos_control/postest controller chain, the swirls themselves)
-    // hold their population forever once emitted.
+    // Source particles only die through decay operators. Systems without one (cool's controller
+    // chain, the swirls) hold their population forever once emitted.
     this.hasKillOp = this.ops.some((o) => o.kind === 'lifespanDecay' || o.kind === 'fadeAndKill');
 
     this.defaultRadius = numOr(def.attributes.radius, 5);
@@ -190,13 +136,8 @@ export class SystemInstance {
       uvRect: [0, 0, 1, 1],
     }));
 
-    // A material confirmed absent from the game itself (index.json's `missing: true` - see
-    // extract-effects.mjs KNOWN_MISSING_MATERIALS) means Source draws nothing for this system:
-    // simulation still runs (particles above, and any operators that write child control points
-    // still see live particle state), only the render side is skipped. Checked synchronously here
-    // (particleIndex is already resolved by the time build() runs) so the THREE.Points object is
-    // simply never created, rather than created and torn down once an async texture fetch reports
-    // it missing.
+    // Missing materials (index.json `missing`) draw nothing, but the simulation still runs for
+    // operators that write child CPs, so only the Points object is skipped.
     const materialRef = def.attributes.material;
     const materialMissing = typeof materialRef === 'string' && particleIndex[materialRef]?.missing === true;
 
@@ -215,14 +156,24 @@ export class SystemInstance {
         this.uvRects[i * 4 + 2] = 1;
         this.uvRects[i * 4 + 3] = 1;
       }
+      const attributes: ParticleAttributes = {
+        position: new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage),
+        size: new THREE.BufferAttribute(this.sizes, 1).setUsage(THREE.DynamicDrawUsage),
+        alpha: new THREE.BufferAttribute(this.alphas, 1).setUsage(THREE.DynamicDrawUsage),
+        color: new THREE.BufferAttribute(this.colors, 3).setUsage(THREE.DynamicDrawUsage),
+        frame: new THREE.BufferAttribute(this.frames, 1).setUsage(THREE.DynamicDrawUsage),
+        rotation: new THREE.BufferAttribute(this.rotations, 1).setUsage(THREE.DynamicDrawUsage),
+        uvRect: new THREE.BufferAttribute(this.uvRects, 4),
+      };
       this.geometry = new THREE.BufferGeometry();
-      this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
-      this.geometry.setAttribute('aSize', new THREE.BufferAttribute(this.sizes, 1).setUsage(THREE.DynamicDrawUsage));
-      this.geometry.setAttribute('aAlpha', new THREE.BufferAttribute(this.alphas, 1).setUsage(THREE.DynamicDrawUsage));
-      this.geometry.setAttribute('aColor', new THREE.BufferAttribute(this.colors, 3).setUsage(THREE.DynamicDrawUsage));
-      this.geometry.setAttribute('aFrame', new THREE.BufferAttribute(this.frames, 1).setUsage(THREE.DynamicDrawUsage));
-      this.geometry.setAttribute('aRotation', new THREE.BufferAttribute(this.rotations, 1).setUsage(THREE.DynamicDrawUsage));
-      this.geometry.setAttribute('aUvRect', new THREE.BufferAttribute(this.uvRects, 4));
+      this.geometry.setAttribute('position', attributes.position);
+      this.geometry.setAttribute('aSize', attributes.size);
+      this.geometry.setAttribute('aAlpha', attributes.alpha);
+      this.geometry.setAttribute('aColor', attributes.color);
+      this.geometry.setAttribute('aFrame', attributes.frame);
+      this.geometry.setAttribute('aRotation', attributes.rotation);
+      this.geometry.setAttribute('aUvRect', attributes.uvRect);
+      this.attributes = attributes;
 
       this.material = takeParticleMaterial();
 
@@ -238,11 +189,8 @@ export class SystemInstance {
         if (additive) applyAdditiveBlending(this.material);
         else this.material.blending = THREE.NormalBlending;
         this.material.needsUpdate = true;
-        // Sheets and strip animation never co-occur in the extracted data
-        // (frames > 1 only happens for VTFs with no sheet resource, e.g.
-        // comball_d), so storing this on the system is unambiguous - a
-        // particle's uvRect selection and its vFrame strip row never both
-        // need to be non-default at once.
+        // Sheets and strip animation never co-occur in the extracted data, so one
+        // `sheet` field on the system is unambiguous.
         this.sheet = sheet;
       });
     }
@@ -275,187 +223,8 @@ export class SystemInstance {
     let anchorCp: ControlPoint | null = null;
 
     for (const init of this.inits) {
-      switch (init.kind) {
-        case 'positionModel': {
-          const config = init.positionModel!;
-          anchorCp = this.getCp(config.cp, this);
-          if (!this.hitboxes.length) {
-            p.pos.copy(anchorCp.worldPos);
-            break;
-          }
-          const nonZeroBias = config.bias.some((value) => Math.abs(value) > 0.0001);
-          const attempts = Math.max(config.tries, nonZeroBias ? 5 : 0) + 1;
-          let bestGoodness = -Infinity;
-          for (let attempt = 0; attempt < attempts; attempt++) {
-            const hitbox = this.hitboxes[Math.floor(Math.random() * this.hitboxes.length)];
-            const min = 1 - config.bboxScale;
-            const max = config.bboxScale;
-            const u = min + Math.random() * (max - min);
-            const v = min + Math.random() * (max - min);
-            const w = min + Math.random() * (max - min);
-            tmpV1.set(
-              lerp(hitbox.min[0], hitbox.max[0], u),
-              lerp(hitbox.min[1], hitbox.max[1], v),
-              lerp(hitbox.min[2], hitbox.max[2], w),
-            );
-            const m = hitbox.transform;
-            tmpV2.set(
-              m[0] * tmpV1.x + m[1] * tmpV1.y + m[2] * tmpV1.z + m[3],
-              m[4] * tmpV1.x + m[5] * tmpV1.y + m[6] * tmpV1.z + m[7],
-              m[8] * tmpV1.x + m[9] * tmpV1.y + m[10] * tmpV1.z + m[11],
-            );
-            this.geometryToWorld(tmpV2);
-            const goodness = Math.random() * 72
-              + (tmpV2.x - anchorCp.worldPos.x) * config.bias[0]
-              + (tmpV2.y - anchorCp.worldPos.y) * config.bias[1]
-              + (tmpV2.z - anchorCp.worldPos.z) * config.bias[2];
-            if (goodness > bestGoodness) {
-              bestGoodness = goodness;
-              p.pos.copy(tmpV2);
-            }
-          }
-          break;
-        }
-        case 'sphere': {
-          // C_INIT_CreateWithinSphere. Expected frame for the energy orb
-          // (weapon_unusual_energyorb_*): CP1 anchors at unusual_1 near the
-          // muzzle; distance_bias (1,0,1) with "bias in local system" zeroes
-          // the attachment-local Y (Source "left"), so both the spawn offset
-          // direction and the 111 u/s launch velocity live in the plane
-          // spanned by the barrel axis and up. With Movement Basic's 0.3
-          // drag the particle darts roughly a dozen units along the barrel
-          // and stalls, which is the in-game front-to-back streaming look.
-          const s = init.sphere!;
-          const cp = this.getCp(s.cp, this);
-          anchorCp = cp;
-          const d = randInUnitBall(tmpV1);
-          if (s.biasAbs[0] !== 0) d.x = Math.abs(d.x);
-          if (s.biasAbs[1] !== 0) d.y = Math.abs(d.y);
-          if (s.biasAbs[2] !== 0) d.z = Math.abs(d.z);
-          d.set(d.x * s.bias[0], d.y * s.bias[1], d.z * s.bias[2]);
-          if (d.lengthSq() < 1e-12) d.set(1, 0, 0);
-          d.normalize();
-          const dWorld = s.localBias
-            ? tmpV2.copy(d).applyQuaternion(cp.worldQuat)
-            : tmpV2.set(d.x, d.z, d.y); // Source world Z-up -> scene Y-up
-          const dist = lerpExp(s.distMin, s.distMax, 1);
-          p.pos.copy(cp.worldPos).addScaledVector(dWorld, dist);
-          p.vel.addScaledVector(dWorld, lerpExp(s.speedMin, s.speedMax, s.speedExp));
-          if (s.localSpeedMin && s.localSpeedMax) {
-            tmpV3.set(
-              lerp(s.localSpeedMin[0], s.localSpeedMax[0], Math.random()),
-              lerp(s.localSpeedMin[1], s.localSpeedMax[1], Math.random()),
-              lerp(s.localSpeedMin[2], s.localSpeedMax[2], Math.random()),
-            ).applyQuaternion(cp.worldQuat);
-            p.vel.add(tmpV3);
-          }
-          break;
-        }
-        case 'velocityRandom': {
-          const s = init.sphere!;
-          const cp = this.getCp(s.cp, this);
-          const d = randInUnitBall(tmpV1).normalize();
-          p.vel.addScaledVector(tmpV2.set(d.x, d.z, d.y), lerpExp(s.speedMin, s.speedMax, s.speedExp));
-          if (s.localSpeedMin && s.localSpeedMax) {
-            tmpV3.set(
-              lerp(s.localSpeedMin[0], s.localSpeedMax[0], Math.random()),
-              lerp(s.localSpeedMin[1], s.localSpeedMax[1], Math.random()),
-              lerp(s.localSpeedMin[2], s.localSpeedMax[2], Math.random()),
-            ).applyQuaternion(cp.worldQuat);
-            p.vel.add(tmpV3);
-          }
-          break;
-        }
-        case 'offset': {
-          const o = init.offset!;
-          const cp = this.getCp(o.cp, this);
-          tmpV1.set(
-            lerp(o.min[0], o.max[0], Math.random()),
-            lerp(o.min[1], o.max[1], Math.random()),
-            lerp(o.min[2], o.max[2], Math.random()),
-          );
-          if (o.local) tmpV1.applyQuaternion(cp.worldQuat);
-          else tmpV1.set(tmpV1.x, tmpV1.z, tmpV1.y);
-          p.pos.add(tmpV1);
-          break;
-        }
-        case 'lifetime':
-          p.lifetime = Math.max(0.001, lerpExp(init.range!.min, init.range!.max, init.range!.exp));
-          break;
-        case 'alpha':
-          p.alphaBase = lerpExp(init.range!.min, init.range!.max, init.range!.exp) / 255;
-          break;
-        case 'radius':
-          p.baseRadius = lerpExp(init.range!.min, init.range!.max, init.range!.exp);
-          break;
-        case 'colorRandom':
-          p.colorInit.copy(init.colors!.c1).lerp(init.colors!.c2, Math.random());
-          break;
-        case 'rotationRandom':
-          p.rotationDeg = init.rotation!.initial + lerpExp(init.rotation!.offMin, init.rotation!.offMax, init.rotation!.exp);
-          break;
-        case 'yawFlip':
-          if (Math.random() < (init.flipPercent ?? 0.5)) p.rotationDeg += 180;
-          break;
-        case 'sequence': {
-          // C_INIT_RandomSequence: pick a uniform random integer sequence
-          // index in [sequence_min, sequence_max], then look it up modulo
-          // however many sequences the sheet actually has (some defs ask
-          // for indices beyond a given sheet's count, e.g. 0..4 against
-          // smoke1's 16). Every known sheet has frameCount 1 per sequence,
-          // so there is no intra-sheet animation to advance over the
-          // particle's life - the rect is fixed for its whole lifetime.
-          const sheet = this.sheet;
-          if (sheet && sheet.sequences.length > 0) {
-            const r = init.sequenceRange!;
-            const lo = Math.round(Math.min(r.min, r.max));
-            const hi = Math.round(Math.max(r.min, r.max));
-            const idx = lo + Math.floor(Math.random() * (hi - lo + 1));
-            const seq = sheet.sequences[((idx % sheet.sequences.length) + sheet.sequences.length) % sheet.sequences.length];
-            const uv = seq.frames[0];
-            if (uv) {
-              // uv is [x0,y0,x1,y1] straight from the VTF sheet resource, which uses
-              // Source's top-left-origin convention (y0 near the image's top row, y1
-              // near its bottom). loadParticleTexture() uploads with three's default
-              // flipY=true, so the GL v the fragment shader ends up sampling runs the
-              // other way (v=1 -> image top, v=0 -> image bottom; see the point-sprite
-              // "raw = 1.0 - pc.y" math in PARTICLE_FRAGMENT, calibrated for that same
-              // flip). Flip y here so the stored rect matches that GL-v convention
-              // instead of re-deriving it in the shader: x is untouched (flipY only
-              // mirrors rows, not columns).
-              p.uvRect[0] = uv[0]; p.uvRect[1] = 1 - uv[3]; p.uvRect[2] = uv[2]; p.uvRect[3] = 1 - uv[1];
-            }
-          }
-          break;
-        }
-        case 'remapScalar': {
-          const r = init.remap!;
-          const span = Math.max(1e-6, r.inMax - r.inMin);
-          const t = THREE.MathUtils.clamp((p.systemAgeAtSpawn - r.inMin) / span, 0, 1);
-          const v = lerp(r.outMin, r.outMax, t);
-          if (r.scalar) p.rotationDeg *= v;
-          else p.rotationDeg += v;
-          break;
-        }
-        case 'velocityNoise': {
-          const n = init.noise!;
-          const cp = this.getCp(n.cp, this);
-          tmpV1.set(
-            lerp(n.min[0], n.max[0], Math.random()),
-            lerp(n.min[1], n.max[1], Math.random()),
-            lerp(n.min[2], n.max[2], Math.random()),
-          );
-          if (n.local) tmpV1.applyQuaternion(cp.worldQuat);
-          else tmpV1.set(tmpV1.x, tmpV1.z, tmpV1.y);
-          p.vel.add(tmpV1);
-          break;
-        }
-        case 'velocityInherit': {
-          const inh = init.inherit!;
-          p.vel.addScaledVector(this.getCp(inh.cp, this).vel, inh.scale);
-          break;
-        }
-      }
+      const anchor = applyInitializer(init, p, this);
+      if (anchor) anchorCp = anchor;
     }
 
     // Position initializers are all CP-relative; systems with no position
@@ -476,9 +245,8 @@ export class SystemInstance {
       }
     }
 
-    // Apply the path constraint once at spawn (age is 0 here) so a freshly
-    // spawned particle snaps straight onto the path instead of flashing at
-    // its initializer-chosen spawn point for one frame.
+    // Apply the path constraint once at spawn so the particle snaps onto the path instead of
+    // flashing at its initializer's spawn point for a frame.
     this.applyConstraints(p);
 
     if (this.points) {
@@ -499,11 +267,8 @@ export class SystemInstance {
     );
   }
 
-  // Rigidly carries every alive particle in this system (and its children)
-  // through a teleport: pos through the full transform, vel through its
-  // rotation only. Used when the weapon's anchor jumps in a single frame
-  // (view-angle presets, reset) so particles don't get left behind in the
-  // old world position for a tick.
+  // Carries every alive particle (and children) through a teleport: pos through the full
+  // transform, vel through its rotation only, so none is left at the old position for a tick.
   applyRigidTransform(deltaM: THREE.Matrix4, deltaQuat: THREE.Quaternion) {
     for (const p of this.particles) {
       if (!p.alive) continue;
@@ -544,23 +309,16 @@ export class SystemInstance {
     for (let i = 0; i < this.particles.length; i++) {
       const p = this.particles[i];
       if (!p.alive) {
-        if (this.points) this.writeVertex(i, p, 0, 0, tmpC1.set(0, 0, 0), 0);
+        this.writeVertex(i, p, 0, 0, tmpC1.set(0, 0, 0), 0);
         continue;
       }
       p.age += dt;
 
-      // Kill authority: both Lifespan Decay and Alpha Fade and Decay
-      // (C_OP_FadeAndKill) die at the same instant, age > lifetime; no decay
-      // op means immortal.
-      let dead = false;
-      if (this.hasKillOp) {
-        for (const op of this.ops) {
-          if ((op.kind === 'lifespanDecay' || op.kind === 'fadeAndKill') && p.age >= p.lifetime) dead = true;
-        }
-      }
-      if (dead) {
+      // Lifespan Decay and Alpha Fade and Decay (C_OP_FadeAndKill) both kill at
+      // age >= lifetime. A system with neither is immortal.
+      if (this.hasKillOp && p.age >= p.lifetime) {
         p.alive = false;
-        if (this.points) this.writeVertex(i, p, 0, 0, tmpC1.set(0, 0, 0), 0);
+        this.writeVertex(i, p, 0, 0, tmpC1.set(0, 0, 0), 0);
         continue;
       }
 
@@ -572,31 +330,25 @@ export class SystemInstance {
       for (const op of this.ops) {
         switch (op.kind) {
           case 'movement': {
-            const m = op.movement!;
+            const m = op.movement;
             p.vel.addScaledVector(m.gravity, dt);
-            // Source's Movement Basic drag is a per-simulation-tick damping
-            // factor at a 30 Hz reference (vel *= 1 - drag each tick), not a
-            // per-second coefficient.
+            // Movement Basic drag is a per-tick factor at a 30 Hz reference (vel *= 1 - drag each tick),
+            // not a per-second coefficient.
             p.vel.multiplyScalar(Math.pow(Math.max(0, 1 - m.drag), dt * 30));
             p.pos.addScaledVector(p.vel, dt);
             break;
           }
           case 'fadeAndKill': {
-            // C_OP_FadeAndKill: fade windows are fractions of lifetime
-            // (lifeFrac = age/lifetime), matching loadout.tf's o =
-            // currentTime/timeToLive. Between endFadeIn and startFadeOut the
-            // op leaves alpha untouched (holds at 1); if startFadeOut is
-            // authored as a value the particle's lifeFrac never reaches
-            // (energy orb: 2.5 against a lifeFrac that tops out at 1), the
-            // fade-out branch below simply never runs.
-            const f = op.fadeAndKill!;
+            // C_OP_FadeAndKill: fade windows are lifetime fractions. A fade-out authored above 1 is
+            // never reached, so the branch below never runs.
+            const f = op.fadeAndKill;
             if (lifeFrac <= f.startFadeIn) {
-              // untouched
+              // Alpha stays at 1 before the fade-in.
             } else if (lifeFrac < f.endFadeIn) {
               const t = THREE.MathUtils.clamp((lifeFrac - f.startFadeIn) / Math.max(1e-6, f.endFadeIn - f.startFadeIn), 0, 1);
               alphaScale *= lerp(f.startAlphaFactor, 1, smooth(t));
             } else if (lifeFrac < f.startFadeOut) {
-              // untouched (holds at the post-fade-in value, 1)
+              // Holds at the post-fade-in value, 1.
             } else if (lifeFrac < f.endFadeOut) {
               const t = THREE.MathUtils.clamp((lifeFrac - f.startFadeOut) / Math.max(1e-6, f.endFadeOut - f.startFadeOut), 0, 1);
               alphaScale *= lerp(1, f.endAlphaFactor, smooth(t));
@@ -604,14 +356,14 @@ export class SystemInstance {
             break;
           }
           case 'fadeIn': {
-            const f = op.fade!;
+            const f = op.fade;
             const t = lerp(f.min, f.max, p.rndFadeIn);
             const T = f.proportional ? t * p.lifetime : t;
             if (T > 0 && p.age < T) alphaScale *= THREE.MathUtils.clamp(p.age / T, 0, 1);
             break;
           }
           case 'fadeOut': {
-            const f = op.fade!;
+            const f = op.fade;
             const t = lerp(f.min, f.max, p.rndFadeOut);
             const T = f.proportional ? t * p.lifetime : t;
             if (T > 0) {
@@ -625,7 +377,7 @@ export class SystemInstance {
             break;
           }
           case 'radiusScale': {
-            const r = op.radiusScale!;
+            const r = op.radiusScale;
             const span = Math.max(1e-4, r.endTime - r.startTime);
             let t = THREE.MathUtils.clamp((lifeFrac - r.startTime) / span, 0, 1);
             t = biasCurve(t, r.bias);
@@ -634,7 +386,7 @@ export class SystemInstance {
             break;
           }
           case 'colorFade': {
-            const c = op.colorFade!;
+            const c = op.colorFade;
             const span = Math.max(1e-4, c.end - c.start);
             let t = THREE.MathUtils.clamp((lifeFrac - c.start) / span, 0, 1);
             if (c.ease) t = smooth(t);
@@ -642,17 +394,15 @@ export class SystemInstance {
             break;
           }
           case 'spin': {
-            const s = op.spin!;
+            const s = op.spin;
             if (s.stopTime <= 0 || p.age < s.stopTime) p.rotationDeg += s.rate * dt;
             else p.rotationDeg += s.rateMin * dt;
             break;
           }
           case 'lock': {
-            // C_OP_PositionLock: rigidly carries particles with the control
-            // point's frame-to-frame motion, fading off between the start and
-            // end windows (fractions of lifetime). This is what keeps the
-            // effect glued to the weapon while it is dragged around.
-            const l = op.lock!;
+            // C_OP_PositionLock: particles follow the control point's frame-to-frame motion, fading off
+            // between the start and end windows. This keeps the effect glued to the weapon.
+            const l = op.lock;
             const cp = this.getCp(l.cp, this);
             const start = lerp(l.startMin, l.startMax, p.rndLockStart) * p.lifetime;
             const end = lerp(l.endMin, l.endMax, p.rndLockEnd) * p.lifetime;
@@ -672,7 +422,7 @@ export class SystemInstance {
             break;
           }
           case 'rotAxis': {
-            const r = op.rotAxis!;
+            const r = op.rotAxis;
             const cp = this.getCp(r.cp, this);
             const axis = r.local
               ? tmpV1.set(r.axis[0], r.axis[1], r.axis[2]).applyQuaternion(cp.worldQuat)
@@ -683,10 +433,9 @@ export class SystemInstance {
             break;
           }
           case 'oscillate': {
-            // Approximation of C_OP_OscillateVector: sinusoidal wobble on the
-            // target field. Field 4 is ROTATION (the only scalar target in
-            // these files); field 0 would be position.
-            const o = op.oscillate!;
+            // Approximates C_OP_OscillateVector as a sinusoidal wobble. Field 4 is ROTATION, the only
+            // scalar target in these files; field 0 would be position.
+            const o = op.oscillate;
             const phase = (o.startPhase + p.rndPhase) * Math.PI * 2;
             if (o.field === 4) {
               const rate = lerp(o.rateMin[0], o.rateMax[0], p.rndPhase);
@@ -707,13 +456,10 @@ export class SystemInstance {
             break;
           }
           case 'maintainPath': {
-            // C_OP_MaintainSequentialPath: distributes the population along
-            // the segment between two control points and advances it over
-            // time so the stream FLOWS from start to end (cool's water swirl
-            // rides this between the CPs its parent chain writes). The flow
-            // period uses the particle lifetime as the traversal time, an
-            // approximation of the SDK's sequential assignment counter.
-            const m = op.maintainPath!;
+            // C_OP_MaintainSequentialPath: distributes the population along the segment between two CPs
+            // and advances it over time so the stream flows start to end. The period uses the lifetime as
+            // the traversal time, an approximation of the SDK's sequential assignment counter.
+            const m = op.maintainPath;
             const a = this.getCp(m.startCp, this);
             const b = this.getCp(m.endCp, this);
             const base = (p.spawnIndex % m.count) / m.count;
@@ -732,16 +478,14 @@ export class SystemInstance {
       // for the frame, matching the SDK's constraint pass ordering.
       this.applyConstraints(p);
 
-      if (this.points) {
-        this.writeVertex(i, p, p.baseRadius * radiusMult, p.alphaBase * alphaScale, frameColor, p.rotationDeg * DEG2RAD);
-      }
+      this.writeVertex(i, p, p.baseRadius * radiusMult, p.alphaBase * alphaScale, frameColor, p.rotationDeg * DEG2RAD);
     }
 
     // Control-point-writing operators run against the post-tick particle
     // state, feeding the children that tick right after this system.
     for (const op of this.ops) {
       if (op.kind === 'setChildCps') {
-        const s = op.setChildCps!;
+        const s = op.setChildCps;
         const needed = s.firstParticle + s.count;
         const alive = this.oldestAliveScratch;
         alive.length = 0;
@@ -759,9 +503,8 @@ export class SystemInstance {
           for (const child of this.children) {
             let cp = child.cpOverrides.get(s.firstCp + k);
             if (!cp) {
-              // Inherit the anchored CP's orientation (the SDK only writes
-              // positions here unless "Set cp orientation" is on, so the
-              // frame stays whatever the control point had before).
+              // Inherit the anchored CP's orientation. The SDK only writes positions here unless
+              // 'Set cp orientation' is on, so the frame keeps its previous value.
               cp = this.createDynamicCp(s.firstCp + k);
               cp.worldPos.copy(src.pos);
               cp.prime();
@@ -771,7 +514,7 @@ export class SystemInstance {
           }
         }
       } else if (op.kind === 'setCpPositions') {
-        const s = op.setCpPositions!;
+        const s = op.setCpPositions;
         const ref = this.getCp(s.offsetFromCp, this);
         for (const e of s.entries) {
           let cp = this.cpOverrides.get(e.cp);
@@ -787,15 +530,15 @@ export class SystemInstance {
       }
     }
 
-    if (this.geometry) {
-      this.geometry.attributes.position.needsUpdate = true;
-      (this.geometry.attributes.aSize as THREE.BufferAttribute).needsUpdate = true;
-      (this.geometry.attributes.aAlpha as THREE.BufferAttribute).needsUpdate = true;
-      (this.geometry.attributes.aColor as THREE.BufferAttribute).needsUpdate = true;
-      (this.geometry.attributes.aFrame as THREE.BufferAttribute).needsUpdate = true;
-      (this.geometry.attributes.aRotation as THREE.BufferAttribute).needsUpdate = true;
+    if (this.attributes) {
+      this.attributes.position.needsUpdate = true;
+      this.attributes.size.needsUpdate = true;
+      this.attributes.alpha.needsUpdate = true;
+      this.attributes.color.needsUpdate = true;
+      this.attributes.frame.needsUpdate = true;
+      this.attributes.rotation.needsUpdate = true;
       if (this.uvRectsDirty) {
-        (this.geometry.attributes.aUvRect as THREE.BufferAttribute).needsUpdate = true;
+        this.attributes.uvRect.needsUpdate = true;
         this.uvRectsDirty = false;
       }
     }
@@ -817,12 +560,6 @@ export class SystemInstance {
     const frameCount = this.material ? (this.material.uniforms.uFrames.value as number) : 1;
     this.frames[i] = p.lifetime > 0 ? Math.min(frameCount - 1, (p.age / p.lifetime) * frameCount) : 0;
     this.rotations[i] = rotationRad;
-  }
-
-  countAlive(): number {
-    let n = 0;
-    for (const p of this.particles) if (p.alive) n++;
-    return n;
   }
 
   dispose() {

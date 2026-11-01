@@ -44,7 +44,7 @@ export default defineConfig({
     rolldownOptions: { plugins: [emptyFs] },
   },
   // Transform the app shell before the browser asks for it.
-  server: { warmup: { clientFiles: ['./src/main.tsx', './src/App.tsx'] } },
+  server: { warmup: { clientFiles: ['./src/main.tsx', './src/app/App.tsx'] } },
   test: {
     exclude: [...configDefaults.exclude, '**/.tmp/**'],
   },

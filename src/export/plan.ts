@@ -1,9 +1,8 @@
 /**
- * The rules the export follows, with none of the machinery that carries them
- * out. The panel needs to show target paths, formats, sizes and warnings before
- * anyone clicks Export, and the exporter needs the same answers when it runs.
- * Keeping them here means the two can never drift, and means the panel does not
- * drag the VTF, DXT and zip encoders into the main bundle just to draw a list.
+ * The export rules, without the machinery that carries them out. The panel shows paths,
+ * formats, sizes and warnings before Export is clicked, and the exporter uses the same answers,
+ * so the two cannot drift. Keeping the encoders out of this module keeps them out of the main
+ * bundle.
  */
 
 import type { TextureMetadata } from '../data/types';
@@ -14,17 +13,9 @@ import type { RecipeNode } from '../compositor/types';
 export type ExportTextureKind = 'texture' | 'mask' | 'sticker' | 'sticker-mask';
 
 /**
- * Every texture a paint reads, across all the wear variants it was resolved
- * for.
- *
- * This is what the export packs from, rather than the set of paths the
- * compositor happens to have read so far. That set is filled in lazily as the
- * renderer resolves textures, so it depends on whether the paint finished
- * compositing before the tab was opened; the recipe is the same answer whether
- * or not anything has been drawn yet.
- *
- * A stage nobody has picked a texture for yet (one fresh from the graph's Add
- * menu) carries an empty ref, which names nothing to pack.
+ * Every texture a paint reads, across all its wear variants. The export packs from the recipes
+ * rather than the compositor's lazily filled read set, which depends on whether anything was
+ * drawn. An empty ref (a stage with no texture picked yet) names nothing and is skipped.
  */
 export function collectTextureRefs(recipes: readonly RecipeNode[]): string[] {
   const refs = new Set<string>();
@@ -54,14 +45,9 @@ export function collectTextureRefs(recipes: readonly RecipeNode[]): string[] {
 export type ExportCompression = 'auto' | 'lossless';
 
 /**
- * The materials a paint kit definition names, e.g.
- * "models/paintkits/handcrafted/c_flamethrower".
- *
- * These are not part of the recipe, so walking the stage tree never finds them,
- * and they are not optional: a new paint kit ships one VMT per weapon it paints
- * and the definition points every weapon slot at its own. A pack that installs
- * the definition without them leaves the engine loading a material that is not
- * there, which is far worse than a missing texture.
+ * The materials a paint kit definition names, e.g. models/paintkits/handcrafted/c_flamethrower.
+ * They are not in the recipe, and they are required: a pack without them leaves the engine
+ * loading a missing material, which is worse than a missing texture.
  */
 export function collectMaterialOverrides(definition: Record<string, unknown>): string[] {
   const overrides = new Set<string>();
@@ -81,19 +67,14 @@ export function collectMaterialOverrides(definition: Record<string, unknown>): s
 }
 
 /**
- * Texture paths a VMT names, so a carried material's own dependencies come with
- * it (a paintkit VMT typically points at its own exponent mask and lightwarp).
- * Deliberately a scan for material-shaped values rather than a full KeyValues
- * parse: anything it picks up that the package does not carry is dropped, so a
- * false positive costs nothing and a missed reference costs a broken material.
+ * Texture paths a VMT names, so a carried material brings its own dependencies. A scan for
+ * material-shaped values, not a full KeyValues parse: false positives are dropped later because
+ * the package lacks them, while a miss would break a material.
  */
 export function collectVmtTextureRefs(vmt: string): string[] {
   const refs = new Set<string>();
-  // KeyValues permits both keys and values to be quoted or bare. Community
-  // VMTs commonly mix the two styles (Ghastly Guns, for example, writes
-  // `$EmissiveBlendBaseTexture "patterns/ghostgun/light_green_solid"`).
-  // Keep the value capture deliberately path-shaped so numeric/vector material
-  // parameters and braces are not mistaken for dependencies.
+  // KeyValues allows quoted or bare keys and values, and community VMTs mix the two. Keep the
+  // value capture path-shaped so numeric parameters and braces are not taken for dependencies.
   for (const match of vmt.matchAll(/(?:"\$[a-z0-9_]+"|\$[a-z0-9_]+)\s+(?:"([^"]+)"|([^\s{}"]+))/gi)) {
     const value = (match[1] ?? match[2] ?? '').trim().replace(/\\/g, '/');
     // Values that are numbers, vectors or booleans are parameters, not paths.
@@ -109,12 +90,9 @@ export function exportPathFor(ref: string): string {
 }
 
 /**
- * Region masks and sticker specs carry exact values, not a picture: a group map
- * addresses regions by id and the shader buckets those ids, so a few units of
- * DXT drift can move a pixel into the neighbouring region. Valve ships its own
- * group maps as DXT1 and gets away with it because the authored ids sit clear of
- * the bucket edges, but a user's mask has no such guarantee. Artwork takes the
- * compression, masks do not.
+ * Region masks and sticker specs hold exact values: the shader buckets a group map's ids, so
+ * DXT drift can move a pixel into a neighbouring region. Valve's own maps get away with DXT1
+ * because their ids sit clear of the bucket edges; a user's mask has no such guarantee.
  */
 export function formatFor(kind: ExportTextureKind, compression: ExportCompression): 'auto' | 'bgra8888' {
   if (compression === 'lossless') return 'bgra8888';
@@ -141,9 +119,8 @@ export function warningsFor(
       warnings.push(`${path} is ${width} x ${height}, where the file it replaces is ${metadata.width} x ${metadata.height}.`);
     }
   }
-  // Anything outside patterns/workshop/ is a file the base game ships, which
-  // other paints read too. Replacing it is legitimate and often the point, but
-  // it is not scoped to the paint on screen and people should know that.
+  // Files outside patterns/workshop/ are stock game files that other paints read. Replacing one
+  // is legitimate but unscoped, so warn.
   if (!ref.includes('/patterns/workshop/')) {
     warnings.push(`${path} is a stock game file, so this pack changes every war paint that reads it.`);
   }
@@ -172,13 +149,9 @@ export function sanitizePackName(name: string): string {
 }
 
 /**
- * Resolves which of a paint's textures a mounted package supplies.
- *
- * Driven by the paint's own recipe refs rather than by whatever the compositor
- * has read so far, so the answer is the same before and after the paint has
- * rendered, and resolved through the provider so a ref binds to exactly the
- * entry the viewer is drawing. Refs the package does not carry are left out on
- * purpose: those are stock files that already exist in the player's game.
+ * Which of a paint's textures a mounted package supplies. Driven by the recipe refs, so the
+ * answer does not depend on render order, and resolved through the provider so a ref binds to
+ * the entry the viewer draws. Refs the package lacks are stock files and are left out.
  */
 export function resolvePackageTextures(
   refs: readonly string[],

@@ -1,7 +1,4 @@
-/* Definitions tab: an imported proto_defs container's kits, listed as compact
-   rows (name/defindex/weapon count carry more meaning here than a texture
-   thumbnail would). Empty/importing states center within the tab; the loaded
-   state stacks a toolbar over a scrollable list, matching the Files tab. */
+/* Definitions tab: kits as compact rows, with a toolbar over a scrollable list once loaded. */
 .definitions-panel {
   display: flex;
   flex: 1;
@@ -61,9 +58,7 @@
   padding: 12px;
   text-align: left;
 }
-/* No card of its own: the tab already frames it. Empty, it stands in for the
-   empty state's centred column; loaded, it is a band under the toolbar,
-   ruled off the same way the toolbar is. */
+/* No card of its own; the tab already frames it. */
 .definitions-panel[data-status='empty'] .definitions-create { margin: 0 auto; }
 .definitions-panel[data-status='loaded'] .definitions-create {
   max-width: none;

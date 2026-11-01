@@ -67,7 +67,6 @@ export class ModelLoader {
 
 export interface ModelBounds {
   box: THREE.Box3;
-  size: THREE.Vector3;
   center: THREE.Vector3;
   radius: number;
   dimensions: [number, number, number];
@@ -85,7 +84,6 @@ export function computeModelBounds(parts: readonly ModelPart[]): ModelBounds {
   box.getCenter(center);
   return {
     box,
-    size,
     center,
     radius: Math.max(size.x, size.y, size.z) * 0.5,
     dimensions: [size.x, size.y, size.z].sort((a, b) => b - a) as [number, number, number],

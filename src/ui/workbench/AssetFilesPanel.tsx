@@ -40,12 +40,7 @@ function shortName(ref: string): string {
     .replace(/[_-]+/g, ' ');
 }
 
-/**
- * Asset grids can contain dozens of source textures. Keep the image element
- * in the card so the preview keeps its layout, but do not assign a source
- * until the card is close to the viewport. Native lazy loading remains as a
- * browser-level backstop once the source is assigned.
- */
+/** Assigns a source only once the card nears the viewport, so large grids stay cheap; the image element stays for layout. */
 function useNearViewport() {
   const elementRef = useRef<HTMLImageElement>(null);
   const [nearViewport, setNearViewport] = useState(false);
@@ -89,10 +84,7 @@ function TexturePreview({
     if (!nearViewport) return;
     let cancelled = false;
     setSrc(fallbackUrl);
-    if (!refPath || !resolvePackageTexture)
-      return () => {
-        cancelled = true;
-      };
+    if (!refPath || !resolvePackageTexture) return;
     void resolvePackageTexture(refPath)
       .then((url) => {
         if (!cancelled) setSrc(url);
@@ -140,7 +132,7 @@ export function AssetFilesPanel({
   onConfirmReset: () => void;
   onResetAll: () => void;
   onExport: () => void;
-  onUpdateFile: (slot: AssetSlot, file: File | undefined, alphaOnly: boolean) => void;
+  onUpdateFile: (ref: string, file: File | undefined, alphaOnly: boolean) => void;
   onRemoveAlpha: (ref: string) => void;
   onResetSlot: (ref: string) => void;
 }) {
@@ -233,6 +225,7 @@ export function AssetFilesPanel({
                   const specularInPackage = Boolean(specularRef && hasPackageTexture?.(specularRef));
                   const original = textureMetadata?.[slot.ref];
                   const showOriginal = comparing[slot.ref] && asset?.output;
+                  const previewOutput = showOriginal ? undefined : asset?.output;
                   const mismatch =
                     asset?.size &&
                     original &&
@@ -242,8 +235,8 @@ export function AssetFilesPanel({
                     <article className="custom-asset-card" key={slot.ref} data-replaced={asset || specularAsset ? '' : undefined}>
                       <div className="custom-asset-preview">
                         <TexturePreview
-                          refPath={showOriginal ? slot.ref : (asset?.output ?? slot.ref)}
-                          fallbackUrl={showOriginal ? resolveTexture(slot.ref) : (asset?.output ?? resolveTexture(slot.ref))}
+                          refPath={previewOutput ?? slot.ref}
+                          fallbackUrl={previewOutput ?? resolveTexture(slot.ref)}
                           resolvePackageTexture={resolvePackageTexture}
                           packageGeneration={packageGeneration}
                         />
@@ -280,7 +273,7 @@ export function AssetFilesPanel({
                             <>
                               <span className="custom-asset-file" title={asset.color.fileName}>
                                 {asset.color.fileName}
-                                {(asset.color.hasEmbeddedAlpha ?? asset.color.isTga) ? ' (embedded alpha)' : ''}
+                                {asset.color.hasEmbeddedAlpha ? ' (embedded alpha)' : ''}
                               </span>
                               {asset.alpha && (
                                 <span className="custom-asset-file" title={asset.alpha.fileName}>
@@ -351,11 +344,11 @@ export function AssetFilesPanel({
                               onChange={(event) => {
                                 const file = event.target.files?.[0];
                                 event.target.value = '';
-                                onUpdateFile(slot, file, false);
+                                onUpdateFile(slot.ref, file, false);
                               }}
                             />
                           </label>
-                          {!(asset?.color && (asset.color.hasEmbeddedAlpha ?? asset.color.isTga)) && (
+                          {!asset?.color?.hasEmbeddedAlpha && (
                             <label className="custom-file-button custom-file-button-secondary" title="Import a separate greyscale or transparent image to use as this texture's alpha channel">
                               <Layers size={12} />
                               <span>Alpha</span>
@@ -366,7 +359,7 @@ export function AssetFilesPanel({
                                 onChange={(event) => {
                                   const file = event.target.files?.[0];
                                   event.target.value = '';
-                                  onUpdateFile(slot, file, true);
+                                  onUpdateFile(slot.ref, file, true);
                                 }}
                               />
                             </label>
@@ -382,7 +375,7 @@ export function AssetFilesPanel({
                                 onChange={(event) => {
                                   const file = event.target.files?.[0];
                                   event.target.value = '';
-                                  onUpdateFile({ ref: specularRef, kind: 'sticker-mask', group: 'mask' }, file, false);
+                                  onUpdateFile(specularRef, file, false);
                                 }}
                               />
                             </label>

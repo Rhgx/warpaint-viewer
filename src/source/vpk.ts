@@ -1,7 +1,6 @@
 /**
- * Browser-safe reader for Source 1 VPK directory files.  It deliberately only
- * reads the small header/tree during mounting; entry data remains in the File
- * objects and is sliced on demand.
+ * Browser-safe reader for Source 1 VPK directory files. Only the header and tree are
+ * read at mount time; entry data stays in the File objects and is sliced on demand.
  */
 
 import type { SourceEntry, SourcePackage, SourcePackageOpenResult } from './contracts'
@@ -110,7 +109,7 @@ export class VpkSourcePackage implements SourcePackage {
   readonly id: string
   readonly name: string
   readonly entries: ReadonlyMap<string, VpkSourceEntry>
-  /** VPKs are always addressed by their real Source path; see contracts.ts. */
+  /** Always false: VPK entries keep their real Source paths. */
   readonly rootIsMaterials = false
 
   #records: Map<string, VpkRecord>
@@ -161,9 +160,7 @@ export class VpkSourcePackage implements SourcePackage {
       )
     }
 
-    // Validate before allocating the combined return buffer. This avoids a
-    // second large allocation for corrupt entries, and no copy is made when
-    // the entry has no preload bytes.
+    // Validate before allocating the combined buffer, so corrupt entries cost no second allocation.
     if (archiveLength > 0) return joinBytes(record.preload, archive)
     return record.preload.slice()
   }
@@ -214,7 +211,7 @@ export async function openVpkPackage(files: readonly File[], options: VpkOpenOpt
   return new VpkSourcePackage(packageName, directoryFile, records)
 }
 
-/** Shared-package equivalent of the ZIP opener. VPK parsing currently has no non-fatal warnings. */
+/** VPK parsing reports no non-fatal diagnostics. */
 export async function openVpkSourcePackage(
   files: readonly File[],
   options: VpkOpenOptions = {},
@@ -298,7 +295,7 @@ async function readVpkHeader(file: File, limits: Limits): Promise<VpkHeader> {
   }
 
   const headerSize = version === 1 ? VPK_V1_HEADER_SIZE : VPK_V2_HEADER_SIZE
-  if (file.size < headerSize || initial.byteLength < headerSize) {
+  if (file.size < headerSize) {
     throw new VpkPackageError('vpk-truncated-header', `“${file.name}” has a truncated VPK v${version} header.`)
   }
 

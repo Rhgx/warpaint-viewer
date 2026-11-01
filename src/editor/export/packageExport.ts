@@ -86,9 +86,8 @@ async function findJsonFragmentPaths(
 }
 
 /**
- * Rebuilds the mounted package as one ZIP while replacing only the selected
- * kit's edited definitions. Mounted entries are read lazily and added one at a
- * time, so exporting does not retain a second expanded copy of the package.
+ * Rebuilds the mounted package as one ZIP, replacing only the selected kit's definitions.
+ * Entries are read lazily, so no second expanded copy of the package is kept.
  */
 export async function exportEditedPackage(
   bundle: ProtoDefKitBundle,
@@ -110,9 +109,7 @@ export async function exportEditedPackage(
         targetDefindex: defindex(bundle.definition),
       });
     } catch {
-      // A separately imported definition may be edited while another package
-      // supplies the assets. In that case append it instead of modifying an
-      // unrelated kit in the mounted container.
+      // A separately imported definition may need appending instead of overwriting an unrelated kit.
       result = spliceProtoDefBundle({ baseBytes, bundle, mode: 'append' });
     }
     replacements.set(PACKAGE_PROTO_DEFS_PATH, result.bytes);

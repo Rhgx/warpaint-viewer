@@ -1,23 +1,9 @@
 #!/usr/bin/env node
-// Extracts MDL attachment points ("unusual_0".."unusual_5", "muzzle") for every weapon in
-// staging/weapon_models.json, expressed in the same coordinate frame as the published GLB
-// geometry (see rootFrameTransforms() in tools/models/lib/mdl.mjs).
-//
-// Produces: public/data/effects/attachments.json (format v3)
-//           public/data/effects/hitboxes.json
-//   {
-//     "<weaponKey>": {
-//       "unusual_0": { "pos": [x, y, z], "quat": [qx, qy, qz, qw] },
-//       ...
-//       "muzzle": { "pos": [x, y, z], "quat": [qx, qy, qz, qw] }
-//     }, ...
-//   }
-//
-// `pos` is the attachment origin in glb/geometry space (unchanged from format v1). `quat` is the
-// attachment's local orientation frame (mstudioattachment_t.local's 3x3 rotation part), carried
-// through the same bone-world and root-frame transforms as pos, then re-orthonormalized and
-// converted to a unit quaternion.
-//
+// Extracts MDL attachment points ("unusual_0".."unusual_5", "muzzle") per weapon in
+// staging/weapon_models.json, in the published GLB's frame (see rootFrameTransforms in
+// models/lib/mdl.mjs). Writes public/data/effects/attachments.json and hitboxes.json.
+// attachments.json is keyed by weapon, then attachment name. pos is in glb geometry space;
+// quat is the 3x3 rotation of mstudioattachment_t.local, re-orthonormalized.
 // Usage: node tools/extract/attachments.mjs (also invoked from tools/extract/effects.mjs)
 
 import fs from 'node:fs';
@@ -26,6 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { extractBatch, MISC_VPK } from '../lib/vpk.mjs';
 import { parseMDL, invertAffine3x4, applyMat3x4, multiplyAffine3x4, rootFrameTransforms } from '../models/lib/mdl.mjs';
+import { readGLB } from '../models/lib/glb.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..', '..');
@@ -35,8 +22,7 @@ const OUT = path.join(REPO, 'public', 'data', 'effects');
 
 function log(...a) { console.log('[attachments]', ...a); }
 
-// Ensure a weapon's .mdl is present in staging, extracting it from the misc VPK if needed.
-// Mirrors mdl2gltf.mjs's ensureExtracted but only needs the .mdl (no VVD/VTX geometry).
+// Make sure a weapon's .mdl is in staging, extracting it from the misc VPK if needed.
 function ensureMdl(vpkRel) {
   vpkRel = vpkRel.replace(/\\/g, '/').replace(/^\/+/, '');
   const dest = path.join(STAGING, vpkRel);
@@ -46,10 +32,6 @@ function ensureMdl(vpkRel) {
   if (!fs.existsSync(dest)) throw new Error(`could not extract ${vpkRel} from ${MISC_VPK}`);
   return dest;
 }
-
-// ---------------------------------------------------------------------------
-// Small vector / 3x3 matrix / quaternion helpers for attachment orientation.
-// ---------------------------------------------------------------------------
 
 function dot3(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
 function cross3(a, b) {
@@ -67,8 +49,7 @@ function normalize3(v) {
   return scale3(v, 1 / len);
 }
 
-// Extract the 3x3 rotation part (row-major, 9 elements) from a row-major 3x4 affine matrix
-// (indices 0,1,2 / 4,5,6 / 8,9,10 - same layout as poseToBone and mstudioattachment_t.local).
+// 3x3 rotation part of a row-major 3x4 affine (the layout of poseToBone and mstudioattachment_t.local).
 function rot3x3(m) {
   return [m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]];
 }
@@ -87,9 +68,7 @@ function mulMat3(a, b) {
 // Column j (a length-3 basis vector) of a row-major 3x3 matrix.
 function col3(m, j) { return [m[j], m[3 + j], m[6 + j]]; }
 
-// Gram-Schmidt orthonormalize three (already roughly-orthogonal) basis vectors, re-deriving Z
-// as X-cross-Y so the result is guaranteed a right-handed orthonormal frame even after passing
-// through a linear transform that isn't perfectly rotation-only (floating point drift).
+// Gram-Schmidt X and Y, with Z = X x Y, to keep a right-handed frame after float drift.
 function orthonormalizeBasis(x, y) {
   const nx = normalize3(x);
   const yOrtho = sub3(y, scale3(nx, dot3(nx, y)));
@@ -98,8 +77,7 @@ function orthonormalizeBasis(x, y) {
   return { x: nx, y: ny, z: nz };
 }
 
-// Convert a row-major 3x3 rotation matrix to a unit quaternion [qx, qy, qz, qw] (Shepperd's
-// method, numerically stable across all rotation angles).
+// Row-major 3x3 rotation to unit quaternion [qx, qy, qz, qw] (Shepperd's method).
 function mat3ToQuat(m) {
   const [m00, m01, m02, m10, m11, m12, m20, m21, m22] = m;
   const trace = m00 + m11 + m22;
@@ -145,10 +123,8 @@ function rotateVecByQuat(q, v) {
   ];
 }
 
-// Compute the world-space (object-space) origin AND orientation of an attachment, then re-express
-// both in the weapon's root-bone frame with the exact same transform mdl2gltf.mjs applies to
-// vertices (xform.pos for the origin, xform.nrm - the transform's linear/rotation part, with no
-// translation - for the orientation basis vectors, per the effects-extraction spec).
+// Attachment origin and orientation in the root-bone frame, using the same transform as the
+// vertices: xform.pos for the origin, xform.nrm for directions (no translation).
 function attachmentFrame(mdl, xform, attachment) {
   const bone = mdl.bones[attachment.localbone];
   if (!bone) {
@@ -162,8 +138,7 @@ function attachmentFrame(mdl, xform, attachment) {
 
   // Object-space rotation = boneWorld(3x3) * attachmentLocal(3x3).
   const objectRot = mulMat3(rot3x3(boneWorld), rot3x3(attachment.local));
-  // Only X and Y need to be transformed; orthonormalizeBasis re-derives Z as X-cross-Y, which
-  // guarantees a right-handed orthonormal frame even after floating-point drift through xform.nrm.
+  // Only X and Y need transforming; orthonormalizeBasis rebuilds Z.
   const mappedX = xform.nrm(col3(objectRot, 0));
   const mappedY = xform.nrm(col3(objectRot, 1));
   const { x, y, z } = orthonormalizeBasis(mappedX, mappedY);
@@ -242,23 +217,11 @@ export function extractAttachments() {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Validation: parse a published GLB's accessors to get its combined bounding box, and assert
-// each extracted unusual_* attachment lies within that box expanded by 25%.
-// ---------------------------------------------------------------------------
-
+// Validation: each unusual_* attachment must lie within its GLB bounding box grown by 25%.
 function parseGLBBoundingBox(glbPath) {
   const buf = fs.readFileSync(glbPath);
   if (buf.toString('ascii', 0, 4) !== 'glTF') throw new Error(`${glbPath}: bad GLB magic`);
-  let off = 12;
-  let json = null;
-  while (off < buf.length) {
-    const len = buf.readUInt32LE(off);
-    const type = buf.toString('ascii', off + 4, off + 8);
-    const data = buf.subarray(off + 8, off + 8 + len);
-    if (type === 'JSON') json = JSON.parse(data.toString('utf8'));
-    off += 8 + len;
-  }
+  const { json } = readGLB(buf);
   if (!json) throw new Error(`${glbPath}: no JSON chunk`);
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
@@ -272,10 +235,8 @@ function parseGLBBoundingBox(glbPath) {
   return { min, max };
 }
 
-// Convention check (spec deliverable 1): for c_rocketlauncher's unusual_1, the attachment local
-// +X axis (Source "forward") mapped through quat must point roughly along glb +Z or -Z (the
-// weapon's long axis) - abs(dot(mappedX, (0,0,1))) > 0.7. Also logs the same for muzzle
-// (informational only; not hard-enforced since the spec's MUST-hold formula only names unusual_1).
+// Basis check: c_rocketlauncher's unusual_1 local +X (Source forward) must map near the glb Z axis
+// (|dot| > 0.7). The muzzle is logged only.
 function checkBasisConvention(attachments) {
   const entry = attachments.c_rocketlauncher;
   if (!entry) { log('  BASIS CHECK SKIP: no c_rocketlauncher in attachments'); return true; }
@@ -292,9 +253,8 @@ function checkBasisConvention(attachments) {
   return ok;
 }
 
-// Validate a set of weapon keys' unusual_* attachments against their GLB bounding boxes,
-// expanded by `marginFrac` (0.25 = 25%) on every axis, and run the c_rocketlauncher basis
-// convention check. Returns false (does not throw) on any failure; callers decide whether to throw.
+// Checks unusual_* points against each GLB bounding box grown by marginFrac, then the basis check.
+// Returns false rather than throwing when a check fails.
 export function validateAgainstGLB(attachments, weaponKeys, modelsDir, marginFrac = 0.25) {
   let allOk = true;
   for (const key of weaponKeys) {

@@ -1,6 +1,5 @@
-// Parser for Source 1 VTX (optimized mesh, .dx90.vtx, file version 7).
-// All structs are byte-packed (#pragma pack(1)). Produces LOD0 triangle lists
-// of origMeshVertID per (bodypart, model, mesh), matching the MDL hierarchy order.
+// Source 1 VTX (.dx90.vtx, version 7) parser. Structs are byte-packed. Returns LOD0 triangles as
+// origMeshVertID per (bodypart, model, mesh), in MDL order.
 import fs from 'node:fs';
 
 const STRIP_IS_TRILIST = 0x01;
@@ -18,8 +17,7 @@ export function parseVTX(path) {
   const numBodyParts = b.readInt32LE(28);
   const bodyPartOffset = b.readInt32LE(32);
 
-  // Detect whether Strip/StripGroup carry the extra topology fields (8 bytes each).
-  // We validate strip parsing under both assumptions on the first non-empty mesh.
+  // Strip and StripGroup may carry an 8-byte topology extension; detect which layout applies.
   const extra = detectExtra(b, numBodyParts, bodyPartOffset);
   const SG_SIZE = extra ? 33 : 25;
   const STRIP_SIZE = extra ? 35 : 27;
@@ -46,8 +44,7 @@ export function parseVTX(path) {
         const triangles = []; // flat array of origMeshVertID triples
         for (let sg = 0; sg < numStripGroups; sg++) {
           const sgBase = meshBase + sgOffset + sg * SG_SIZE;
-          // sgBase + 0 is numVerts and sgBase + 8 is numIndices; both are
-          // implied by the strip walk below and never read directly.
+          // numVerts (+0) and numIndices (+8) are not needed; the strips cover them.
           const vertOffset = b.readInt32LE(sgBase + 4);
           const indexOffset = b.readInt32LE(sgBase + 12);
           const numStrips = b.readInt32LE(sgBase + 16);
@@ -144,11 +141,8 @@ function validateExtra(b, numBodyParts, bodyPartOffset, extra) {
   return checked > 0;
 }
 
+// Use the extended layout only if the plain one fails validation and the extended one passes.
 function detectExtra(b, numBodyParts, bodyPartOffset) {
-  const noExtra = validateExtra(b, numBodyParts, bodyPartOffset, false);
-  if (noExtra) return false;
-  const withExtra = validateExtra(b, numBodyParts, bodyPartOffset, true);
-  if (withExtra) return true;
-  // Fall back to no-extra (TF2 default) if neither validated cleanly.
-  return false;
+  return !validateExtra(b, numBodyParts, bodyPartOffset, false)
+    && validateExtra(b, numBodyParts, bodyPartOffset, true);
 }

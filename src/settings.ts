@@ -1,8 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-// User preferences from the Settings modal. Workshopper tools default to off
-// so the viewer stays uncluttered for people who only browse paints.
+// User preferences from the Settings modal. Workshopper tools default to off.
 interface SettingsState {
   /** Paint kit IDs plus Pyxell's texture directory entries. */
   showPaintkitDetails: boolean;
@@ -15,8 +14,7 @@ interface SettingsState {
   setShowcaseBoard(enabled: boolean): void;
 }
 
-// persist falls back to in-memory state when localStorage is unavailable, so
-// toggles still work for the session in private browsing.
+// persist falls back to in-memory state when localStorage is unavailable; toggles still work this session.
 export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({

@@ -12,8 +12,9 @@ import {
   type VarFieldMsg,
 } from '../../protodefs/messages';
 import { sourceTextureIdentity } from '../../source/paths';
-import type { StickerQuad, StickerTarget } from '../mutations';
-import { EditorMutationAmbiguityError, setStickerDestQuad } from '../mutations';
+import type { StickerQuad, StickerTarget } from './stickerMutations';
+import { EditorMutationAmbiguityError } from '../mutationCore';
+import { setStickerDestQuad } from './stickerMutations';
 
 /** A field as authored in the operation, alongside the value the resolver uses. */
 interface StickerResolvedField {
@@ -27,7 +28,6 @@ interface StickerResolvedField {
 }
 
 interface StickerVariantInfo {
-  readonly index: number;
   readonly base: StickerResolvedField;
   readonly weight: StickerResolvedField;
   readonly spec: StickerResolvedField;
@@ -38,12 +38,8 @@ export interface StickerPlacementTarget {
   readonly id: string;
   /** Target accepted by setStickerDestQuad(). */
   readonly target: StickerTarget;
-  /** Zero-based depth-first apply_sticker occurrence. */
-  readonly occurrence: number;
   /** Every authored occurrence represented by this logical sticker. */
   readonly occurrences: readonly number[];
-  /** Operation-message path, useful for diagnostics but never an object reference. */
-  readonly stagePath: readonly string[];
   readonly stagePaths: readonly (readonly string[])[];
   readonly canMoveEarlier: boolean;
   readonly canMoveLater: boolean;
@@ -90,7 +86,6 @@ function coalesceLogicalStickerTargets(targets: readonly StickerPlacementTarget[
     output[existingIndex] = {
       ...representative,
       id: existing.id,
-      occurrence: existing.occurrence,
       occurrences: [...existing.occurrences, ...target.occurrences],
       stagePaths: [...existing.stagePaths, ...target.stagePaths],
       canMoveEarlier: existing.canMoveEarlier && target.canMoveEarlier,
@@ -176,8 +171,7 @@ function editableLocalSourcePath(field: StickerResolvedField): readonly string[]
   const path = source.editableSourcePath ?? source.sourcePath;
   const [root, second, third] = path;
   if (source.scope === 'weapon') {
-    // A named/repeated weapon slot is part of the exported definition. Writing
-    // its VarField keeps another weapon's authored placement untouched.
+    // Writing a named or repeated weapon slot keeps other weapons' authored placement untouched.
     return root === 'definition' && second !== 'header' ? path : undefined;
   }
   return (root === 'definition' || root === 'operation') && second === 'header' && third === 'variables'
@@ -190,8 +184,7 @@ function preflightEdit(
   quad: StickerQuad,
 ): string | undefined {
   try {
-    // This only calls the clone-only mutation primitive. It proves the source
-    // scope now, before the UI advertises a draggable target.
+    // Clone-only dry run: proves the source scope before the UI offers a draggable target.
     setStickerDestQuad(messages, target, quad);
     return undefined;
   } catch (cause) {
@@ -200,12 +193,8 @@ function preflightEdit(
 }
 
 /**
- * Discover direct, editable apply_sticker stages in the exported kit operation.
- *
- * Template-owned stages are deliberately excluded: they are not present in the
- * two-message editor snapshot and changing one would affect unrelated kits.
- * Each direct stage is still returned when it is read-only, so the UI can show
- * the actual source and explain why it cannot be moved.
+ * Discover direct apply_sticker stages in the exported kit operation. Template-owned stages are excluded,
+ * since changing one would affect unrelated kits. Read-only stages are still returned, with a reason.
  */
 export function discoverStickerPlacementTargets(
   messages: ProtoDefKitMessages,
@@ -249,7 +238,6 @@ export function discoverStickerPlacementTargets(
       const stickers = many(stickerStage.sticker).map((sticker, index): StickerVariantInfo => {
         const path = manyEntryPath([...stickerPath, 'sticker'], stickerStage.sticker, index);
         return {
-          index,
           base: fieldInfo(messages, sticker.base, [...path, 'base'], traces),
           weight: fieldInfo(messages, sticker.weight, [...path, 'weight'], traces),
           spec: fieldInfo(messages, sticker.spec, [...path, 'spec'], traces),
@@ -283,9 +271,7 @@ export function discoverStickerPlacementTargets(
       output.push({
         id: `sticker:${currentOccurrence}:${stickerPath.join('/')}`,
         target,
-        occurrence: currentOccurrence,
         occurrences: [currentOccurrence],
-        stagePath: stickerPath,
         stagePaths: [stickerPath],
         canMoveEarlier: siblings.some((node, index) => index < siblingIndex && Boolean(node.stage?.apply_sticker)),
         canMoveLater: siblings.some((node, index) => index > siblingIndex && Boolean(node.stage?.apply_sticker)),
@@ -322,11 +308,7 @@ export function protoTextureReference(reference: string): string {
   return sourceTextureIdentity(reference).replace(/^materials\//, '');
 }
 
-/**
- * Source texture names are inconsistent and sometimes actively misleading, so
- * only genuinely descriptive ones become labels. Everything else falls back to
- * a plain ordinal rather than telling the user about `displaynull`.
- */
+/** Source names are often misleading, so only descriptive ones become labels; the rest fall back to an ordinal. */
 const UNINFORMATIVE_STICKER_TOKENS = new Set([
   'sticker', 'stickers', 'group', 'groupsticker', 'decal', 'display', 'displaynull',
   'texture', 'tex', 'img', 'image', 'square', 'squares', 'rect', 'box', 'blank',

@@ -1,31 +1,23 @@
-// Port of tools/lib/proto.mjs `parseContainer`, over an in-memory Uint8Array
-// instead of a file path. proto_defs.vpd is a flat little-endian container:
-// repeated blocks of { int32 defType; int32 numDefs; numDefs * (int32 size; byte[size] payload) }
-// until EOF. There is no length prefix for the whole file and no magic number,
-// so a corrupt or unrelated file mostly just fails one of the bounds checks below.
+// Port of parseContainer in tools/lib/proto.mjs, over an in-memory buffer. proto_defs.vpd
+// is a flat little-endian sequence of blocks, { int32 defType; int32 numDefs;
+// numDefs * (int32 size; byte[size]) }, read to EOF with no magic number, so a corrupt
+// file usually fails a bounds check.
 //
-// This parses bytes a user drags in, so every count and offset is treated as
-// hostile: negative or absurd values, and any block whose declared size would
-// run past the end of the buffer, are rejected with a specific error rather
-// than allowed to read out of bounds or allocate unbounded arrays.
+// Every count and offset is treated as hostile: bad sizes are rejected rather than read
+// out of bounds or allocated.
 
 interface ContainerBlock {
-  size: number;
   buffer: Uint8Array;
 }
 
 export interface ParsedContainer {
   byType: Record<number, ContainerBlock[]>;
-  totalBytes: number;
-  consumed: number;
 }
 
 // Same per-block guard as the Node pipeline (tools/lib/proto.mjs).
 const MAX_NUM_DEFS_PER_BLOCK = 1_000_000;
-// Additional guard the Node pipeline doesn't need: it only ever reads one
-// trusted, known-good file. A hostile file could declare many small blocks
-// that each pass the per-block check yet still add up to an absurd total, so
-// cap the grand total of definitions across every block in the container too.
+// Unlike the Node pipeline, this reads untrusted files: many small blocks could each pass
+// the per-block check and still add up to an absurd total.
 const MAX_TOTAL_DEFS = 2_000_000;
 
 export function parseContainer(bytes: Uint8Array): ParsedContainer {
@@ -56,9 +48,9 @@ export function parseContainer(bytes: Uint8Array): ParsedContainer {
       }
       const payload = bytes.subarray(off, off + size);
       off += size;
-      list.push({ size, buffer: payload });
+      list.push({ buffer: payload });
     }
   }
 
-  return { byType, totalBytes: bytes.length, consumed: off };
+  return { byType };
 }

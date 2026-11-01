@@ -1,4 +1,4 @@
-import { many, type Many, type OperationMsg, type OperationNodeMsg, type OperationStageMsg } from '../../protodefs/messages';
+import { many, type Many, type OperationMsg, type OperationNodeMsg } from '../../protodefs/messages';
 import {
   manyShape,
   type ManyShape,
@@ -13,7 +13,7 @@ import {
   type OperationStageKind,
 } from './types';
 
-const STAGE_KINDS: readonly OperationStageKind[] = [
+export const STAGE_KINDS: readonly OperationStageKind[] = [
   'texture_lookup',
   'select',
   'combine_add',
@@ -22,16 +22,15 @@ const STAGE_KINDS: readonly OperationStageKind[] = [
   'apply_sticker',
 ];
 
-const CONTAINER_KINDS = new Set<OperationStageKind>([
+/** Stages that own nested operation_node children, and therefore accept graph inputs. */
+export const CONTAINER_KINDS: ReadonlySet<OperationGraphNodeKind> = new Set<OperationGraphNodeKind>([
   'combine_add',
   'combine_multiply',
   'combine_lerp',
   'apply_sticker',
 ]);
 
-type OperationStageValue = NonNullable<OperationStageMsg[keyof OperationStageMsg]>;
-
-function clone<T>(value: T): T {
+export function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
@@ -41,23 +40,11 @@ function pathId(path: OperationGraphPath): string {
   )).join('/')}`;
 }
 
-function stageValue(stage: OperationStageMsg | undefined, kind: OperationStageKind): OperationStageValue | undefined {
-  if (!stage) return undefined;
-  switch (kind) {
-    case 'texture_lookup': return stage.texture_lookup;
-    case 'select': return stage.select;
-    case 'combine_add': return stage.combine_add;
-    case 'combine_multiply': return stage.combine_multiply;
-    case 'combine_lerp': return stage.combine_lerp;
-    case 'apply_sticker': return stage.apply_sticker;
-  }
-}
-
 function stageKindOf(node: OperationNodeMsg): { kind: OperationGraphNodeKind; stageCount: number } {
   if (node.operation_template !== undefined) return { kind: 'operation_template', stageCount: 0 };
   const stage = node.stage;
   if (!stage || typeof stage !== 'object') return { kind: 'invalid', stageCount: 0 };
-  const present = STAGE_KINDS.filter((kind) => stageValue(stage, kind) !== undefined);
+  const present = STAGE_KINDS.filter((kind) => stage[kind] !== undefined);
   if (present.length === 1) return { kind: present[0], stageCount: 1 };
   if (present.length > 1) return { kind: present[0] ?? 'invalid', stageCount: present.length };
   return { kind: 'invalid', stageCount: 0 };
@@ -74,7 +61,7 @@ function nestedNodesOf(node: OperationNodeMsg, kind: OperationGraphNodeKind): Ma
   }
 }
 
-function outputTypeOf(kind: OperationGraphNodeKind): OperationPortType {
+export function outputTypeOf(kind: OperationGraphNodeKind): OperationPortType {
   switch (kind) {
     case 'select': return 'mask';
     case 'texture_lookup':
@@ -145,7 +132,7 @@ function labelFor(kind: OperationGraphNodeKind, raw: OperationNodeMsg): string {
   }
 }
 
-function edgeId(source: string, target: string, inputIndex: number): string {
+export function edgeId(source: string, target: string, inputIndex: number): string {
   return `operation-edge:${source}->${target}:${inputIndex}`;
 }
 
@@ -187,11 +174,8 @@ function rootsFromEdges(graph: OperationGraph): readonly string[] {
 }
 
 /**
- * Flatten one authored operation-node tree into a graph suitable for a node UI.
- *
- * The graph intentionally stores a detached raw node on every authored node.
- * This is what lets a no-op graph round trip retain variable references and
- * fields added to the proto after this editor was written.
+ * Flatten an authored operation-node tree into a graph. Each node keeps a detached raw copy,
+ * so a no-op round trip keeps variable references and unknown fields.
  */
 export function operationNodesToGraph(
   rootNodes: Many<OperationNodeMsg>,
@@ -222,7 +206,7 @@ export function operationNodesToGraph(
       inputPorts: inputPortsFor(info.kind, nestedList.length),
       locked: info.kind === 'operation_template',
       children: [],
-      ...(CONTAINER_KINDS.has(info.kind as OperationStageKind) ? { childrenShape: manyShape(nested) } : {}),
+      ...(CONTAINER_KINDS.has(info.kind) ? { childrenShape: manyShape(nested) } : {}),
       ...(info.kind === 'operation_template' ? { lockedSnapshot: clone(raw) } : {}),
     });
 
@@ -310,7 +294,7 @@ function serializeNode(graph: OperationGraph, nodes: Map<string, OperationGraphN
 
   const raw = clone(node.raw);
   const children = incomingEdges(graph, nodeId).map((edge) => serializeNode(graph, nodes, edge.source, active));
-  if (CONTAINER_KINDS.has(node.kind as OperationStageKind)) {
+  if (CONTAINER_KINDS.has(node.kind)) {
     setNestedNodes(raw, node.kind, childrenWithShape(children, node.childrenShape ?? 'array'));
   } else if (children.length > 0) {
     throw new Error(`Node ${nodeId} of kind ${node.kind} cannot own child nodes.`);
@@ -328,8 +312,8 @@ export function graphToOperationNodes(graph: OperationGraph): Many<OperationNode
 }
 
 /** Replace only `operation_node` on a detached OperationMsg snapshot. */
-export function graphToOperation(graph: OperationGraph, baseOperation?: OperationMsg): OperationMsg {
-  const source = baseOperation ?? graph.operationSnapshot;
+export function graphToOperation(graph: OperationGraph): OperationMsg {
+  const source = graph.operationSnapshot;
   if (!source) throw new Error('graphToOperation requires an OperationMsg or a graph built from one.');
   const operation = clone(source);
   operation.operation_node = graphToOperationNodes(graph);

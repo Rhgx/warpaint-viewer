@@ -1,13 +1,6 @@
-// Parser for Source 1 VVD (vertexFileHeader_t v4). Reads the LOD0 vertex array
-// after applying the fixup table.
-//
-// Each mstudiovertex_t (48 bytes):
-//   0  : float weight[3]         (12)
-//   12 : byte  bone[3]           (3)
-//   15 : byte  numbones          (1)
-//   16 : Vector m_vecPosition    (12)  -- model space, bind pose
-//   28 : Vector m_vecNormal      (12)
-//   40 : Vector2D m_vecTexCoord  (8)
+// Parser for Source 1 VVD (vertexFileHeader_t v4). Reads the LOD0 vertex array after applying
+// the fixup table. Each mstudiovertex_t is 48 bytes; offsets: weight[3] 0, bone[3] 12,
+// numbones 15, m_vecPosition 16 (model space, bind pose), m_vecNormal 28, m_vecTexCoord 40.
 import fs from 'node:fs';
 
 const VERT_SIZE = 48;
@@ -38,8 +31,7 @@ export function parseVVD(path) {
     };
   }
 
-  // Build the LOD0 vertex array applying the fixup table.
-  // For target rootLod=0, copy every fixup whose lod >= 0 in table order.
+  // Apply the fixup table: take each fixup with lod >= 0, in table order.
   const rootLod = 0;
   const verts = [];
   if (numFixups > 0) {

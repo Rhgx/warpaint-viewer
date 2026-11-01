@@ -24,8 +24,7 @@
 .controls-help-modal:has(.controls-help-body[data-mode='graph']) {
   width: min(620px, 100%);
 }
-/* Rows arrive just behind the panel so the list reads as settling into place
-   rather than the whole card sliding as one block. */
+/* Rows settle into place one after another, rather than the whole card sliding as one block. */
 .controls-help-section {
   animation: controls-help-section-in 220ms ease-out backwards;
 }

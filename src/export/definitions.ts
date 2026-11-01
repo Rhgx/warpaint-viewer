@@ -1,16 +1,9 @@
 /**
- * Builds the definition half of a pack: the files that make a war paint exist
- * in someone's game, as opposed to the textures that make it look like itself.
- *
- * A paint the viewer imported lives only in memory. For the game to show it,
- * three things have to land in tf/custom/:
- *   scripts/protodefs/proto_defs.vpd          the paint's definition + operation
- *   resource/tf_proto_obj_defs_<lang>.txt     its display name
- *   materials/...                             its textures, handled elsewhere
- *
- * Both of the first two SHADOW the game's own copies rather than merging with
- * them, so each is written as a complete file built from a full base: the
- * snapshot this site ships, or the player's own copy when they supply one.
+ * Builds the definition half of a pack: the files that make a war paint exist in someone's
+ * game. An imported paint lives only in memory, so tf/custom/ needs
+ * scripts/protodefs/proto_defs.vpd (definition and operation) and
+ * resource/tf_proto_obj_defs_<lang>.txt (display name). Both shadow the game's copies, so each
+ * is written whole, from the shipped snapshot or the player's own copy.
  */
 
 import type { ProtoDefKitBundle } from '../protodefs/types';

@@ -1,27 +1,21 @@
 import { MAX_CUSTOM_LIGHTS } from '../../viewer/lighting/customLighting';
 import type { CustomLight, CustomLightingRig, CustomLightType, FrameVector } from '../../viewer/lighting/customLighting';
 
-/**
- * Pure helpers shared by the stage lighting panel and the inspector summary.
- * Kept free of JSX so both component files can import it without tripping the
- * react/only-export-components rule.
- */
+/** Pure helpers shared by the stage lighting panel and inspector summary. No JSX, for react/only-export-components. */
 
 /** Roles seed a light with a usable position and tint; bare types start neutral. */
 export type LightTemplate = 'key' | 'fill' | 'rim' | CustomLightType;
 
 /** One name per type across the whole UI: the badge, the picker and the menu. */
-export const TYPE_OPTIONS = [
-  { value: 'point', label: 'Point' },
-  { value: 'spot', label: 'Spot' },
-  { value: 'directional', label: 'Sun' },
-];
-
 export const TYPE_LABELS: Record<CustomLightType, string> = {
   point: 'Point',
   spot: 'Spot',
   directional: 'Sun',
 };
+
+const TYPE_ORDER: readonly CustomLightType[] = ['point', 'spot', 'directional'];
+
+export const TYPE_OPTIONS = TYPE_ORDER.map((value) => ({ value, label: TYPE_LABELS[value] }));
 
 export const ROLE_TEMPLATES: readonly { value: LightTemplate; label: string }[] = [
   { value: 'key', label: 'Key' },
@@ -54,25 +48,24 @@ export function formatScalar(value: number): string {
   return String(Math.round(value * 1000) / 1000);
 }
 
-export function nextLightId(lights: readonly CustomLight[], base: string): string {
-  const used = new Set(lights.map((light) => light.id));
+/** First of `base`, `base<separator>2`, ... that no light's `field` already uses. */
+function uniqueValue(lights: readonly CustomLight[], base: string, field: 'id' | 'name', separator: string): string {
+  const used = new Set(lights.map((light) => light[field]));
   if (!used.has(base)) return base;
   for (let index = 2; index < 100; index++) {
-    const candidate = `${base}-${index}`;
+    const candidate = `${base}${separator}${index}`;
     if (!used.has(candidate)) return candidate;
   }
-  return `${base}-${Date.now()}`;
+  return `${base}${separator}${Date.now()}`;
+}
+
+export function nextLightId(lights: readonly CustomLight[], base: string): string {
+  return uniqueValue(lights, base, 'id', '-');
 }
 
 /** Keep list names distinct: "Key light", then "Key light 2". */
 export function uniqueLightName(lights: readonly CustomLight[], base: string): string {
-  const used = new Set(lights.map((light) => light.name));
-  if (!used.has(base)) return base;
-  for (let index = 2; index < 100; index++) {
-    const candidate = `${base} ${index}`;
-    if (!used.has(candidate)) return candidate;
-  }
-  return `${base} ${Date.now()}`;
+  return uniqueValue(lights, base, 'name', ' ');
 }
 
 /** Duplicating a duplicate reads as "Key light copy 2", not "copy copy". */

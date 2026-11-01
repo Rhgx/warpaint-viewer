@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { colorFromArray, numOr, warnOnce } from './util';
 
-export interface UnusualFunctionEntry {
+interface UnusualFunctionEntry {
   functionName: string;
   params: Record<string, unknown>;
 }
@@ -40,13 +40,11 @@ function arrOr3(v: unknown, def: [number, number, number]): [number, number, num
 }
 
 // Source WORLD-space vectors (gravity, non-local bias directions) are Z-up;
-// the scene is Y-up, so (x, y, z) -> (x, z, y), matching the original gravity
-// mapping in this file.
+// the scene is Y-up, so (x, y, z) -> (x, z, y).
 function swizzleSourceWorld(v: [number, number, number]): THREE.Vector3 {
   return new THREE.Vector3(v[0], v[2], v[1]);
 }
 
-// Parsed system configuration
 
 interface SphereInit {
   cp: number;
@@ -62,22 +60,23 @@ interface SphereInit {
   localSpeedMax: [number, number, number] | null;
 }
 
-export interface ParsedInit {
-  kind: 'sphere' | 'offset' | 'lifetime' | 'alpha' | 'radius' | 'colorRandom' | 'rotationRandom'
-      | 'yawFlip' | 'remapScalar' | 'velocityNoise' | 'velocityInherit' | 'velocityRandom' | 'sequence'
-      | 'positionModel';
-  sphere?: SphereInit;
-  offset?: { cp: number; min: [number, number, number]; max: [number, number, number]; local: boolean };
-  range?: { min: number; max: number; exp: number };
-  colors?: { c1: THREE.Color; c2: THREE.Color };
-  rotation?: { initial: number; offMin: number; offMax: number; exp: number };
-  flipPercent?: number;
-  remap?: { inMin: number; inMax: number; outMin: number; outMax: number; scalar: boolean };
-  noise?: { min: [number, number, number]; max: [number, number, number]; local: boolean; cp: number };
-  inherit?: { cp: number; scale: number };
-  sequenceRange?: { min: number; max: number };
-  positionModel?: { cp: number; bboxScale: number; tries: number; bias: [number, number, number] };
-}
+type RangeConfig = { min: number; max: number; exp: number };
+
+export type ParsedInit =
+  | { kind: 'sphere'; sphere: SphereInit }
+  | { kind: 'velocityRandom'; sphere: SphereInit }
+  | { kind: 'offset'; offset: { cp: number; min: [number, number, number]; max: [number, number, number]; local: boolean } }
+  | { kind: 'positionModel'; positionModel: { cp: number; bboxScale: number; tries: number; bias: [number, number, number] } }
+  | { kind: 'lifetime'; range: RangeConfig }
+  | { kind: 'alpha'; range: RangeConfig }
+  | { kind: 'radius'; range: RangeConfig }
+  | { kind: 'colorRandom'; colors: { c1: THREE.Color; c2: THREE.Color } }
+  | { kind: 'rotationRandom'; rotation: { initial: number; offMin: number; offMax: number; exp: number } }
+  | { kind: 'yawFlip'; flipPercent: number }
+  | { kind: 'remapScalar'; remap: { inMin: number; inMax: number; outMin: number; outMax: number; scalar: boolean } }
+  | { kind: 'velocityNoise'; noise: { min: [number, number, number]; max: [number, number, number]; local: boolean; cp: number } }
+  | { kind: 'velocityInherit'; inherit: { cp: number; scale: number } }
+  | { kind: 'sequence'; sequenceRange: { min: number; max: number } };
 
 export interface ParsedConstraint {
   kind: 'pathBetweenCps';
@@ -93,26 +92,24 @@ export interface ParsedConstraint {
   };
 }
 
-export interface ParsedOp {
-  kind: 'movement' | 'lifespanDecay' | 'fadeAndKill' | 'fadeIn' | 'fadeOut' | 'radiusScale'
-      | 'colorFade' | 'spin' | 'lock' | 'rotAxis' | 'oscillate' | 'maintainPath'
-      | 'setChildCps' | 'setCpPositions';
-  movement?: { gravity: THREE.Vector3; drag: number };
-  // All four fade times are fractions of the particle's lifetime (compared
-  // against age/lifetime directly, the same way C_OP_FadeAndKill's doOperate
-  // does: o = currentTime/timeToLive), not absolute seconds.
-  fadeAndKill?: { startFadeIn: number; endFadeIn: number; startFadeOut: number; endFadeOut: number; startAlphaFactor: number; endAlphaFactor: number };
-  fade?: { min: number; max: number; proportional: boolean; ease: boolean };
-  radiusScale?: { start: number; end: number; startTime: number; endTime: number; bias: number; ease: boolean };
-  colorFade?: { color: THREE.Color; start: number; end: number; ease: boolean };
-  spin?: { rate: number; stopTime: number; rateMin: number };
-  lock?: { cp: number; startMin: number; startMax: number; endMin: number; endMax: number; lockRot: boolean };
-  rotAxis?: { axis: [number, number, number]; rate: number; cp: number; local: boolean };
-  oscillate?: { field: number; rateMin: [number, number, number]; rateMax: [number, number, number]; freqMin: [number, number, number]; freqMax: [number, number, number]; multiplier: number; startPhase: number };
-  maintainPath?: { startCp: number; endCp: number; count: number; cohesion: number };
-  setChildCps?: { firstCp: number; count: number; firstParticle: number };
-  setCpPositions?: { entries: Array<{ cp: number; location: [number, number, number] }>; worldSpace: boolean; offsetFromCp: number };
-}
+type FadeConfig = { min: number; max: number; proportional: boolean; ease: boolean };
+
+export type ParsedOp =
+  | { kind: 'movement'; movement: { gravity: THREE.Vector3; drag: number } }
+  | { kind: 'lifespanDecay' }
+  // Fade times are lifetime fractions, not absolute seconds.
+  | { kind: 'fadeAndKill'; fadeAndKill: { startFadeIn: number; endFadeIn: number; startFadeOut: number; endFadeOut: number; startAlphaFactor: number; endAlphaFactor: number } }
+  | { kind: 'fadeIn'; fade: FadeConfig }
+  | { kind: 'fadeOut'; fade: FadeConfig }
+  | { kind: 'radiusScale'; radiusScale: { start: number; end: number; startTime: number; endTime: number; bias: number; ease: boolean } }
+  | { kind: 'colorFade'; colorFade: { color: THREE.Color; start: number; end: number; ease: boolean } }
+  | { kind: 'spin'; spin: { rate: number; stopTime: number; rateMin: number } }
+  | { kind: 'lock'; lock: { cp: number; startMin: number; startMax: number; endMin: number; endMax: number; lockRot: boolean } }
+  | { kind: 'rotAxis'; rotAxis: { axis: [number, number, number]; rate: number; cp: number; local: boolean } }
+  | { kind: 'oscillate'; oscillate: { field: number; rateMin: [number, number, number]; rateMax: [number, number, number]; freqMin: [number, number, number]; freqMax: [number, number, number]; multiplier: number; startPhase: number } }
+  | { kind: 'maintainPath'; maintainPath: { startCp: number; endCp: number; count: number; cohesion: number } }
+  | { kind: 'setChildCps'; setChildCps: { firstCp: number; count: number; firstParticle: number } }
+  | { kind: 'setCpPositions'; setCpPositions: { entries: Array<{ cp: number; location: [number, number, number] }>; worldSpace: boolean; offsetFromCp: number } };
 
 export interface EmitterConfig {
   mode: 'continuous' | 'instant';
@@ -188,9 +185,8 @@ export function parseInitializers(list: UnusualFunctionEntry[]): ParsedInit[] {
         out.push({ kind: 'rotationRandom', rotation: { initial: numOr(p.rotation_initial, 0), offMin: numOr(p.rotation_offset_min, 0), offMax: numOr(p.rotation_offset_max, 0), exp: numOr(p.rotation_random_exponent, 1) } });
         break;
       case 'rotationyawrandom':
-        // YAW (attribute 12) only affects oriented sprite renderers; the
-        // screen-aligned Points path ignores it like frame 0 of
-        // render_animated_sprites with orientation 0 would.
+        // YAW (attribute 12) only affects oriented sprites; the screen-aligned Points path
+        // ignores it, as render_animated_sprites does with orientation 0.
         break;
       case 'rotationyawfliprandom':
         // Yaw flip mirrors the sprite; approximate with a 180 degree roll.
@@ -224,9 +220,8 @@ export function parseInitializers(list: UnusualFunctionEntry[]): ParsedInit[] {
         break;
       }
       case 'velocitynoise':
-        // The SDK samples curl noise; a per-particle random draw inside the
-        // same output box keeps the population statistics without the noise
-        // field itself.
+        // The SDK samples curl noise; a per-particle random draw in the same box keeps the
+        // population statistics without the noise field.
         out.push({
           kind: 'velocityNoise',
           noise: {
@@ -278,17 +273,10 @@ export function parseOperators(list: UnusualFunctionEntry[]): ParsedOp[] {
         break;
       case 'alphafadeanddecay':
       case 'fadeandkill':
-        // C_OP_FadeAndKill (aka "Alpha Fade and Decay"): verified against
-        // loadout.tf's reimplementation. doOperate computes o =
-        // currentTime/timeToLive (a FRACTION of lifetime, not absolute
-        // seconds) and compares the four fade times against that fraction
-        // directly; the death check is the same one Lifespan Decay uses
-        // (timeToLive < currentTime), independent of the fade-out window. So
-        // when start/end fade-out are authored as values >1 (energy orb uses
-        // 2.5/3.0 against a 2.1s lifetime, i.e. o never gets there), that
-        // half of the operator simply never fires and the particle just
-        // holds at full alpha until Alpha Fade Out Random (a separate,
-        // proportional op) fades it, or its lifetime runs out.
+        // C_OP_FadeAndKill: doOperate compares the fade times with o = currentTime/timeToLive
+        // (a lifetime fraction). The death check uses timeToLive < currentTime, independent of the
+        // fade-out window, so fade-outs authored above 1 (energy orb: 2.5/3.0 on a 2.1s life)
+        // never fire and the particle holds full alpha until Alpha Fade Out Random ends it.
         out.push({
           kind: 'fadeAndKill',
           fadeAndKill: {
@@ -434,11 +422,9 @@ export function parseOperators(list: UnusualFunctionEntry[]): ParsedOp[] {
   return out;
 }
 
-// C_OP_ConstrainDistanceToPath: the entire motion model for the energy orb
-// (a particle streams from a start CP to an end CP over "travel time"), and
-// for isotope's glow children and cool's barrel systems. Unrecognized
-// constraints are ignored silently, matching how unrecognized operators are
-// handled above.
+// C_OP_ConstrainDistanceToPath is the motion model for the energy orb (streams from a
+// start CP to an end CP over travel time), isotope's glow children and cool's barrels.
+// Unrecognized constraints are ignored silently, as unrecognized operators are.
 export function parseConstraints(list: UnusualFunctionEntry[]): ParsedConstraint[] {
   const out: ParsedConstraint[] = [];
   for (const entry of list) {

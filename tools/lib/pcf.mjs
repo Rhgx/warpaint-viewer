@@ -1,13 +1,7 @@
-// Minimal binary DMX (Datamodel Exchange) reader for Valve's .pcf particle files.
-//
-// PCF files start with a null-terminated ASCII header line, e.g.:
-//   <!-- dmx encoding binary 2 format pcf 1 -->\n\0
-// followed by the binary payload. This module supports binary encoding version 2, which is what
-// TF2's weapon_unusual_*.pcf files use (verified against the actual bytes: a uint16 string-table
-// count, uint16 string indices for element type names and attribute names, and inline
-// null-terminated strings for both element names and string-typed attribute values). Encoding
-// versions 1 and 3-5 use different index widths and/or string tables (see Valve's dmxserializers)
-// and are not implemented here; parsePCF throws a clear error if it encounters one.
+// Minimal binary DMX (Datamodel Exchange) reader for Valve's .pcf particle files. Only binary
+// encoding version 2 is implemented, which TF2's weapon_unusual_*.pcf files use. The header is a
+// null-terminated ASCII line such as "dmx encoding binary 2 format pcf 1". Other encodings use
+// different index widths and string tables, so parsePCF throws on them.
 
 const ATTR_TYPE = {
   ELEMENT: 1, INT: 2, FLOAT: 3, BOOL: 4, STRING: 5, BINARY: 6, TIME: 7, COLOR: 8,
@@ -128,10 +122,7 @@ export function parsePCF(buf) {
     }
   }
 
-  // Some shipped .pcf files (e.g. weapon_unusual_cool.pcf) carry a large trailing run of ASCII
-  // space (0x20) padding after the real DMX content - not a parser bug, just inert filler baked
-  // into the asset on disk. Tolerate a well-formed all-space/all-null tail; anything else past
-  // the parsed content means the structure was actually misread.
+  // weapon_unusual_cool.pcf ends in inert 0x20/0x00 padding. Accept that tail; any other trailing bytes mean a misparse.
   if (p !== len) {
     const tail = buf.subarray(p);
     const isPadding = tail.every((byte) => byte === 0x20 || byte === 0x00);

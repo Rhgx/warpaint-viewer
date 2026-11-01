@@ -1,11 +1,6 @@
 /**
- * Static physical/UV topology for choosing one real instance of a sticker
- * when a model reuses the same texture coordinates on more than one part.
- *
- * A chart is deliberately narrower than a mesh: triangles join only across a
- * shared physical edge whose UV values also agree (modulo texture wrapping).
- * That keeps mirrored copies, UV seams, and disconnected parts apart while
- * accepting ordinary indexed and non-indexed geometry alike.
+ * Static UV topology for picking one physical instance of a sticker when a model reuses UVs on several parts.
+ * Triangles join only across a shared edge whose UVs also agree (modulo wrapping).
  */
 
 export type StickerUv = readonly [number, number];
@@ -64,10 +59,7 @@ export interface StickerUvTopology {
   readonly charts: readonly StickerUvChart[];
   /** Resolve a THREE raycaster-style mesh/face identity to its physical chart. */
   chartIdForFace(meshIndex: number, triangleIndex: number): number | null;
-  /**
-   * Resolve each target against all charts, or just one selected physical
-   * chart. The latter is the fast live-gizmo path after an instance is picked.
-   */
+  /** Resolve targets against all charts, or one chart (the fast live-gizmo path). */
   findCandidates(targets: readonly StickerUv[], chartId?: number): readonly (readonly StickerUvCandidate[])[];
 }
 
@@ -92,8 +84,7 @@ function quantized(value: number): string {
 
 function periodic(value: number): number {
   const result = value - Math.floor(value);
-  // A quantized representation should not distinguish 0 from 1 merely due
-  // to floating-point noise at a wrapping seam.
+  // Snap float noise at a wrap seam so 0 and 1 quantize identically.
   return Math.abs(result - 1) < EPSILON || Math.abs(result) < EPSILON ? 0 : result;
 }
 
@@ -166,8 +157,7 @@ function readTriangle(
 function unwrapAround(reference: StickerUv, point: StickerUv): StickerUv {
   const unwrap = (origin: number, value: number) => {
     const difference = value - origin;
-    // A 0 -> 1 UV edge is a legitimate full-texture span. Only unwrap the
-    // almost-full-range jump that is characteristic of an ordinary wrap seam.
+    // A 0 to 1 edge spans the full texture; only unwrap near-full-range jumps at a wrap seam.
     if (difference > 0.5 && difference < 1 - EPSILON) return value - 1;
     if (difference < -0.5 && difference > -1 + EPSILON) return value + 1;
     return value;
@@ -191,9 +181,7 @@ function candidateForTarget(
   const denominator = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
   if (Math.abs(denominator) < 1e-12) return null;
   let best: { uv: StickerUv; barycentric: readonly [number, number, number]; distance: number } | null = null;
-  // An authored destination may already be unwrapped (for example 1.02 at a
-  // normal 0/1 seam). Test nearby periodic copies and retain the in-triangle
-  // one nearest to this chart's local UV centre.
+  // Authored destinations may be unwrapped (1.02 at a 0/1 seam). Test nearby periodic copies and keep the in-triangle one nearest the chart centre.
   const baseU = Math.round(centroid[0] - target[0]);
   const baseV = Math.round(centroid[1] - target[1]);
   for (let offsetU = -1; offsetU <= 1; offsetU += 1) {
@@ -219,11 +207,7 @@ function candidateForTarget(
   };
 }
 
-/**
- * Build physical periodic UV charts for one or more static paintable meshes.
- * Invalid/missing triangles are skipped; a valid mesh may therefore contribute
- * no triangles without making the full model unusable.
- */
+/** Build periodic UV charts for static paintable meshes. Invalid triangles are skipped rather than failing the model. */
 export function buildStickerUvTopology(
   geometries: readonly StickerUvTopologyGeometry[],
 ): StickerUvTopology {
@@ -246,8 +230,7 @@ export function buildStickerUvTopology(
   for (let triangleOffset = 0; triangleOffset < rawTriangles.length; triangleOffset += 1) {
     const triangle = rawTriangles[triangleOffset];
     for (const [from, to] of [[0, 1], [1, 2], [2, 0]] as const) {
-      // Mesh index is part of the key: separate meshes may occupy identical
-      // positions while intentionally using the same texture placement.
+      // Include the mesh index: separate meshes can share positions and texture placement.
       const key = `${triangle.meshIndex}:${edgeKey(
         triangle.positions[from], triangle.uvs[from], triangle.positions[to], triangle.uvs[to],
       )}`;
@@ -280,8 +263,7 @@ export function buildStickerUvTopology(
   const chartByFace = new Map<string, number>();
   for (const triangle of triangles) chartByFace.set(`${triangle.meshIndex}:${triangle.triangleIndex}`, triangle.chartId);
 
-  // A live drag queries one physical chart repeatedly. Bin its UV bounds,
-  // wrapping cell coordinates so seam-crossing and unwrapped edits agree.
+  // Bin chart UVs in wrapped cells so a live drag can query one chart cheaply across seams.
   const binSide = 16;
   const wrapCell = (cell: number) => ((cell % binSide) + binSide) % binSide;
   const chartBins = new Map<number, Map<number, StickerUvTopologyTriangle[]>>();

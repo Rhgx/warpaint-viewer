@@ -1,12 +1,10 @@
-// Precompute operation template facts into public/data/operation-templates.json:
-// which stock paints reach each operation, and what each top-level template is made of.
+// Precompute operation template facts into public/data/operation-templates.json: which stock
+// paints reach each operation, and what each top-level template is made of.
 //
 //   npm run update:operation-templates
 //
-// Decodes the shipped public/data/protodefs-full.bin, so it runs without a TF2 install.
-// update:warpaints runs it last, so the file follows every game data refresh. Decoding
-// the container in the browser would cost ~10 MB of protobuf work per visit, so the
-// browser reads this summary instead.
+// Decodes the shipped protodefs-full.bin, so no TF2 install is needed. The browser reads this
+// summary because decoding the container there would cost ~10 MB of protobuf work per visit.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,15 +16,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..', '..');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
 
-// The snapshot this guard was written against has 20 top-level templates. Far fewer
-// means the container layout changed under the decoder, not that the game dropped them.
+// Far fewer templates than this means the container layout changed, not that the game dropped them.
 const MIN_TEMPLATES = 10;
 
 const STAGE_KINDS = ['texture_lookup', 'combine_add', 'combine_lerp', 'combine_multiply', 'select', 'apply_sticker'];
 
-// Yields what a node list reaches, depth first. A `template` event is an operation_template
-// reference; its nodes are expanded in place. A `stage` event carries the stage. `ancestors`
-// holds the templates on the current path, so a reference cycle stops instead of recursing.
+// Depth-first events for what a node list reaches. ancestors holds the templates on the
+// current path, so a reference cycle stops.
 function* walkNodes(nodes, opByIdx, ancestors = new Set()) {
   for (const node of nodes ?? []) {
     if (node.operation_template) {
@@ -47,9 +43,8 @@ function* walkNodes(nodes, opByIdx, ancestors = new Set()) {
   }
 }
 
-// The node list with every operation_template reference replaced by that template's nodes,
-// recursively, so a paint built on the template authors every stage in its own operation.
-// Like walkNodes, a reference back to an enclosing template is dropped instead of recursing.
+// Node list with each operation_template reference replaced by its nodes, recursively.
+// A reference back to an enclosing template is dropped.
 function expandNodes(nodes, opByIdx, ancestors = new Set()) {
   return (nodes ?? []).flatMap((node) => {
     if (node.operation_template) {
@@ -66,9 +61,7 @@ function expandNodes(nodes, opByIdx, ancestors = new Set()) {
   });
 }
 
-// Item slots on a paint kit: the old-style item[] list plus the named weapon fields.
-// Matching on the item_definition_template key keeps this in step with the schema
-// without repeating its field list.
+// Item slots on a paint kit (old-style item[] and named weapon fields), found by their key.
 function itemDefindexes(kit) {
   return Object.values(kit)
     .flatMap((value) => (Array.isArray(value) ? value : [value]))
@@ -76,11 +69,8 @@ function itemDefindexes(kit) {
     .map((slot) => slot.item_definition_template.defindex);
 }
 
-// Named weapon slots on a paint kit (scattergun, knife, ...), keyed by field name. The repeated
-// `item` list is left out because the JSON importer only reads named slots. A slot keeps its
-// item definition and the weapon's own model maps: the template's weapon_* values are placeholders
-// that every slot overrides. Everything else on a slot belongs to one paint (sticker placement,
-// select values, material overrides), so it is dropped.
+// Named weapon slots only (the JSON importer reads no repeated item list). A slot keeps its item
+// definition and weapon_* variables; per-paint data (stickers, selects, material overrides) is dropped.
 function weaponSlots(kit) {
   return Object.fromEntries(Object.entries(kit).flatMap(([field, slot]) => {
     if (!slot?.item_definition_template) return [];
@@ -89,8 +79,7 @@ function weaponSlots(kit) {
   }));
 }
 
-// Weapon slots repeat across templates (every stock paint names the same ones), so the file keeps
-// each distinct slot once in a shared table and a template's items map field -> table index.
+// Slots repeat across templates, so each distinct slot is stored once and items maps field -> index.
 function describeTemplate(op, opByIdx, representative, slotIndex) {
   const stages = [...walkNodes(op.operation_node, opByIdx)].filter((event) => event.type === 'stage');
   const variables = op.header.variables ?? [];
@@ -99,8 +88,7 @@ function describeTemplate(op, opByIdx, representative, slotIndex) {
   return {
     defindex: op.header.defindex,
     name: op.header.name,
-    // The weapons one stock paint using this template supports, so a paint built on it can
-    // name the same item definitions.
+    // Weapon slots a paint on this template can name, as indices into the shared table.
     items: Object.fromEntries(Object.entries(weaponSlots(representative)).map(([field, slot]) => [field, slotIndex(slot)])),
     operationNode: expandNodes(op.operation_node, opByIdx, new Set([op.header.defindex])),
     variables: variables.map((variable) => ({

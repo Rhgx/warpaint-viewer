@@ -1,29 +1,23 @@
 import type { ReactEventHandler } from 'react';
 import './WeaponUvSurface.css';
 
-export interface WeaponUvSurfaceProps {
+interface WeaponUvSurfaceProps {
   readonly textureSrc?: string | null;
   readonly isolationOverlaySrc?: string | null;
-  readonly className?: string;
   readonly textureAlt?: string;
   readonly onTextureLoad?: ReactEventHandler<HTMLImageElement>;
 }
 
-/**
- * Shared visual foundation for flat weapon-texture editors. Interaction layers
- * stay with their owning editor while the composed texture presentation stays
- * consistent between editor surfaces.
- */
+/** Shared visual base for flat weapon-texture editors; interaction layers stay with their owning editor. */
 export function WeaponUvSurface({
   textureSrc,
   isolationOverlaySrc,
-  className,
   textureAlt = '',
   onTextureLoad,
 }: WeaponUvSurfaceProps) {
   return (
     <div
-      className={`weapon-uv-surface${className ? ` ${className}` : ''}`}
+      className="weapon-uv-surface"
       aria-hidden={!textureAlt || undefined}
     >
       <span className="weapon-uv-surface-underlay" aria-hidden="true" />

@@ -1,14 +1,10 @@
-// Snapshot Pyxell's TF2 Warpaint Texture Directory into
-// public/data/texture-directory.json, credited in the README and the Settings
-// toggle that shows it.
+// Snapshot Pyxell's TF2 Warpaint Texture Directory into public/data/texture-directory.json.
 //
 //   npm run update:texture-directory
 //
-// The page is curated by hand and updates on its own schedule, so this is not
-// part of update:warpaints. Entries are keyed by the paint kit ID printed in
-// each heading rather than by name: a few headings spell the name differently
-// from the game (e.g. "Pirnaha Mania"). Text is kept verbatim, including the
-// page's own footnote asterisks.
+// Not part of update:warpaints: the page is curated by hand and updates on its own schedule.
+// Entries are keyed by the paint kit ID in each heading, since some headings spell names
+// differently from the game. Text is kept verbatim, footnote asterisks included.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,8 +16,7 @@ const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
 
 export const SOURCE_URL = 'https://pyxell.neocities.org/paintersworkshop/texturedirectory';
 const SECTIONS = ['Base', 'Textures', 'Features', 'Notes'];
-// The snapshot this guard was written against had 162 entries. Far fewer means
-// the markup changed and the parser no longer finds them, not that paints left.
+// Far fewer entries than this means the markup changed, not that paints were removed.
 const MIN_ENTRIES = 150;
 
 const ENTITIES = { amp: '&', quot: '"', apos: "'", '#39': "'", lt: '<', gt: '>', nbsp: ' ' };
@@ -39,8 +34,8 @@ function listItems(html) {
 }
 
 /**
- * Parses the directory page into its terminology legend and one entry per
- * paint kit ID. Throws on markup it does not recognise rather than guessing.
+ * Parse the directory page into its legend and one entry per paint kit ID.
+ * Throws on unrecognised markup instead of guessing.
  */
 export function parseTextureDirectory(html) {
   const intro = html.match(/<div class="introduction">([\s\S]*?)<\/div>/);

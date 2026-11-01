@@ -1,17 +1,13 @@
 import { PackageSearch, X } from 'lucide-react';
 import './DefinitionsPrompt.css';
 
-/**
- * Asks whether the definitions found inside the mounted package should be
- * imported as well. Shown once per package: importing or dismissing answers
- * the question, and the Definitions tab keeps the same offer available after.
- */
+/** Offers the definitions found in a mounted package, once per package; the Definitions tab keeps the offer after. */
 export function DefinitionsPrompt({
   path,
   onImport,
   onDismiss,
 }: {
-  /** Package-relative path(s) the definitions were found at. */
+  /** Package-relative path the definitions were found at. */
   path: string;
   onImport: () => void;
   onDismiss: () => void;

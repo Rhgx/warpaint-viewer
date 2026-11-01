@@ -1,10 +1,6 @@
 /**
- * Geometry shared by the two-dimensional and model-side sticker editors.
- *
- * All values are relative to the texture (0-1), rather than screen pixels.
- * `x` and `y` denote the centre of the sticker.  Keeping the public value in
- * this small form means a placement changed in either view is exactly the
- * same placement handed to the mutation layer.
+ * Sticker geometry shared by the 2D and model-side editors. Values are texture-relative (0-1),
+ * with x and y at the sticker centre, so both views hand the same placement to the mutation layer.
  */
 export interface StickerPlacement {
   readonly x: number;
@@ -45,12 +41,7 @@ export interface StickerAffineQuad {
   readonly bl: readonly [number, number];
 }
 
-/**
- * A conversion result makes unsupported artwork explicit. The compact editor
- * represents translated, rotated rectangles with independent width and height;
- * it deliberately does not pretend that a skewed or mirrored affine quad can
- * be preserved by those five controls.
- */
+/** Compact-editor read of a quad. Skewed or mirrored quads are not editable: the controls only express rotated rectangles. */
 export interface StickerPlacementReadResult {
   readonly placement?: StickerPlacement;
   readonly editable: boolean;
@@ -71,11 +62,11 @@ export const DEFAULT_STICKER_PLACEMENT: StickerPlacement = Object.freeze({
   rotation: 0,
 });
 
-function finite(value: number, fallback: number): number {
+export function finite(value: number, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
 }
 
-function clamp(value: number, minimum: number, maximum: number): number {
+export function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
@@ -94,12 +85,7 @@ function normalizeStickerRotation(rotation: number): number {
   return normalized === -180 ? 180 : normalized;
 }
 
-/**
- * Keep the editable anchor recoverable inside the texture and cap extreme
- * scaling. TF2 deliberately permits destination corners outside 0-1 and
- * clips them at the render target edge. Several shipped definitions rely on
- * that behavior.
- */
+/** Clamp the anchor into the texture and cap size. Authored quads are not clamped: TF2 keeps corners outside 0-1 and clips them at the target edge. */
 export function constrainStickerPlacementToTexture(placement: StickerPlacement): StickerPlacement {
   const rotation = normalizeStickerRotation(placement.rotation);
   return {
@@ -124,16 +110,11 @@ export function snapStickerRotationToCardinal(
     : normalized;
 }
 
-/** Sanitize externally supplied authored values without requiring a UI mount. */
-export function clampStickerPlacement(placement: StickerPlacement): StickerPlacement {
-  return constrainStickerPlacementToTexture(placement);
-}
-
 export function moveStickerPlacement(
   placement: StickerPlacement,
   delta: StickerPoint,
 ): StickerPlacement {
-  return clampStickerPlacement({
+  return constrainStickerPlacementToTexture({
     ...placement,
     x: placement.x + finite(delta.x, 0),
     y: placement.y + finite(delta.y, 0),
@@ -141,14 +122,10 @@ export function moveStickerPlacement(
 }
 
 export function rotateStickerPlacement(placement: StickerPlacement, degrees: number): StickerPlacement {
-  return clampStickerPlacement({ ...placement, rotation: degrees });
+  return constrainStickerPlacementToTexture({ ...placement, rotation: degrees });
 }
 
-/**
- * Align a placement with the compact editor's texture grid.  Keeping this in
- * geometry, rather than in the React editor, makes mouse, keyboard and value
- * edits agree on exactly the same grid.
- */
+/** Snap a placement to the texture grid, so mouse, keyboard and value edits agree. */
 export function snapStickerPlacement(
   placement: StickerPlacement,
   step = DEFAULT_STICKER_SNAP_STEP,
@@ -156,7 +133,7 @@ export function snapStickerPlacement(
 ): StickerPlacement {
   const positionStep = usableSnapStep(step, DEFAULT_STICKER_SNAP_STEP);
   const angleStep = usableSnapStep(turnStep, DEFAULT_STICKER_TURN_SNAP, 360);
-  return clampStickerPlacement({
+  return constrainStickerPlacementToTexture({
     x: snap(placement.x, positionStep),
     y: snap(placement.y, positionStep),
     width: snap(placement.width, positionStep),
@@ -188,13 +165,7 @@ function isFiniteQuad(quad: StickerAffineQuad): boolean {
   return [quad.tl, quad.tr, quad.bl].every(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
 }
 
-/**
- * The rectangle Source actually paints. CTCApplyStickerStage builds
- * translate(TL) * rotate(angle of TL->BL) * scale(|TL->TR|, |TL->BL|), so the
- * vertical edge is TL->BL exactly and the horizontal edge is its perpendicular
- * towards TR with the full length of TL->TR. Degenerate quads are returned
- * unchanged.
- */
+/** The rectangle Source paints (CTCApplyStickerStage): TL->BL is exact and the horizontal edge is its perpendicular with length TL->TR. */
 export function stickerCoverageQuad(quad: StickerAffineQuad): StickerAffineQuad {
   const uX = quad.tr[0] - quad.tl[0], uY = quad.tr[1] - quad.tl[1];
   const vX = quad.bl[0] - quad.tl[0], vY = quad.bl[1] - quad.tl[1];
@@ -203,12 +174,7 @@ export function stickerCoverageQuad(quad: StickerAffineQuad): StickerAffineQuad 
   return { tl: quad.tl, tr: [quad.tl[0] + vY * s, quad.tl[1] - vX * s], bl: quad.bl };
 }
 
-/**
- * Convert the compact editor value to the exact authored three-point form.
- * Unlike clampStickerPlacement(), this function does not constrain valid
- * unwrapped positions or large dimensions, so a supported authored quad can
- * round-trip without changing its numbers.
- */
+/** Convert a compact placement to the three-point form without clamping, so an authored quad round-trips exactly. */
 export function stickerPlacementToQuad(placement: StickerPlacement): StickerAffineQuad | undefined {
   if (![placement.x, placement.y, placement.width, placement.height, placement.rotation].every(Number.isFinite)) return undefined;
   if (placement.width <= 0 || placement.height <= 0) return undefined;
@@ -222,12 +188,7 @@ export function stickerPlacementToQuad(placement: StickerPlacement): StickerAffi
   };
 }
 
-/**
- * Read an authored destination into the compact transform controls. The
- * controls describe the painted rectangle (stickerCoverageQuad); callers that edit a
- * skewed quad must apply the placement delta to the original quad rather than
- * rebuilding a rectangle with stickerPlacementToQuad().
- */
+/** Read an authored quad into the controls, which describe the painted rectangle. Edit skewed quads with applyStickerPlacementToQuad. */
 export function stickerPlacementFromQuad(quad: StickerAffineQuad): StickerPlacementReadResult {
   if (!isFiniteQuad(quad)) return { editable: false, reason: 'This sticker has invalid placement data.' };
   const horizontal = { x: quad.tr[0] - quad.tl[0], y: quad.tr[1] - quad.tl[1] };
@@ -294,18 +255,14 @@ export function applyStickerPlacementToQuad(
   };
 }
 
-/**
- * Resize from one corner while keeping the diagonally opposite corner fixed.
- * `pointer` is texture-normalized and the operation is intentionally freeform:
- * a decal may be stretched when its source definition allows it.
- */
+/** Resize from one corner with the opposite corner fixed. Freeform: a decal may stretch when its source definition allows it. */
 export function resizeStickerFromCorner(
   initial: StickerPlacement,
   corner: StickerCorner,
   pointer: StickerPoint,
   options: StickerResizeOptions = {},
 ): StickerPlacement {
-  const value = clampStickerPlacement(initial);
+  const value = constrainStickerPlacementToTexture(initial);
   const signs = cornerSigns(corner);
   const opposite = {
     x: -signs.x * value.width / 2,
@@ -324,9 +281,7 @@ export function resizeStickerFromCorner(
   const nextHeight = options.preserveAspect
     ? nextWidth / initialAspect
     : rawHeight;
-  // When the aspect is locked, construct the selected corner from its signs
-  // so the opposite corner stays fixed rather than drifting as we correct the
-  // user's freeform pointer position.
+  // With aspect locked, build the corner from its signs so the opposite corner does not drift.
   const selected = options.preserveAspect
     ? { x: opposite.x + signs.x * nextWidth, y: opposite.y + signs.y * nextHeight }
     : pointerLocal;
@@ -335,7 +290,7 @@ export function resizeStickerFromCorner(
     y: (selected.y + opposite.y) / 2,
   };
   const centreOffset = rotateStickerPoint(centreLocal, value.rotation);
-  return clampStickerPlacement({
+  return constrainStickerPlacementToTexture({
     ...value,
     x: value.x + centreOffset.x,
     y: value.y + centreOffset.y,
@@ -351,7 +306,7 @@ export function resizeStickerFromEdge(
   pointer: StickerPoint,
   options: StickerResizeOptions = {},
 ): StickerPlacement {
-  const value = clampStickerPlacement(initial);
+  const value = constrainStickerPlacementToTexture(initial);
   const horizontal = edge === 'left' || edge === 'right';
   const sign = edge === 'right' || edge === 'bottom' ? 1 : -1;
   const pointerLocal = rotateStickerPoint({
@@ -367,7 +322,7 @@ export function resizeStickerFromEdge(
     ? { x: centreAlongAxis, y: 0 }
     : { x: 0, y: centreAlongAxis }, value.rotation);
   const initialAspect = value.width / Math.max(value.height, MIN_SIZE);
-  return clampStickerPlacement({
+  return constrainStickerPlacementToTexture({
     ...value,
     x: value.x + centreOffset.x,
     y: value.y + centreOffset.y,
@@ -381,7 +336,7 @@ export function resizeStickerFromEdge(
 export function fitStickerPlacement(stickerAspect = 1): StickerPlacement {
   const safeAspect = clamp(finite(stickerAspect, 1), 0.1, 10);
   const longestSide = 0.28;
-  return clampStickerPlacement({
+  return constrainStickerPlacementToTexture({
     x: 0.5,
     y: 0.5,
     width: safeAspect >= 1 ? longestSide : longestSide * safeAspect,

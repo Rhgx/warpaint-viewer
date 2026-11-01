@@ -1,6 +1,5 @@
-// Minimal, fast Valve KeyValues (text) parser.
-// Handles quoted/unquoted tokens, nested { } blocks, // line comments, and #base (ignored).
-// Duplicate keys within a block collapse into an array of values (order preserved).
+// Minimal Valve KeyValues (text) parser: quoted and bare tokens, nested blocks, // comments, #base ignored.
+// Duplicate keys in a block collapse into an array, in order.
 
 export function parseKV(text) {
   let i = 0;
@@ -67,7 +66,7 @@ export function parseKV(text) {
       if (tok === '{') continue; // stray, skip
       // tok is a key
       let key = tok.str;
-      // #base / #include directives: consume their value token and ignore
+      // The key's value token; #directives are skipped below.
       const val = readToken();
       if (val === null) break;
       if (val === '{') {

@@ -1,5 +1,4 @@
-// Opt-in frame pacing probe for manual interaction recordings. This measures
-// browser frame intervals and long tasks, not GPU execution or utilization.
+// Opt-in frame pacing probe for manual recordings. It measures frame intervals and long tasks, not GPU use.
 const panel = document.createElement('details');
 panel.open = true;
 panel.style.cssText = 'position:fixed;bottom:8px;left:8px;z-index:10000;background:#202227;color:#eee;padding:8px;max-width:420px;font:12px monospace';
@@ -64,8 +63,8 @@ function start() {
 button.onclick = () => {
   if (recording) stop(); else start();
 };
-// Six forward and six backward selections at a fixed cadence, ending at the
-// starting weapon. Repeat once to warm assets before comparing recordings.
+// Six forward and six backward selections at a fixed cadence, ending at the starting weapon.
+// Repeat once to warm assets before comparing recordings.
 cycleButton.onclick = () => {
   stop();
   let step = 0;

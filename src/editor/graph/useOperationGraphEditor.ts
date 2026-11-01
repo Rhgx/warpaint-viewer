@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import type { Compositor } from '../../compositor/compositor';
 import type { DataSource } from '../../data/loader';
 import type { PaintkitEntry } from '../../data/types';
-import type { OperationNodeMsg, VarDefMsg } from '../../protodefs/messages';
+import type { VarDefMsg } from '../../protodefs/messages';
 import { isSupportedTexturePath } from '../../source/paths';
 import type { SourceTextureProvider } from '../../source/provider';
 import { downloadBlob } from '../../ui/common/download';
@@ -26,6 +27,7 @@ import {
   reconnectOperationGraph,
   reorderOperationGraphInputs,
   createOperationGraphNode,
+  findOperationGraphNode,
   setOperationGraphParameter,
   summarizeOperationGraphDiagnostics,
   validateOperationGraph,
@@ -51,6 +53,11 @@ import type { StickerEditor } from '../sticker/useStickerEditor';
 
 /** The graph slice of the workbench editor props. */
 type GraphEditorProps = NonNullable<WorkbenchEditorProps['graph']>;
+
+/** Compares stage paths by value; a missing left path never matches. */
+function samePath(left: readonly string[] | undefined, right: readonly string[]): boolean {
+  return left?.join('\0') === right.join('\0');
+}
 
 function downloadBytes(bytes: Uint8Array, fileName: string, mimeType: string): void {
   const copy = new ArrayBuffer(bytes.byteLength);
@@ -91,11 +98,7 @@ interface UseOperationGraphEditorOptions extends
   onSelectKit: (id: number) => void;
 }
 
-/**
- * The operation graph view of the working definition: the graph itself with
- * its draft and validation state, per-node preview renders, node export, the
- * jumps into the other editors, and the props for the Graph panel.
- */
+/** Operation graph view: the graph with its draft and validation state, node previews and export, and the Graph panel props. */
 export function useOperationGraphEditor({
   editableKitId,
   editorStatus,
@@ -148,17 +151,7 @@ export function useOperationGraphEditor({
   const operationGraph = operationGraphDraft?.revision === editorRevision
     ? operationGraphDraft.graph
     : committedOperationGraph;
-  /**
-   * Texture choices for the graph's on-node pickers: what this graph already
-   * uses, what the imported package carries, then everything the viewer ships.
-   * Ordering matters more than completeness here, because the first group is
-   * almost always the one someone is reaching for.
-   */
-  /**
-   * Bindable variables, nearest scope first. A paint kit declares the ones an
-   * operation's stages actually bind to, while an operation only declares its
-   * own when it overrides a wear level, so both have to be offered.
-   */
+  /** Bindable variables, nearest scope first: operation overrides and paint-kit declarations. */
   const operationGraphVariables = useMemo<GraphVariableOption[]>(() => {
     const options: GraphVariableOption[] = [];
     const seen = new Set<string>();
@@ -182,6 +175,7 @@ export function useOperationGraphEditor({
     return options;
   }, [editorCurrent, operationGraph]);
 
+  /** Texture choices for graph pickers: refs already in use, then the imported package, then shipped textures. */
   const operationGraphTextureOptions = useMemo<GraphComboboxOption[]>(() => {
     const options: GraphComboboxOption[] = [];
     const seen = new Set<string>();
@@ -213,10 +207,7 @@ export function useOperationGraphEditor({
       packageRefs.has(ref) || data?.manifest.textures?.[`textures/${ref}.webp`] !== undefined
     );
 
-    // What this paint already draws with, first: literal refs on its stages,
-    // then the variable declarations that resolve to a real file. Templated
-    // declarations such as a per-weapon albedo path name no single file, so
-    // they are left out rather than offered as a dead choice.
+    // Refs already in use come first; templated variables name no single file, so they are skipped.
     for (const ref of operationGraphTextureRefs(operationGraph)) push(ref, 'In this paint');
     for (const variable of operationGraphVariables) {
       const ref = variable.value ? graphTextureRef(variable.value) : null;
@@ -274,39 +265,12 @@ export function useOperationGraphEditor({
     setOperationGraphEditError('The valid operation graph could not be serialized.');
   }, [editorRevision, operationGraph, replaceOperationGraph]);
 
-  const updateOperationGraphRaw = useCallback((nodeId: string, raw: OperationNodeMsg): void => {
-    if (!operationGraph) return;
-    const node = operationGraph.nodes.find((candidate) => candidate.id === nodeId);
-    if (!node || node.locked) return;
-    const next: OperationGraph = {
-      ...operationGraph,
-      nodes: operationGraph.nodes.map((candidate) => (
-        candidate.id === nodeId ? { ...candidate, raw: structuredClone(raw) } : candidate
-      )),
-    };
-    const validation = validateOperationGraph(next);
-    if (!validation.valid) {
-      setOperationGraphDraft({ revision: editorRevision, graph: next, diagnostics: validation.diagnostics });
-      setOperationGraphEditError(summarizeOperationGraphDiagnostics(validation.diagnostics));
-      return;
-    }
-    if (replaceOperationGraph(next)) {
-      setOperationGraphDraft(null);
-      setOperationGraphEditError(null);
-    } else {
-      setOperationGraphDraft({ revision: editorRevision, graph: next, diagnostics: validation.diagnostics });
-      setOperationGraphEditError('The operation graph could not be serialized.');
-    }
-  }, [editorRevision, operationGraph, replaceOperationGraph]);
-
   const updateOperationGraphParameter = useCallback((
     nodeId: string,
     address: OperationGraphParameterAddress,
     value: OperationGraphParameterValue,
   ): void => {
-    // Writing a bound parameter means writing its declaration. The graph layer
-    // owns operation-scope variables; paint-kit ones live a level up, so route
-    // those to the definition instead of failing the whole edit.
+    // A bound parameter is written through its declaration; paint-kit variables live a level up, so route them to the definition.
     if (value.mode === 'literal' && value.preserveVariable !== false && operationGraph) {
       const bound = boundOperationGraphVariable(operationGraph, nodeId, address);
       const declaredInOperation = varDefList(operationGraph.operationSnapshot?.header.variables)
@@ -461,7 +425,7 @@ export function useOperationGraphEditor({
     if (!result.ok) return;
     const render = result.render;
     try {
-      const node = operationGraph.nodes.find((candidate) => candidate.id === nodeId);
+      const node = findOperationGraphNode(operationGraph, nodeId);
       const stage = node?.raw?.stage;
       const sourceField = stage?.texture_lookup?.texture
         ?? stage?.texture_lookup?.texture_red
@@ -498,12 +462,9 @@ export function useOperationGraphEditor({
     }
   }, [compositorRef, data?.manifest.wearNames, operationGraph, selectedKit?.name, state.seed, state.team, state.wearIndex, state.weaponKey, provenanceRecipe]);
   const openOperationTextureNode = (nodeId: string): void => {
-    const node = operationGraph?.nodes.find((candidate) => candidate.id === nodeId);
+    const node = operationGraph ? findOperationGraphNode(operationGraph, nodeId) : undefined;
     if (!node || node.kind !== 'texture_lookup') return;
     const stagePath = [...graphNodeOperationPath(node), 'stage', 'texture_lookup'];
-    const samePath = (left: readonly string[] | undefined, right: readonly string[]) => (
-      Boolean(left) && left!.join('\0') === right.join('\0')
-    );
     if (baseTextureTransform && samePath(baseTextureTransform.transform.target.stagePath, stagePath)) {
       setWeaponBaseLayerActive(true);
       setPaintSubView('transform');
@@ -526,7 +487,7 @@ export function useOperationGraphEditor({
   };
 
   const openOperationSelectNode = (nodeId: string): void => {
-    const node = operationGraph?.nodes.find((candidate) => candidate.id === nodeId);
+    const node = operationGraph ? findOperationGraphNode(operationGraph, nodeId) : undefined;
     if (!node || node.kind !== 'select' || !groupDiscovery) return;
     const selectNodes = operationGraph?.nodes.filter((candidate) => candidate.kind === 'select') ?? [];
     const operationIndex = selectNodes.findIndex((candidate) => candidate.id === node.id);
@@ -542,12 +503,10 @@ export function useOperationGraphEditor({
   };
 
   const openOperationStickerNode = (nodeId: string): void => {
-    const node = operationGraph?.nodes.find((candidate) => candidate.id === nodeId);
+    const node = operationGraph ? findOperationGraphNode(operationGraph, nodeId) : undefined;
     if (!node || node.kind !== 'apply_sticker') return;
     const stagePath = [...graphNodeOperationPath(node), 'stage', 'apply_sticker'];
-    const targetIndex = stickerTargets.findIndex((target) => target.stagePaths.some((path) => (
-      path.join('\0') === stagePath.join('\0')
-    )));
+    const targetIndex = stickerTargets.findIndex((target) => target.stagePaths.some((path) => samePath(path, stagePath)));
     if (targetIndex < 0) return;
     updateStickerDraft(null);
     setActiveStickerTarget(targetIndex);
@@ -559,7 +518,6 @@ export function useOperationGraphEditor({
     selectedNodeId: selectedOperationGraphNodeId ?? undefined,
     onSelectNode: setSelectedOperationGraphNodeId,
     onGraphChange: handleOperationGraphChange,
-    onUpdateNodeRaw: updateOperationGraphRaw,
     onUpdateParameter: updateOperationGraphParameter,
     textureOptions: operationGraphTextureOptions,
     variables: operationGraphVariables,

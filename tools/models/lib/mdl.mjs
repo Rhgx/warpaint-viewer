@@ -1,5 +1,4 @@
-// Parser for Source 1 MDL (studiohdr_t), targeting version 48/49 (TF2).
-// Extracts textures, skin table, bones (bind pose), and bodyparts -> models -> meshes.
+// Source 1 MDL (studiohdr_t) parser for TF2 versions 48/49: textures, skins, bones, bodyparts and attachments.
 import fs from 'node:fs';
 
 function readCStr(buf, off) {
@@ -39,7 +38,6 @@ export function parseMDL(path) {
   const numlocalattachments = b.readInt32LE(0xf0);
   const localattachmentindex = b.readInt32LE(0xf4);
 
-  // --- textures ---
   const textures = [];
   for (let i = 0; i < numtextures; i++) {
     const base = textureindex + i * 64;
@@ -47,14 +45,12 @@ export function parseMDL(path) {
     textures.push(readCStr(b, base + sz));
   }
 
-  // --- cdtextures (search paths) ---
   const cdtextures = [];
   for (let i = 0; i < numcdtextures; i++) {
     const p = b.readInt32LE(cdtextureindex + i * 4);
     cdtextures.push(readCStr(b, p));
   }
 
-  // --- skin families table [family][ref] -> texture index ---
   const skins = [];
   for (let f = 0; f < numskinfamilies; f++) {
     const row = [];
@@ -64,7 +60,6 @@ export function parseMDL(path) {
     skins.push(row);
   }
 
-  // --- bones (bind pose local pos + quat, parent, poseToBone matrix) ---
   const bones = [];
   for (let i = 0; i < numbones; i++) {
     const base = boneindex + i * 216;
@@ -88,7 +83,7 @@ export function parseMDL(path) {
     bones.push({ index: i, name: bname, parent, pos, quat, poseToBone });
   }
 
-  // --- first hitbox set (the active set for TF2 weapon models) ---
+  // First hitbox set, the active one for TF2 weapon models.
   const hitboxes = [];
   if (numhitboxsets > 0) {
     const setBase = hitboxsetindex;
@@ -104,7 +99,6 @@ export function parseMDL(path) {
     }
   }
 
-  // --- bodyparts -> models -> meshes ---
   const bodyparts = [];
   for (let i = 0; i < numbodyparts; i++) {
     const base = bodypartindex + i * 16;
@@ -143,7 +137,7 @@ export function parseMDL(path) {
     bodyparts.push({ index: i, name: bpName, base: bpBaseVal, nummodels, models });
   }
 
-  // --- attachments (mstudioattachment_t: sznameindex, flags, localbone, local[12], unused[8]) ---
+  // mstudioattachment_t: name, flags, localbone, local[12], unused[8].
   const attachments = [];
   for (let i = 0; i < numlocalattachments; i++) {
     const base = localattachmentindex + i * 92;
@@ -164,9 +158,7 @@ export function parseMDL(path) {
   };
 }
 
-// Invert a 3x4 row-major affine matrix (rotation + translation, no scale/shear),
-// i.e. the same layout as mstudiobone_t.poseToBone and mstudioattachment_t.local.
-// Given M = [R | t], M^-1 = [R^T | -R^T * t].
+// Invert a row-major 3x4 rigid affine: M = [R | t] gives [R^T | -R^T t].
 export function invertAffine3x4(m) {
   const r00 = m[0], r01 = m[1], r02 = m[2], tx = m[3];
   const r10 = m[4], r11 = m[5], r12 = m[6], ty = m[7];
@@ -203,26 +195,11 @@ export function multiplyAffine3x4(a, b) {
   return out;
 }
 
-// Orientation: TF2 c_model weapons are NOT authored in Source world space
-// (Z-up). They are authored in the weapon_bone attachment frame, which is
-// bonemerged onto the player's hand in-game. Verified against the MDL bone
-// data of all 45 manifest weapons: root "weapon_bone" quat is identity for
-// every gun, and the geometry uses +X right, +Y up, +Z forward (muzzle).
-// Evidence: flamethrower tank hangs at y=-17.6 (down), sniper scope at
-// y=+17.2 (up), every barrel extends along +Z (flamethrower nozzle z=+68.9,
-// shotgun z=+35). That frame already matches glTF conventions (Y-up,
-// right-handed, front at +Z), so NO axis rotation is applied.
-//
-// A few models carry a non-identity root bone (c_knife: 180 deg about Y,
-// c_demo_sultan_sword: -90 deg about Y, some have translation offsets), so we
-// re-express the bind mesh in the root bone frame by applying the root bone's
-// poseToBone (world-to-bone) matrix3x4. For identity roots this is a no-op;
-// for the rest it normalizes facing/origin to the common attachment frame.
-// Melee weapons are genuinely authored head/blade along +Y (up out of the
-// gripping fist); that is correct and left as-is.
-//
-// Shared by mdl2gltf.mjs (mesh vertices) and tools/extract/attachments.mjs
-// (unusual/muzzle attachment points), so both land in the identical frame.
+// Geometry frame. TF2 c_model weapons are authored in the weapon_bone attachment frame, not in
+// Source world space. That frame already matches glTF (+X right, +Y up, +Z forward), so no axis
+// rotation is applied. Some root bones are not identity (c_knife turns 180 deg about Y,
+// c_demo_sultan_sword -90 deg), so the bind mesh is re-expressed through the root's poseToBone.
+// Melee blades run along +Y, as authored. Shared by mdl2gltf.mjs and attachments.mjs.
 export function rootFrameTransforms(mdl) {
   const ptb = mdl.bones[0]?.poseToBone;
   if (!ptb) {
@@ -238,8 +215,7 @@ export function rootFrameTransforms(mdl) {
   return { pos, nrm };
 }
 
-// Resolve the material name for a mesh at skin family `skinFamily`.
-// mesh.material indexes the skin ref column; skins[family][col] -> texture index.
+// mesh.material indexes the skin ref column; skins[family][col] gives the texture index.
 export function resolveMaterialName(mdl, meshMaterial, skinFamily = 0) {
   let texIndex = meshMaterial;
   if (mdl.skins.length > skinFamily && meshMaterial < mdl.numskinref) {

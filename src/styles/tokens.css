@@ -1,6 +1,5 @@
 :root {
-  /* Dark theme only. The stage backdrop is always a dark, game-like scene, so
-     the panels follow it in both appearances and there is no light variant. */
+  /* Dark theme only: the stage backdrop is always dark, so panels follow it in both appearances. */
   --bg: #16181c;
   --panel: #1e2126;
   --panel-2: #24282f;
@@ -14,44 +13,33 @@
   --red: #d24b4e;
   --blu: #5a8fd0;
   --pass: #46c07a;
-  /* Diagnostics split by severity: --warn is for things that changed the
-     result but left it usable, --fail only for outright failures. */
+  /* --warn changed the result but left it usable; --fail is an outright failure. */
   --warn: #e0a83c;
   --fail: #e06060;
   color-scheme: dark;
 
-  /* War paint grade (rarity) colors, standard TF2 palette. Blended toward
-     --text before use so light grades (civilian, freelance) stay readable;
-     --grade-tint-strength controls how much of the raw color survives. */
+  /* TF2 grade (rarity) colors, blended toward --text so light grades stay readable. */
   --grade-civilian: #b0c3d9;
   --grade-freelance: #5e98d9;
   --grade-mercenary: #4b69ff;
   --grade-commando: #8847ff;
   --grade-assassin: #d32ce6;
   --grade-elite: #eb4b4b;
-  /* Dark panels contrast fine with the raw grade colors, so let most of
-     them show through. */
+  /* Dark panels contrast fine with the raw grade colors, so most show through. */
   --grade-tint-strength: 70%;
 
-  /* The operation graph's connection vocabulary. A stage carries either a
-     painted surface or a mask, and the canvas and the controls reference have
-     to say so in the same two colors. */
+  /* Graph connection colors: a stage carries either a painted surface or a mask. */
   --graph-type-texture: #5aa7de;
   --graph-type-mask: #b18ad4;
   --graph-type-unknown: #97a1ac;
 
-  /* Shared control sizing so selects, buttons, inputs and number fields
-     line up in the controls bar. */
+  /* Shared control sizing so selects, buttons, inputs and number fields line up. */
   --control-h: 28px;
 
-  /* Square size of the stage toolbar's buttons. Overlays that sit under the
-     toolbar (stage header on the mobile layout, lights panel) offset by it. */
+  /* Stage toolbar button size; overlays under the toolbar offset by it. */
   --stage-toolbar-btn: 28px;
 
-  /* Height of the bottom tab strip that replaces the sidebar/inspector
-     layout on the mobile layout (see layout.css); the stage and the panels
-     both inset by this (plus the home indicator inset) so nothing renders
-     underneath it. Phone landscape slims it down. */
+  /* Height of the mobile tab strip; the stage and panels inset by it plus the home indicator. */
   --mobile-tabstrip-h: 56px;
 
   /* Radius scale, applied consistently across buttons/inputs/popups. */

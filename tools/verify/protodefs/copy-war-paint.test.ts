@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { decodeProtoDefsFromJson, extractKitMessages, resolveKitRecipe } from '../../../src/protodefs/decoder';
+import { decodeProtoDefsFromJson } from '../../../src/protodefs/decoder';
+import { extractKitMessages, resolveKitRecipe } from '../../../src/protodefs/kitQueries';
 import { buildCopiedWarPaint, generatedPaintDefindex, nextWarPaintIds } from '../../../src/protodefs/templatePaint';
 import { shippedProtoDefs } from '../fixtures';
 

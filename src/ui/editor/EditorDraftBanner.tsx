@@ -1,5 +1,6 @@
 import { AlertTriangle, Download, History, RotateCcw } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useArmedConfirm } from '../../hooks/useArmedConfirm';
 import type { EditorDraftState } from '../../editor/useEditorDraft';
 
 const DISCARD_CONFIRM_MS = 3000;
@@ -11,16 +12,10 @@ export function EditorDraftBanner({
   draft: EditorDraftState;
   onDownloadRecovery: () => void;
 }) {
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [confirmDiscard, armDiscard, disarmDiscard] = useArmedConfirm(DISCARD_CONFIRM_MS);
   const recovery = draft.recovery;
 
-  useEffect(() => setConfirmDiscard(false), [recovery]);
-
-  useEffect(() => {
-    if (!confirmDiscard) return;
-    const timer = window.setTimeout(() => setConfirmDiscard(false), DISCARD_CONFIRM_MS);
-    return () => window.clearTimeout(timer);
-  }, [confirmDiscard]);
+  useEffect(() => disarmDiscard(), [recovery, disarmDiscard]);
 
   if (recovery) {
     return (
@@ -42,7 +37,7 @@ export function EditorDraftBanner({
             aria-label={confirmDiscard ? 'Confirm discarding the saved draft' : 'Discard the saved draft'}
             onClick={() => {
               if (!confirmDiscard) {
-                setConfirmDiscard(true);
+                armDiscard();
                 return;
               }
               recovery.discard();

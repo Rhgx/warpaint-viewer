@@ -1,26 +1,14 @@
-import { applyAlphaMask } from './alphaMask';
 import { encodeRgbaPng } from '../source/png';
+import { encodeTgaPixels, mergeAlphaPixels } from './texturePixels';
 
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 const MAX_VTF_PIXELS = 16 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'tga', 'vtf'];
 
-interface TgaWorkerSuccess {
+interface WorkerSuccess {
   id: number;
   ok: true;
-  kind: 'decode-tga';
   png: ArrayBuffer;
-  width: number;
-  height: number;
-}
-
-interface MergeWorkerSuccess {
-  id: number;
-  ok: true;
-  kind: 'merge-alpha';
-  png: ArrayBuffer;
-  width: number;
-  height: number;
 }
 
 interface WorkerFailure {
@@ -30,7 +18,7 @@ interface WorkerFailure {
   message: string;
 }
 
-type ProcessingResult = TgaWorkerSuccess | MergeWorkerSuccess | WorkerFailure;
+type ProcessingResult = WorkerSuccess | WorkerFailure;
 
 interface PendingProcessing {
   fallback: () => Promise<ArrayBuffer>;
@@ -77,15 +65,7 @@ export function loadImage(source: string): Promise<HTMLImageElement> {
 
 async function decodeTgaOnMainThread(file: File): Promise<ArrayBuffer> {
   const { TGALoader } = await import('three/addons/loaders/TGALoader.js');
-  const parsed = new TGALoader().parse(await file.arrayBuffer());
-  if (!parsed.data || !parsed.width || !parsed.height) {
-    throw new Error('This TGA has no readable pixel data.');
-  }
-  return encodeRgbaPng(
-    Uint8Array.from(parsed.data as ArrayLike<number>),
-    parsed.width,
-    parsed.height,
-  );
+  return encodeTgaPixels(new TGALoader().parse(await file.arrayBuffer()));
 }
 
 async function mergeAlphaOnMainThread(colorUrl: string, alphaUrl: string): Promise<ArrayBuffer> {
@@ -98,13 +78,7 @@ async function mergeAlphaOnMainThread(colorUrl: string, alphaUrl: string): Promi
   canvas.height = color.naturalHeight;
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) throw new Error('The browser could not merge the alpha mask.');
-  context.drawImage(color, 0, 0);
-  const colorPixels = context.getImageData(0, 0, canvas.width, canvas.height);
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(alpha, 0, 0, canvas.width, canvas.height);
-  const maskPixels = context.getImageData(0, 0, canvas.width, canvas.height);
-  applyAlphaMask(colorPixels.data, maskPixels.data);
-  context.putImageData(colorPixels, 0, 0);
+  const colorPixels = mergeAlphaPixels(context, color, alpha, canvas.width, canvas.height);
   return encodeRgbaPng(
     new Uint8Array(colorPixels.data.buffer, colorPixels.data.byteOffset, colorPixels.data.byteLength),
     canvas.width,
@@ -202,8 +176,12 @@ async function decodeVtf(file: File): Promise<string> {
   }
 }
 
+export function fileExtension(file: File): string {
+  return file.name.split('.').pop()?.toLowerCase() ?? '';
+}
+
 export async function readTexture(file: File, alphaOnly = false) {
-  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  const extension = fileExtension(file);
   if (
     !SUPPORTED_EXTENSIONS.includes(extension) ||
     (alphaOnly && extension === 'tga')

@@ -1,6 +1,6 @@
 import type { ProtoDefKitMessages, ProtoDefKitWeaponSlot } from '../../protodefs/types';
 import { asItem } from '../../protodefs/messages';
-import type { WeaponMaterialTarget } from '../mutations';
+import type { WeaponMaterialTarget } from './materialMutations';
 
 /** One weapon's current material_override state, ready for a provenance-correct write. */
 export interface WeaponMaterialTargetInfo {
@@ -28,11 +28,8 @@ function readAtSlotPath(definition: Record<string, unknown>, path: readonly stri
 }
 
 /**
- * Reads each resolved weapon slot's current item_data.material_override off
- * the definition message, using the exact authored path the decoder resolved
- * for that slot (getKitWeaponSlots in src/protodefs/decoder.ts), covering
- * both named weapon-slot fields and repeated `item` entries alike. A weapon
- * with no resolved slot on this kit simply does not appear.
+ * Reads each resolved weapon slot's item_data.material_override at its exact authored path,
+ * for named fields and repeated items alike. Weapons without a resolved slot are skipped.
  */
 export function discoverWeaponMaterialTargets(
   messages: ProtoDefKitMessages,

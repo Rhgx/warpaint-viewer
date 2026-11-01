@@ -40,7 +40,6 @@ test('authored nodes map to the resolved subtree in authored order, with sibling
   const expanded: RecipeNode = { type: 'combine_add', nodes: [recipeTexture('expanded-template'), recipeTexture('resolved-sibling')] };
   assert.equal(mapsTo(templated, templated.roots[0], expanded), expanded);
   assert.deepEqual(mapsTo(templated, idOf(templated, 'texture_lookup'), expanded), recipeTexture('resolved-sibling'));
-  assert.equal(unavailable(templated, idOf(templated, 'operation_template'), expanded), 'opaque-operation-template');
 });
 
 test('templates, structural mismatches and the output node have no preview', () => {

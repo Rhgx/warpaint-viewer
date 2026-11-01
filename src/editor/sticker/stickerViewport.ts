@@ -1,10 +1,6 @@
-import type { StickerPoint } from './stickerGeometry';
+import { clamp, finite, type StickerPoint } from './stickerGeometry';
 
-/**
- * Screen-only navigation for the 2D sticker editor.  Placement itself never
- * enters this type: that remains normalized UV space so the compositor and
- * on-model editor receive the same authored coordinates.
- */
+/** Screen-only navigation for the 2D sticker editor. Placement stays in normalized UV space, shared with the on-model editor. */
 export interface StickerViewport {
   readonly zoom: number;
   readonly panX: number;
@@ -20,14 +16,6 @@ const STICKER_VIEWPORT_MIN_ZOOM = 0.25;
 const STICKER_VIEWPORT_MAX_ZOOM = 16;
 
 export const DEFAULT_STICKER_VIEWPORT: StickerViewport = Object.freeze({ zoom: 1, panX: 0, panY: 0 });
-
-function finite(value: number, fallback: number): number {
-  return Number.isFinite(value) ? value : fallback;
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
-}
 
 function safeSize(size: StickerViewportSize): StickerViewportSize {
   return {
@@ -74,20 +62,6 @@ export function stickerViewportPointToUv(
   return {
     x: (finite(point.x, 0) - value.panX) / (safe.width * value.zoom),
     y: (finite(point.y, 0) - value.panY) / (safe.height * value.zoom),
-  };
-}
-
-/** Position a UV point in viewport pixels. The exact inverse of pointToUv. */
-export function stickerUvPointToViewport(
-  point: StickerPoint,
-  viewport: StickerViewport,
-  size: StickerViewportSize,
-): StickerPoint {
-  const safe = safeSize(size);
-  const value = normalizeStickerViewport(viewport, safe);
-  return {
-    x: finite(point.x, 0) * safe.width * value.zoom + value.panX,
-    y: finite(point.y, 0) * safe.height * value.zoom + value.panY,
   };
 }
 

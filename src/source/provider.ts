@@ -17,9 +17,8 @@ export interface SourceTextureProviderSnapshot {
   usedPaths: ReadonlySet<string>;
   fallbackIdentities: ReadonlySet<string>;
   /**
-   * Refs bound by filename rather than exact Source path (only possible for a
-   * `rootIsMaterials` package), keyed by the ref's texture identity and
-   * pointing at the package path it resolved to.
+   * Refs bound by filename rather than exact path (possible only for a rootIsMaterials
+   * package), keyed by texture identity.
    */
   nameMatchedPaths: ReadonlyMap<string, string>;
   /** Identities whose filename stem matched two or more package entries, so were deliberately left unmatched. */
@@ -123,9 +122,8 @@ export class SourceTextureProvider {
   }
 
   /**
-   * Resolve a thumbnail without treating it as an asset consumed by the active
-   * recipe. The workbench lists all wear/team slots, many of which are not
-   * relevant to the currently composed paint.
+   * Resolve a preview without marking it as used by the active recipe, since the
+   * workbench lists every wear and team slot.
    */
   async resolvePreview(ref: string): Promise<string> {
     return this.#resolve(ref, false);
@@ -162,16 +160,10 @@ export class SourceTextureProvider {
   }
 
   /**
-   * Which package entry a ref binds to, or undefined when the package does not
-   * carry it, without loading anything.
-   *
-   * Shares #resolve's rules on purpose. The export builder has to pack exactly
-   * what the viewer is drawing, and community packs make that non-obvious:
-   * Flak Furnished, for example, asks for `patterns/FFV3/` while shipping its
-   * textures loose at the archive root, so only the filename fallback below
-   * binds them. An
-   * export that matched on exact paths alone would quietly ship a pack missing
-   * the very artwork on screen.
+   * The package entry a ref binds to, or undefined, without loading anything. Shares
+   * #resolve's rules, so an export packs what the viewer draws: some packs ask for
+   * `patterns/FFV3/` while shipping loose files at the root, which only the filename
+   * fallback binds.
    */
   packagePathFor(ref: string): string | undefined {
     const pkg = this.#package;
@@ -188,13 +180,9 @@ export class SourceTextureProvider {
   }
 
   /**
-   * Resolves an arbitrary canonical Source file path into the mounted package.
-   *
-   * Rootless community packages often keep VMTs and dependent textures in
-   * installer-oriented folders rather than at the paths their definitions
-   * name. Exact paths still win; a unique filename match mirrors the repair
-   * used by the viewer. Export writes the bytes under the requested canonical
-   * path, never this returned read path.
+   * Resolves a canonical path into a rootless package, where installers keep files in
+   * folders the definitions do not name. Exact paths win, then a unique filename match.
+   * Export writes under the requested path, never this read path.
    */
   packagePathForFile(requestedPath: string): string | undefined {
     const pkg = this.#package;
@@ -221,9 +209,8 @@ export class SourceTextureProvider {
     try { identity = sourceTextureIdentity(ref); candidates = sourceTextureCandidates(ref); }
     catch { return this.fallback(ref); }
     let path = candidates.find((candidate) => pkg.has(candidate));
-    // A rootIsMaterials package has no real materials/ tree to place a ref's
-    // exact path in, so as a last resort (never for an ordinary package, and
-    // never ahead of an exact hit) try binding by filename alone.
+    // A rootIsMaterials package has no materials/ tree, so as a last resort (never ahead of
+    // an exact hit) bind by filename.
     if (!path && pkg.rootIsMaterials) {
       const nameMatch = this.#matchByName(pkg, identity);
       if (nameMatch === 'ambiguous') {
@@ -253,10 +240,9 @@ export class SourceTextureProvider {
   }
 
   /**
-   * The material this package supplies for a weapon, or null to keep the
-   * viewer's built-in one. War paint packs ship replacement VMTs alongside
-   * their textures (a glow pass, an alpha-tested body, different phong), and
-   * manifest.json only ever carries the stock weapon material.
+   * The material this package supplies for a weapon, or null to keep the built-in one.
+   * Packs ship replacement VMTs next to their textures, while manifest.json only carries
+   * the stock material.
    */
   async resolveMaterial(weaponKey: string, materialOverrideId?: string): Promise<PackageMaterial | null> {
     const pkg = this.#package;
@@ -321,9 +307,8 @@ export class SourceTextureProvider {
         detail: material.path,
       });
     }
-    // Naming a stock TF2 texture the package does not carry is normal and
-    // resolves against the built-ins. Only inputs neither side has are worth
-    // a warning, because those simply do not get drawn.
+    // A stock texture the package omits is normal and resolves to the built-in. Warn only
+    // when neither side has the input, since it will not be drawn.
     const unresolvable = material.missingTextures.filter((ref) => !this.hasBuiltIn(ref));
     const envmapTexture = material.material.envmapTexture;
     const missingEnvmap = envmapTexture && unresolvable.includes(envmapTexture)
@@ -366,10 +351,8 @@ export class SourceTextureProvider {
   }
 
   /**
-   * Binds an identity to a package entry sharing its filename stem. Two or
-   * more entries sharing a stem are ambiguous by design: guessing wrong would
-   * silently apply the wrong texture, so it is reported instead and left for
-   * the built-in fallback.
+   * Binds an identity to the package entry with its filename stem. Two or more such
+   * entries are ambiguous by design: a wrong guess would silently apply the wrong texture.
    */
   #matchByName(pkg: SourcePackage, identity: string): string | 'ambiguous' | undefined {
     if (this.#nameIndexPackage !== pkg) {
@@ -401,14 +384,15 @@ export class SourceTextureProvider {
       if (decoded.metadata) this.#metadata.set(path, decoded.metadata);
       return url;
     } catch (cause) {
-      // Removed/replaced packages must be completely inert. In particular, a
-      // late read may not attach a diagnostic to the package that replaced it.
+      // A removed or replaced package must leave no trace, so a late read may not add a diagnostic.
       if (generation !== this.#generation || pkg !== this.#package) throw cause;
       const message = cause instanceof Error ? cause.message : 'Could not decode this package texture.';
-      if (!this.#diagnostics.some((entry) => entry.id === `decode:${path}`)) {
-        this.#diagnostics.push({ id: `decode:${path}`, level: 'warning', message: 'Could not use package texture; the built-in asset was used instead.', detail: `${path}: ${message}` });
-        this.#notifySoon();
-      }
+      this.#addDiagnostic({
+        id: `decode:${path}`,
+        level: 'warning',
+        message: 'Could not use package texture; the built-in asset was used instead.',
+        detail: `${path}: ${message}`,
+      });
       return this.fallback(fallbackRef);
     }
   }
@@ -419,8 +403,8 @@ export class SourceTextureProvider {
     this.#notifySoon();
   }
 
-  /** Package texture resolution often completes in a burst. One paint refresh
-   * only needs one UI summary update, while mount/remove remain immediate. */
+  /** Texture resolution completes in bursts, so one summary update covers them.
+   * Mount and remove stay immediate. */
   #notifySoon(): void {
     if (!this.onChange || this.#notificationPending) return;
     this.#notificationPending = true;
@@ -435,8 +419,7 @@ export class SourceTextureProvider {
   }
 
   #notifyImmediately(): void {
-    // Invalidate a queued summary update so mounting/removing has exactly one
-    // synchronous state transition rather than an unnecessary trailing render.
+    // Cancels a queued summary update, so mount or remove renders exactly once.
     this.#notificationPending = false;
     this.#notificationToken += 1;
     this.onChange?.();
@@ -449,20 +432,16 @@ function listPhrase(items: readonly string[]): string {
 }
 
 /**
- * Groups a rootIsMaterials package's supported texture entries by filename
- * stem (extension stripped, directories ignored), so a ref whose exact
- * Source path is not in the package can still bind to a same-named file
- * elsewhere in the pack, the way FlakFurnished-style packs expect an
- * installer to repath their loose textures by hand.
+ * Groups a rootIsMaterials package's texture entries by filename stem, so a ref with no
+ * exact path can bind to a same-named file elsewhere in the pack.
  */
 function buildNameIndex(pkg: SourcePackage): Map<string, string[]> {
   const index = new Map<string, string[]>();
   for (const path of pkg.entries.keys()) {
     if (!isSupportedTexturePath(path)) continue;
-    const extension = sourcePathExtension(path);
-    if (!extension) continue;
+    // isSupportedTexturePath guarantees a dot that is neither first nor last in the filename.
     const filename = path.slice(path.lastIndexOf('/') + 1);
-    const stem = filename.slice(0, filename.length - (extension.length + 1));
+    const stem = filename.slice(0, filename.lastIndexOf('.'));
     const list = index.get(stem);
     if (list) list.push(path); else index.set(stem, [path]);
   }
@@ -474,8 +453,7 @@ async function decodePackageTexture(
   extension: string,
 ): Promise<{ url: string; thumbnailUrl?: string; metadata?: Partial<TextureMetadata> }> {
   if (extension === 'vtf') {
-    // VTF decoding and lossless PNG encoding run in a lazy Worker. This keeps
-    // package reads from blocking interaction with the active paint.
+    // VTF and PNG work runs in a lazy Worker, so reads do not block the active paint.
     const { decodeVtfToPng } = await import('./vtfDecode');
     const decoded = await decodeVtfToPng(bytes, { maxPixels: MAX_DECODED_PIXELS });
     return {

@@ -1,5 +1,5 @@
 import type { ComposeResult } from '../../compositor/compositor';
-import type { StickerTransformTool } from '../../ui/editor/StickerPlacementEditor';
+import type { StickerTransformTool } from '../../ui/editor/stickerPlacementEditorTypes';
 import type { Viewer } from '../../viewer/Viewer';
 import type { StickerPlacementQuad } from './viewerStickerPlacement';
 

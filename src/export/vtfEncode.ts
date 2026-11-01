@@ -1,21 +1,9 @@
-// VTF writer for the export path, the inverse of tools/lib/vtf-core.mjs.
-//
-// Emits version 7.4, which is what the game's own paint textures are (checked
-// against materials/patterns/solid_red.vtf: 7.4, DXT5, full mip chain).
-//
-// Two parts of the layout are easy to get wrong and are worth stating up front,
-// both confirmed against the SDK at .tmp/source-sdk-2013/src/public/vtf/vtf.h:
-//
-//  1. Image data is stored SMALLEST MIP FIRST, 1x1 upward to the full size,
-//     then by frame, then by face (vtf.h:394). In memory the engine keeps the
-//     opposite order, which is exactly why the on-disk order surprises people.
-//  2. The 7.3+ header has invisible struct padding. `VectorAligned reflectivity`
-//     forces 16-byte alignment, so although the fields stop at 0x48 the resource
-//     directory starts at 0x50. The SDK shouts about this at vtf.h:446, and our
-//     own decoder agrees by reading resources from byte 80.
-//
-// We only ever write single-frame, single-face, non-volume textures, so the
-// data section is just the mip chain.
+// VTF writer for the export path, the inverse of tools/lib/vtf-core.mjs. Emits version 7.4
+// (DXT5, full mip chain), as the game's own paint textures are. Only single-frame, single-face,
+// non-volume textures are written.
+// Two layouts are easy to get wrong (Valve's Source SDK 2013, vtf.h):
+//  1. Image data is stored SMALLEST MIP FIRST (vtf.h:394), the reverse of memory.
+//  2. The 7.3+ header has padding: VectorAligned reflectivity puts the resource directory at 0x50 (vtf.h:446).
 
 import { compressDxt1, compressDxt5 } from './dxt';
 
@@ -56,9 +44,8 @@ export interface VtfEncodeOptions {
   /** Unpremultiplied RGBA, 4 bytes per pixel, first row is the top. */
   pixels: Uint8Array;
   /**
-   * 'auto' and 'dxt' both follow the game's own choice, DXT5 when the image
-   * carries alpha and DXT1 when it does not. 'bgra8888' stays uncompressed,
-   * for data that has to survive byte for byte.
+   * 'auto' and 'dxt' pick DXT5 when the image has alpha, DXT1 when not. 'bgra8888'
+   * stays uncompressed, for data that must survive byte for byte.
    */
   format?: 'auto' | 'dxt' | 'bgra8888';
   /** Sampling flags, normally copied from the texture being replaced. */
@@ -71,19 +58,15 @@ interface MipLevel {
   pixels: Uint8Array;
 }
 
-function hasTransparency(pixels: Uint8Array): boolean {
+export function hasTransparency(pixels: Uint8Array): boolean {
   for (let i = 3; i < pixels.length; i += 4) if (pixels[i] !== 255) return true;
   return false;
 }
 
 /**
- * 2x2 box filter, every channel averaged on its own.
- *
- * Alpha is never multiplied into RGB. A TF2 paint texture uses the two as
- * independent data channels (a pattern's wear mask, a sticker's spec), so a
- * "correct" premultiplied downsample would quietly zero the colour under any
- * transparent pixel. The WebP pipeline hit this same trap once, which is why
- * public/data is written with libwebp's `exact` flag.
+ * 2x2 box filter, each channel averaged on its own. Alpha is not premultiplied into
+ * RGB: TF2 paint textures use the two as independent data (a wear mask, a sticker
+ * spec), and a premultiplied downsample would zero the colour under transparent pixels.
  */
 function downsample(level: MipLevel): MipLevel {
   const width = Math.max(1, level.width >> 1);
@@ -130,10 +113,8 @@ function encodeLevel(level: MipLevel, format: number): Uint8Array {
 }
 
 /**
- * Average colour of the largest mip, 0..1 per channel. The engine only uses
- * this to light world geometry from a surface, so it does not matter for a
- * weapon skin, but a plausible value costs nothing and a zeroed one looks like
- * a broken file to other tools.
+ * Average colour of the largest mip, 0..1 per channel. The engine uses it only for
+ * world lighting, but a zeroed value looks like a broken file to other tools.
  */
 function reflectivityOf(level: MipLevel): [number, number, number] {
   let r = 0;
@@ -157,9 +138,8 @@ function flagBits(flags: VtfEncodeFlags | undefined, eightBitAlpha: boolean): nu
   if (flags?.anisotropic) bits |= FLAG_ANISOTROPIC;
   if (flags?.noMip) bits |= FLAG_NOMIP;
   if (flags?.noLod) bits |= FLAG_NOLOD;
-  // vtex derives this one from the pixels rather than from the author's config,
-  // so it is set here for the same reason: it describes the data, not a wish.
-  // ONEBITALPHA is never set: we do not emit DXT1_ONEBITALPHA.
+  // EIGHTBITALPHA describes the pixels, so it is set from the data as vtex does.
+  // ONEBITALPHA is never set: DXT1_ONEBITALPHA is not emitted.
   if (eightBitAlpha) bits |= FLAG_EIGHTBITALPHA;
   return bits;
 }
@@ -205,8 +185,7 @@ export function encodeVtf(options: VtfEncodeOptions): Uint8Array {
   view.setFloat32(48, 1, true); // bumpScale
   view.setInt32(52, format, true);
   view.setUint8(56, mipCount);
-  // No low-resolution thumbnail. It is optional, and the engine reads the
-  // reflectivity it would otherwise be consulted for straight from the header.
+  // No low-resolution thumbnail: it is optional.
   view.setInt32(57, FORMAT_NONE, true);
   view.setUint8(61, 0);
   view.setUint8(62, 0);
@@ -216,7 +195,7 @@ export function encodeVtf(options: VtfEncodeOptions): Uint8Array {
   file[RESOURCE_DIRECTORY_OFFSET] = RESOURCE_HIGH_RES;
   view.setUint32(RESOURCE_DIRECTORY_OFFSET + 4, headerSize, true);
 
-  // Smallest mip first, per the disk layout note at the top of this file.
+  // Smallest mip first.
   let offset = headerSize;
   for (let level = encoded.length - 1; level >= 0; level -= 1) {
     file.set(encoded[level], offset);

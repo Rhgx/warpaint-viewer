@@ -1,15 +1,9 @@
-// Starting layouts for the showcase board, modelled on how paints are
-// presented: Valve's Gun Mettle case boards for the 14 stock weapons, and the
-// case-style boards people post with War Paint submissions on the Steam
-// Workshop, which give the unlockables boards of their own. Weapons lie level
-// in side profile, muzzles left, at their true sizes relative to each other.
-//
-// A layout only says which weapons go on the board and in what order. The
-// board measures the loaded weapons and fits them to its own size, so the same
-// layout works for any paint's weapon list.
+// Starting layouts for the showcase board, modelled on Valve's Gun Mettle case boards.
+// Weapons lie in side profile, muzzles left, at their true relative sizes.
+// A layout only lists weapons and their order; the board fits them to its own size.
 
 import type { PaintkitEntry } from '../data/types';
-import type { ShowcasePaint } from './ShowcaseBoard';
+import type { ShowcasePaint } from './showcaseTypes';
 
 interface LayoutSlot {
   weaponKey: string;
@@ -29,10 +23,7 @@ export interface BoardLayout {
    * them largest. 'size' groups similar sizes, 'order' keeps the listed order.
    */
   pack?: LayoutPacking;
-  /**
-   * Turn weapons to point at the middle of the board, as Valve's case boards
-   * do: those on the left half face right, those on the right half face left.
-   */
+  /** Turn weapons to face the middle of the board, as Valve's case boards do: left-half weapons face right, right-half ones left. */
   inward?: boolean;
   /** Also try every weapon standing upright, tip up, and keep whichever fills the board better. */
   upright?: boolean;
@@ -62,12 +53,7 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
   return rows;
 }
 
-/**
- * The layouts that make sense for this paint: RED and BLU only when the teams
- * differ, the wears only when they do. `focus` is the weapon the wears show,
- * and RED and BLU pair up `pairs` (or the focus when none is given), each
- * when the paint covers it.
- */
+/** Layouts that suit this paint: RED and BLU only when the teams differ, the wears only when they do. */
 export function boardLayouts(kit: PaintkitEntry, paint: ShowcasePaint, wearCount: number, focus: string | null, pairs: readonly string[] = []): BoardLayout[] {
   const available = kit.weapons.filter((key) => !EXCLUDED.has(key));
   const ordered = [...STOCK.filter((key) => available.includes(key)), ...available.filter((key) => !STOCK.includes(key))];

@@ -1,9 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-// Collapse handle mounted on the stage's own left/right edge, which is exactly
-// where the neighbouring panel ends. Living inside the stage rather than being
-// pinned to a panel means the handle survives the panel collapsing to zero
-// width, and it rides the grid transition without needing the width variables.
+// Collapse handle on the stage's own edge, where the neighbouring panel ends. Living in the stage
+// (not the panel) lets it survive the panel collapsing to zero width and ride the grid transition.
 export function PanelEdgeToggle({
   side,
   open,
@@ -17,8 +15,7 @@ export function PanelEdgeToggle({
   controls: string;
   onToggle: () => void;
 }) {
-  // Points the way the panel will move: outwards to collapse, inwards to bring
-  // it back. The bottom-docked layout rotates this in CSS.
+  // Points the way the panel moves: outward to collapse, inward to reopen. CSS rotates it when docked.
   const pointsLeft = side === 'left' ? open : !open;
   const Icon = pointsLeft ? ChevronLeft : ChevronRight;
 

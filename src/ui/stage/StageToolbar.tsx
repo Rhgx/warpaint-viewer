@@ -2,7 +2,7 @@ import { preloadIntent, type PreloadIntent } from '../../hooks/useIntentPreload'
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import { Check, Copy, Film, HelpCircle, ImageDown, LayoutGrid, PackagePlus, Rotate3d, RotateCcw, X } from 'lucide-react';
-import { ControlsHelpModal } from './ControlsHelpModal';
+import { ControlsHelpModal, type ControlsEditingMode } from './ControlsHelpModal';
 import { SettingsDialog } from './SettingsDialog';
 import { TOUCH_ONLY_DEVICE, WORKSHOP_ENABLED } from '../../device';
 import { useSettings } from '../../settings';
@@ -11,9 +11,7 @@ type Feedback = 'idle' | 'success' | 'error';
 
 const FEEDBACK_MS = 1500;
 
-// One icon button that swaps its own icon for a Check/X after `onAction`
-// settles, then reverts. Feedback state is local and per-button so the four
-// toolbar actions never interfere with each other.
+// One icon button that swaps its icon for Check/X after `onAction` settles. Feedback is local to each button.
 function ToolbarButton({
   label,
   icon: Icon,
@@ -59,11 +57,8 @@ function ToolbarButton({
   );
 }
 
-// Top-right overlay on the canvas: save the current capture format, copy
-// image (image format only), toggle auto spin, then reset the camera. The
-// capture actions share one local "capturing" flag (all drive expensive
-// viewer captures) so they disable together; Reset and Auto spin stay
-// independently available.
+// Top-right canvas overlay. The capture actions share one "capturing" flag so they disable together;
+// Reset and Auto spin stay available.
 export function StageToolbar({
   workbenchOpen,
   editingMode = null,
@@ -81,7 +76,7 @@ export function StageToolbar({
   onToggleShowcase,
 }: {
   workbenchOpen: boolean;
-  editingMode?: 'paint' | 'sticker' | 'lighting' | 'graph' | null;
+  editingMode?: Exclude<ControlsEditingMode, 'showcase'>;
   onToggleWorkbench: () => void;
   onPreloadWorkbench?: PreloadIntent;
   captureFormat: 'image' | 'animated';

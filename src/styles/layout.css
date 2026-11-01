@@ -24,12 +24,8 @@
   transition: opacity 150ms ease, transform 190ms ease, visibility 0s linear 190ms;
 }
 
-/* ---------- panel collapse handles ---------- */
-/* Absolute inside .stage, so each handle sits exactly on the boundary with the
-   panel it collapses and moves with the grid transition. The chevron carries
-   full --text-dim (about 6:1 on the panel in both themes) rather than being
-   faded back: it is the only way to reopen a collapsed panel, so it has to
-   clear the 3:1 minimum for meaningful graphics on its own. */
+/* Absolute inside .stage so each handle tracks its panel edge. The chevron uses full
+   --text-dim, since it is the only way to reopen a collapsed panel (3:1 minimum). */
 .panel-edge-toggle {
   position: absolute;
   z-index: 3;
@@ -40,9 +36,7 @@
   width: 20px;
   height: 72px;
   padding: 0;
-  /* Only the stage-facing edges are bordered, and the stage backdrop is dark
-     in both themes; plain --border-strong reads at 2.16:1 there, so the edge
-     is lifted toward --text-dim to clear 3:1. */
+  /* Stage-facing edges only, lifted to --text-dim to clear 3:1 on the dark backdrop. */
   border: 1px solid color-mix(in srgb, var(--border-strong) 60%, var(--text-dim));
   background: var(--panel);
   color: var(--text-dim);
@@ -50,8 +44,7 @@
   transform: translateY(-50%);
   transition: var(--transition-fast);
 }
-/* Pads the pointer target past the 24px minimum. It only grows inwards, over
-   the stage, so it never steals clicks from the panel beside it. */
+/* Pads the pointer target past the 24px minimum, growing only into the stage. */
 .panel-edge-toggle::before {
   content: '';
   position: absolute;
@@ -84,8 +77,7 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* In forced-colors the panel/border tokens collapse, so lean on the system
-   button colors and keep the chevron on the matching foreground. */
+/* Forced colors collapse the panel tokens, so use system button colors. */
 @media (forced-colors: active) {
   .panel-edge-toggle {
     border: 1px solid ButtonBorder;
@@ -94,7 +86,6 @@
   }
 }
 
-/* ---------- sidebar / warpaint list ---------- */
 .sidebar {
   grid-column: 1;
   min-width: 0;
@@ -109,11 +100,8 @@
   transition: opacity 150ms ease, transform 190ms ease, visibility 0s;
 }
 
-/* ---------- responsive ---------- */
-/* Breakpoints follow the viewport, not the device. Docked (<=1100px wide and
-   >500px tall) puts the inspector under the stage; it skips short viewports
-   so the mobile rules never have to undo it. Mobile (<=860px wide or <=500px
-   tall) turns the panels into overlays opened from the bottom tab strip. */
+/* Breakpoints follow the viewport, not the device. Docked (<=1100px wide, >500px tall) puts the
+   inspector under the stage; mobile (<=860px wide or <=500px tall) makes panels overlays. */
 @media (max-width: 1100px) and (height > 500px) {
   .app {
     grid-template-columns: var(--catalog-width) minmax(0, 1fr);
@@ -141,8 +129,7 @@
     border-top-color: transparent;
     transform: translateY(10px);
   }
-  /* The inspector docks under the stage here, so its handle follows it to the
-     bottom edge and lies flat. */
+  /* Docked inspector: its handle follows the stage bottom edge and lies flat. */
   .panel-edge-toggle[data-side='right'] {
     top: auto;
     right: 16px;
@@ -164,10 +151,7 @@
     transform: rotate(90deg);
   }
 }
-/* The panels only overlay the stage, so the WebGL canvas resizes when this
-   breakpoint is crossed, never when a panel opens or closes.
-   --mobile-tabstrip-bottom is the strip height plus the home indicator inset.
-   --panel-closed is each panel's offscreen transform. */
+/* Panels overlay the stage, so the canvas resizes only at this breakpoint, never when a panel opens. */
 @media (max-width: 860px), (max-height: 500px) {
   .app {
     --mobile-tabstrip-bottom: calc(var(--mobile-tabstrip-h) + env(safe-area-inset-bottom));
@@ -242,10 +226,8 @@
     border-top: 1px solid var(--border);
   }
 }
-/* Phone portrait: bottom sheets. Controls stops near the middle so the weapon
-   stays visible and orbitable, without a backdrop; the catalog covers most of
-   the screen over a backdrop that closes it. Closed sheets drop past the
-   strip so their shadow never shows above it. */
+/* Phone portrait: bottom sheets. Controls stop near mid-screen so the weapon stays orbitable;
+   closed sheets drop below the tab strip so their shadow never shows. */
 @media (max-width: 860px) and (orientation: portrait) {
   .sidebar,
   .inspector {
@@ -264,8 +246,7 @@
   .inspector {
     height: 55dvh;
   }
-  /* First Person frames the viewmodel in the canvas area above this sheet;
-     FP_PORTRAIT_FRAME_CENTER in src/viewer/firstPerson.ts depends on it. */
+  /* First Person frames the viewmodel above this sheet; its frame center constant depends on it. */
   .app[data-first-person] .inspector {
     height: 45dvh;
   }
@@ -308,8 +289,7 @@
     font-size: 11px;
   }
 }
-/* After every hidden rule (same specificity), so a panel hidden on desktop
-   still opens from its tab. */
+/* Placed after the hidden rules (same specificity), so a desktop-hidden panel still opens from its tab. */
 @media (max-width: 860px), (max-height: 500px) {
   .app[data-mobile-panel='catalog'] .sidebar,
   .app[data-mobile-panel='controls'] .inspector {

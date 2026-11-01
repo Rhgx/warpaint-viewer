@@ -1,15 +1,8 @@
 /**
- * Fetches the game-data snapshots the definition builder splices into.
- *
- * These are big (a 9.4 MB container, plus a 140 KB localization file per
- * language) and only the export builder ever wants them, so nothing is
- * requested until someone actually builds a pack. Both are byte-for-byte copies
- * of the files a TF2 install has, emitted by tools/extract/warpaints.mjs and stamped in
- * the manifest with the build they came from.
- *
- * Anyone on a newer TF2 build can hand over their own files instead, which is
- * the escape hatch for the one real hazard here: a pack built from a stale
- * snapshot shadows the player's newer copy and hides anything Valve added since.
+ * Fetches the game-data snapshots the definition builder splices into: byte-for-byte copies of
+ * a TF2 install's files, emitted by tools/extract/warpaints.mjs. They are large, so nothing is
+ * requested until a pack is built. A pack built from a stale snapshot shadows a newer game copy
+ * and hides what Valve added since, so players on a newer build can supply their own files.
  */
 
 const DATA_ROOT = `${import.meta.env.BASE_URL}data`;
@@ -55,10 +48,8 @@ function loadSnapshotLocalization(language: string): Promise<Uint8Array> {
 }
 
 /**
- * Every language TF2 ships a paint-name file for. A pack that only carries
- * english leaves the paint unnamed for anyone running the game in another
- * language, and the files are small enough that carrying all of them is
- * cheaper than explaining the choice.
+ * Every language TF2 ships a paint-name file for. A pack with only English leaves the paint
+ * unnamed elsewhere, and the files are small.
  */
 const SNAPSHOT_LANGUAGES = [
   'brazilian', 'bulgarian', 'czech', 'danish', 'dutch', 'english', 'finnish', 'french',
@@ -67,12 +58,10 @@ const SNAPSHOT_LANGUAGES = [
   'tchinese', 'thai', 'turkish', 'ukrainian',
 ] as const;
 
-export async function loadSnapshotLocalizations(
-  languages: readonly string[] = SNAPSHOT_LANGUAGES,
-): Promise<Map<string, Uint8Array>> {
+export async function loadSnapshotLocalizations(): Promise<Map<string, Uint8Array>> {
   const loaded = new Map<string, Uint8Array>();
   const results = await Promise.allSettled(
-    languages.map(async (language) => [language, await loadSnapshotLocalization(language)] as const),
+    SNAPSHOT_LANGUAGES.map(async (language) => [language, await loadSnapshotLocalization(language)] as const),
   );
   for (const result of results) {
     if (result.status === 'fulfilled') loaded.set(result.value[0], result.value[1]);

@@ -6,11 +6,7 @@ export interface KitViewerScope {
   wear: number;
 }
 
-/**
- * The scope the editor works on for the viewer's weapon and wear: an exact
- * match, else the weapon's first wear, else the first scope. A top-level paint
- * has no scopes, so the result is null.
- */
+/** Scope for the viewer's weapon and wear: exact match, else the weapon's first wear, else the first scope. Null for top-level paints. */
 export function selectActiveScope(
   scopes: readonly ProtoDefOperationScope[],
   viewer: KitViewerScope | undefined,
@@ -27,7 +23,7 @@ export function activeOperationIndex(bundle: ProtoDefKitBundle, viewer: KitViewe
   return selectActiveScope(bundle.scopes, viewer)?.operationIndex ?? 0;
 }
 
-/** The definition plus one operation: the pair every mutation in mutations.ts edits. */
+/** The definition plus one operation: the pair every editor mutation edits. */
 export function operationMessages(bundle: ProtoDefKitBundle, operationIndex: number): ProtoDefKitMessages | null {
   const operation = bundle.operations[operationIndex];
   return operation ? { definition: bundle.definition, operation } : null;
@@ -39,10 +35,8 @@ export function topLevelMessages(bundle: ProtoDefKitBundle): ProtoDefKitMessages
 }
 
 /**
- * Runs one edit against the active operation and writes the result back. The
- * definition is shared by every scope, so an edit may change it too; the other
- * operations are reused as the same objects. Returns the bundle itself when the
- * edit changed nothing.
+ * Runs one edit on the active operation and writes it back. The definition is shared by every scope,
+ * so it may change too. Returns the same bundle when nothing changed.
  */
 export function applyBundleEdit(
   bundle: ProtoDefKitBundle,
@@ -60,14 +54,10 @@ export function applyBundleEdit(
   };
 }
 
-// Every object this module has deep-frozen. A frozen snapshot is never mutated,
-// so a later snapshot can reuse it by reference instead of cloning it again.
+// Deep-frozen objects; a frozen snapshot can be reused by reference instead of cloned again.
 const frozenSnapshots = new WeakSet<object>();
 
-/**
- * Decoder messages are plain data, but freezing them catches accidental UI
- * mutation early. The WeakSet also makes this safe for an unexpected cycle.
- */
+/** Freezes decoder messages to catch accidental UI mutation. The visited set keeps cycles safe. */
 function freezeDeep<T>(value: T, visited = new WeakSet<object>()): T {
   if (!value || typeof value !== 'object') return value;
   if (ArrayBuffer.isView(value)) return value;
@@ -84,11 +74,7 @@ function snapshotMessage<T>(value: T): T {
   return freezeDeep(structuredClone(value));
 }
 
-/**
- * Freezes a working bundle into an editor snapshot that shares no mutable state
- * with its input. Operations, the definition and item definitions that are
- * already snapshots are reused by reference, so an edit clones only what it changed.
- */
+/** Freezes a working bundle into a snapshot that shares no mutable state with its input. Frozen parts are reused by reference. */
 export function snapshotBundle(bundle: ProtoDefKitBundle): ProtoDefKitBundle {
   const next = {
     ...bundle,

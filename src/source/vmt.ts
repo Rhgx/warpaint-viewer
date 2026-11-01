@@ -2,29 +2,18 @@ import type { WeaponMaterial } from '../data/types';
 import type { SourcePackage } from './contracts';
 import { isSupportedTexturePath, normalizeSourcePath, sourcePathExtension, sourceTextureCandidates, sourceTextureIdentity } from './paths';
 
-// Runtime VMT support for imported packages.
-//
-// tools/extract/warpaints.mjs reads each stock weapon's VMT out of the game VPKs and
-// bakes it into manifest.json, so the built-in war paints never need a parser
-// in the browser. Community war paints do: packs routinely ship replacement
-// materials next to their textures (see the "VMT's/" folder of ghastly_guns,
-// which turns the weapon glow on and makes the paint alpha-tested), and the
-// baked-in weapon material says nothing about those.
-//
-// This is the same VMT -> WeaponMaterial mapping the pipeline performs
-// (tools/extract/warpaints.mjs resolveWeaponMaterials), ported so a mounted package can
-// override the material the same way the game would.
-
-// KeyValues
+// Runtime VMT support for imported packages. The stock weapon materials are baked into
+// manifest.json by tools/extract/warpaints.mjs, but community packs ship replacement VMTs
+// (glow passes, alpha-tested bodies), so the browser maps them here the way the pipeline's
+// resolveWeaponMaterials does.
 
 type KvValue = string | KvBlock | (string | KvBlock)[];
 interface KvBlock { [key: string]: KvValue }
 
 /**
- * Minimal Valve KeyValues (text) reader: quoted and unquoted tokens, nested
- * blocks, `//` comments, `#base` directives ignored, duplicate keys collapsed
- * into an array. Ported from tools/lib/kv.mjs so the browser and the pipeline
- * read the same files the same way.
+ * Minimal Valve KeyValues reader: quoted and bare tokens, nested blocks, `//` comments,
+ * `#` directives ignored, duplicate keys collected into an array. Ported from
+ * tools/lib/kv.mjs so both read files alike.
  */
 function parseKeyValues(text: string): KvBlock {
   let index = 0;
@@ -125,8 +114,6 @@ function kvGet(block: KvBlock | undefined, key: string): KvValue | undefined {
   return undefined;
 }
 
-// VMT -> WeaponMaterial
-
 function kvString(value: KvValue | undefined): string | undefined {
   if (typeof value === 'string') return value;
   // A duplicated key keeps its last value, matching Source's own overwrite.
@@ -171,11 +158,9 @@ function hasProxy(body: KvBlock, name: string): boolean {
 }
 
 /**
- * Turns a raw material reference into the viewer's public texture path, the
- * same shape tools/lib/resolve.mjs texturePublicPath produces. Lowercased for
- * the same reason src/protodefs/decoder.ts lowercases recipe refs: Source
- * treats material paths case-insensitively and the pipeline writes every file
- * lowercased, so a VMT's casing is not meaningful.
+ * Turns a material reference into the viewer's public texture path, the shape
+ * tools/lib/resolve.mjs produces. Lowercased: Source matches material paths
+ * case-insensitively and the pipeline writes lowercase files.
  */
 function texturePublicPath(reference: string | undefined): string | null {
   if (!reference) return null;
@@ -189,9 +174,8 @@ function texturePublicPath(reference: string | undefined): string | null {
 const KNOWN_SHADERS = new Set(['vertexlitgeneric', 'unlitgeneric', 'skin', 'weaponinvis', 'patch']);
 
 /**
- * VMT parameters that visibly change a weapon in game but that this viewer
- * does not reproduce, so an imported material can say so rather than silently
- * dropping them.
+ * VMT parameters that visibly change a weapon but that this viewer does not reproduce,
+ * so an imported material can say so rather than silently dropping them.
  */
 const UNSUPPORTED_PARAMETERS: { key: string; label: string }[] = [
   { key: '$translucent', label: 'sorted translucency' },
@@ -201,9 +185,8 @@ const UNSUPPORTED_PARAMETERS: { key: string; label: string }[] = [
 ];
 
 /**
- * Detail blend modes this viewer implements, which is every TCOMBINE_* mode
- * from common_ps_fxc.h except the two self-shadowed-bump ones: those read the
- * detail texture as an ssbump basis, and nothing in the viewer produces one.
+ * Detail blend modes (TCOMBINE_* from common_ps_fxc.h) this viewer implements. The two
+ * self-shadowed-bump modes are left out: they need an ssbump basis the viewer never makes.
  */
 const SUPPORTED_DETAIL_MODES = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
@@ -217,11 +200,10 @@ interface ParsedVmt {
 }
 
 /**
- * Maps one VMT onto the viewer's material parameters. A VMT is self-contained
- * in Source, so unset parameters take shader defaults rather than inheriting
- * from the weapon's built-in material.
+ * Maps one VMT onto the viewer's material parameters. A VMT is self-contained, so unset
+ * parameters take shader defaults, not the built-in material's. Also imported directly by
+ * tools/verify/source/vmt-parity.test.mjs.
  */
-/** @public Used by tools/verify/vmt-parity.mjs through its generated SSR entry. */
 export function parseWeaponMaterialVmt(text: string): ParsedVmt {
   const root = parseKeyValues(text);
   const shaderKey = Object.keys(root)[0] ?? '';
@@ -279,8 +261,7 @@ export function parseWeaponMaterialVmt(text: string): ParsedVmt {
       // A material that asks for alpha testing without naming a cutoff gets
       // the shader's own default rather than "discard nothing".
       alphaTestReference: vmtNumber(body, '$alphatestreference', 0.5) || 0.5,
-      // Without this the test is a binary cut, which is not what a war paint
-      // whose composited alpha sits just over the reference is asking for.
+      // Without it the test is a hard cut, which war paints with alpha just over the reference do not want.
       alphaToCoverage: vmtBool(body, '$allowalphatocoverage'),
     } : {}),
     // Defaults from vertexlitgeneric_dx9_helper.cpp InitParamsVertexLitGeneric.
@@ -329,8 +310,6 @@ export function parseWeaponMaterialVmt(text: string): ParsedVmt {
   return { shader, material, textureRefs, unsupported };
 }
 
-// Package lookup
-
 export interface PackageMaterialPathIndex {
   readonly paths: ReadonlySet<string>;
   readonly uniqueFilenames: ReadonlySet<string>;
@@ -367,12 +346,9 @@ export function packageHasMaterialOverride(
 }
 
 /**
- * Where a package would place the material for this weapon, most specific
- * first. A war paint's material override is what the game actually loads for
- * a painted weapon, so a package replacing it outranks the plain weapon
- * material. The rest mirror the model paths tools/extract/warpaints.mjs resolves
- * (`c_models/<key>/<key>` for most weapons, `workshop/` for the Steam
- * Workshop imports, and the two flatter historical layouts).
+ * Where a package would place this weapon's material, most specific first. A war paint's
+ * material override is what the game loads for a painted weapon, so it ranks first; the
+ * rest mirror the paths tools/extract/warpaints.mjs resolves.
  */
 function weaponMaterialIdentities(weaponKey: string, materialOverrideId?: string): string[] {
   const identities = materialOverrideId ? [materialOverrideId] : [];
@@ -410,9 +386,8 @@ function vmtStemIndex(pkg: SourcePackage): Map<string, string[]> {
 }
 
 /**
- * Whether the package can serve this texture reference, by exact Source path
- * or (for a package with no materials/ tree of its own) by file name, matching
- * how SourceTextureProvider will go looking for it when the material is used.
+ * Whether the package can serve this texture, by exact path or, for a package with no
+ * materials/ tree, by file name, as SourceTextureProvider will look it up.
  */
 function packageHasTexture(pkg: SourcePackage, ref: string, textureStems: Set<string> | null): boolean {
   let candidates: string[];
@@ -428,10 +403,10 @@ function packageHasTexture(pkg: SourcePackage, ref: string, textureStems: Set<st
 function textureStemIndex(pkg: SourcePackage): Set<string> {
   const stems = new Set<string>();
   for (const path of pkg.entries.keys()) {
-    const extension = sourcePathExtension(path);
-    if (!extension || !isSupportedTexturePath(path)) continue;
+    if (!isSupportedTexturePath(path)) continue;
+    // isSupportedTexturePath guarantees a dot that is neither first nor last in the filename.
     const filename = path.slice(path.lastIndexOf('/') + 1);
-    stems.add(filename.slice(0, filename.length - (extension.length + 1)));
+    stems.add(filename.slice(0, filename.lastIndexOf('.')));
   }
   return stems;
 }
@@ -452,14 +427,10 @@ export type PackageMaterialLookup =
   | { status: 'failed'; path: string; message: string };
 
 /**
- * Finds and parses the material a mounted package supplies for one weapon.
- *
- * Exact Source paths win. Failing that a single `<weaponKey>.vmt` anywhere in
- * the package is accepted, because packs regularly ship their materials in a
- * loose folder for the installer to repath by hand (ghastly_guns keeps them in
- * `VMT's/`). The weapon key is a specific enough file name to bind on; two
- * files sharing it are reported rather than guessed between, the same rule
- * SourceTextureProvider applies to name-matched textures.
+ * Finds and parses the material a mounted package supplies for one weapon. Exact Source
+ * paths win; failing that, a single `<weaponKey>.vmt` anywhere in the package is accepted,
+ * since packs often keep materials in loose folders. Two files with that name are reported
+ * rather than guessed between.
  */
 export async function readPackageWeaponMaterial(
   pkg: SourcePackage,

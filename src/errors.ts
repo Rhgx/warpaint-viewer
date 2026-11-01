@@ -24,13 +24,7 @@ interface AppErrorOptions {
   cause?: unknown;
 }
 
-/**
- * An application failure with separate public and developer-facing messages.
- *
- * UI boundaries should convert this with appErrorDiagnostic() instead of
- * displaying Error.message directly. See docs/error-codes.md for the public
- * code contract and rules for allocating new codes.
- */
+/** Application failure with public and developer messages; codes are listed in docs/error-codes.md. */
 export class AppError extends Error {
   readonly name: string = 'AppError';
   readonly code: AppErrorCode;

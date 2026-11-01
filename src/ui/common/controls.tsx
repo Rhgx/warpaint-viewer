@@ -44,8 +44,7 @@ function SelectSearch({
         aria-label={placeholder}
         onChange={(event) => onChange(event.currentTarget.value)}
         onKeyDown={(event) => {
-          // Leave Escape to the Select so it can close the popup. Text entry
-          // should not also drive the Select's built-in option typeahead.
+          // Escape is left to the Select so it can close the popup; text entry stays out of its typeahead.
           if (event.key !== 'Escape') event.stopPropagation();
         }}
       />
@@ -61,26 +60,22 @@ function OptionSwatch({ option }: { option?: SwatchOption }) {
   return <span className="ui-swatch" data-empty={!option?.color || undefined} data-split={split || undefined} style={style} />;
 }
 
-// Small image with a graceful text-only fallback: manifest icons are not
-// guaranteed (mock mode has none, a couple of collections have none), so a
-// broken/missing src just collapses to an empty slot instead of a broken icon.
+// Small image. A missing or broken src leaves the slot empty, since manifest icons are optional.
 export function AssetIcon({
   src,
   size = 24,
-  className,
   loading = 'lazy',
   fetchPriority = 'auto',
 }: {
   src?: string | null;
   size?: number;
-  className?: string;
   loading?: 'eager' | 'lazy';
   fetchPriority?: 'high' | 'low' | 'auto';
 }) {
-  if (!src) return <span className={`asset-icon-empty${className ? ` ${className}` : ''}`} style={{ width: size, height: size }} />;
+  if (!src) return <span className="asset-icon-empty" style={{ width: size, height: size }} />;
   return (
     <img
-      className={`asset-icon${className ? ` ${className}` : ''}`}
+      className="asset-icon"
       src={src}
       alt=""
       loading={loading}
@@ -94,8 +89,7 @@ export function AssetIcon({
   );
 }
 
-// A labelled control row used throughout the inspector panel. `label` accepts
-// a leading icon plus text (see Inspector) as well as a plain string.
+// A labelled control row used throughout the inspector. `label` takes a string or an icon plus text.
 export function Control({ label, children, className, group = false }: { label: ReactNode; children: ReactNode; className?: string; group?: boolean }) {
   const labelId = useId();
   const Container = group ? 'div' : 'label';
@@ -111,18 +105,21 @@ export function SelectField({
   value,
   onChange,
   options,
-  placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: Option[];
-  placeholder?: string;
 }) {
   return (
-    <Select.Root value={value} onValueChange={(v) => onChange(v as string)}>
+    <Select.Root
+      value={value}
+      onValueChange={(v) => {
+        if (v !== null) onChange(v);
+      }}
+    >
       <Select.Trigger className="ui-select-trigger">
         <Select.Value>
-          {(v: string) => options.find((o) => o.value === v)?.label ?? placeholder ?? 'Select'}
+          {(v: string) => options.find((o) => o.value === v)?.label ?? 'Select'}
         </Select.Value>
         <Select.Icon className="ui-select-icon"><ChevronDown size={12} aria-hidden="true" /></Select.Icon>
       </Select.Trigger>
@@ -147,8 +144,7 @@ export function SelectField({
   );
 }
 
-// Same as SelectField, but each option (and the closed trigger) can show a
-// small icon, e.g. a weapon's backpack icon.
+// SelectField with a small icon on each option and on the closed trigger.
 export function IconSelectField({
   onPreload,
   value,
@@ -180,8 +176,7 @@ export function IconSelectField({
   const stepValue = (delta: number) => {
     if (options.length === 0) return;
     const current = options.findIndex((o) => o.value === value);
-    // Wrapping is the point: this exists to walk the whole list without
-    // stopping at either end to scroll back.
+    // Wrapping is the point: walk the whole list without stopping at either end.
     const next = current < 0
       ? delta < 0 ? options.length - 1 : 0
       : ((current + delta) % options.length + options.length) % options.length;
@@ -211,7 +206,9 @@ export function IconSelectField({
         setOpen(next);
         if (!next) setQuery('');
       }}
-      onValueChange={(v) => onChange(v as string)}
+      onValueChange={(v) => {
+        if (v !== null) onChange(v);
+      }}
     >
       {stepLabels ? (
         <div className="ui-select-stepper">
@@ -270,27 +267,28 @@ export function IconSelectField({
   );
 }
 
-// Same as SelectField, but each option (and the closed trigger) shows a
-// small round color swatch, e.g. a killstreak sheen tint. A missing/null
-// color (e.g. the 'none' option) renders as a hollow swatch.
+// SelectField with a round color swatch per option. A null color renders as a hollow swatch.
 export function SwatchSelectField({
   value,
   onChange,
   options,
-  placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: SwatchOption[];
-  placeholder?: string;
 }) {
   const selected = options.find((o) => o.value === value);
   return (
-    <Select.Root value={value} onValueChange={(v) => onChange(v as string)}>
+    <Select.Root
+      value={value}
+      onValueChange={(v) => {
+        if (v !== null) onChange(v);
+      }}
+    >
       <Select.Trigger className="ui-select-trigger ui-select-trigger-icon">
         <span className="ui-icon-option">
           <OptionSwatch option={selected} />
-          <Select.Value>{() => selected?.label ?? placeholder ?? 'Select'}</Select.Value>
+          <Select.Value>{() => selected?.label ?? 'Select'}</Select.Value>
         </span>
         <Select.Icon className="ui-select-icon"><ChevronDown size={12} aria-hidden="true" /></Select.Icon>
       </Select.Trigger>
@@ -459,6 +457,42 @@ export function TeamToggle({
       {/* Spelled out, since touch screens never show the tooltip. */}
       {showNote && <p id={noteId} className="ui-team-note">{disabledReason}</p>}
     </>
+  );
+}
+
+// A row of mutually exclusive buttons that sets one value. Pressing the
+// selected option still calls onChange.
+export function ToggleGroup<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly { value: T; label: ReactNode; title?: string; disabled?: boolean }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="ui-toggle-group" role="group" aria-label={label}>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            className="ui-toggle-btn"
+            data-pressed={selected || undefined}
+            aria-pressed={selected}
+            disabled={option.disabled}
+            title={option.title}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

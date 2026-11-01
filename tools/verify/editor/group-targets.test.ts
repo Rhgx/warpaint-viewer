@@ -2,8 +2,8 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { chooseBestSelectTargetForBucket, discoverGroupSelectTargets } from '../../../src/editor/layers/groupTargets';
-import { toggleSelectGroupId } from '../../../src/editor/mutations';
+import { discoverGroupSelectTargets } from '../../../src/editor/layers/groupTargets';
+import { toggleSelectGroupId } from '../../../src/editor/layers/groupMutations';
 import { dig } from '../fixtures';
 
 const found = discoverGroupSelectTargets({
@@ -101,12 +101,4 @@ test('a selector with only part of it inherited per weapon stays editable', () =
   assert.equal(dig(edited.definition, 'blackbox', 'data', 'variable', 'string'), '32');
   assert.equal(dig(edited.definition, 'header', 'variables', 1, 'value'), '0', 'non-inherited tail slots stay shared');
   assert.equal(dig(edited.definition, 'header', 'variables', 2, 'value'), '0', 'inherited padding is not rewritten per weapon');
-});
-
-test('a bucket picks the single editable selector that owns it', () => {
-  assert.deepEqual(chooseBestSelectTargetForBucket(found, 16)?.target, { groupsValue: 'models/a_groups', occurrence: 0 });
-  assert.deepEqual(chooseBestSelectTargetForBucket(found, 99, { groupsRef: 'models/c_groups' })?.target, { groupsValue: 'models/c_groups', occurrence: 0 });
-  assert.equal(chooseBestSelectTargetForBucket(found, 99), null);
-  assert.equal(chooseBestSelectTargetForBucket(found, 48), null);
-  assert.equal(chooseBestSelectTargetForBucket(found, 0), null);
 });

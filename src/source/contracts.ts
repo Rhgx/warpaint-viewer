@@ -22,11 +22,9 @@ export interface SourcePackage {
   readonly format: SourcePackageFormat;
   readonly entries: ReadonlyMap<string, SourceEntry>;
   /**
-   * True when this package had no materials/ directory anywhere, so its
-   * (wrapper-stripped) archive root was indexed as if it were the materials
-   * tree instead. VPKs and ordinary ZIPs with a real materials/ root always
-   * report false here. Consumers use this to allow a name-based texture
-   * fallback that would otherwise be too speculative for a well-formed pack.
+   * True when the package had no materials/ directory, so its wrapper-stripped root was
+   * indexed as the materials tree. Consumers use it to allow a name-based texture fallback
+   * that would be too speculative otherwise.
    */
   readonly rootIsMaterials: boolean;
 

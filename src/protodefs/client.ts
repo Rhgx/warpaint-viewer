@@ -1,15 +1,12 @@
-// Main-thread ProtoDefSource: spawns protodefs.worker.ts to keep the decoded
-// container (tens of megabytes for a stock file) off the main thread, and
-// falls back to running decoder.ts in-process when Worker is unavailable or
-// fails to start - same rationale as src/source/vtfDecode.ts.
+// Main-thread ProtoDefSource. Decoding runs in protodefs.worker.ts to keep the container
+// off the main thread; decoder.ts runs in-process when Workers are unavailable or fail.
 
-import type { DecodedContainer } from './decoder';
+import type { DecodedContainer } from './decoderShared';
+import type { Team } from '../data/types';
 import type {
   ProtoDefIndex, ProtoDefJsonFragment, ProtoDefKitBundle, ProtoDefKitMessages, ProtoDefKitWeaponSlot, ProtoDefOpenOptions,
   ProtoDefRecipe, ProtoDefRecipeWithProvenance, ProtoDefSource,
 } from './types';
-
-type Team = 'red' | 'blu';
 
 interface WorkerSuccess {
   id: number;
@@ -28,14 +25,12 @@ interface PendingRequest {
   reject: (reason: unknown) => void;
 }
 
-// What to replay against a fresh in-process fallback: either the last open()
-// or the last openJsonFragments() call, whichever ran most recently.
+  // The last open call, replayed into a fresh in-process fallback if the worker dies.
 type LastOpen =
   | { kind: 'bytes'; bytes: Uint8Array; options: ProtoDefOpenOptions }
   | { kind: 'json'; baseBytes: Uint8Array; fragments: ProtoDefJsonFragment[]; options: ProtoDefOpenOptions };
 
-// In-process fallback: decoder.ts is a plain module, so without a Worker this
-// just calls it directly and keeps the parsed container in this object instead.
+  // In-process fallback: calls decoder.ts directly and holds the parsed container itself.
 class InProcessSource {
   private decoded: DecodedContainer | null = null;
 
@@ -57,7 +52,7 @@ class InProcessSource {
 
   async resolveRecipe(defindex: number, weaponKey: string, team: Team, wearIndex: number): Promise<ProtoDefRecipe | null> {
     if (!this.decoded) return null;
-    const { resolveKitRecipe } = await import('./decoder');
+    const { resolveKitRecipe } = await import('./kitQueries');
     return resolveKitRecipe(this.decoded, defindex, weaponKey, team, wearIndex);
   }
 
@@ -68,25 +63,25 @@ class InProcessSource {
     wearIndex: number,
   ): Promise<ProtoDefRecipeWithProvenance | null> {
     if (!this.decoded) return null;
-    const { resolveKitRecipeWithProvenance } = await import('./decoder');
+    const { resolveKitRecipeWithProvenance } = await import('./kitQueries');
     return resolveKitRecipeWithProvenance(this.decoded, defindex, weaponKey, team, wearIndex);
   }
 
   async exportKit(defindex: number): Promise<ProtoDefKitMessages | null> {
     if (!this.decoded) return null;
-    const { extractKitMessages } = await import('./decoder');
+    const { extractKitMessages } = await import('./kitQueries');
     return extractKitMessages(this.decoded, defindex);
   }
 
   async exportKitBundle(defindex: number): Promise<ProtoDefKitBundle | null> {
     if (!this.decoded) return null;
-    const { extractKitBundle } = await import('./decoder');
+    const { extractKitBundle } = await import('./kitQueries');
     return extractKitBundle(this.decoded, defindex);
   }
 
   async exportKitWeaponSlots(defindex: number): Promise<ProtoDefKitWeaponSlot[] | null> {
     if (!this.decoded) return null;
-    const { getKitWeaponSlots } = await import('./decoder');
+    const { getKitWeaponSlots } = await import('./kitQueries');
     return getKitWeaponSlots(this.decoded, defindex);
   }
 
@@ -100,8 +95,7 @@ class ProtoDefClient implements ProtoDefSource {
   private workerDisabled = false;
   private nextRequestId = 1;
   private pending = new Map<number, PendingRequest>();
-  // Cached so a worker that dies mid-session can be replaced by the in-process
-  // fallback without losing the ability to keep resolving recipes.
+  // Cached so a dead worker can be swapped for the in-process fallback mid-session.
   private lastOpen: LastOpen | null = null;
   private fallback: InProcessSource | null = null;
 
@@ -135,8 +129,7 @@ class ProtoDefClient implements ProtoDefSource {
     this.workerDisabled = true;
     const pending = [...this.pending.values()];
     this.pending.clear();
-    // Requests in flight when the worker died would otherwise hang forever;
-    // fail them so callers can retry (open() will re-run through the fallback).
+    // Fail in-flight requests so callers can retry; they would otherwise hang.
     for (const request of pending) request.reject(new Error('The proto_defs worker terminated unexpectedly.'));
   }
 
@@ -164,8 +157,7 @@ class ProtoDefClient implements ProtoDefSource {
     const worker = this.createWorker();
     if (!worker) return (await this.ensureFallback()).open(bytes, options);
     try {
-      // Keep the caller's bytes intact: if the browser cannot clone the
-      // message the same request can still fall back to the in-process path.
+      // Copy so the caller's bytes survive a failed postMessage and the in-process fallback.
       const transferable = bytes.slice().buffer;
       return (await this.post({ kind: 'open', bytes: transferable, options }, [transferable])) as ProtoDefIndex;
     } catch {
@@ -182,8 +174,7 @@ class ProtoDefClient implements ProtoDefSource {
     const worker = this.createWorker();
     if (!worker) return (await this.ensureFallback()).openJsonFragments(baseBytes, fragments, options);
     try {
-      // Same rationale as open(): keep the caller's bytes intact so a failed
-      // postMessage can still retry through the in-process fallback.
+      // Same copy as open().
       const transferable = baseBytes.slice().buffer;
       return (await this.post({ kind: 'openJson', baseBytes: transferable, fragments, options }, [transferable])) as ProtoDefIndex;
     } catch {
@@ -191,14 +182,26 @@ class ProtoDefClient implements ProtoDefSource {
     }
   }
 
-  async resolveRecipe(defindex: number, weaponKey: string, team: Team, wearIndex: number): Promise<ProtoDefRecipe | null> {
-    if (this.fallback) return this.fallback.resolveRecipe(defindex, weaponKey, team, wearIndex);
-    if (!this.worker) return (await this.ensureFallback()).resolveRecipe(defindex, weaponKey, team, wearIndex);
+  // Once the in-process fallback is active it serves every call. Otherwise the
+  // worker runs the request, and a failed or missing worker falls back for it.
+  private async dispatch<T>(
+    message: Record<string, unknown>,
+    inProcess: (source: InProcessSource) => Promise<T>,
+  ): Promise<T> {
+    if (this.fallback) return inProcess(this.fallback);
+    if (!this.worker) return inProcess(await this.ensureFallback());
     try {
-      return (await this.post({ kind: 'resolveRecipe', defindex, weaponKey, team, wearIndex })) as ProtoDefRecipe | null;
+      return (await this.post(message)) as T;
     } catch {
-      return (await this.ensureFallback()).resolveRecipe(defindex, weaponKey, team, wearIndex);
+      return inProcess(await this.ensureFallback());
     }
+  }
+
+  async resolveRecipe(defindex: number, weaponKey: string, team: Team, wearIndex: number): Promise<ProtoDefRecipe | null> {
+    return this.dispatch<ProtoDefRecipe | null>(
+      { kind: 'resolveRecipe', defindex, weaponKey, team, wearIndex },
+      (source) => source.resolveRecipe(defindex, weaponKey, team, wearIndex),
+    );
   }
 
   async resolveRecipeWithProvenance(
@@ -207,49 +210,36 @@ class ProtoDefClient implements ProtoDefSource {
     team: Team,
     wearIndex: number,
   ): Promise<ProtoDefRecipeWithProvenance | null> {
-    if (this.fallback) return this.fallback.resolveRecipeWithProvenance(defindex, weaponKey, team, wearIndex);
-    if (!this.worker) return (await this.ensureFallback()).resolveRecipeWithProvenance(defindex, weaponKey, team, wearIndex);
-    try {
-      return (await this.post({ kind: 'resolveRecipeWithProvenance', defindex, weaponKey, team, wearIndex })) as ProtoDefRecipeWithProvenance | null;
-    } catch {
-      return (await this.ensureFallback()).resolveRecipeWithProvenance(defindex, weaponKey, team, wearIndex);
-    }
+    return this.dispatch<ProtoDefRecipeWithProvenance | null>(
+      { kind: 'resolveRecipeWithProvenance', defindex, weaponKey, team, wearIndex },
+      (source) => source.resolveRecipeWithProvenance(defindex, weaponKey, team, wearIndex),
+    );
   }
 
   async exportKit(defindex: number): Promise<ProtoDefKitMessages | null> {
-    if (this.fallback) return this.fallback.exportKit(defindex);
-    if (!this.worker) return (await this.ensureFallback()).exportKit(defindex);
-    try {
-      return (await this.post({ kind: 'exportKit', defindex })) as ProtoDefKitMessages | null;
-    } catch {
-      return (await this.ensureFallback()).exportKit(defindex);
-    }
+    return this.dispatch<ProtoDefKitMessages | null>(
+      { kind: 'exportKit', defindex },
+      (source) => source.exportKit(defindex),
+    );
   }
 
   async exportKitBundle(defindex: number): Promise<ProtoDefKitBundle | null> {
-    if (this.fallback) return this.fallback.exportKitBundle(defindex);
-    if (!this.worker) return (await this.ensureFallback()).exportKitBundle(defindex);
-    try {
-      return (await this.post({ kind: 'exportKitBundle', defindex })) as ProtoDefKitBundle | null;
-    } catch {
-      return (await this.ensureFallback()).exportKitBundle(defindex);
-    }
+    return this.dispatch<ProtoDefKitBundle | null>(
+      { kind: 'exportKitBundle', defindex },
+      (source) => source.exportKitBundle(defindex),
+    );
   }
 
   async exportKitWeaponSlots(defindex: number): Promise<ProtoDefKitWeaponSlot[] | null> {
-    if (this.fallback) return this.fallback.exportKitWeaponSlots(defindex);
-    if (!this.worker) return (await this.ensureFallback()).exportKitWeaponSlots(defindex);
-    try {
-      return (await this.post({ kind: 'exportKitWeaponSlots', defindex })) as ProtoDefKitWeaponSlot[] | null;
-    } catch {
-      return (await this.ensureFallback()).exportKitWeaponSlots(defindex);
-    }
+    return this.dispatch<ProtoDefKitWeaponSlot[] | null>(
+      { kind: 'exportKitWeaponSlots', defindex },
+      (source) => source.exportKitWeaponSlots(defindex),
+    );
   }
 
   dispose(): void {
     if (this.worker) {
-      // Best-effort: let the worker drop its references before terminating,
-      // but don't wait on it, dispose() is synchronous.
+      // Best-effort: the worker drops its references, but dispose() does not wait on it.
       void this.post({ kind: 'dispose' }).catch(() => undefined);
       this.worker.terminate();
       this.worker = null;

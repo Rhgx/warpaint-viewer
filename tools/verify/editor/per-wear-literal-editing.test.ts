@@ -4,18 +4,21 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
+
 import { activeOperationIndex, applyBundleEdit, operationMessages, topLevelMessages } from '../../../src/editor/kitBundle';
 import {
   assignSelectGroupExclusively,
-  readTextureLayerTeamColors,
   setGroupTextureReference,
+} from '../../../src/editor/layers/groupMutations';
+import {
+  readTextureLayerTeamColors,
   setTextureLayerTeamColors,
   setTextureTransformRange,
-} from '../../../src/editor/mutations';
+} from '../../../src/editor/transform/transformMutations';
 import { discoverGroupSelectTargets, discoverGroupTextureTarget, discoverLiteralGroupTextureTarget } from '../../../src/editor/layers/groupTargets';
 import { discoverStickerPlacementTargets } from '../../../src/editor/sticker/stickerTargets';
 import { discoverLayerTransforms } from '../../../src/editor/transform/transformTargets';
-import { getKitWeaponSlots, resolveKitRecipeWithProvenance } from '../../../src/protodefs/decoder';
+import { getKitWeaponSlots, resolveKitRecipeWithProvenance } from '../../../src/protodefs/kitQueries';
 import type { ProtoDefKitBundle, ProtoDefKitMessages } from '../../../src/protodefs/types';
 import { shippedProtoDefs } from '../fixtures';
 

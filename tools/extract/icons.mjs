@@ -9,12 +9,10 @@ import { decodeVTF } from '../lib/vtf.mjs';
 import { extractBatch, listVPK, MISC_VPK, TEXTURES_VPK } from '../lib/vpk.mjs';
 import { sha1 } from './state.mjs';
 
-// Inventory icons ship at 512px but the UI never draws them above 28px; 64px
-// covers high-DPI screens at a tenth of the download.
+// Inventory icons ship at 512px but the UI draws at most 28px; 64px covers high-DPI screens.
 const INVENTORY_ICON_MAX = 64;
 
-// Halves with a 2x2 box filter (alpha-weighted, so transparent edges do not
-// bleed dark) until the image fits. VTF sizes are powers of two.
+// Halve with an alpha-weighted 2x2 box filter until the image fits; VTF sizes are powers of two.
 export function downscaleRGBA(rgba, width, height, max) {
   while (Math.max(width, height) > max && width > 1 && height > 1) {
     const w = width >> 1;
@@ -92,8 +90,7 @@ export async function generatePaintIcons({
       missing++;
     }
   }
-  fs.mkdirSync(stagingPath, { recursive: true });
-  fs.writeFileSync(statePath, JSON.stringify([...swatchedIds].sort((a, b) => a - b)));
+  saveSwatchedIds(statePath, swatchedIds);
   log(`[icons] paintkit thumbnails: ${kept} kept, ${swatched} swatched, ${missing} without one`);
 }
 
@@ -194,9 +191,14 @@ export async function extractInventoryIcons({
   return { collectionIcons, hashes };
 }
 
-function loadSwatchedIds(statePath) {
+export function loadSwatchedIds(statePath) {
   if (!fs.existsSync(statePath)) return new Set();
   try { return new Set(JSON.parse(fs.readFileSync(statePath, 'utf8'))); } catch { return new Set(); }
+}
+
+export function saveSwatchedIds(statePath, swatchedIds) {
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  fs.writeFileSync(statePath, JSON.stringify([...swatchedIds].sort((a, b) => a - b)));
 }
 
 function walkTree(node, visit) {

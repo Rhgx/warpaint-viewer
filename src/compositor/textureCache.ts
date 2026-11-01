@@ -8,18 +8,17 @@ export interface LoadOpts {
 }
 
 interface Entry {
-  /** The full texture, ready on the GPU; only meaningful once `fullStarted`. */
-  promise: Promise<THREE.Texture>;
+  /** The full texture, ready on the GPU; set when the full texture is first requested. */
+  promise?: Promise<THREE.Texture>;
   /**
-   * Whether the full texture was asked for. Smaller copies decode from the
-   * file alone, so a caller that only ever wants those never pays for it.
+   * Whether the full texture was asked for. Smaller copies decode from the file
+   * alone, so a caller that never wants the full texture never pays for it.
    */
   fullStarted: boolean;
   bytes: number; // 0 until the image is decoded
   settled: boolean;
   failed: boolean;
-  // Decoded by this entry alone (THREE.Cache is off, so the loader shares
-  // nothing), which makes the entry the bitmap's only owner.
+  // Decoded by this entry alone (THREE.Cache is off), so it is the bitmap's only owner.
   bitmap?: ImageBitmap;
   /** The downloaded file, kept until the full texture is up so stand-ins decode from it. */
   file?: Promise<Blob>;
@@ -28,9 +27,8 @@ interface Entry {
   tierBitmaps: ImageBitmap[];
 }
 
-// Uploads larger than this go up in strips across tasks; one 2048 px texture
-// is 16 MiB, and handing it to WebGL in one call froze low-end machines for
-// most of a tenth of a second on every paint switch.
+// Uploads larger than this go up in strips across tasks: one 2048 px texture is
+// 16 MiB, and a single call froze low-end machines on every paint switch.
 const STREAM_MIN_SIZE = 512;
 const STRIP_BYTES = 256 * 1024;
 // Upload work allowed per task before yielding, so frames keep coming.
@@ -143,21 +141,11 @@ const MIB = 1024 * 1024;
 const reportedMissing = new Set<string>();
 
 /**
- * Pick an LRU budget that leaves room for the viewer, compositor targets, and
- * the rest of the page. Source textures can be reloaded; avoiding a GPU reset
- * on an integrated/mobile GPU is more valuable than retaining every variant.
- *
- * Unknown hardware gets 256 MiB: materially safer than the old 384 MiB while
- * still holding roughly eleven fully-mipped 2048px RGBA textures. A capable
- * desktop (more than 8 GiB of reported memory) retains the previous 384 MiB
- * budget. GPU max texture size only constrains clearly lower-end adapters; an
- * 8192px desktop GPU is not penalized merely for reporting that limit.
- *
- * Phones defeat every hint above: Safari reports no memory, cores are plentiful
- * and mobile GPUs advertise 8192-16384px textures. A touch-only device is
- * therefore capped at 128 MiB (about five fully-mipped 2048px textures, one
- * recipe's inputs plus a variant), since its GPU shares the few hundred MiB a
- * mobile tab may use before the browser drops the WebGL context.
+ * LRU byte budget for source textures, sized to leave room for the viewer, the
+ * compositor targets and the page. Losing a texture costs a reload; losing the GPU
+ * context costs far more, so the tiers are conservative. Phones report no memory
+ * and their browsers drop WebGL once a tab grows too large, so touch-only devices
+ * are capped at 128 MiB.
  */
 export function textureCacheBudgetBytes(hints: TextureCacheBudgetHints = {}): number {
   const nav = globalThis.navigator as (Navigator & { deviceMemory?: number }) | undefined;
@@ -173,8 +161,7 @@ export function textureCacheBudgetBytes(hints: TextureCacheBudgetHints = {}): nu
     else budgetMiB = 384;
   }
 
-  // CPU count is a weaker signal than RAM, but reliably spots phones and
-  // low-power Chromebooks when Device Memory is unavailable.
+  // CPU count is a weaker signal than RAM, but it still spots phones and Chromebooks.
   if (Number.isFinite(cores)) {
     if (cores! <= 2) budgetMiB = Math.min(budgetMiB, 96);
     else if (cores! <= 4) budgetMiB = Math.min(budgetMiB, 160);
@@ -202,23 +189,19 @@ function textureBytes(tex: THREE.Texture): number {
   return tex.generateMipmaps ? Math.ceil(base * 1.34) : base;
 }
 
-// Loads and caches source textures. All textures are sampled RAW (NoColorSpace);
-// sRGB decode, when wanted, is done in the compositor shader so we control it
-// per input exactly like the fxc does.
+// Loads and caches source textures. All are sampled RAW (NoColorSpace); sRGB decode
+// happens in the compositor shader, per input, as the fxc does.
 //
-// The cache is a byte-budgeted LRU: patterns run up to 2048x2048 (about 22 MB
-// each on the GPU with mips) and the full corpus is far larger than any sane
-// GPU budget, so least-recently-used textures are disposed once the budget is
-// exceeded. Refs pinned via pin() (the textures used by an in-flight compose)
-// are never evicted while pinned.
+// Byte-budgeted LRU. Patterns run up to 2048x2048 (about 22 MB on the GPU with mips),
+// so the corpus far exceeds any sane budget. Refs pinned via pin() are never evicted
+// while an in-flight compose uses them.
 export class TextureCache {
   // Map preserves insertion order; entries are re-inserted on hit, so iteration
   // order is least-recently-used first.
   private cache = new Map<string, Entry>();
-  // Decoded off the main thread, raw (no premultiply, no color management) to
-  // match how the textures are sampled. An <img> source decodes premultiplied
-  // and color-managed, so the WebGL upload had to re-decode every 2048px
-  // pattern synchronously: 100-300ms hitches on each paint switch.
+  // Decoded off the main thread and raw (no premultiply, no color management), matching
+  // how the textures are sampled. An <img> decodes premultiplied and would re-decode
+  // 2048px patterns synchronously on upload: 100-300 ms hitches per paint switch.
   private decodesBitmaps = typeof createImageBitmap === 'function';
   private fallbackLoader = new THREE.TextureLoader();
   private resolve: TextureResolver;
@@ -230,8 +213,6 @@ export class TextureCache {
   private maxAnisotropy: number;
   /** Streams large uploads when present; without one, textures upload on first use. */
   private renderer: THREE.WebGLRenderer | null;
-  /** Refs that would not load and are standing in as white. */
-  readonly missing = new Set<string>();
 
   constructor(resolve: TextureResolver, budgetBytes = textureCacheBudgetBytes(), metadata: Record<string, TextureMetadata> = {}, metadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined, maxAnisotropy = 1, renderer: THREE.WebGLRenderer | null = null) {
     this.renderer = renderer;
@@ -239,8 +220,7 @@ export class TextureCache {
     this.budget = budgetBytes;
     this.metadata = metadata;
     this.metadataResolver = metadataResolver;
-    // Eight samples is a useful quality ceiling for these source textures;
-    // importantly, never request more than the active renderer supports.
+    // Cap anisotropy at 8, and never above what the renderer supports.
     this.maxAnisotropy = Math.max(1, Math.min(8, maxAnisotropy));
   }
 
@@ -265,7 +245,7 @@ export class TextureCache {
     if (this.totalBytes <= this.budget) return;
     for (const [k, entry] of this.cache) {
       if (this.totalBytes <= this.budget) break;
-      // Still on its way up; a copy-only entry has nothing in flight that a compose relies on unpinned.
+      // Skip entries still loading a full texture; a copy-only entry has no in-flight work.
       if (this.pinned.has(k) || (entry.fullStarted && !entry.settled) || entry.failed) continue;
       this.cache.delete(k);
       this.totalBytes -= entry.bytes;
@@ -273,11 +253,10 @@ export class TextureCache {
     }
   }
 
-  // Frees the GPU upload and, unless an in-flight compose may still draw (and,
-  // after a context loss, re-upload) the texture, its decoded bitmap. Every
-  // caller pins before loading, so an unpinned entry has no remaining user.
+  // Frees the GPU upload, and the decoded bitmap unless an in-flight compose may still
+  // draw or re-upload it. Callers pin before loading, so an unpinned entry has no users.
   private discard(entry: Entry, closeBitmap: boolean) {
-    if (entry.fullStarted) entry.promise.then((t) => {
+    entry.promise?.then((t) => {
       t.dispose();
       if (closeBitmap) entry.bitmap?.close();
     }).catch(() => undefined);
@@ -305,9 +284,8 @@ export class TextureCache {
     const existing = entry.tiers.get(size);
     if (existing) return existing;
     const tier = (async () => {
-      // Decoded from the file rather than resized from the full bitmap: the
-      // browser decodes files off the main thread, but resizes a bitmap on it.
-      // Square is fine, as the compositor samples by normalised UV.
+      // Decode from the file, not by resizing the full bitmap: browsers decode files off
+      // the main thread but resize bitmaps on it. Square is fine; the compositor samples by UV.
       const small = await createImageBitmap(await file, {
         resizeWidth: size,
         resizeHeight: size,
@@ -324,8 +302,7 @@ export class TextureCache {
       entry.bytes += bytes;
       this.totalBytes += bytes;
       if (Math.max(small.width, small.height) > STREAM_MIN_SIZE) return streamTexture(renderer, texture, small);
-      // Small copies go up at once: a fraction of a millisecond each, where
-      // waiting in the shared upload queue behind other work cost far more.
+      // Small copies upload at once; queueing them behind other work costs far more.
       renderer.initTexture(texture);
       return texture;
     })().catch(() => this.load(ref, opts));
@@ -336,13 +313,9 @@ export class TextureCache {
   // Sampling state for a decoded source. All textures are sampled RAW; see load().
   private configure(tex: THREE.Texture, ref: string, opts: LoadOpts) {
     tex.colorSpace = THREE.NoColorSpace;
-    // CRITICAL orientation contract: the composited render target is
-    // sampled by glTF UVs, whose convention (like the game's DirectX UVs)
-    // is v=0 at the image TOP with unflipped uploads. TextureLoader's
-    // default flipY=true would put the image bottom at v=0, making the
-    // whole composite land vertically mirrored on the weapon. Uploading
-    // every source unflipped keeps composite space identical to game UV
-    // space (v down), so the result maps onto the mesh exactly in-game.
+    // CRITICAL orientation contract: composites are sampled by glTF UVs, with v=0 at
+    // the image top. TextureLoader's default flipY=true would mirror the whole
+    // composite on the weapon, so every source uploads unflipped.
     tex.flipY = false;
     const meta = { ...this.metadata[ref], ...this.metadataResolver?.(ref) };
     tex.wrapS = meta?.clampS ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
@@ -376,7 +349,6 @@ export class TextureCache {
       return existing;
     }
     const entry: Entry = {
-      promise: Promise.resolve(null as unknown as THREE.Texture),
       fullStarted: false,
       bytes: 0,
       settled: false,
@@ -384,9 +356,8 @@ export class TextureCache {
       tiers: new Map(),
       tierBitmaps: [],
     };
-    // An empty ref is a stage nobody has picked a texture for yet: white, without a fetch or a warning.
-    // The file is requested up front, so stand-ins asked for right away can
-    // decode from it, with or without the full texture.
+    // An empty ref is a stage with no texture picked yet: it stays white, with no fetch
+    // or warning. The file is fetched up front so stand-ins can decode from it.
     entry.file = ref && this.decodesBitmaps ? Promise.resolve(this.resolve(ref)).then((url) => fetch(url)).then((response) => response.blob()) : undefined;
     this.cache.set(key, entry);
     return entry;
@@ -394,7 +365,7 @@ export class TextureCache {
 
   load(ref: string, opts: LoadOpts = {}): Promise<THREE.Texture> {
     const entry = this.entryFor(ref, opts);
-    if (entry.fullStarted) return entry.promise;
+    if (entry.promise) return entry.promise;
     entry.fullStarted = true;
     const resolvedUrl = Promise.resolve(ref ? this.resolve(ref) : '');
     const file = entry.file;
@@ -409,13 +380,8 @@ export class TextureCache {
       const onError = () => {
         entry.settled = true;
         entry.failed = true;
-        // An input that will not load must not take the whole composite with
-        // it. An imported war paint routinely names a texture its author did
-        // not ship, and the recipe is otherwise perfectly renderable, so
-        // stand in white: the neutral element of the multiply chains that
-        // dominate these recipes, which leaves the rest of the paint intact
-        // instead of blacking out the weapon or failing the app outright.
-        if (ref) this.missing.add(ref);
+        // A texture the import names but never shipped must not sink the composite. Stand
+        // in white, the neutral element of multiply chains, so the rest of the paint draws.
         if (ref && !reportedMissing.has(ref)) {
           reportedMissing.add(ref);
           console.warn(`[warpaint-viewer] missing texture, substituting white: ${ref} (${url})`);

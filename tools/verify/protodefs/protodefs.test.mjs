@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { decodeProtoDefs, resolveKitRecipe } from '../../../src/protodefs/decoder';
+
+import { decodeProtoDefs } from '../../../src/protodefs/decoder';
+import { resolveKitRecipe } from '../../../src/protodefs/kitQueries';
 import { buildBundle } from '../../lib/recipe-pack.mjs';
 import { loadRoot, parseContainer as parseContainerNode, decodeType, DEF_TYPE } from '../../lib/proto.mjs';
 import { buildIndex, resolveRecipe as resolveRecipeNode, WEAPON_SLOTS } from '../../lib/resolve.mjs';
@@ -69,7 +71,6 @@ test('decoder agrees with independent pipeline', (context) => {
   const nodeCtx = buildIndex(
     decodeType(nodeRoot, nodeContainer.byType, DEF_TYPE.PAINTKIT_OPERATION),
     decodeType(nodeRoot, nodeContainer.byType, DEF_TYPE.PAINTKIT_ITEM_DEFINITION),
-    decodeType(nodeRoot, nodeContainer.byType, DEF_TYPE.PAINTKIT_VARIABLES),
   );
   const nodeDefById = new Map(nodeDefs.map((def) => [def.header.defindex, def]));
 

@@ -4,16 +4,7 @@ import type { RecipeNode } from '../compositor/types';
 import type { PaintkitEntry, Team, WeaponEntry } from '../data/types';
 import { PAINTKIT_TOOL_VIEW, TF2_ITEM_PANEL_FOV, weaponIconView } from '../viewer/presets';
 import { PAINTKIT_ICON_LIGHTING_ID } from '../viewer/lighting/lighting';
-
-interface IdleDeadlineLike {
-  didTimeout: boolean;
-  timeRemaining(): number;
-}
-
-type IdleCallbackWindow = Window & {
-  requestIdleCallback?: (callback: (deadline: IdleDeadlineLike) => void, options?: { timeout?: number }) => number;
-  cancelIdleCallback?: (handle: number) => void;
-};
+import { requestIdle } from './idle';
 
 interface IconRenderSession {
   cancelled: boolean;
@@ -22,13 +13,14 @@ interface IconRenderSession {
   createdUrls: Map<number, string>;
   attemptedIds: Set<number>;
   processing: boolean;
-  idleHandle: number;
-  fallbackTimer: number;
+  /** Cancels the queued idle render, or null while none is queued. */
+  cancelIdle: (() => void) | null;
   schedule: () => void;
 }
 
 const ICON_RENDER_IDLE_TIMEOUT_MS = 750;
 const ICON_RENDER_IDLE_BUDGET_MS = 12;
+const ICON_RENDER_FALLBACK_DELAY_MS = 50;
 
 interface Options {
   enabled: boolean;
@@ -43,13 +35,7 @@ interface Options {
   visibleKitIds: readonly number[];
 }
 
-/**
- * Renders imported paints on TF2's paint-tool model instead of presenting a
- * raw pattern swatch. The one hidden Viewer is reused for the visible part of
- * the import and every generated object URL is revoked when that import is
- * replaced. Definition/package thumbnails remain the immediate fallback until
- * the idle 3D render completes.
- */
+/** Renders imported paints on TF2's paint-tool model; the definition thumbnail shows until it lands. */
 export function useCustomWarpaintIcons({
   enabled,
   generation,
@@ -69,21 +55,6 @@ export function useCustomWarpaintIcons({
   visibleKitIdsRef.current = new Set(visibleKitIds);
 
   useEffect(() => {
-    const prior = sessionRef.current;
-    if (prior) {
-      prior.cancelled = true;
-      if (prior.idleHandle) {
-        (window as IdleCallbackWindow).cancelIdleCallback?.(prior.idleHandle);
-        prior.idleHandle = 0;
-      }
-      if (prior.fallbackTimer) {
-        window.clearTimeout(prior.fallbackTimer);
-        prior.fallbackTimer = 0;
-      }
-      prior.viewer?.dispose();
-      prior.host?.remove();
-      for (const url of prior.createdUrls.values()) URL.revokeObjectURL(url);
-    }
     sessionRef.current = null;
     setIcons({});
 
@@ -98,25 +69,21 @@ export function useCustomWarpaintIcons({
       createdUrls: new Map(),
       attemptedIds: new Set(),
       processing: false,
-      idleHandle: 0,
-      fallbackTimer: 0,
+      cancelIdle: null,
       schedule: () => undefined,
     };
     sessionRef.current = session;
 
     const cancelIdle = () => {
-      const idleWindow = window as IdleCallbackWindow;
-      if (session.idleHandle) idleWindow.cancelIdleCallback?.(session.idleHandle);
-      session.idleHandle = 0;
-      if (session.fallbackTimer) window.clearTimeout(session.fallbackTimer);
-      session.fallbackTimer = 0;
+      session.cancelIdle?.();
+      session.cancelIdle = null;
     };
 
     const ensureViewer = async (): Promise<import('../viewer/Viewer').Viewer | null> => {
       if (session.viewer) return session.viewer;
       const compositor = compositorRef.current;
       if (!compositor || session.cancelled) return null;
-      const [{ Viewer }] = await Promise.all([import('../viewer/Viewer')]);
+      const { Viewer } = await import('../viewer/Viewer');
       if (session.cancelled) return null;
 
       const host = document.createElement('div');
@@ -156,8 +123,6 @@ export function useCustomWarpaintIcons({
     };
 
     const renderVisible = async () => {
-      session.idleHandle = 0;
-      session.fallbackTimer = 0;
       if (session.cancelled || session.processing) return;
       const visible = visibleKitIdsRef.current;
       const pending = renderable.filter((kit) => visible.has(kit.id) && !session.attemptedIds.has(kit.id));
@@ -184,9 +149,8 @@ export function useCustomWarpaintIcons({
               session.attemptedIds.delete(kit.id);
               continue;
             }
-            // The hidden icon Viewer owns a separate WebGL context, so copy the
-            // composed bytes into a transferable texture. Alpha must remain
-            // untouched: TF2 uses it as the phong/environment mask.
+            // The icon Viewer has its own WebGL context, so copy the bytes into a transferable texture.
+            // Alpha must stay untouched: TF2 reads it as the phong mask.
             iconTexture = compositor.toTransferTexture(result.target);
             viewer.setMap(iconTexture);
             const blob = await viewer.captureScreenshot(1);
@@ -204,8 +168,7 @@ export function useCustomWarpaintIcons({
           }
         }
       } catch (error) {
-        // A thumbnail must never make an otherwise valid import fail. Abort
-        // quietly when the import was replaced while the render was pending.
+        // A thumbnail must never fail a valid import; abort quietly if it was replaced mid-render.
         if (!session.cancelled) console.warn('[warpaint-viewer] could not render imported war paint icon', error);
       } finally {
         session.processing = false;
@@ -214,26 +177,15 @@ export function useCustomWarpaintIcons({
     };
 
     session.schedule = () => {
-      if (session.cancelled || session.processing || session.idleHandle || session.fallbackTimer) return;
-      const idleWindow = window as IdleCallbackWindow;
-      const finish = () => {
-        session.idleHandle = 0;
-        session.fallbackTimer = 0;
+      if (session.cancelled || session.processing || session.cancelIdle) return;
+      session.cancelIdle = requestIdle(() => {
+        session.cancelIdle = null;
         void renderVisible();
-      };
-      if (idleWindow.requestIdleCallback) {
-        session.idleHandle = idleWindow.requestIdleCallback((deadline) => {
-          session.idleHandle = 0;
-          if (session.cancelled) return;
-          if (!deadline.didTimeout && deadline.timeRemaining() < ICON_RENDER_IDLE_BUDGET_MS) {
-            session.schedule();
-            return;
-          }
-          finish();
-        }, { timeout: ICON_RENDER_IDLE_TIMEOUT_MS });
-      } else {
-        session.fallbackTimer = window.setTimeout(finish, 50);
-      }
+      }, {
+        timeoutMs: ICON_RENDER_IDLE_TIMEOUT_MS,
+        fallbackDelayMs: ICON_RENDER_FALLBACK_DELAY_MS,
+        minRemainingMs: ICON_RENDER_IDLE_BUDGET_MS,
+      });
     };
 
     session.schedule();

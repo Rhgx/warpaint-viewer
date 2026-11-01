@@ -45,12 +45,7 @@ interface UseEditorViewportOptions extends
   >;
 }
 
-/**
- * How the editor talks to the 3D canvas: the camera and selection modes it
- * switches on the viewer, the live sticker preview, and the pointer router
- * that turns canvas gestures into part selection, sticker placement and
- * model-part picking.
- */
+/** Editor-to-canvas bridge: camera and selection modes on the viewer, the live sticker preview, and the pointer router. */
 export function useEditorViewport({
   editorPreviewPending,
   editorDefinitionGeneration,
@@ -97,9 +92,7 @@ export function useEditorViewport({
   const [editorSelectionHeld, setEditorSelectionHeld] = useState(false);
   const editorInteractionActive = groupAssignActive || stickerPlacementActive;
 
-  // Paint-area selection deliberately uses Shift + click. Keep free-fly out
-  // of this focused workflow and make the modifier state visible through the
-  // canvas cursor before the pointer reaches a selectable part.
+  // Paint-area selection uses Shift+click. Keep free-fly out and show the modifier through the cursor before the pointer reaches a part.
   useEffect(() => {
     const viewer = viewerRef.current;
     viewer?.setAdvancedCameraAvailable(!editorTabActive);
@@ -141,9 +134,7 @@ export function useEditorViewport({
       && effectiveStickerTextureUrl
       && quad;
     if (canPreview) {
-      // Swap the material source before drawing the decal overlay. The base
-      // recipe excludes only this sticker, so there is never an old baked
-      // position under the live one.
+      // Swap the material source first: the base recipe excludes only this sticker, so no old baked position shows.
       viewer.setStickerEditorBaseMap(surface.texture);
       showStickerPreview(viewer, quad, {
         groupResources: selectedStickerUsesComposedArtwork ? activeGroupStickerResources : null,
@@ -212,8 +203,7 @@ export function useEditorViewport({
       if (drag) {
         event.preventDefault();
         event.stopPropagation();
-        // The viewer has the same native-layer reservation as a backstop;
-        // make this high-level ownership explicit for later canvas listeners.
+        // Explicit ownership for later canvas listeners; the viewer reserves the same native layer as a backstop.
         event.nativeEvent.stopImmediatePropagation();
         event.currentTarget.setPointerCapture(event.pointerId);
         stickerGizmoGestureRef.current = {
@@ -315,8 +305,7 @@ export function useEditorViewport({
     sampleEditorSurface(event.clientX, event.clientY);
   }, [groupAssignActive, groupPointerRef, modelPartPointerRef, previewStickerDraft, sampleEditorSurface, setHoverBucket, stickerGestureRef, stickerGizmoGestureRef, stickerPartPickingActive, updateStickerDraft, canvasRef, viewerRef]);
 
-  // Ends a sticker drag: release the pointer, then commit its quad when it
-  // moved and the target is editable, otherwise drop the local draft.
+  // Ends a sticker drag: commit the quad if it moved and the target is editable, else drop the draft.
   const endStickerGesture = useCallback((
     event: ReactPointerEvent<HTMLDivElement>,
     gesture: { base: StickerPlacementQuad; latest: StickerPlacementQuad },

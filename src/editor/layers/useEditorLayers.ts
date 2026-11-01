@@ -12,11 +12,7 @@ interface UseEditorLayersOptions extends Pick<EditorCore, 'editableKitId' | 'edi
   state: ControlsState;
 }
 
-/**
- * The paint layers of the working definition: which selector is active, what
- * each layer targets, and which parts are assigned to it. Parts, transform,
- * sticker and graph editing all navigate by this.
- */
+/** Paint layers of the working definition: the active selector, its targets, and the parts assigned to it. */
 export function useEditorLayers({
   editableKitId,
   editorCurrent,
@@ -31,9 +27,7 @@ export function useEditorLayers({
     () => editorCurrent ? discoverGroupSelectTargets(editorCurrent, provenanceRecipe?.provenance) : null,
     [editorCurrent, provenanceRecipe],
   );
-  // Position-aligned with groupDiscovery.targets: both walk the same operation
-  // tree in the same order, so index i here describes the stage masked by
-  // select stage i there (see transformTargets.ts's module comment).
+  // Position-aligned with groupDiscovery.targets: index i here is the stage masked by select stage i.
   const currentLayerTransforms = useMemo(
     () => editorCurrent ? discoverLayerTransforms(editorCurrent, provenanceRecipe?.provenance) : null,
     [editorCurrent, provenanceRecipe],
@@ -53,15 +47,11 @@ export function useEditorLayers({
   const activeGroupOperationIndex = activeGroupTarget && groupDiscovery
     ? groupDiscovery.targets.indexOf(activeGroupTarget)
     : -1;
-  // TF2 templates can reuse one authored layer in an early wear branch and a
-  // later colour branch. Transform editing and previews follow the final
-  // occurrence that matches the finished paint; group assignment retains the
-  // first authored selector target because both share the same source slots.
+  // Templates can reuse one layer in several branches. Transform previews follow the final occurrence; group assignment keeps the first.
   const activeGroupVisualIndex = groupDiscovery
     ? preferredLayerOccurrenceIndex(groupDiscovery.targets, activeGroupTarget)
     : -1;
-  // The RecipeNode counterpart of activeTransformTargetInfo, used to composite
-  // preview tiles (which need the authored subtree, not just its field values).
+  // The RecipeNode counterpart of activeTransformTargetInfo, for compositing preview tiles.
   const recipeLayerNodes = useMemo(
     () => provenanceRecipe ? collectRecipeLayerNodes(provenanceRecipe.tree) : [],
     [provenanceRecipe],
@@ -81,7 +71,7 @@ export function useEditorLayers({
     ? resolvedGroupSelects[activeGroupOperationIndex]
     : undefined;
   const activeGroupRef = activeResolvedGroupSelect?.groups ?? activeGroupTarget?.groupsRef;
-  const groupAssignmentTargets = useMemo(() => editableGroupTargets.map((target, index) => {
+  const groupAssignmentTargets = useMemo(() => editableGroupTargets.map((target) => {
     const matchingOperationIndexes = groupDiscovery?.targets.flatMap((candidate, operationIndex) => (
       candidate.sourceKey === target.sourceKey ? [operationIndex] : []
     )) ?? [];
@@ -91,7 +81,7 @@ export function useEditorLayers({
     const resolved = resolvedMatches.at(-1);
     const selectedGroupIds = target.hasInheritedVariableValues ? resolved?.select : target.selectedGroupIds;
     return {
-      label: editorSelectors[index]?.label ?? target.label,
+      label: target.label,
       groupsRef: resolved?.groups ?? target.groupsRef,
       textureRef: resolved?.textureRef ?? target.textureRef,
       selectedGroupIds: selectedGroupIds ?? [],
@@ -103,16 +93,14 @@ export function useEditorLayers({
       },
       canAssign: !target.hasInheritedVariableValues || Boolean(resolved),
     };
-  }), [editableGroupTargets, editorSelectors, groupDiscovery, resolvedGroupSelects]);
+  }), [editableGroupTargets, groupDiscovery, resolvedGroupSelects]);
   const activeGroupAssignmentTarget = groupAssignmentTargets[activeEditorSelector]
     ?? groupAssignmentTargets[0]
     ?? null;
   const activeGroupEditTarget = activeGroupAssignmentTarget?.canAssign
     ? activeGroupAssignmentTarget.target
     : null;
-  // Keep the focused part cue in the same stable color as this layer's
-  // all-layer map entry. This remains useful even when the map itself is
-  // hidden: switching layers is enough to establish the cue's color.
+  // The focused part cue uses this layer's map colour, even when the map is hidden.
   const activeEditorLayerIndex = weaponBaseLayerActive
     ? groupAssignmentTargets.length
     : activeGroupAssignmentTarget === null

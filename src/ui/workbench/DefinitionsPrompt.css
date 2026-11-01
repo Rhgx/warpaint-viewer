@@ -1,7 +1,5 @@
-/* Bottom-center prompt over the stage, offering the definitions a freshly
-   mounted package turned out to carry. The Definitions tab makes the same
-   offer, but it sits behind a drawer that is usually closed, so without this
-   nothing on screen says the package has more in it than textures. */
+/* Bottom-center prompt over the stage. The Definitions tab sits behind a usually closed
+   drawer, so this is the only on-screen offer of the package's definitions. */
 .definitions-prompt {
   position: absolute;
   z-index: 3;
@@ -52,10 +50,7 @@
   gap: 4px;
   margin-left: auto;
 }
-/* The Definitions tab's primary button, restated here rather than imported:
-   this prompt loads with the app shell, and its panel lives in the workbench's
-   lazy chunk, which should stay out of the initial payload. One step up in
-   size, since this one floats over the stage instead of sitting in a panel. */
+/* Restated rather than imported, to keep the workbench's lazy chunk out of the app shell. */
 .definitions-prompt-import {
   display: flex;
   flex: none;

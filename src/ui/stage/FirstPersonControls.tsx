@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
 import type { Viewer } from '../../viewer/Viewer';
-import type { ViewmodelManifest } from '../../viewer/firstPerson';
-import { Control, SelectField, SliderField, SwitchField } from '../common/controls';
+import type { ViewmodelManifest } from '../../viewer/firstPerson/firstPerson';
+import { Control, SelectField, SliderField, SwitchField, ToggleGroup } from '../common/controls';
 import { firstPersonAnimationGroups } from './firstPersonAnimations';
 import { InspectorSection } from './Inspector';
 import './FirstPersonControls.css';
@@ -70,14 +70,20 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
 
   return <InspectorSection title="Preview" className="first-person-controls">
       <Control group label="View mode">
-        <div className="ui-toggle-group" role="group" aria-label="View mode">
-          <button type="button" className="ui-toggle-btn" data-pressed={!active || undefined}
-            aria-pressed={!active} onClick={() => onEnabledChange(false)}>Inspect</button>
-          <button type="button" className="ui-toggle-btn" data-pressed={active || undefined}
-            aria-pressed={active} disabled={disabled || weaponKey === 'paintkit_tool'}
-            title={disabled ? 'Select a weapon and close visual editors to use first-person preview' : 'Preview the painted weapon with class arms'}
-            onClick={() => onEnabledChange(true)}>First Person</button>
-        </div>
+        <ToggleGroup
+          label="View mode"
+          value={active ? 'first-person' : 'inspect'}
+          options={[
+            { value: 'inspect', label: 'Inspect' },
+            {
+              value: 'first-person',
+              label: 'First Person',
+              disabled: disabled || weaponKey === 'paintkit_tool',
+              title: disabled ? 'Select a weapon and close visual editors to use first-person preview' : 'Preview the painted weapon with class arms',
+            },
+          ]}
+          onChange={(mode) => onEnabledChange(mode === 'first-person')}
+        />
       </Control>
       {active && <>
         {choices.length > 1 && <Control label="Class">

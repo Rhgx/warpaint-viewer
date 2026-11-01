@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import {
   readTextureLayerTeamColors,
-  setStickerBaseReference,
   setTextureLayerTeamColors,
   setTextureLayerTeamTexture,
-} from '../../../src/editor/mutations';
+} from '../../../src/editor/transform/transformMutations';
+import { setStickerBaseReference } from '../../../src/editor/sticker/stickerMutations';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
 
 const layer = { stagePath: ['operation', 'operation_node', '0', 'stage', 'apply_sticker', 'operation_node', 'stage', 'texture_lookup'] };

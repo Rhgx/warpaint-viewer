@@ -1,6 +1,5 @@
-// Procedurally generated placeholder textures, produced at runtime as PNG data:
-// URLs so the compositor's TextureLoader can consume them like any other path.
-// These stand in for real materials/patterns/**.png when no pipeline data exists.
+// Procedural placeholder textures as PNG data URLs, so TextureLoader treats them like files.
+// They stand in for real materials when no pipeline data exists.
 
 function makeCanvas(size: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
@@ -47,8 +46,7 @@ function stripes(size: number, a: string, b: string, count: number): string {
   return c.toDataURL('image/png');
 }
 
-// Region-index map for the select stage: byte value V => region round(V/16).
-// Left half byte 16 (region 1), right half byte 32 (region 2).
+// Region index for the select stage: byte V is region round(V/16); the halves use bytes 16 and 32.
 function groups(size: number): string {
   const [c, ctx] = makeCanvas(size);
   const img = ctx.createImageData(size, size);
@@ -68,8 +66,7 @@ function groups(size: number): string {
 
 const S = 256;
 
-// Built lazily so nothing touches the DOM until the app actually asks for mock
-// data (keeps module import safe under SSR / test import).
+// Built lazily so nothing touches the DOM until mock data is requested; keeps imports SSR and test safe.
 let cache: Record<string, string> | null = null;
 
 export function mockTextures(): Record<string, string> {

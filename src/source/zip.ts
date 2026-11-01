@@ -176,17 +176,14 @@ export async function openZipSourcePackage(
       throw sourceError('too-many-entries', `ZIP files may contain at most ${limits.maxEntries.toLocaleString()} entries.`, file.name);
     }
 
-    // Mod ZIPs commonly wrap the Source tree in one descriptive folder (for
-    // example `Yeti Coated/materials/...`), sometimes several folders deep (for
-    // example `Skinned Submission/Skinned Textures/materials/...`). Authors also
-    // regularly bundle several variants, each with its own materials/ folder.
-    // Treat the wrappers as presentation and overlay every materials/ tree at
-    // the canonical Source root. Just like mounting multiple Source packages,
-    // distinct paths merge while an exact normalized path collision is rejected.
-    const normalizedArchivePaths = entries.map((entry) => ({
+    // Mod ZIPs wrap the Source tree in one or more descriptive folders, and may bundle
+    // several materials/ variants. Wrappers are presentation: every materials/ tree is
+    // overlaid at the Source root. Distinct paths merge; an exact collision is rejected.
+    const archivePaths = entries.map((entry) => ({
       entry,
       path: normalizeSourcePath(entry.filename),
-    })).filter(({ path }) => !isHarmlessMetadataPath(path));
+    }));
+    const normalizedArchivePaths = archivePaths.filter(({ path }) => !isHarmlessMetadataPath(path));
     const materialRootPrefixes = new Set<string>();
     for (const { entry, path } of normalizedArchivePaths) {
       const materialIndex = materialsComponentIndex(path, entry.directory);
@@ -198,27 +195,16 @@ export async function openZipSourcePackage(
     const roots = new Set(normalizedArchivePaths.map(({ path }) => path.split('/')[0]));
     const onlyRoot = roots.size === 1 ? roots.values().next().value as string | undefined : undefined;
 
-    let wrapperRoot: string | undefined;
-    if (materialRootPrefixes.size === 1) {
-      wrapperRoot = materialRootPrefixes.values().next().value || undefined;
-    } else if (mergesMaterialRoots) {
-      // There is no single path down to materials/, but a shared outer wrapper
-      // is still safe to remove from non-material files such as readmes.
-      wrapperRoot = onlyRoot;
-    } else if (onlyRoot) {
-      // No materials/ directory anywhere beneath the single wrapper folder.
-      // Still strip it as a prefix; whether the stripped root becomes an
-      // implicit materials tree (see rootIsMaterials below) is decided once
-      // every entry's supported-texture status is known.
-      wrapperRoot = onlyRoot;
-    }
+    // A single materials/ root is itself the wrapper (empty when materials/ sits at the
+    // archive root). Otherwise a shared outer folder is still stripped from non-material
+    // files such as readmes.
+    const wrapperRoot: string | undefined = materialRootPrefixes.size === 1
+      ? materialRootPrefixes.values().next().value || undefined
+      : onlyRoot;
 
-    // A pack with no materials/ directory anywhere (see FlakFurnished) can
-    // still ship texture files, just laid out as though the archive root (once
-    // the wrapper folder, if any, is stripped) already were the materials
-    // tree. Only accept that reading when it would expose at least one
-    // supported texture; an archive with neither a materials/ directory nor
-    // any recognizable texture extension is simply not a Source package.
+    // A pack with no materials/ directory may still ship textures laid out as though its
+    // root were the materials tree. Accept that reading only when it exposes a supported
+    // texture; otherwise the archive is not a Source package.
     const hasAnySupportedTexture = normalizedArchivePaths.some(({ entry, path }) => !entry.directory && isSupportedTexturePath(path));
     const rootIsMaterials = !hasMaterialsRoot && hasAnySupportedTexture;
     if (!hasMaterialsRoot && !rootIsMaterials) {
@@ -237,16 +223,7 @@ export async function openZipSourcePackage(
     let highestCompressionRatio = 0;
     let highestCompressionPath: string | undefined;
 
-    for (const entry of entries) {
-      let archivePath: string;
-      try {
-        archivePath = normalizeSourcePath(entry.filename);
-      } catch (error) {
-        if (error instanceof SourcePackageError) {
-          throw sourceError(error.code, error.message, entry.filename, error);
-        }
-        throw error;
-      }
+    for (const { entry, path: archivePath } of archivePaths) {
       if (isHarmlessMetadataPath(archivePath)) {
         ignoredMetadataEntries += 1;
         continue;
@@ -256,10 +233,8 @@ export async function openZipSourcePackage(
         ? archivePath.slice(wrapperRoot.length + 1)
         : archivePath;
       const materialIndex = materialsComponentIndex(strippedPath, entry.directory);
-      // rootIsMaterials means the whole (stripped) archive stands in for the
-      // materials/ tree, so every path is addressed as if it lived under one.
-      // With real material roots, discard any remaining variant wrapper and
-      // overlay the path from materials/ downward.
+      // rootIsMaterials: the stripped archive stands in for the materials/ tree. Otherwise
+      // discard any variant wrapper and overlay the path from materials/ downward.
       const canonicalPath = rootIsMaterials
         ? `materials/${strippedPath}`
         : materialIndex === undefined
@@ -268,8 +243,7 @@ export async function openZipSourcePackage(
       if (entry.encrypted) {
         throw sourceError('encrypted-entry', 'Encrypted ZIP entries are not supported.', entry.filename);
       }
-      // Several overlaid trees naturally contain their own materials/
-      // directory entries. Only files participate in collision detection.
+      // Only files take part in collision detection; overlaid trees repeat directory entries.
       if (entry.directory) continue;
 
       const size = ensureFiniteNonNegative(entry.uncompressedSize, 'Uncompressed entry size', entry.filename);
@@ -297,9 +271,8 @@ export async function openZipSourcePackage(
       };
       if (normalizedPaths.has(canonicalPath)) {
         const existing = sourceEntries.get(canonicalPath);
-        // Variant bundles often repeat a shared utility texture in each
-        // materials/ tree. Matching size and ZIP CRC mean both entries carry
-        // the same bytes, so mounting either one has identical Source behavior.
+        // Variant bundles repeat shared textures in each materials/ tree. Matching size and CRC
+        // mean identical bytes, so either copy behaves the same.
         if (
           mergesMaterialRoots &&
           canonicalPath.startsWith('materials/') &&
@@ -376,12 +349,9 @@ export async function openZipSourcePackage(
       });
     }
 
-    // A numeric wrapper folder is a common author convention for tagging a
-    // pack with its paint kit's defindex (`913/materials/...`). When the
-    // wrapper is several folders deep, the outermost numeric component wins:
-    // it is the folder the archive was actually built from, while a numeric
-    // folder found deeper inside (closer to materials/) is more likely an
-    // unrelated subfolder than a paintkit id.
+    // A numeric wrapper folder (`913/materials/...`) tags the pack with its paint kit's
+    // defindex. With several wrappers the outermost numeric folder wins; a deeper one is
+    // more likely an unrelated subfolder.
     const numericWrapperComponent = wrapperRoot?.split('/').find((component) => /^\d+$/.test(component));
     const suggestedPaintkitId = numericWrapperComponent !== undefined && Number.isSafeInteger(Number(numericWrapperComponent))
       ? Number(numericWrapperComponent)

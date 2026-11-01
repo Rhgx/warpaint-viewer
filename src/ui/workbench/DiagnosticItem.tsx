@@ -8,16 +8,17 @@ const LEVEL_ICON = {
   warning: AlertTriangle,
 } as const satisfies Record<Exclude<SourceDiagnosticLevel, 'info'>, unknown>;
 
-/* Announced to screen readers only: sighted users get the octagon/triangle/circle
-   shapes, which distinguish the levels without relying on color alone. */
+/* Screen-reader text only: sighted users see octagon and triangle icons instead. */
 const LEVEL_LABEL = {
   error: 'Error',
   warning: 'Warning',
 } as const satisfies Record<Exclude<SourceDiagnosticLevel, 'info'>, string>;
 
+/** A diagnostic the list renders; informational entries are filtered out before rendering. */
+type ProblemDiagnostic = SourceDiagnostic & { level: Exclude<SourceDiagnosticLevel, 'info'> };
+
 /** Shared rendering contract for user, support, and developer error layers. */
-function DiagnosticItem({ diagnostic }: { diagnostic: SourceDiagnostic }) {
-  if (diagnostic.level === 'info') return null;
+function DiagnosticItem({ diagnostic }: { diagnostic: ProblemDiagnostic }) {
   const Icon = LEVEL_ICON[diagnostic.level];
 
   return (
@@ -64,7 +65,7 @@ export function DiagnosticsList({
   diagnostics: SourceDiagnostic[];
 }) {
   const problems = diagnostics.filter(
-    (diagnostic) => diagnostic.level !== 'info',
+    (diagnostic): diagnostic is ProblemDiagnostic => diagnostic.level !== 'info',
   );
   const listRef = useRef<HTMLUListElement>(null);
   const newestId = problems.at(-1)?.id;

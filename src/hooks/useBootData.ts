@@ -32,9 +32,8 @@ interface UseBootDataOptions {
 }
 
 export function useBootData({ state, setState, selectedKitId, setSelectedKitId, setError }: UseBootDataOptions) {
-  // Guards the URL-sync effect: it must not fire until the boot effect below
-  // has applied any URL-provided selection to state, or it would immediately
-  // clobber the incoming URL with the pre-boot placeholder defaults.
+  // The URL-sync effect must wait for the boot effect to apply the URL selection,
+  // or it would overwrite the incoming URL with placeholder defaults.
   const bootSelectionAppliedRef = useRef(false);
 
   const [data, setData] = useState<DataSource | null>(null);
@@ -53,16 +52,11 @@ export function useBootData({ state, setState, selectedKitId, setSelectedKitId, 
         setData(ds);
         advanceBoot(16, 'Catalog ready');
 
-        // The URL is parsed exactly once, right here, and only ever applied
-        // on top of the catalog's own defaults below; every param is
-        // optional and independently falls back if missing or invalid.
+        // The URL applies only on top of catalog defaults; each param is optional and falls back if invalid.
         const url = parseUrlState(window.location.search, window.location.hash);
 
-        // Start empty unless a valid shared-link selection was requested.
-        // Unknown kit ids also remain empty instead of silently selecting a
-        // different item from the catalog.
-        const urlKit = url.kitId != null ? ds.manifest.paintkits.find((p) => p.id === url.kitId) ?? null : null;
-        const kit = urlKit;
+        // Empty unless a valid shared link asked for a kit; unknown ids stay empty too.
+        const kit = url.kitId != null ? ds.manifest.paintkits.find((p) => p.id === url.kitId) ?? null : null;
 
         let weaponKey = kit?.weapons.includes(DEFAULT_WEAPON_KEY)
           ? DEFAULT_WEAPON_KEY
@@ -82,7 +76,6 @@ export function useBootData({ state, setState, selectedKitId, setSelectedKitId, 
           projection: url.projection ?? s.projection,
           fov: url.fov ?? s.fov,
         }));
-        // From here on the URL-sync effect is free to start writing back.
         bootSelectionAppliedRef.current = true;
       })
       .catch((e) => setError(String(e)));
@@ -91,16 +84,13 @@ export function useBootData({ state, setState, selectedKitId, setSelectedKitId, 
     };
   }, [advanceBoot, setError, setSelectedKitId, setState]);
 
-  // Mirror the shareable bits of state into the URL (debounced, no
-  // navigation) so the current view can be copied and reopened. Skipped
-  // entirely until the boot effect above has applied any incoming URL
-  // params, or this would immediately overwrite them with pre-boot defaults.
+  // Mirror shareable state into the URL (debounced, no navigation) so views can be copied.
+  // Waits for boot, or it would overwrite incoming params with defaults.
   useEffect(() => {
     if (!bootSelectionAppliedRef.current) return;
     const handle = window.setTimeout(() => {
       const urlState = serializeUrlState(window.location.search, {
-        // Imported definitions live only in this tab's memory, so their ids
-        // would not resolve for whoever opens the link.
+        // Imported definitions live only in memory, so their ids would not resolve in a shared link.
         kitId: selectedKitId != null && isCustomKitId(selectedKitId) ? null : selectedKitId,
         weaponKey: state.weaponKey,
         seed: state.seed,

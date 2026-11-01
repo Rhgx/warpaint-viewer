@@ -1,18 +1,8 @@
 /**
- * Writer for Source 1 VPK directory files. Produces the single-file archive
- * layout `src/source/vpk.ts` reads: a 28-byte version-2 header, then a
- * three-level (extension / directory / filename) null-terminated string
- * tree, then the file data the tree's entries point into.
- *
- * Version 2, not 1, and the difference is not cosmetic. The two headers are
- * otherwise identical for our purposes, and a v1 file parses its tree fine, but
- * TF2's shipped bin/vpk.exe locates the data section at a fixed 28 bytes plus
- * the tree size whatever the version field says. Hand it a v1 file and every
- * entry's bytes come out shifted by the 16-byte header difference: the first
- * file reads partly correct, later ones read past the end of the file and
- * extract as zeros. That looks exactly like a mod that installed but contains
- * nothing, which is what it did. Everything TF2 itself ships is v2, so v2 is
- * what other tools are written against.
+ * Writer for Source 1 VPK directory files, the single-file layout src/source/vpk.ts reads: a
+ * header, a three-level (extension / directory / filename) string tree, then the file data.
+ * Output is version 2. Version 1 parses, but TF2's bin/vpk.exe places the data section at 28
+ * bytes plus the tree size whatever the version says, so a v1 file extracts shifted and empty.
  */
 
 import { crc32 } from '../source/vpk';
@@ -28,20 +18,14 @@ const VPK_SIGNATURE = 0x55aa1234;
 const VPK_VERSION = 2;
 // signature + version + treeSize, then v2's four section sizes.
 const VPK_HEADER_SIZE = 28;
-// The trailing checksum sections are all optional. Valve's packer writes a
-// 48-byte "other MD5" block (tree, archive-MD5 section, whole file), but it is
-// only consulted by an explicit integrity check, never by loading, so this
-// writer declares all four sections empty rather than carrying an MD5
-// implementation into the browser bundle for bytes nothing reads.
+// Checksum sections are optional and only read by an explicit integrity check, so they are left
+// empty rather than bundling an MD5 implementation.
 const FILE_DATA_SECTION_SIZE_OFFSET = 12;
-// vpk.ts's DIRECTORY_ARCHIVE_INDEX: this value tells the reader the entry's
-// bytes live in the directory file itself rather than a numbered _NNN.vpk
-// segment. This writer only ever produces single-file archives, so every
-// entry uses it.
+// Entries point into the directory file itself, not a numbered _NNN.vpk segment
+// (vpk.ts DIRECTORY_ARCHIVE_INDEX).
 const DIRECTORY_ARCHIVE_INDEX = 0x7fff;
 const ENTRY_TERMINATOR = 0xffff;
-// buildVpkPath() in vpk.ts maps this exact string back to "no directory"
-// (the archive root), so it has to be written verbatim rather than "".
+// Written verbatim: vpk.ts maps this exact string to the archive root.
 const ROOT_DIRECTORY = ' ';
 // crc32(4) + preloadBytes(2) + archiveIndex(2) + offset(4) + length(4) + terminator(2)
 const ENTRY_FIXED_SIZE = 18;
@@ -63,18 +47,15 @@ interface ExtensionGroup {
 }
 
 /**
- * Builds a version-1 VPK containing every given file. Entries are grouped by
+ * Builds a version-2 VPK containing every given file. Entries are grouped by
  * extension then directory then filename, and every level is sorted, so the
  * same input always serializes to identical bytes.
  */
 export function writeVpk(files: readonly VpkFileEntry[]): Uint8Array {
   const groups = groupEntries(files);
 
-  // The data section starts at 12 + treeSize, so treeSize has to be known
-  // before we can place any file's bytes. Every tree field is fixed-width
-  // except the three name strings, so its length can be measured directly
-  // from the same grouped/sorted structure writeTree() below walks, without
-  // needing to write the tree twice.
+  // The data section starts after the tree, so measure the tree first. Only the name strings
+  // vary in width, so measureTreeSize walks the same structure writeTree does.
   const treeSize = measureTreeSize(groups);
   let dataSize = 0;
   for (const extension of groups) {
@@ -115,9 +96,8 @@ function groupEntries(files: readonly VpkFileEntry[]): ExtensionGroup[] {
     }
     seenPaths.add(normalized);
 
-    // sourcePathExtension() also rejects dotfiles (e.g. "materials/.vtf"),
-    // which have no name once the extension is removed, so it doubles as the
-    // "empty name" check the writer needs.
+    // sourcePathExtension() also rejects dotfiles such as "materials/.vtf", which doubles as the
+    // empty-name check.
     const extension = sourcePathExtension(normalized);
     if (!extension) {
       throw new Error(`VPK entries must have a file extension, got "${normalized}".`);
@@ -203,8 +183,7 @@ function writeTree(
         view.setUint32(treeCursor, entry.crc, true); treeCursor += 4;
         view.setUint16(treeCursor, 0, true); treeCursor += 2; // preloadBytes: this writer never preloads
         view.setUint16(treeCursor, DIRECTORY_ARCHIVE_INDEX, true); treeCursor += 2;
-        // Relative to dataStart, not the start of the file; see vpk.ts's
-        // dataBaseOffset + record.offset in VpkSourcePackage#read().
+        // Relative to dataStart; the reader adds dataBaseOffset (vpk.ts).
         view.setUint32(treeCursor, dataOffset, true); treeCursor += 4;
         view.setUint32(treeCursor, entry.data.byteLength, true); treeCursor += 4;
         view.setUint16(treeCursor, ENTRY_TERMINATOR, true); treeCursor += 2;

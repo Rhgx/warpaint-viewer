@@ -6,15 +6,9 @@ import { DEFAULT_ATTACHMENT_QUAT, loadHitboxes, loadParticleIndex, parseAttachme
 
 export { setParticlePointScale } from './sim';
 
-// Unusual weapon effects
-//
-// A CPU port of the weapon unusual particle systems, driven by their extracted
-// PCF definitions. Semantics follow the Source particle library
-// (public/particles/particles.h attribute model, Alien Swarm SDK operator
-// lineage): particles simulate in WORLD space while control points follow
-// the weapon's attachments (PATTACH_POINT_FOLLOW in
-// CEconEntity::UpdateSingleParticleSystem), which is what makes the effects
-// lag and swirl when the weapon moves.
+// Unusual weapon effects: a CPU port of the weapon unusual particle systems, driven by the
+// extracted PCF definitions. Particles simulate in WORLD space while control points follow
+// the weapon's attachments (PATTACH_POINT_FOLLOW), which is why effects lag and swirl.
 
 export type AttachmentTransformResolver = (
   index: number,
@@ -24,44 +18,34 @@ export type AttachmentTransformResolver = (
 
 export interface UnusualEffect {
   object: THREE.Object3D;
-  // Re-anchors control points from the weapon's current world transform
-  // (centerGroup.matrixWorld); called by the Viewer every frame before
-  // update(dt).
+  // Re-anchors control points from the weapon's world transform (centerGroup.matrixWorld).
+  // The Viewer calls this every frame before update(dt).
   updateAnchor(matrix: THREE.Matrix4, resolveAttachment?: AttachmentTransformResolver): void;
   update(dt: number): void;
-  // Flags the next update() as following an instant transform snap (a
-  // view-angle preset or reset), so it rigidly carries every alive particle
-  // and control point to the new anchor instead of reading the jump as one
-  // frame of extreme control-point velocity.
+  // The next update() treats an instant transform snap (view preset or reset) as a rigid
+  // move, carrying particles and control points instead of reading a huge velocity spike.
   notifyTeleport(): void;
   dispose(): void;
 }
 
 const KNOWN_EFFECT_IDS = new Set(['hot', 'isotope', 'cool', 'energy_orb', 'sparkle']);
 
-// A pre-resolved (effect, weapon) bundle: the system name the game actually
-// spawns for that pair (see the removed runtime selectSystemName(), now baked in
-// at build time by tools/extract/effects.mjs) plus
+// A pre-resolved (effect, weapon) bundle: the system the game spawns for that pair, plus
 // its transitive children, copied verbatim from the source PCF data.
 interface UnusualBundle {
   root: string;
   systems: Record<string, UnusualSystemDef>;
 }
 
-// Fetched once per (effect, weapon) pair and shared across every effect
-// instance/rebuild of that pair.
+// Fetched once per (effect, weapon) pair and shared by every instance of it.
 const unusualBundlePromises = new Map<string, Promise<UnusualBundle>>();
 function loadUnusualBundle(effectId: string, weaponKey: string): Promise<UnusualBundle> {
   const key = `${effectId}/${weaponKey}`;
   let promise = unusualBundlePromises.get(key);
   if (!promise) {
     const base = import.meta.env.BASE_URL;
-    // paintkit_tool is a presentation prop rather than an equippable weapon,
-    // so the weapon-unusual PCFs do not author a suffixed particle dispatch
-    // for it. The model itself does author unusual_0..unusual_5 down the six
-    // spray cans; attachments.json carries those exact transforms. Reuse a
-    // canonical world-model dispatch, then bind its CPs to those authored can
-    // attachments through the same lookup path as every real weapon.
+    // paintkit_tool is a presentation prop, so its PCFs author no suffixed dispatch. Reuse
+    // c_rocketlauncher's, then bind its CPs to the six spray-can attachments (unusual_0..5).
     const bundleWeaponKey = weaponKey === 'paintkit_tool' ? 'c_rocketlauncher' : weaponKey;
     const bundlePath = effectId === 'sparkle'
       ? 'sparkle.json'
@@ -87,21 +71,16 @@ function loadAttachmentsJson(): Promise<AttachmentsJson> {
   return attachmentsJsonPromise;
 }
 
-// createUnusualEffect returns immediately (a Group that starts empty) and
-// populates itself once the (module-cached) unusual bundle, attachment data, and
-// any per-system sprite textures resolve. modelCenter is the model's
-// bounding-box center in GEOMETRY space (raw, uncentered), used as a fallback
-// control point for weapons/systems with no matching attachment entry. The
-// returned Group must sit at the SCENE ROOT with an identity transform:
-// particles simulate in world space, and updateAnchor() re-derives the
-// control points from the weapon's current world matrix every frame.
+// Returns at once with an empty Group, then fills in when the unusual bundle, attachments
+// and sprite textures resolve. modelCenter (geometry-space bounding-box center) is the
+// fallback control point for systems with no matching attachment. The Group must sit at
+// the SCENE ROOT with an identity transform: particles simulate in world space.
 export function createUnusualEffect(
   id: string,
   radius: number,
   weaponKey: string,
   modelCenter: THREE.Vector3,
 ): UnusualEffect | null {
-  if (id === 'none') return null;
   if (!KNOWN_EFFECT_IDS.has(id)) return null;
 
   const group = new THREE.Group();
@@ -127,12 +106,10 @@ export function createUnusualEffect(
     }
   };
 
-  // Teleport handling: a view-angle preset or reset moves the weapon's whole
-  // transform in a single frame. Left alone, ControlPoint.beginFrame would
-  // read that as one tick of enormous velocity and fling every lock/
-  // velocityInherit particle. prevAnchorMatrix holds the anchor as of the end
-  // of the last tick; pendingTeleport is the explicit flag from
-  // notifyTeleport(), consumed (and cleared) on the next update().
+  // Teleport handling: a view preset or reset moves the whole transform in one frame, which
+  // ControlPoint.beginFrame would read as enormous velocity and fling lock/velocityInherit
+  // particles. prevAnchorMatrix is the anchor at the end of the last tick; pendingTeleport
+  // is set by notifyTeleport() and cleared on the next update().
   const prevAnchorMatrix = new THREE.Matrix4();
   let prevAnchorValid = false;
   let pendingTeleport = false;
@@ -162,9 +139,8 @@ export function createUnusualEffect(
             ?? { pos: fallbackAnchor.pos.clone(), quat: fallbackAnchor.quat.clone() };
           cp = new ControlPoint(anchor);
           updateAnchoredCp(index, cp);
-          // Anchored CPs are created lazily on first use, which happens
-          // mid-tick (after this frame's beginFrame pass): prime the
-          // prev-frame state so same-tick Movement Lock sees zero motion.
+          // Anchored CPs are created lazily, mid-tick after beginFrame: prime them so same-tick
+          // Movement Lock sees zero motion.
           cp.prime();
           anchoredCps.set(index, cp);
         }
@@ -245,10 +221,8 @@ export function createUnusualEffect(
       }
 
       if (teleport && prevAnchorValid) {
-        // Rigidly carry every alive particle (and any dynamic CP tracking
-        // last frame's particle positions) from the old anchor to the new
-        // one; anchored CPs already read the new anchor above, so they only
-        // need re-priming below.
+        // Rigidly carry every alive particle and dynamic CP from the old anchor to the new one.
+        // Anchored CPs already read the new anchor, so they only need re-priming below.
         teleportInvPrev.copy(prevAnchorMatrix).invert();
         teleportDeltaM.copy(anchorMatrix).multiply(teleportInvPrev);
         teleportDeltaQuat.setFromRotationMatrix(teleportDeltaM);
@@ -260,9 +234,7 @@ export function createUnusualEffect(
       }
 
       if (teleport) {
-        // Prime every CP (anchored and dynamic) to its NEW pose so this
-        // frame's beginFrame computes zero delta/velocity instead of a
-        // one-tick impulse from the jump.
+        // Prime every CP to its new pose so beginFrame computes zero delta and velocity.
         for (const cp of anchoredCps.values()) cp.prime();
         for (const cp of dynamicCps) cp.prime();
       }

@@ -6,7 +6,8 @@ import {
   spliceProtoDefs,
   usedDefindexes,
 } from '../../../src/export/protoWrite';
-import { decodeProtoDefs, resolveKitRecipe } from '../../../src/protodefs/decoder';
+import { decodeProtoDefs } from '../../../src/protodefs/decoder';
+import { resolveKitRecipe } from '../../../src/protodefs/kitQueries';
 import { shippedProtoDefs } from '../fixtures';
 
 // Highest stock defindexes in the shipped snapshot; appended ids must sit above them.

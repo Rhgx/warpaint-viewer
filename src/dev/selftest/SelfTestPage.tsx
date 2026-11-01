@@ -4,14 +4,12 @@ import { Compositor } from '../../compositor/compositor';
 import type { RecipeNode } from '../../compositor/types';
 import { createUnusualEffect } from '../../viewer/particles';
 import { collectPointsStats } from './particleChecks';
-import { compositorTransformChecks } from './compositorChecks';
+import { compositorTransformChecks, type CheckResult } from './compositorChecks';
 import { compositorSchedulingChecks } from './schedulingChecks';
 import './selftest.css';
 
-// /?selftest=1 - composites known recipes offscreen and asserts the compositor's
-// pixel math against reference values computed here in JS with the same sRGB and
-// combine formulas as compositor_ps2x.fxc. Reports PASS/FAIL to the console, the
-// document title, and the DOM.
+// /?selftest=1 checks the compositor's pixel math against JS reference values that use the
+// same sRGB and combine formulas as compositor_ps2x.fxc. Reports PASS/FAIL to console, title and DOM.
 
 function srgb2lin(c: number): number {
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
@@ -48,7 +46,6 @@ interface Case {
 }
 
 function buildCases(): { cases: Case[]; texMap: Record<string, string> } {
-  // byte values
   const A = 200,
     B = 150,
     SEL = 188;
@@ -66,8 +63,7 @@ function buildCases(): { cases: Case[]; texMap: Record<string, string> } {
   const lookupB: RecipeNode = { type: 'texture_lookup', texture: 'B' };
   const lookupSel: RecipeNode = { type: 'texture_lookup', texture: 'SEL' };
 
-  // Combine output adjust for the post-pass case (min == max so the value is
-  // seed-independent).
+  // min == max, so the value does not depend on the seed.
   const combineGamma = 1.5;
 
   const cases: Case[] = [
@@ -157,20 +153,9 @@ function buildCases(): { cases: Case[]; texMap: Record<string, string> } {
   return { cases, texMap };
 }
 
-interface Result {
-  name: string;
-  pass: boolean;
-  got: number[];
-  expected: number[];
-}
+// Effect checks: each unusual effect on c_rocketlauncher, anchored at identity and stepped 5 s at 60 Hz.
 
-// Unusual effect simulation checks: instantiate each weapon effect for
-// c_rocketlauncher with an identity anchor (world space == geometry space),
-// step 5 simulated seconds at 60 Hz, and assert population/shape invariants
-// against the extracted attachment data.
-
-// Perpendicular distance from p to the segment [a, b], and the (clamped)
-// fraction t along that segment where the closest point falls.
+// Distance from p to the segment [a, b], and the clamped fraction t of the closest point.
 function pointToSegment(
   p: [number, number, number],
   a: [number, number, number],
@@ -185,11 +170,13 @@ function pointToSegment(
   return { dist: Math.hypot(p[0] - cx, p[1] - cy, p[2] - cz), t };
 }
 
-async function runEffectSimChecks(): Promise<Result[]> {
-  const out: Result[] = [];
+async function runEffectSimChecks(): Promise<CheckResult[]> {
+  const out: CheckResult[] = [];
   const base = import.meta.env.BASE_URL;
-  const attachments = await fetch(`${base}data/effects/attachments.json`).then((r) => r.json());
-  const weapon = attachments['c_rocketlauncher'] ?? {};
+  // Each attachment is either a bare [x, y, z] or an object carrying a pos triple.
+  type AttachmentEntry = [number, number, number] | { pos?: [number, number, number] };
+  const attachments: Record<string, Record<string, AttachmentEntry | undefined>> = await fetch(`${base}data/effects/attachments.json`).then((r) => r.json());
+  const weapon: Record<string, AttachmentEntry | undefined> = attachments['c_rocketlauncher'] ?? {};
   const entry = (name: string): [number, number, number] => {
     const e = weapon[name];
     if (Array.isArray(e)) return [e[0], e[1], e[2]];
@@ -234,12 +221,8 @@ async function runEffectSimChecks(): Promise<Result[]> {
 
     if (id === 'energy_orb') {
       const orb = stats.find((s) => s.name.includes('energyorb'));
-      // Task 1 (path constraint): minimum/maximum distance are both 0 in the
-      // extracted data, so the constraint hard-snaps every alive particle
-      // onto the straight segment between the CP0 and CP5 attachments (mid
-      // is the exact segment midpoint, so the quadratic bezier degenerates
-      // to the line); ages should also be spread along that segment rather
-      // than clustered at one end, confirming particles actually travel.
+      // Path constraint: min and max distance are both 0 in the extracted data, so particles
+      // snap onto the CP0 to CP5 segment. Ages should spread along it, so particles travel.
       let maxSegDist = 0;
       let minT = Infinity;
       let maxT = -Infinity;
@@ -260,12 +243,8 @@ async function runEffectSimChecks(): Promise<Result[]> {
       });
     }
     if (id === 'cool') {
-      // weapon_unusual_cool_rocketlauncher's real children (barrel/vapour "_1"/icecubes/
-      // snowflakes) - not the weapon_unusual_water_*/swirls subtree a stale, corrupted copy of
-      // weapon_unusual_cool.pcf in the gitignored staging/ dir had wired the tree to instead (see
-      // the extract-effects.mjs KNOWN_MISSING_MATERIALS/MATERIAL_FALLBACKS comments for the full
-      // story). None of the four real leaf materials (sc_hardglow, smokesprites_0001,
-      // fleck_glass3, snowflake01) are missing, so all four should have live rendered points.
+      // Each child system (barrel, vapour, icecubes, snowflakes) needs its leaf materials to
+      // resolve, so each should have live points.
       const barrel = stats.find((s) => s.name.endsWith('_barrel'));
       const vapour = stats.find((s) => s.name.endsWith('_rocketlauncher_1'));
       const icecubes = stats.find((s) => s.name.endsWith('_icecubes'));
@@ -288,15 +267,10 @@ async function runEffectSimChecks(): Promise<Result[]> {
   return out;
 }
 
-// Task 2b: a view-angle preset or reset moves the weapon's whole transform
-// in a single frame. Uses "hot", not the energy orb: the orb's motion is
-// fully re-derived from control-point positions every frame by the path
-// constraint (min/max distance both 0), so it would self-correct on the very
-// next tick regardless of whether teleport handling works. Hot's barrel/
-// embers children use Movement Lock to Control Point, which reads the
-// control point's raw one-frame delta directly, so it is the case that
-// actually exercises notifyTeleport()/the automatic anchor-jump fallback.
-async function runTeleportCheck(): Promise<Result> {
+// A view-angle preset or reset moves the weapon in one frame. Uses "hot": the energy orb's
+// path constraint re-derives its motion every frame and would hide a bad teleport, while
+// hot's Movement Lock to Control Point reads the raw one-frame delta.
+async function runTeleportCheck(): Promise<CheckResult> {
   const modelRadius = 40;
   const center = new THREE.Vector3(0, 0, 0);
   const effect = createUnusualEffect('hot', modelRadius, 'c_rocketlauncher', center);
@@ -310,8 +284,7 @@ async function runTeleportCheck(): Promise<Result> {
   }
   for (let i = 0; i < 120; i++) effect.update(1 / 60);
 
-  // Instant transform snap, matching InspectControls.apply()'s single-frame
-  // jump (setViewDirection / reset both call it synchronously).
+  // Instant transform snap, as a view preset or reset makes.
   const teleportPos = new THREE.Vector3(500, -300, 200);
   const teleportMatrix = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(teleportPos);
   effect.updateAnchor(teleportMatrix);
@@ -330,13 +303,9 @@ async function runTeleportCheck(): Promise<Result> {
   };
 }
 
-// Locks in the Alpha Fade and Decay fix: before it, energy orb particles
-// died at an absolute end_fade_out_time (3.0s) instead of their lifetime
-// attribute (2.1s), so the pool filled past capacity and emission stalled in
-// bursts (spawn stall -> mass death -> refill, repeating every ~3s). After a
-// warmup to steady state, the alive count should hold roughly steady rather
-// than sawtoothing.
-async function runEnergyOrbContinuityCheck(): Promise<Result> {
+// Guards the energy orb alpha fade fix. Particles once died at an absolute fade time instead of
+// their lifetime, so emission stalled in bursts. Alive count should hold steady after warmup.
+async function runEnergyOrbContinuityCheck(): Promise<CheckResult> {
   const modelRadius = 40;
   const center = new THREE.Vector3(0, 0, 0);
   const effect = createUnusualEffect('energy_orb', modelRadius, 'c_rocketlauncher', center);
@@ -372,18 +341,17 @@ async function runEnergyOrbContinuityCheck(): Promise<Result> {
 }
 
 export function SelfTestPage() {
-  const [results, setResults] = useState<Result[] | null>(null);
+  const [results, setResults] = useState<CheckResult[] | null>(null);
   const [allPass, setAllPass] = useState<boolean | null>(null);
 
   useEffect(() => {
     const { cases, texMap } = buildCases();
     const comp = new Compositor((ref) => texMap[ref] ?? ref, { size: 64 });
-    const out: Result[] = [];
+    const out: CheckResult[] = [];
 
     (async () => {
-      // Source composes texture transforms as R * S * T about UV origin.
-      // This specifically guards authored offsets such as Heatcast Black Box's
-      // scale=2, translateV=.335 from regressing to a centered transform.
+      // Source composes texture transforms as R * S * T about the UV origin. Guards authored
+      // offsets (Heatcast Black Box: scale 2, translateV .335) from regressing to a centered transform.
       out.push(...compositorTransformChecks());
       for (const c of cases) {
         const res = await comp.compose(c.recipe, '1');

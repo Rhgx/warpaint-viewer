@@ -3,6 +3,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readGLB } from './lib/glb.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const source = path.resolve(process.argv[2] ?? path.join(root, '../tf-viewmodel-editor'), 'public/data');
@@ -27,7 +28,7 @@ const weapons = [];
 const arms = {};
 for (const weapon of catalog.weapons.filter(entry => entry.key !== 'paintkit_tool')) {
   const staticGlb = await fs.readFile(path.join(root, 'public/data', weapon.model));
-  const staticDocument = JSON.parse(staticGlb.toString('utf8', 20, 20 + staticGlb.readUInt32LE(12)));
+  const { json: staticDocument } = readGLB(staticGlb);
   const paintMaterials = staticDocument.materials.map(material => material.name)
     .filter(name => !/(?:^|_)lens(?:$|_)/i.test(name));
   const matches = extracted.weapons.filter(entry => path.basename(entry.model) === path.basename(weapon.model)

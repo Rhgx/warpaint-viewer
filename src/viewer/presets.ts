@@ -1,14 +1,6 @@
-// Pure preset data, deliberately free of any three.js (or other viewer-chunk)
-// imports: src/ui/** imports this module statically so the controls bar can
-// build its selects without pulling the lazily-loaded viewer/compositor
-// chunk into the main bundle. src/viewer/Viewer.ts imports these directly for
-// the viewer engine's own use.
+// Pure preset data with no three.js imports, so src/ui can import it statically
+// without pulling the lazily loaded viewer chunk into the main bundle.
 
-// Killstreak sheens
-//
-// TF2 renders a killstreak sheen as a second render pass over the weapon
-// (materialsystem/stdshaders/weapon_sheen_pass_ps2x.fxc), driven by
-// CProxyAnimatedWeaponSheen (game/client/tf/c_tf_player.cpp).
 
 export interface SheenPreset {
   id: string;
@@ -17,10 +9,8 @@ export interface SheenPreset {
   blu: [number, number, number];
 }
 
-// g_KillStreakEffectsBase / g_KillStreakEffectsBlue in c_tf_player.cpp. Raw
-// 0-255 sRGB-space values divided down to 0-1; NOT run through sRGB->linear
-// conversion here, since the shader multiplies them straight into a
-// cubemap sample the way Source's ps2x shader does.
+// Values are g_KillStreakEffectsBase/Blue from c_tf_player.cpp, 0-255 sRGB divided to 0-1.
+// Not converted to linear: the shader multiplies them straight into the cubemap sample, as Source does.
 const rgb255 = (r: number, g: number, b: number): [number, number, number] => [r / 255, g / 255, b / 255];
 
 export const SHEEN_PRESETS: SheenPreset[] = [
@@ -38,7 +28,6 @@ export function getSheen(id: string): SheenPreset {
   return SHEEN_PRESETS.find((preset) => preset.id === id) ?? SHEEN_PRESETS[0];
 }
 
-// Unusual weapon effects
 
 export interface UnusualPreset {
   id: string;
@@ -54,7 +43,6 @@ export const UNUSUAL_PRESETS: UnusualPreset[] = [
   { id: 'sparkle', label: 'Community Sparkle' },
 ];
 
-// View angle presets
 
 export interface ViewAnglePreset {
   id: string;
@@ -109,10 +97,9 @@ export const VIEW_ANGLES: ViewAnglePreset[] = [
   { id: 'iso', label: 'Isometric', dir: [ISO, ISO, ISO] },
 ];
 
-// Valve's inventory icons present the paint-tool card almost face-on, with a
-// small elevation and side angle to keep the card thickness and paint cans
-// legible. The BaseModelPanel resource default is 54 degrees (rather than the
-// viewer's wider general-purpose 75-degree weapon view).
+// Valve's inventory icons show the paint-tool card almost face-on, with a small
+// elevation and side angle so its thickness and paint cans read. The BaseModelPanel
+// default is 54 degrees, not the viewer's wider general-purpose 75-degree view.
 export const PAINTKIT_TOOL_VIEW: ViewAnglePreset = {
   id: 'paintkit-tool',
   label: 'War Paint',

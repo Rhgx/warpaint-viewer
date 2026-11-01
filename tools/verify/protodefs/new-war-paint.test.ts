@@ -2,16 +2,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, vi } from 'vitest';
+
 import { loadOperationTemplates } from '../../../src/data/loader';
 import type { Manifest } from '../../../src/data/types';
 import { discoverGroupSelectTargets } from '../../../src/editor/layers/groupTargets';
 import { discoverStickerPlacementTargets } from '../../../src/editor/sticker/stickerTargets';
-import {
-  decodeProtoDefsFromJson,
-  extractKitMessages,
-  resolveKitRecipe,
-  resolveKitRecipeWithProvenance,
-} from '../../../src/protodefs/decoder';
+import { decodeProtoDefsFromJson } from '../../../src/protodefs/decoder';
+import { extractKitMessages, resolveKitRecipe, resolveKitRecipeWithProvenance } from '../../../src/protodefs/kitQueries';
 import { partitionResolvableKits } from '../../../src/protodefs/validation';
 import { buildTemplateWarPaint, nextWarPaintIds } from '../../../src/protodefs/templatePaint';
 import { PUBLIC_DATA } from '../fixtures';

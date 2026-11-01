@@ -31,11 +31,7 @@ export interface TextureTransformPanelProps {
   /** Width divided by height for the weapon's composed texture. */
   readonly previewAspect?: number;
   readonly uvSurfaceLoading?: boolean;
-  /**
-   * The Parts/Transform switch, supplied by the workbench. It belongs in this
-   * panel's own header rather than in a bar above it, so both sub-views keep a
-   * single header row and the layer name never scrolls out of sight.
-   */
+  /** The Parts/Transform switch, supplied by the workbench and shown in this panel's header row. */
   readonly headerSlot?: ReactNode;
   /** Layer-level actions from the workbench, shown at the start of this head's action group. */
   readonly headerActions?: ReactNode;
@@ -77,9 +73,7 @@ function authoredBounds(
   return [Math.min(...values), Math.max(...values)];
 }
 
-/**
- * The transform sub-view of a paint layer: per-field ranges and mirroring.
- */
+/** The transform sub-view of a paint layer: per-field ranges and mirroring. */
 export function TextureTransformPanel({
   layerLabel,
   layerIndex,
@@ -109,10 +103,6 @@ export function TextureTransformPanel({
   onInteractionStart,
   onInteractionEnd,
 }: TextureTransformPanelProps) {
-  const handleFieldChange = (key: keyof TextureTransformFields, value: SeedRangeValue) => {
-    onFieldChange(key, value);
-  };
-
   return (
     <div className="texture-transform-panel">
       <div className="texture-transform-panel-head">
@@ -124,7 +114,6 @@ export function TextureTransformPanel({
         <span className="texture-transform-panel-head-spacer" />
         {headerActions}
         <select
-          id="texture-transform-scope"
           className="texture-transform-panel-scope-select"
           aria-label="Transform scope"
           title="Choose whether transform edits apply to every weapon or only the current weapon"
@@ -201,7 +190,7 @@ export function TextureTransformPanel({
               originalValue={originalValue}
               divergence={divergence?.[config.key]}
               disabled={disabled}
-              onChange={(value) => handleFieldChange(config.key, value)}
+              onChange={(value) => onFieldChange(config.key, value)}
               onPushToAll={onPushFieldToAll ? () => onPushFieldToAll(config.key) : undefined}
               onInteractionStart={onInteractionStart}
               onInteractionEnd={onInteractionEnd}

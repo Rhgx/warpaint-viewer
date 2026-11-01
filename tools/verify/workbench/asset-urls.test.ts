@@ -8,11 +8,11 @@ afterEach(() => vi.restoreAllMocks());
 test('asset URL cleanup revokes only released blob URLs once', () => {
   const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
   const retained: WarpaintAssetState = {
-    color: { dataUrl: 'blob:retained', fileName: 'retained.png', isTga: false },
+    color: { dataUrl: 'blob:retained', fileName: 'retained.png', isTga: false, hasEmbeddedAlpha: false },
     output: 'blob:retained',
   };
   const removed: WarpaintAssetState = {
-    color: { dataUrl: 'blob:removed-color', fileName: 'removed.png', isTga: false },
+    color: { dataUrl: 'blob:removed-color', fileName: 'removed.png', isTga: false, hasEmbeddedAlpha: false },
     alpha: { dataUrl: 'blob:removed-alpha', fileName: 'alpha.png' },
     output: 'blob:removed-output',
   };
@@ -32,7 +32,7 @@ test('cache cleanup ignores non-blob sources and deduplicates shared output URLs
       revision: 1,
       assets: {
         paint: {
-          color: { dataUrl: 'blob:shared', fileName: 'paint.png', isTga: false },
+          color: { dataUrl: 'blob:shared', fileName: 'paint.png', isTga: false, hasEmbeddedAlpha: false },
           output: 'blob:shared',
         },
       },
@@ -41,7 +41,7 @@ test('cache cleanup ignores non-blob sources and deduplicates shared output URLs
       revision: 1,
       assets: {
         paint: {
-          color: { dataUrl: 'https://example.test/stock.webp', fileName: 'stock.webp', isTga: false },
+          color: { dataUrl: 'https://example.test/stock.webp', fileName: 'stock.webp', isTga: false, hasEmbeddedAlpha: false },
           output: 'blob:shared',
         },
       },

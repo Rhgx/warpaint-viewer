@@ -26,12 +26,7 @@ export interface MaterialOverridesPanelProps {
   readonly onClearAll: () => void;
 }
 
-/**
- * A visible list of per-weapon material overrides with a preset button,
- * rather than a single "metallic shine" checkbox: a weapon with a warning
- * ships unchecked and stays that way through "Apply preset", so excluding it
- * is a fact the list shows rather than something the export decides quietly.
- */
+/** Per-weapon overrides as a list, so a weapon with a warning stays visibly unchecked through Apply preset. */
 export function MaterialOverridesPanel({
   weapons,
   presets,

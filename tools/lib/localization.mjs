@@ -1,6 +1,5 @@
-// Parse Valve localization files (UTF-16 LE with BOM) into a flat token -> string map.
-// These are KeyValues with a "lang" { "Tokens" { "TokenName" "Value" ... } } structure,
-// but a simple pair scan is more robust against the odd characters they contain.
+// Parse a Valve localization file (UTF-16 with BOM) into a token -> string map. A pair scan is
+// more robust than KeyValues against the odd characters these files contain.
 
 import fs from 'node:fs';
 

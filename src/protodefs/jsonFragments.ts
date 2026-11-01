@@ -1,22 +1,10 @@
-// Tolerant reader for the JSON fragments war paint modders actually publish.
-// They are not proto_defs containers: they are one protobuf message each,
-// serialized to JSON with the same snake_case shape decodeType() produces
-// (src/protodefs/decoder.ts), but authored to be pasted into a bigger
-// decompiled dump rather than parsed standalone. In practice that means:
-//   - leading indentation from wherever the snippet was cut out of
-//   - a trailing comma, because the next thing in the dump followed it
-//   - a placeholder token (###, &&&, ...) in place of "defindex": <number>
-//     wherever the mod's own tool hasn't assigned a real one yet
-// This module turns one or many such fragments into plain objects shaped
-// exactly like decodeType()'s output, so decoder.ts can build a
-// DecodedContainer from them without caring where they came from. It is pure
-// text/JSON handling with no protobuf schema knowledge, which is also why the
-// interfaces it produces are typed as Record<string, unknown>: decoder.ts owns
-// the cast into its message shapes, same as it already trusts decodeType()'s.
+// Tolerant reader for the JSON fragments modders publish: one protobuf message each,
+// snake_case like decoder.ts's output, but pasted from a larger dump. So they may
+// carry leading indentation, a trailing comma, and placeholder defindex tokens
+// (###, &&&) in place of numbers. Output is plain objects for decoder.ts, which
+// owns the cast into message types.
 //
-// This parses files a user drags in, so untrusted input rules apply: fragments
-// are size-capped, and anything that isn't a JSON object after normalization
-// is rejected with a specific error rather than passed through.
+// Input is untrusted: fragments are size-capped and must be JSON objects.
 
 import { printParseErrorCode, visit, type ParseErrorCode } from 'jsonc-parser';
 import type { ProtoDefJsonFragment } from './types';
@@ -30,28 +18,20 @@ export interface NormalizedProtoDefFragment {
   value: Record<string, unknown>;
 }
 
-// Generous relative to the real files this is modeled on (the largest of the
-// six sample community packs is ~250 KB): this bounds runaway/hostile input
-// without rejecting anything a modder would plausibly paste.
+// Generous next to real packs (the largest sample is about 250 KB). This bounds
+// hostile input without rejecting anything a modder would paste.
 const MAX_FRAGMENT_BYTES = 8 * 1024 * 1024;
 
-// Placeholder defindex tokens are assigned ids up here: far above any real
-// defindex (stock ids top out in the low thousands, and mod authors who pick
-// their own numbers also use small ones, e.g. 9991), so a synthetic id can
-// never collide with a real one, and stays recognizable as synthetic if it
-// ever surfaces in a log or error message.
+// Placeholder tokens get ids up here, far above any real defindex, so a synthetic id
+// can never collide with a real one and stays recognisable in logs.
 const SYNTHETIC_DEFINDEX_BASE = 900_000_000;
 
-// Matches "defindex": 123 and the placeholder form "defindex": ###. The token
-// capture stops at the next comma, brace, bracket or whitespace, which is
-// exactly where the real files put one (placeholders are never quoted).
+// Matches a numeric or placeholder defindex. The token stops at the next comma, brace,
+// bracket or whitespace, where real files put one; placeholders are never quoted.
 const DEFINDEX_FIELD = /"defindex"\s*:\s*([^,}\]\s]+)/g;
 
-// CMsgProtoDefID.type (ProtoDefTypes in schema.generated.json) is an enum on
-// the wire; decodeType() always resolves it to a number via protobufjs
-// (TO_OBJECT_OPTIONS uses enums: Number), so the JSON path has to do the same
-// translation to produce an equivalent shape, even though nothing in
-// decoder.ts currently branches on the value.
+// Enum names map to numbers, as protobufjs does for decodeType(), so the JSON path
+// produces the same shape.
 const PROTO_DEF_TYPE_NUMBERS: Record<string, number> = {
   DEF_TYPE_QUEST_MAP_NODE: 0,
   DEF_TYPE_QUEST_THEME: 2,
@@ -85,9 +65,8 @@ function placeholderTokensIn(text: string): string[] {
   return tokens;
 }
 
-// Every non-numeric defindex token found by placeholderTokensIn() must already
-// be in `ids` before this runs (both call sites populate it from the same
-// scan), so a lookup miss here means that invariant broke, not bad input.
+// Every token must already be in ids (both callers fill it from the same scan), so a
+// miss is an internal error, not bad input.
 function substitutePlaceholders(text: string, ids: Map<string, number>): string {
   return text.replace(DEFINDEX_FIELD, (whole, token: string) => {
     if (/^\d+$/.test(token)) return whole;
@@ -105,7 +84,7 @@ function coerceEnumStrings(value: unknown): unknown {
   if (isPlainObject(value)) {
     for (const key of Object.keys(value)) {
       const raw = value[key];
-      value[key] = (key === 'type' && typeof raw === 'string' && raw in PROTO_DEF_TYPE_NUMBERS)
+      value[key] = (key === 'type' && typeof raw === 'string' && Object.hasOwn(PROTO_DEF_TYPE_NUMBERS, raw))
         ? PROTO_DEF_TYPE_NUMBERS[raw]
         : coerceEnumStrings(raw);
     }
@@ -169,12 +148,9 @@ function parseFragmentJson(name: string, jsonText: string): Record<string, unkno
   return coerceEnumStrings(value) as Record<string, unknown>;
 }
 
-// An OPERATION fragment has a top-level operation_node; a DEFINITION fragment
-// has a header plus at least one field that is itself an object carrying
-// item_definition_template (a weapon slot); an ITEM DEFINITION fragment has a
-// header, an item_definition_index and a definition array of per-wear entries.
-// Checked in that order because each later shape also has a header, but
-// never the earlier shape's distinguishing field.
+// An operation has a top-level operation_node; a definition has a weapon slot carrying
+// item_definition_template; an item definition has item_definition_index and a
+// definition array. Checked in that order, since the later shapes also have a header.
 function classifyShape(value: Record<string, unknown>): ProtoDefFragmentKind | null {
   const opNode = value.operation_node;
   if (Array.isArray(opNode) ? opNode.length > 0 : isPlainObject(opNode)) return 'operation';
@@ -200,13 +176,9 @@ function checkSize(name: string, text: string): void {
 }
 
 /**
- * Classifies one JSON fragment by shape alone, without linking it to anything
- * else. Real packs name these files inconsistently (operation.json,
- * operation_template.json, <PackName>_Operation.json, ...), so this is how the
- * importer tells an operation file from a definition file inside a ZIP.
- * Returns null for anything that fails to parse or matches neither shape,
- * rather than throwing: callers are expected to be scanning a whole archive
- * looking for the files that matter, most of which are not proto_defs at all.
+ * Classifies one fragment by shape alone, since packs name these files inconsistently.
+ * Returns null for anything that fails to parse or matches neither shape, rather than
+ * throwing, because callers scan whole archives mostly full of unrelated files.
  */
 export function classifyProtoDefFragment(text: string): ProtoDefFragmentKind | null {
   if (text.length > MAX_FRAGMENT_BYTES) return null;
@@ -225,20 +197,13 @@ export function classifyProtoDefFragment(text: string): ProtoDefFragmentKind | n
 }
 
 /**
- * Normalizes and classifies a batch of fragments together, so a placeholder
- * token (###, &&&, ...) appearing in more than one file - an operation's own
- * header.defindex and the definition that points at it through
- * operation_template.defindex - is assigned the SAME synthetic id everywhere
- * it appears. Matching is by the token's exact text, never by position or
- * file order: two different packs each using "###" for their own placeholder
- * must not be linked to each other, which is why this takes one pack's files
- * at a time rather than every fragment ever seen.
+ * Normalizes and classifies one pack's fragments together, so a placeholder token gets
+ * the same synthetic id in every file it appears in (an operation's header and the
+ * definition that points at it). Matching is by exact token text, so two packs using
+ * "###" are never linked.
  *
- * Throws (rather than skipping) on a fragment that is too large, fails to
- * parse, or matches neither shape: unlike classifyProtoDefFragment, a caller
- * of this function has already decided these specific files are the ones to
- * import, so a bad one should surface as an import error, not silently
- * vanish from the result.
+ * Throws on a fragment that is too large, fails to parse, or matches neither shape:
+ * the caller has chosen these files for import, so a bad one should surface as an error.
  */
 export function normalizeProtoDefFragments(fragments: ProtoDefJsonFragment[]): NormalizedProtoDefFragment[] {
   for (const fragment of fragments) checkSize(fragment.name, fragment.text);

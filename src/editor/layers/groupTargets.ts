@@ -1,15 +1,10 @@
 import type { ProtoDefKitMessages, ProtoDefValueTrace } from '../../protodefs/types';
 import { many, type Many, type OperationNodeMsg, type OperationStageMsg, type VarDefMsg, type VarFieldMsg } from '../../protodefs/messages';
-import type { GroupTextureTarget, SelectGroupTarget } from '../mutations';
+import type { GroupTextureTarget, SelectGroupTarget } from './groupMutations';
 import { normalizeGroupTextureReference } from './groupNames';
 
-/**
- * A literal select stage that the editor can associate with a decoded groups
- * texture. `target` deliberately has the same identity shape accepted by
- * toggleSelectGroupId(): occurrence is counted only among select stages with
- * the identical authored `groupsValue`.
- */
-export interface GroupSelectTargetInfo {
+/** A literal select stage tied to a decoded groups texture. Occurrences are counted per identical `groupsValue`. */
+interface GroupSelectTargetInfo {
   target: SelectGroupTarget;
   /** The unmodified literal string from CMsgPaintKit_Operation_SelectStage.groups. */
   groupsRef: string;
@@ -43,14 +38,6 @@ export interface GroupSelectDiscovery {
   hasUnresolvedGroupsReferences: boolean;
 }
 
-export interface ChooseGroupTargetOptions {
-  /**
-   * Restrict to a particular raw groups reference when the picked texture is
-   * known. Supplying this avoids guessing when a paint uses multiple maps.
-   */
-  groupsRef?: string;
-}
-
 /** Find the inherited groups variable and scope its write to the active weapon. */
 export function discoverGroupTextureTarget(
   provenance: readonly ProtoDefValueTrace[] | undefined,
@@ -73,12 +60,7 @@ export function discoverGroupTextureTarget(
   return variables.length === 1 ? { variableName: variables[0], overridePath: weaponOverridePath } : null;
 }
 
-/**
- * A per-wear operation has no shared header variable, so its group map is the
- * literal its select stages carry. Writing it there changes only the weapon and
- * wear that operation serves, so it is offered for per-wear sessions alone; a
- * top-level paint keeps the variable-only rule above.
- */
+/** Per-wear operations have no shared header variable, so their group map is the literal `groups` value. Per-wear sessions only. */
 export function discoverLiteralGroupTextureTarget(
   groupsRef: string | undefined,
   perWear: boolean,
@@ -96,8 +78,7 @@ function directLiteralValue(field: VarFieldMsg | undefined): string | undefined 
 }
 
 function directLiteralGroupRef(field: VarFieldMsg | undefined): string | undefined {
-  // A group texture reference is semantically a string. Treat number/bool
-  // fields as unresolved rather than manufacturing a filename from them.
+  // Group texture refs are strings; number or bool fields are unresolved, not filenames.
   if (!field || typeof field.string !== 'string') return undefined;
   const present = LITERAL_KEYS.filter((key) => field[key] !== undefined);
   return present.length === 1 ? field.string : undefined;
@@ -106,9 +87,7 @@ function directLiteralGroupRef(field: VarFieldMsg | undefined): string | undefin
 function literalGroupId(field: VarFieldMsg): number | undefined {
   const literal = directLiteralValue(field);
   if (literal === undefined) return undefined;
-  // Unlike the compositor's permissive atoi compatibility path, editor
-  // targeting only accepts complete integer literals. toggleSelectGroupId()
-  // makes the same conservative choice before mutating an authored message.
+  // Stricter than the compositor's atoi path: only complete integer literals are targetable.
   if (!/^(?:0|[1-9]\d*)$/.test(literal)) return undefined;
   const value = Number(literal);
   return Number.isSafeInteger(value) && value >= 0 && value <= 255 ? value : undefined;
@@ -130,17 +109,12 @@ function textureReference(
   return singleVariableValue(field.variable, variables);
 }
 
-/**
- * Make a Source texture reference readable without pretending to know a name
- * the definition did not provide. The basename is the stable authored texture
- * identity; its folder is deliberately omitted from the compact editor UI.
- */
+/** Readable name from a texture reference's basename. The folder is omitted from the compact UI. */
 function textureLabel(textureRef: string): string | undefined {
   const clean = textureRef.replace(/[?#].*$/, '').replace(/\\/g, '/').replace(/\/+$/, '');
   const base = clean.split('/').pop()
     ?.replace(/\.(?:vtf|tga|png|webp)$/i, '')
-    // Source paint textures commonly use `p_` as a technical filename
-    // prefix. It is not part of the texture's useful display name.
+    // The p_ filename prefix is technical, not part of the display name.
     .replace(/^p_/i, '');
   if (!base) return undefined;
   const words = base.split(/[_\-\s]+/).filter(Boolean);
@@ -169,9 +143,7 @@ function textureReferencesInNode(
 }
 
 /**
- * A select stage is the final input of a combine operation; the sibling just
- * before it is the texture (or nested texture result) it masks. Keep this
- * deliberately conservative: a multi-texture sibling has no single honest
+ * A select stage masks the sibling just before it. A multi-texture sibling has no single
  * display name, so callers fall back to the selector variable name.
  */
 function selectTextureReferences(
@@ -198,19 +170,8 @@ function selectTextureReferences(
   }
 }
 
-/**
- * Find direct, literal group-map select stages inside the editable operation.
- * The traversal covers nested combine and sticker branches, retains authored
- * singleton/array forms, and never resolves or guesses variable values.
- */
-export function discoverGroupSelectTargets(
-  messages: ProtoDefKitMessages,
-  provenance?: readonly ProtoDefValueTrace[],
-): GroupSelectDiscovery {
-  const targets: GroupSelectTargetInfo[] = [];
-  const occurrences = new Map<string, number>();
-  const state = { hasUnexpandedOperationTemplates: false, hasUnresolvedGroupsReferences: false };
-  const operation = messages.operation as { operation_node?: Many<OperationNodeMsg> };
+/** Header variables by name, from the first header that declares each name. */
+export function collectVariables(messages: ProtoDefKitMessages): Map<string, VarDefMsg[]> {
   const variables = new Map<string, VarDefMsg[]>();
   for (const message of [messages.definition, messages.operation]) {
     const header = message.header as { variables?: Many<VarDefMsg> } | undefined;
@@ -220,6 +181,19 @@ export function discoverGroupSelectTargets(
       variables.set(variable.name, sameHeader);
     }
   }
+  return variables;
+}
+
+/** Find literal group-map select stages in the editable operation. Variable values are never resolved or guessed. */
+export function discoverGroupSelectTargets(
+  messages: ProtoDefKitMessages,
+  provenance?: readonly ProtoDefValueTrace[],
+): GroupSelectDiscovery {
+  const targets: GroupSelectTargetInfo[] = [];
+  const occurrences = new Map<string, number>();
+  const state = { hasUnexpandedOperationTemplates: false, hasUnresolvedGroupsReferences: false };
+  const operation = messages.operation as { operation_node?: Many<OperationNodeMsg> };
+  const variables = collectVariables(messages);
 
   selectTextureReferences(operation.operation_node, (stage, textureRef) => {
     const select = stage.select;
@@ -275,10 +249,8 @@ export function discoverGroupSelectTargets(
       return [parent.join('\0'), parent];
     })).values()];
     const valueOverridePath = overrideParents.length === 1 ? overrideParents[0] : undefined;
-    // An inherited operation slot may resolve from either this weapon's
-    // editable override or the shared header default. Shared zero-padding is
-    // not part of the weapon's layer capacity and must not make the complete
-    // layer read-only. Without provenance, retain the conservative behavior.
+    // Inherited slots resolve from a weapon override or the header default. Shared zero padding is not
+    // layer capacity, so it must not make the layer read-only.
     const inheritedSelectFields = headerInheritedSelectFields.map((inherits, index) => (
       inherits && (provenance === undefined || valueSourcePaths[index] !== undefined)
     ));
@@ -312,25 +284,4 @@ export function discoverGroupSelectTargets(
   }, variables, state);
 
   return { targets, ...state };
-}
-
-/**
- * Choose an unambiguous literal select stage for a sampled compositor bucket.
- * Prefer an editable stage that already contains the bucket; if none does,
- * fall back to the sole editable stage in the chosen groups texture. Returns
- * null instead of guessing whenever those rules leave multiple candidates.
- */
-export function chooseBestSelectTargetForBucket(
-  discovery: GroupSelectDiscovery,
-  bucket: number,
-  options: ChooseGroupTargetOptions = {},
-): GroupSelectTargetInfo | null {
-  if (!Number.isInteger(bucket) || bucket < 1 || bucket > 255) return null;
-  const eligible = discovery.targets.filter((target) => (
-    target.canToggle && (options.groupsRef === undefined || target.groupsRef === options.groupsRef)
-  ));
-  const selected = eligible.filter((target) => target.selectedGroupIds.includes(bucket));
-  if (selected.length === 1) return selected[0];
-  if (selected.length > 1) return null;
-  return eligible.length === 1 ? eligible[0] : null;
 }

@@ -1,5 +1,4 @@
-// Compact, versioned share-state codec. The binary payload lives in #v= so it
-// is not sent to the web server; unrelated query flags remain untouched.
+// Compact, versioned share-state codec. The payload lives in #v= so the web server never sees it.
 
 export interface ParsedUrlState {
   kitId: number | null;
@@ -32,8 +31,7 @@ export interface SerializedUrlState {
   hash: string;
 }
 
-// `view` predates the individual legacy fields. It is no longer parsed, but
-// remains owned so serializing a current link removes the obsolete payload.
+// `view` predates the individual legacy fields. Still owned, so a current link drops the obsolete payload.
 const LEGACY_PARAMS = ['view', 'kit', 'weapon', 'seed', 'wear', 'team', 'sheen', 'effect', 'light', 'proj', 'fov'] as const;
 
 const URL_STATE_DEFAULTS = {
@@ -43,6 +41,7 @@ const URL_STATE_DEFAULTS = {
   unusual: 'none',
   preset: 'inspect',
   projection: 'perspective' as const,
+  // Stays 75, not the viewer default of 70: links omit fov at this value, so changing it breaks old links.
   fov: 75,
 };
 
@@ -58,10 +57,8 @@ const FLAG_EFFECT = 1 << 4;
 const FLAG_LIGHT = 1 << 5;
 const FLAG_FOV = 1 << 6;
 
-// Frozen compression dictionaries, not exhaustive validation lists. Known
-// values use a compact integer; anything added later is encoded inline as
-// UTF-8 by stableId(), so feature changes never require editing this codec.
-// Never reorder or remove entries because their positions are public schema.
+// Frozen compression dictionaries. Known values use a compact integer; later additions are encoded inline
+// by stableId(). Never reorder or remove entries; their positions are public schema.
 const WEAPON_DICTIONARY = [
   'c_amputator', 'c_atom_launcher', 'c_back_scratcher', 'c_battleaxe', 'c_bazaar_sniper',
   'c_blackbox', 'c_claidheamohmor', 'c_crusaders_crossbow', 'c_degreaser', 'c_demo_cannon',
@@ -241,6 +238,10 @@ export function decodeShareState(payload: string): ParsedUrlState | null {
   }
 }
 
+function nonBlank(raw: string | null): string | null {
+  return raw && raw.trim() ? raw : null;
+}
+
 export function parseUrlState(search: string, hash = ''): ParsedUrlState {
   const fragment = new URLSearchParams(hash.replace(/^#/, ''));
   const shared = fragment.get('v');
@@ -254,7 +255,7 @@ export function parseUrlState(search: string, hash = ''): ParsedUrlState {
   const kitRaw = params.get('kit');
   const kitId = kitRaw !== null && /^\d+$/.test(kitRaw) ? Number(kitRaw) : null;
   const weaponRaw = params.get('weapon');
-  const weaponKey = weaponRaw && weaponRaw.trim() ? weaponRaw : null;
+  const weaponKey = nonBlank(weaponRaw);
   const seedRaw = params.get('seed');
   const seed = seedRaw && /^\d+$/.test(seedRaw) ? BigInt.asUintN(64, BigInt(seedRaw.slice(0, 20))).toString() : null;
   const wearRaw = params.get('wear');
@@ -262,11 +263,11 @@ export function parseUrlState(search: string, hash = ''): ParsedUrlState {
   const teamRaw = params.get('team');
   const team = teamRaw === 'red' || teamRaw === 'blu' ? teamRaw : null;
   const sheenRaw = params.get('sheen');
-  const sheen = sheenRaw && sheenRaw.trim() ? sheenRaw : null;
+  const sheen = nonBlank(sheenRaw);
   const unusualRaw = params.get('effect');
-  const unusual = unusualRaw && unusualRaw.trim() ? unusualRaw : null;
+  const unusual = nonBlank(unusualRaw);
   const presetRaw = params.get('light');
-  const preset = presetRaw && presetRaw.trim() ? presetRaw : null;
+  const preset = nonBlank(presetRaw);
   const projRaw = params.get('proj');
   const projection = projRaw === 'ortho' ? 'orthographic' : projRaw === 'perspective' ? 'perspective' : null;
   const fovRaw = params.get('fov');

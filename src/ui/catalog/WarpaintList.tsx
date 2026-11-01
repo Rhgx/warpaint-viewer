@@ -2,9 +2,10 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { ScrollArea } from '@base-ui/react/scroll-area';
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, LayoutGrid, List, Search, X } from 'lucide-react';
+
 import { AssetIcon, SelectField, TextField } from '../common/controls';
 import { preloadIntent, type PreloadIntent } from '../../hooks/useIntentPreload';
-import type { PaintkitEntry, TextureDirectory, TextureDirectoryEntry } from '../../data/types';
+import type { Grade, PaintkitEntry, TextureDirectory, TextureDirectoryEntry } from '../../data/types';
 import { isCustomKitId, paintkitDefindex } from '../../protodefs/types';
 import { useTextureDirectory } from '../../hooks/useTextureDirectory';
 import { useOperationTemplates } from '../../hooks/useOperationTemplates';
@@ -24,8 +25,7 @@ type CatalogView = 'grid' | 'list';
 
 const VIEW_STORAGE_KEY = 'warpaint-viewer:catalog-view';
 
-// With no stored choice, the mobile layout starts on the denser grid, which
-// suits a narrow sheet better than the long list.
+// Without a stored choice, mobile starts on the denser grid.
 function loadStoredView(): CatalogView {
   const fallback = matchesMobileLayout() ? 'grid' : 'list';
   try {
@@ -37,7 +37,7 @@ function loadStoredView(): CatalogView {
 }
 
 // Highest grade first; unknown grade sorts last. Ties broken by name.
-const GRADE_RANK: Record<string, number> = {
+const GRADE_RANK: Record<Grade, number> = {
   elite: 6,
   assassin: 5,
   commando: 4,
@@ -47,7 +47,7 @@ const GRADE_RANK: Record<string, number> = {
 };
 
 function byGradeThenName(a: PaintkitEntry, b: PaintkitEntry): number {
-  const rankDiff = (GRADE_RANK[b.grade ?? ''] ?? 0) - (GRADE_RANK[a.grade ?? ''] ?? 0);
+  const rankDiff = (b.grade ? GRADE_RANK[b.grade] : 0) - (a.grade ? GRADE_RANK[a.grade] : 0);
   return rankDiff !== 0 ? rankDiff : a.name.localeCompare(b.name);
 }
 
@@ -139,10 +139,9 @@ const PaintListItem = memo(function PaintListItem({
     </button>
   );
   if (!showDetails) return row;
-  // The details button is a sibling (buttons cannot nest) and only mounts for
-  // the selected or hovered row: a popover on every row made remounting the
-  // list about four times slower. It also stays while its card is open, since
-  // reaching the card crosses a gap outside the row.
+  // The details button is a sibling (buttons cannot nest). It mounts only for the selected
+  // or hovered row, since a popover on every row made remounting about four times slower.
+  // It stays while its card is open, since the card sits outside the row.
   return (
     <div className="warpaint-item-row" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
       {row}
@@ -164,9 +163,8 @@ const PaintListItem = memo(function PaintListItem({
   );
 });
 
-// Counts how many grid tiles share the first tile's row inside `group`, used
-// to turn ArrowUp/ArrowDown into a row-height jump in grid view. Falls back
-// to 1 (behaves like ArrowLeft/ArrowRight) if the DOM doesn't cooperate.
+// Counts the grid tiles in the first tile's row, so ArrowUp/ArrowDown jump a whole row.
+// Falls back to 1 when the DOM does not cooperate.
 function countGridColumns(group: Element | null): number {
   if (!group) return 1;
   const tiles = group.querySelectorAll<HTMLElement>('.warpaint-tile');
@@ -180,11 +178,9 @@ function countGridColumns(group: Element | null): number {
   return count || 1;
 }
 
-// Left panel: a search field and a collection dropdown filter a grouped
-// warpaint list. Collections and paints share one oldest/newest order toggle
-// (proxy: ascending minimum paintkit id, which tracks release order).
-// Typing in the filter searches every paintkit name, collection name and ID, ignoring
-// whichever collection is selected. ?sortdesc=1 presets descending order.
+// Left panel: a search field and a collection dropdown filter a grouped list.
+// Collections and paints share one oldest/newest toggle, proxied by the minimum
+// paintkit id, which tracks release order. A filter searches all names, ignoring the collection.
 export const WarpaintList = memo(function WarpaintList({
   paintkits,
   selectedId,
@@ -208,8 +204,7 @@ export const WarpaintList = memo(function WarpaintList({
 }) {
   const [filter, setFilter] = useState('');
   const [reversed, setReversed] = useState(() => {
-    // Newest first by default (proxy: descending collection release order).
-    // ?sortdesc=0 forces oldest first; ?sortdesc=1 is redundant but honored.
+    // Newest first by default. ?sortdesc=0 forces oldest first.
     const param = new URLSearchParams(window.location.search).get('sortdesc');
     return param === null ? true : param === '1';
   });
@@ -219,15 +214,13 @@ export const WarpaintList = memo(function WarpaintList({
   const directory = useTextureDirectory();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Saved only on an explicit toggle, so the layout-dependent default never
-  // gets stored and carried over to the other layout.
+  // Saved only on an explicit toggle, so the layout-dependent default is never stored.
   const chooseView = (next: CatalogView) => {
     setView(next);
     try {
       localStorage.setItem(VIEW_STORAGE_KEY, next);
     } catch {
-      // Storage may be unavailable (private browsing, quota); the toggle
-      // still works for the session, it just won't persist.
+      // Storage can be unavailable; the toggle still works for this session.
     }
   };
 
@@ -257,8 +250,7 @@ export const WarpaintList = memo(function WarpaintList({
 
   const q = filter.trim().toLowerCase();
   const isFiltering = q.length > 0;
-  // ID and op: matching are Workshopper tools (Settings), so for everyone else
-  // the filter stays a name and collection search. "400" or "#400" matches that
+  // ID and op: matching sit behind the Settings toggle. "400" or "#400" matches that
   // paint kit ID exactly; a prefix match would turn "4" into dozens of paints.
   const advancedSearch = useSettings((s) => s.advancedCatalogSearch);
   const idQuery = advancedSearch && /^#?\d+$/.test(q) ? Number(q.replace('#', '')) : null;
@@ -270,14 +262,10 @@ export const WarpaintList = memo(function WarpaintList({
     () => (opQuery !== null && operationData ? operationFilterKits(paintkits, operationData, opQuery) : []),
     [opQuery, operationData, paintkits],
   );
-  // A filter, or the "All" entry, spans every collection and needs group
-  // headers; a single selected collection is already unambiguous.
+  // Group headers are needed unless a single collection is selected.
   const showGroupHeaders = isFiltering || activeCollection === null;
-  // A collection has only a handful of thumbnail assets (at most 15). Native
-  // lazy loading can defer all of them after this panel is swapped into view,
-  // which made a newly opened collection look empty for seconds. Keep the
-  // large, all-collections catalogue lazy, but fetch the chosen collection's
-  // compact set immediately.
+  // Lazy loading deferred a newly opened collection's few thumbnails for seconds, so a
+  // single collection loads its icons eagerly. The full catalog stays lazy.
   const prioritizePaintIcons = activeCollection !== null && !isFiltering;
 
   const groups = useMemo<Group[]>(() => {
@@ -304,14 +292,11 @@ export const WarpaintList = memo(function WarpaintList({
       byCollection.set(key, arr);
     }
     for (const arr of byCollection.values()) arr.sort(byGradeThenName);
-    // `collections` already computed every collection's minimum id and applied
-    // the requested direction. Reuse that ordering rather than allocating two
-    // id arrays and scanning them again on every sort comparison.
-    const collectionOrder = new Map(collections.map((collection, index) => [collection.name, index]));
-    return [...byCollection.entries()].sort(
-      (a, b) => (collectionOrder.get(a[0]) ?? Number.MAX_SAFE_INTEGER)
-        - (collectionOrder.get(b[0]) ?? Number.MAX_SAFE_INTEGER),
-    );
+    // Walking `collections` keeps the groups in its direction order.
+    return collections.flatMap((collection): Group[] => {
+      const kits = byCollection.get(collection.name);
+      return kits ? [[collection.name, kits]] : [];
+    });
   }, [paintkits, q, idQuery, isFiltering, activeCollection, collections, opQuery, operationKits]);
 
   useEffect(() => {
@@ -323,8 +308,7 @@ export const WarpaintList = memo(function WarpaintList({
     const container = containerRef.current;
     const viewport = container?.querySelector<HTMLElement>('.ui-scroll-viewport');
     if (!container || !viewport || typeof IntersectionObserver === 'undefined') {
-      // Older browsers still get the prior eager behavior rather than losing
-      // generated icons entirely when IntersectionObserver is unavailable.
+      // Without IntersectionObserver, every tracked kit counts as visible.
       onVisibleKitIdsChange(visibilityTrackedKitIds);
       return;
     }
@@ -351,8 +335,7 @@ export const WarpaintList = memo(function WarpaintList({
     return () => observer.disconnect();
   }, [groups, onVisibleKitIdsChange, view, visibilityTrackedKitIds]);
 
-  // Flat, filtered kit order used for keyboard navigation; matches the order
-  // the groups render in, independent of grid vs. list layout.
+  // Keyboard navigation order; matches the rendered group order in both layouts.
   const flatKits = useMemo(() => groups.flatMap(([, kits]) => kits), [groups]);
 
   const clearFilters = () => {
@@ -360,10 +343,8 @@ export const WarpaintList = memo(function WarpaintList({
     setActiveCollection(null);
   };
 
-  // Reveals a newly selected kit, whatever selected it: the arrow keys, or a
-  // base paint link in a details card. A filter hiding it is cleared. Only a
-  // change of selection does this, so filtering the current selection out of
-  // view afterwards is left alone.
+  // Reveals a newly selected kit, from any source, by clearing a filter that hides it.
+  // Only a change of selection does this, so filtering the current kit out of view is left alone.
   const [revealedId, setRevealedId] = useState(selectedId);
   if (selectedId !== revealedId) {
     setRevealedId(selectedId);
@@ -380,8 +361,7 @@ export const WarpaintList = memo(function WarpaintList({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    // Never hijack typing in the search field or interaction with the
-    // collection select (open or closed).
+    // Leave typing in the search field and the collection select alone.
     const target = event.target as HTMLElement;
     if (target.closest('input, .ui-select-trigger, .ui-select-popup')) return;
     if (flatKits.length === 0) return;

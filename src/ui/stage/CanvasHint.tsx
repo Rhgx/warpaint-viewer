@@ -1,5 +1,5 @@
 import { TOUCH_ONLY_DEVICE } from '../../device';
-import type { StickerTransformTool } from '../editor/StickerPlacementEditor';
+import type { StickerTransformTool } from '../editor/stickerPlacementEditorTypes';
 
 interface CanvasHintProps {
   dismissed: boolean;

@@ -42,4 +42,14 @@ export function parseVTFHeader(input: Uint8Array | ArrayBuffer): VTFHeader;
 export function decodeVTF(input: Uint8Array | ArrayBuffer): DecodedVTF;
 export function decodeVTFAllFrames(input: Uint8Array | ArrayBuffer): DecodedVTF[];
 export function decodeVTFCubemap(input: Uint8Array | ArrayBuffer): DecodedVTF[];
-export function parseVTFSpriteSheet(input: Uint8Array | ArrayBuffer): unknown | null;
+export interface VTFSpriteSheet {
+  version: number;
+  sequences: {
+    sequenceNumber: number;
+    clamp: boolean;
+    totalTime: number;
+    frames: { displayTime: number; uv: [number, number, number, number] }[];
+  }[];
+}
+
+export function parseVTFSpriteSheet(input: Uint8Array | ArrayBuffer): VTFSpriteSheet | null;

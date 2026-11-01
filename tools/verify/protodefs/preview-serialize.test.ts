@@ -3,7 +3,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { serializeProtoDefKitBundle, serializeProtoDefKitBundlePreview } from '../../../src/editor/export/jsonExport';
-import { decodeProtoDefsFromJson, resolveKitRecipe, type DecodedContainer } from '../../../src/protodefs/decoder';
+import { decodeProtoDefsFromJson } from '../../../src/protodefs/decoder';
+import { resolveKitRecipe } from '../../../src/protodefs/kitQueries';
+import type { DecodedContainer } from '../../../src/protodefs/decoderShared';
 import { shippedProtoDefs } from '../fixtures';
 
 const { weaponsByItemDef, options, baseBytes, bundleOf } = shippedProtoDefs();

@@ -1,56 +1,47 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  DragEvent as ReactDragEvent,
-  PointerEvent as ReactPointerEvent,
-  ComponentProps,
-} from 'react';
+import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { Tabs } from '@base-ui/react/tabs';
 import {
   AlertTriangle,
-  ArrowDown,
-  ArrowUp,
   Check,
   ChevronDown,
   Download,
-  Files,
   ImageUp,
-  Link2,
-  Lock,
   LoaderCircle,
-  Maximize2,
-  Minimize2,
   PackageOpen,
-  PencilRuler,
-  Plus,
-  RefreshCw,
-  RotateCcw,
   Redo2,
-  ScrollText,
-  Trash2,
+  RotateCcw,
   Undo2,
   Users,
-  X,
 } from 'lucide-react';
-import type { TextureMetadata } from '../../data/types';
-import type { CustomDefinitionsState } from '../../protodefs/types';
-import { texturePublicPath } from '../../protodefs/values';
-import type { SourcePackageState } from '../../source/contracts';
-import type { WarpaintAssetOverrides, WarpaintAssetState, WearRecipe, WorkbenchTab } from '../../workbench/types';
+
 import { collectSlots } from '../../workbench/assetSlots';
-import type { AssetSlot } from '../../workbench/assetSlots';
-import { revokeReleasedAssetUrls, revokeTextureUrl } from '../../workbench/assetUrls';
-import { loadImage, mergeAlpha, readTexture } from '../../workbench/textureImport';
-import type { ExportDefinitionsContext, ExportItem } from './ExportPanel';
+import { fileExtension } from '../../workbench/textureImport';
+import type { WarpaintAssetState, WorkbenchTab } from '../../workbench/types';
+import type { ExportItem } from '../../workbench/exportTypes';
 import type { EditorDownloadFormat } from '../../editor/export/definitionExport';
-import type { EditorDraftState, EditorDraftStatus } from '../../editor/useEditorDraft';
-import type { OperationGraphEditorProps } from '../editor/OperationGraphEditor';
+import { useArmedConfirm } from '../../hooks/useArmedConfirm';
 import { AssetFilesPanel } from './AssetFilesPanel';
 import { EditorDraftBanner } from '../editor/EditorDraftBanner';
+import { EditorLayerList } from './EditorLayerList';
+import { StickerEditToolbar } from './StickerEditToolbar';
+import { StickerTexturePicker } from './StickerTexturePicker';
+import { StickerVariantList } from './StickerVariantList';
+import { WorkbenchHeader } from './WorkbenchHeader';
+import { useWorkbenchAssetEdits } from './useWorkbenchAssetEdits';
+import { startWorkbenchResize } from './workbenchResize';
+import {
+  draftStatusLabel,
+  MIN_PANEL_HEIGHT,
+  referenceLabel,
+  RESET_CONFIRM_MS,
+  TEXTURE_FILE_ACCEPT,
+} from './workbenchLabels';
+import type { CustomWarpaintWorkbenchProps } from './workbenchTypes';
 import './CustomWarpaintWorkbench.css';
 
-// Tabs.Panel mounts its children only after they become active. Keeping the
-// secondary panel imports lazy keeps the Files controls immediately available
-// while preserving each secondary tab's state once it has been visited.
+// Secondary panels load lazily so the Files controls show first. Tabs.Panel
+// mounts children only when active, so each keeps its state once visited.
 const ExportPanel = lazy(() =>
   import('./ExportPanel').then(({ ExportPanel: panel }) => ({ default: panel })),
 );
@@ -76,11 +67,6 @@ const OperationGraphEditor = lazy(() =>
   import('../editor/OperationGraphEditor').then(({ OperationGraphEditor: panel }) => ({ default: panel })),
 );
 
-type VisualWarpaintEditorPanelProps = ComponentProps<typeof VisualWarpaintEditorPanel>;
-type StickerPlacementEditorProps = ComponentProps<typeof StickerPlacementEditor>;
-type TextureTransformPanelProps = ComponentProps<typeof TextureTransformPanel>;
-type MaterialOverridesPanelProps = ComponentProps<typeof MaterialOverridesPanel>;
-
 function WorkbenchPanelFallback() {
   return (
     <div className="custom-workbench-empty" aria-busy="true">
@@ -88,59 +74,7 @@ function WorkbenchPanelFallback() {
     </div>
   );
 }
-const MIN_PANEL_HEIGHT = 190;
-const RESET_CONFIRM_MS = 3000;
-const TEXTURE_FILE_ACCEPT = '.png,.jpg,.jpeg,.webp,.tga,.vtf';
 
-/** A definition texture reference without its materials/ root or extension. */
-function referenceStem(reference: string): string {
-  return reference.trim().replace(/\\/g, '/').replace(/^materials\//i, '').replace(/\.(vtf|tga|psd|png|webp)$/i, '');
-}
-
-function referenceLabel(reference: string): string {
-  return (referenceStem(reference).split('/').at(-1) ?? reference).replaceAll('_', ' ');
-}
-
-function draftStatusLabel(status: EditorDraftStatus): string | null {
-  if (status === 'pending' || status === 'saving') return 'Saving...';
-  if (status === 'saved') return 'Saved locally';
-  if (status === 'error') return 'Autosave failed';
-  return null;
-}
-
-/** Commits on blur or Enter, so typing a weight is one history entry rather than one per keystroke. */
-function StickerVariantWeightInput({
-  label,
-  weight,
-  onCommit,
-}: {
-  label: string;
-  weight: number;
-  onCommit: (weight: number) => void;
-}) {
-  const [draft, setDraft] = useState<string | null>(null);
-  return (
-    <input
-      type="number"
-      className="sticker-placement-editor-variant-weight"
-      aria-label={label}
-      title={label}
-      min={0}
-      step={0.1}
-      value={draft ?? String(weight)}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        if (draft === null) return;
-        setDraft(null);
-        const parsed = draft.trim() === '' ? Number.NaN : Number(draft);
-        if (Number.isFinite(parsed) && parsed >= 0 && parsed !== weight) onCommit(parsed);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') event.currentTarget.blur();
-      }}
-    />
-  );
-}
 export function CustomWarpaintWorkbench({
   recipes,
   resolveTexture,
@@ -168,169 +102,30 @@ export function CustomWarpaintWorkbench({
   editor,
   expanded,
   onExpandedChange,
-}: {
-  recipes: WearRecipe[];
-  resolveTexture: (ref: string) => string;
-  textureMetadata?: Record<string, TextureMetadata>;
-  /** Names the export writes into the pack's README and default file name. */
-  paintName?: string;
-  weaponName?: string;
-  /** TF2 build the shipped data snapshot came from. */
-  gameBuild?: string | null;
-  /** When that snapshot was taken, which is the part people can act on. */
-  snapshotDate?: string | null;
-  /** Definition and package sources for the Export tab, supplied by the app. */
-  exportDefinitions?: ExportDefinitionsContext;
-  editor?: VisualWarpaintEditorPanelProps & {
-    mode: 'paint' | 'sticker';
-    onModeChange: (mode: 'paint' | 'sticker') => void;
-    sticker?: StickerPlacementEditorProps & {
-      targets: readonly {
-        id: string;
-        label: string;
-        thumbnail?: string | null;
-        canMoveEarlier: boolean;
-        canMoveLater: boolean;
-        /** Authored artwork reference, as the definition names it. */
-        baseReference?: string;
-        /** How many other stickers draw this same artwork file. */
-        sharedWith?: number;
-        /** Weighted artwork choices the seed picks between. */
-        variantCount?: number;
-      }[];
-      /** Points the active sticker at different artwork. */
-      onSetTargetTexture?: (baseReference: string) => void;
-      /** Weighted artwork choices of the active sticker, in list order. */
-      variants?: readonly {
-        index: number;
-        /** Authored artwork reference of this variant, when it has one. */
-        baseReference?: string;
-        thumbnail?: string | null;
-        weight: number;
-        /** True when the current seed drew this variant's artwork. */
-        picked: boolean;
-        /** True when this variant is pinned for preview in the sticker editor. */
-        previewing: boolean;
-      }[];
-      /** Pins a variant for preview, or unpins it when it is already pinned. */
-      onPreviewVariant?: (index: number) => void;
-      onSetVariantWeight?: (index: number, weight: number) => void;
-      onSetVariantBase?: (index: number, baseReference: string) => void;
-      onEqualizeVariantWeights?: () => void;
-      onAddVariant?: (baseReference: string) => void;
-      onRemoveVariant?: (index: number) => void;
-      activeTargetId: string;
-      onActiveTargetChange: (id: string) => void;
-      textureChoices: readonly { ref: string; label: string; thumbnail?: string | null }[];
-      allTextureChoices: readonly { ref: string; label: string; thumbnail?: string | null }[];
-      onAddTarget: (baseReference: string) => void;
-      onRemoveTarget: () => void;
-      onMoveTarget: (direction: -1 | 1) => void;
-      /** Temporary 3D model-part picker state for sticker placement. */
-      modelPartPickingActive?: boolean;
-      hiddenModelPartCount?: number;
-      onModelPartPickingChange?: (active: boolean) => void;
-      onRestoreHiddenModelParts?: () => void;
-    };
-    /** Per-team artwork for the active paint layer; absent when the layer cannot have any. */
-    teamColors?: {
-      enabled: boolean;
-      /** The team the viewer shows; Replace acts on this side. */
-      team: 'red' | 'blu';
-      /** Authored texture reference each team draws, as the definition names it. */
-      red?: string;
-      blu?: string;
-      onToggle: (enabled: boolean) => void;
-      onSetTexture: (team: 'red' | 'blu', reference: string) => void;
-    };
-    /** Gates the Materials mode button; absent means nothing to override yet. */
-    materials?: MaterialOverridesPanelProps;
-    /** Gates the Parts/Transform sub-view switch for paint mode. */
-    transform?: TextureTransformPanelProps;
-    /** Optional graph view for the same paint operation. */
-    graph?: OperationGraphEditorProps;
-    paintSubView?: 'parts' | 'transform' | 'graph';
-    onPaintSubViewChange?: (view: 'parts' | 'transform' | 'graph') => void;
-    /** Weapon and wear whose operation is being edited, for a per-wear paint; absent otherwise. */
-    perWearScope?: { weapon: string; wear: string };
-    /** Per-layer marker, aligned with `selectors`, for a non-default transform range. */
-    layerHasTransformEdits?: readonly boolean[];
-    /** Per-layer marker, aligned with `selectors`, for transforms that are intentionally unavailable. */
-    layerTransformLocked?: readonly boolean[];
-    dirty: boolean;
-    draft: EditorDraftState;
-    /** Serialises the current definition edits as downloadable fragments. */
-    onDownloadRecovery: () => void;
-    canDownload: boolean;
-    exporting: boolean;
-    canUndo: boolean;
-    canRedo: boolean;
-    error?: string | null;
-    selectors: readonly { id: string; label: string }[];
-    activeSelectorId: string;
-    onActiveSelectorChange: (id: string) => void;
-    onUndo: () => void;
-    onRedo: () => void;
-    onReset: () => void;
-    onDownloadPackage: (format: EditorDownloadFormat) => void;
-  };
-  /** Expands the Edit tab over the full application viewport. */
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
-  sourcePackage: SourcePackageState;
-  /** Async Source package resolver used only for the non-destructive preview. */
-  resolvePackageTexture?: (ref: string) => Promise<string>;
-  /** Synchronous package membership check used for optional companion files. */
-  hasPackageTexture?: (ref: string) => boolean;
-  packageGeneration?: number;
-  definitions: CustomDefinitionsState;
-  loading: boolean;
-  open: boolean;
-  initialOverrides: WarpaintAssetOverrides;
-  onChange: (overrides: WarpaintAssetOverrides) => void;
-  /** Reset all returns the entire workbench to built-ins, including its package. */
-  onResetAll?: () => void;
-  /** Opens the clear-workspace confirmation when imported data exists. */
-  onClearWorkspace?: () => void;
-  /**
-   * The drawer remounts whenever the selected paint or weapon changes, which is
-   * how per-slot edits reset. The tab has to outlive that: importing a
-   * definition selects the paint it just added, and bouncing the user off the
-   * tab they are working in would look like the import did nothing.
-   */
-  tab: WorkbenchTab;
-  onTabChange: (tab: WorkbenchTab) => void;
-  onResize: (height: number) => void;
-  onClose: () => void;
-}) {
+}: CustomWarpaintWorkbenchProps) {
   const slots = useMemo(() => collectSlots(recipes), [recipes]);
   const [assets, setAssets] = useState<Record<string, WarpaintAssetState>>(
     initialOverrides.assets,
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
-  const [confirmReset, setConfirmReset] = useState(false);
-  const [confirmRevert, setConfirmRevert] = useState(false);
-  // Materials is a third top-level view alongside Paint/Stickers, but it does
-  // not extend `mode` (paint vs. sticker stays the app's concern) so the
-  // gating prop can be added without touching that existing contract.
+  const [confirmReset, armReset] = useArmedConfirm(RESET_CONFIRM_MS);
+  const [confirmRevert, armRevert, disarmRevert] = useArmedConfirm(RESET_CONFIRM_MS);
+  // Materials is not a `mode` value: the app owns `mode`, which only holds paint or sticker.
   const [materialsActive, setMaterialsActive] = useState(false);
   const [editorDownloadFormat, setEditorDownloadFormat] = useState<EditorDownloadFormat>('zip');
   const [resizing, setResizing] = useState(false);
   const [dropping, setDropping] = useState(false);
   const [dropHint, setDropHint] = useState(false);
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
-  // One picker serves both "Add sticker" and "Add variant"; this says which
-  // action the chosen texture goes to.
+  // One picker serves Add sticker and Add variant; this records the chosen action.
   const [stickerPickerPurpose, setStickerPickerPurpose] = useState<'sticker' | 'variant'>('sticker');
   const [stickerSearch, setStickerSearch] = useState('');
   const [showAllStickerTextures, setShowAllStickerTextures] = useState(false);
-  // dragenter/dragleave fire for every child the pointer crosses, so the cue
-  // is driven by a depth count instead of the last event seen.
+  // dragenter/dragleave fire for every child crossed, so the cue is a depth count.
   const dragDepthRef = useRef(0);
   const revisionRef = useRef(initialOverrides.revision);
-  // Async imports read the edit set after their awaits, so the latest map has
-  // to be readable outside of React's render closure.
+  // Async imports read the edit set after awaits, so it must be readable outside render.
   const assetsRef = useRef(assets);
   const sectionRef = useRef<HTMLElement | null>(null);
 
@@ -346,35 +141,20 @@ export function CustomWarpaintWorkbench({
   }, [open, onClose]);
 
   useEffect(() => {
-    if (!confirmReset) return;
-    const timer = window.setTimeout(
-      () => setConfirmReset(false),
-      RESET_CONFIRM_MS,
-    );
-    return () => window.clearTimeout(timer);
-  }, [confirmReset]);
-
-  useEffect(() => {
     if (!confirmRevert) return;
-    const timer = window.setTimeout(() => setConfirmRevert(false), RESET_CONFIRM_MS);
     const cancel = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      setConfirmRevert(false);
+      disarmRevert();
     };
     window.addEventListener('keydown', cancel, true);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('keydown', cancel, true);
-    };
-  }, [confirmRevert]);
+    return () => window.removeEventListener('keydown', cancel, true);
+  }, [confirmRevert, disarmRevert]);
 
-  useEffect(() => setConfirmRevert(false), [editor?.dirty, editor?.activeSelectorId]);
+  useEffect(() => disarmRevert(), [editor?.dirty, editor?.activeSelectorId, disarmRevert]);
 
-  // A paint or weapon change remounts this component (see the `key` prop at
-  // the call site), but the materials source can still disappear on its own,
-  // so guard against being left on a view with nothing left to show.
+  // The materials source can vanish without a remount, so leave the Materials view then.
   useEffect(() => {
     if (!editor?.materials) setMaterialsActive(false);
   }, [editor?.materials]);
@@ -385,116 +165,27 @@ export function CustomWarpaintWorkbench({
     return () => window.clearTimeout(timer);
   }, [dropHint]);
 
-  const commit = (next: Record<string, WarpaintAssetState>) => {
-    const previous = assetsRef.current;
-    assetsRef.current = next;
-    setAssets(next);
-    revisionRef.current += 1;
-    onChange({ revision: revisionRef.current, assets: next });
-    revokeReleasedAssetUrls(previous, next);
-  };
-
-  const setSlotError = (ref: string, message: string) => {
-    setErrors((current) => {
-      const next = { ...current };
-      if (message) next[ref] = message;
-      else delete next[ref];
-      return next;
-    });
-  };
-
-  const rebuild = async (
-    asset: WarpaintAssetState,
-  ): Promise<WarpaintAssetState> => {
-    if (!asset.color) return { ...asset, output: undefined, size: undefined };
-    const output = asset.alpha
-      ? await mergeAlpha(asset.color.dataUrl, asset.alpha.dataUrl)
-      : asset.color.dataUrl;
-    try {
-      const image = await loadImage(output);
-      return {
-        ...asset,
-        output,
-        size: { width: image.naturalWidth, height: image.naturalHeight },
-      };
-    } catch (cause) {
-      if (output !== asset.color.dataUrl) revokeTextureUrl(output);
-      throw cause;
-    }
-  };
-
-  const updateFile = async (
-    slot: AssetSlot,
-    file: File | undefined,
-    alphaOnly: boolean,
-  ): Promise<string> => {
-    if (!file) return '';
-    setSlotError(slot.ref, '');
-    setBusy((current) => ({ ...current, [slot.ref]: true }));
-    let importedSource: string | undefined;
-    let committed = false;
-    try {
-      const read = await readTexture(file, alphaOnly);
-      importedSource = read.dataUrl;
-      const current = assetsRef.current[slot.ref] ?? {};
-      const nextAsset: WarpaintAssetState = alphaOnly
-        ? {
-            ...current,
-            alpha: { dataUrl: read.dataUrl, fileName: read.fileName },
-          }
-        : {
-            ...current,
-            color: read,
-            alpha: read.hasEmbeddedAlpha ? undefined : current.alpha,
-          };
-      commit({ ...assetsRef.current, [slot.ref]: await rebuild(nextAsset) });
-      committed = true;
-      return '';
-    } catch (cause) {
-      if (!committed) revokeTextureUrl(importedSource);
-      const message = cause instanceof Error
-        ? cause.message
-        : 'The file could not be imported.';
-      setSlotError(slot.ref, message);
-      return message;
-    } finally {
-      setBusy((current) => {
-        const next = { ...current };
-        delete next[slot.ref];
-        return next;
-      });
-    }
-  };
-
-  // Edit-tab image swaps. Artwork shared with another sticker or the other
-  // team gets a fresh reference beside the original, so only the chosen use
-  // changes; one this editor already split off is replaced in place.
-  const [editImportError, setEditImportError] = useState('');
-  const isSplitOffReference = (ref: string) => Boolean(assetsRef.current[ref] && !textureMetadata?.[ref]);
-  const freshReference = (stem: string) => {
-    const taken = (candidate: string) => {
-      const ref = texturePublicPath(candidate) ?? '';
-      return Boolean(assetsRef.current[ref] || textureMetadata?.[ref] || slots.some((slot) => slot.ref === ref));
-    };
-    let candidate = stem;
-    for (let n = 2; taken(candidate); n += 1) candidate = `${stem}_${n}`;
-    return candidate;
-  };
-  const importEditTexture = async (
-    reference: string,
-    kind: AssetSlot['kind'],
-    file: File,
-    split: boolean,
-    onSplit: (reference: string) => void,
-  ) => {
-    setEditImportError('');
-    const target = split ? freshReference(referenceStem(reference)) : referenceStem(reference);
-    const ref = texturePublicPath(target);
-    if (!ref) return;
-    const error = await updateFile({ ref, kind, group: 'artwork' }, file, false);
-    if (error) setEditImportError(error);
-    else if (split) onSplit(target);
-  };
+  const {
+    editImportError,
+    updateFile,
+    removeAlpha,
+    resetSlot,
+    resetAll,
+    replaceStickerImage,
+    replaceVariantImage,
+    replaceTeamTexture,
+  } = useWorkbenchAssetEdits({
+    slots,
+    textureMetadata,
+    editor,
+    onChange,
+    onResetAll,
+    setAssets,
+    setErrors,
+    setBusy,
+    assetsRef,
+    revisionRef,
+  });
   const toggleStickerPicker = (purpose: 'sticker' | 'variant') => {
     if (stickerPickerOpen && stickerPickerPurpose === purpose) {
       setStickerPickerOpen(false);
@@ -504,97 +195,23 @@ export function CustomWarpaintWorkbench({
     setShowAllStickerTextures(false);
     setStickerPickerOpen(true);
   };
-  const replaceStickerImage = (file: File) => {
-    const sticker = editor?.sticker;
-    const active = sticker?.targets.find((target) => target.id === sticker.activeTargetId);
-    if (!sticker?.onSetTargetTexture || !active?.baseReference) return;
-    const ref = texturePublicPath(referenceStem(active.baseReference)) ?? '';
-    const split = (active.sharedWith ?? 0) > 0 || !isSplitOffReference(ref);
-    void importEditTexture(active.baseReference, 'sticker', file, split, sticker.onSetTargetTexture);
-  };
-  const replaceVariantImage = (index: number, file: File) => {
-    const sticker = editor?.sticker;
-    const variants = sticker?.variants ?? [];
-    const variant = variants.find((row) => row.index === index);
-    if (!sticker?.onSetVariantBase || !variant?.baseReference) return;
-    // Always a fresh file: this variant's texture may also be drawn by another
-    // sticker or variant, and only the chosen variant should change.
-    void importEditTexture(variant.baseReference, 'sticker', file, true, (reference) => sticker.onSetVariantBase?.(index, reference));
-  };
-  const replaceTeamTexture = (team: 'red' | 'blu', file: File) => {
-    const colors = editor?.teamColors;
-    const side = colors?.[team];
-    if (!colors || !side) return;
-    const other = colors[team === 'red' ? 'blu' : 'red'];
-    const ref = texturePublicPath(referenceStem(side)) ?? '';
-    const split = !isSplitOffReference(ref) || referenceStem(other ?? '') === referenceStem(side);
-    void importEditTexture(
-      split ? `${referenceStem(side)}_${team}` : side,
-      'texture',
-      file,
-      split,
-      (reference) => colors.onSetTexture(team, reference),
-    );
-  };
+
   const stickerFileRef = useRef<HTMLInputElement | null>(null);
   // One file input serves every variant row; the row that asked for it is remembered here.
   const variantFileRef = useRef<HTMLInputElement | null>(null);
   const variantReplaceIndexRef = useRef<number | null>(null);
 
-  const removeAlpha = async (ref: string) => {
-    const current = assetsRef.current[ref];
-    if (!current?.alpha) return;
-    const { alpha: _alpha, ...rest } = current;
-    commit({ ...assetsRef.current, [ref]: await rebuild(rest) });
-  };
+  const startResize = (event: ReactPointerEvent<HTMLDivElement>) =>
+    startWorkbenchResize(event, { sectionRef, onResize, setResizing });
 
-  const resetSlot = (ref: string) => {
-    const next = { ...assetsRef.current };
-    delete next[ref];
-    setSlotError(ref, '');
-    commit(next);
-  };
-
-  const resetAll = () => {
-    setErrors({});
-    commit({});
-    onResetAll?.();
-  };
-
-  // Drag the drawer's top edge to trade stage height for a taller asset grid.
-  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const startY = event.clientY;
-    const startHeight = sectionRef.current?.offsetHeight ?? 0;
-    const maxHeight = Math.round(window.innerHeight * 0.75);
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setResizing(true);
-    const move = (moveEvent: PointerEvent) => {
-      const height = startHeight + (startY - moveEvent.clientY);
-      onResize(Math.min(maxHeight, Math.max(MIN_PANEL_HEIGHT, height)));
-    };
-    const stop = () => {
-      setResizing(false);
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', stop);
-      window.removeEventListener('pointercancel', stop);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', stop);
-    window.addEventListener('pointercancel', stop);
-  };
-
-  // Package files can be dropped anywhere on the workbench, not just onto the
-  // bar: the drawer is short, and hunting for a small well is worse than
-  // treating the whole surface as the target.
-  // Extensions decide where a file goes, so dropping and picking behave the
-  // same and nobody has to classify a file before handing it over.
+  // Package files can be dropped anywhere on the workbench, not just the short bar.
+  // Extensions decide the destination, so dropping and picking behave the same.
   const routeImportedFiles = (files: File[]) => {
-    const extensionOf = (file: File) => file.name.split('.').pop()?.toLowerCase() ?? '';
     const packageFiles = files.filter(
-      (file) => extensionOf(file) === 'zip' || extensionOf(file) === 'vpk',
+      (file) => fileExtension(file) === 'zip' || fileExtension(file) === 'vpk',
     );
     const definitionFiles = files.filter(
-      (file) => extensionOf(file) === 'vpd' || extensionOf(file) === 'json',
+      (file) => fileExtension(file) === 'vpd' || fileExtension(file) === 'json',
     );
     if (packageFiles.length) sourcePackage.onImport(packageFiles);
     if (definitionFiles.length) definitions.onImport(definitionFiles);
@@ -630,17 +247,6 @@ export function CustomWarpaintWorkbench({
     },
   };
 
-  // Tab badges surface the other tabs' state without switching to them: the
-  // same replaced/total shape the Files toolbar already uses, a presence dot
-  // plus format for the package, and a loaded/total count for definitions.
-  const filesBadge =
-    replacedCount > 0 ? `${replacedCount}/${slots.length}` : `${slots.length}`;
-  const packageSummary =
-    sourcePackage.status === 'mounted' ? sourcePackage.summary : undefined;
-  const loadedDefinitionCount = definitions.kits.filter(
-    (kit) => kit.loaded,
-  ).length;
-
   useEffect(() => {
     if (!expanded) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -653,8 +259,7 @@ export function CustomWarpaintWorkbench({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [expanded, onExpandedChange]);
 
-  // The export needs each replaced slot's kind, which only the slot list knows,
-  // so the pairing happens here rather than in the panel.
+  // Only the slot list knows each slot's kind, so export items are paired here.
   const exportItems = useMemo<ExportItem[]>(
     () =>
       slots.flatMap((slot) => {
@@ -709,130 +314,20 @@ export function CustomWarpaintWorkbench({
         value={tab}
         onValueChange={(value) => onTabChange(value as WorkbenchTab)}
       >
-        <header className="custom-workbench-header">
-          <Tabs.List className="custom-workbench-tablist">
-            <Tabs.Tab value="files" className="custom-workbench-tab">
-              <Files size={13} />
-              <span>Files</span>
-              <span className="custom-workbench-tab-badge">{filesBadge}</span>
-            </Tabs.Tab>
-            <Tabs.Tab
-              value="editor"
-              className="custom-workbench-tab"
-              data-dirty={editor?.dirty ? '' : undefined}
-            >
-              <PencilRuler size={13} />
-              <span>Edit</span>
-              {editor?.dirty && (
-                <span
-                  className="visual-warpaint-editor-dirty-dot"
-                  data-state={editor.draft.status}
-                  aria-label={draftStatusLabel(editor.draft.status) ?? 'Changes waiting to save'}
-                />
-              )}
-            </Tabs.Tab>
-            <Tabs.Tab value="export" className="custom-workbench-tab">
-              <Download size={13} />
-              <span>Export</span>
-              {replacedCount > 0 && (
-                <span className="custom-workbench-tab-badge">{replacedCount}</span>
-              )}
-            </Tabs.Tab>
-          </Tabs.List>
-
-          {/* What has been brought in, rather than places to go. Files and
-              Export are the two surfaces you work in; an archive and a set of
-              definitions are state you need to see while working in them, which
-              is exactly what a tab hides. These stay readable from every tab and
-              open their own detail when there is something to say. */}
-          <div className="workbench-sources">
-            {/* Plain buttons rather than Tabs.Tab: base-ui's tab triggers must
-                live inside a Tabs.List, and these belong beside it, not in it.
-                The Root's value is controlled here anyway, so selecting one
-                still shows its panel. */}
-            <button
-              type="button"
-              className="workbench-source"
-              data-loaded={sourcePackage.status === 'mounted' ? '' : undefined}
-              data-selected={tab === 'package' ? '' : undefined}
-              aria-pressed={tab === 'package'}
-              onClick={() => onTabChange('package')}
-              title={packageSummary ? `${packageSummary.name} (${packageSummary.format.toUpperCase()})` : 'No archive mounted'}
-            >
-              <PackageOpen size={12} />
-              <span>
-                {packageSummary
-                  ? `${packageSummary.name} · ${packageSummary.usedCount || packageSummary.entryCount} files`
-                  : 'No archive'}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="workbench-source"
-              data-loaded={definitions.status === 'loaded' ? '' : undefined}
-              data-selected={tab === 'definitions' ? '' : undefined}
-              aria-pressed={tab === 'definitions'}
-              onClick={() => onTabChange('definitions')}
-              title={definitions.fileName ?? 'No definitions imported'}
-            >
-              <ScrollText size={12} />
-              <span>
-                {definitions.status === 'loaded'
-                  ? `${loadedDefinitionCount || definitions.kits.length} paint${(loadedDefinitionCount || definitions.kits.length) === 1 ? '' : 's'}`
-                  : 'No definitions'}
-              </span>
-            </button>
-            <label className="workbench-source workbench-source-import" title="Import an archive or a war paint's definitions">
-              <Plus size={12} />
-              <span>Import</span>
-              <input
-                type="file"
-                accept=".zip,.vpk,.vpd,.json"
-                multiple
-                aria-label="Import an archive or war paint definitions"
-                onChange={(event) => {
-                  const files = [...(event.target.files ?? [])];
-                  event.target.value = '';
-                  if (files.length) routeImportedFiles(files);
-                }}
-              />
-            </label>
-            {onClearWorkspace && (
-              <button
-                type="button"
-                className="workbench-source workbench-source-clear"
-                title="Clear everything imported into this browser"
-                aria-label="Clear workspace"
-                onClick={onClearWorkspace}
-              >
-                <Trash2 size={12} />
-              </button>
-            )}
-          </div>
-
-          {tab === 'editor' && (
-            <button
-              type="button"
-              className="custom-workbench-expand"
-              title={expanded ? 'Exit full-screen editor (Esc)' : 'Open full-screen editor'}
-              aria-label={expanded ? 'Exit full-screen editor' : 'Open full-screen editor'}
-              aria-pressed={expanded}
-              onClick={() => onExpandedChange(!expanded)}
-            >
-              {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-            </button>
-          )}
-
-          <button
-            type="button"
-            className="custom-workbench-close"
-            title="Close war paint workbench"
-            aria-label="Close war paint workbench"
-            onClick={onClose}
-          >
-            <X size={16} />
-          </button>
-        </header>
+        <WorkbenchHeader
+          tab={tab}
+          onTabChange={onTabChange}
+          slotCount={slots.length}
+          replacedCount={replacedCount}
+          editor={editor}
+          sourcePackage={sourcePackage}
+          definitions={definitions}
+          onRouteFiles={routeImportedFiles}
+          onClearWorkspace={onClearWorkspace}
+          expanded={expanded}
+          onExpandedChange={onExpandedChange}
+          onClose={onClose}
+        />
 
         {dropping && (
           <div className="source-package-dropzone">
@@ -861,11 +356,11 @@ export function CustomWarpaintWorkbench({
             packageGeneration={packageGeneration ?? 0}
             sourceMounted={sourcePackage.status === 'mounted'}
             confirmReset={confirmReset}
-            onConfirmReset={() => setConfirmReset(true)}
+            onConfirmReset={armReset}
             onResetAll={resetAll}
             onExport={() => onTabChange('export')}
-            onUpdateFile={(slot, file, alphaOnly) =>
-              void updateFile(slot, file, alphaOnly)
+            onUpdateFile={(ref, file, alphaOnly) =>
+              void updateFile(ref, file, alphaOnly)
             }
             onRemoveAlpha={(ref) => void removeAlpha(ref)}
             onResetSlot={resetSlot}
@@ -907,241 +402,27 @@ export function CustomWarpaintWorkbench({
                     )}
                   </div>
                 )}
-                <div
-                  className="custom-workbench-edit-list"
-                  role="listbox"
-                  aria-label={materialsActive ? 'Material overrides' : (editor.mode === 'paint' ? 'Paint layers' : 'Stickers')}
-                >
-                  {editor.perWearScope && (
-                    <p className="custom-workbench-edit-scope-note">
-                      Editing: {editor.perWearScope.weapon}, {editor.perWearScope.wear}. This paint has a separate operation for each weapon and wear; change the weapon or wear in the viewer to edit another.
-                    </p>
-                  )}
-                  {materialsActive ? (
-                    <p className="custom-workbench-edit-materials-note">
-                      Material overrides apply to the whole paint, so this list is not used in Materials.
-                    </p>
-                  ) : editor.mode === 'paint' ? (<>
-                    {editor.baseLayer && (
-                      <button
-                        type="button"
-                        key="weapon-base-texture"
-                        className="custom-workbench-edit-layer-row"
-                        role="option"
-                        aria-selected={editor.baseLayer.active}
-                        onClick={editor.baseLayer.onSelect}
-                      >
-                        <span className="custom-workbench-edit-layer-thumb" aria-hidden="true">
-                          {editor.baseLayer.thumbnail ? <img src={editor.baseLayer.thumbnail} alt="" draggable={false} /> : null}
-                          <span
-                            className="custom-workbench-edit-layer-swatch"
-                            style={(editor.layerSwatchColors?.[editor.selectors.length]
-                              ?? editor.layerColors?.[editor.selectors.length])
-                              ? { background: editor.layerSwatchColors?.[editor.selectors.length]
-                                ?? editor.layerColors?.[editor.selectors.length] }
-                              : undefined}
-                          />
-                        </span>
-                        <span className="custom-workbench-edit-layer-label">{editor.baseLayer.label}</span>
-                        {(editor.layerHasTransformEdits?.[editor.selectors.length] ?? false) && (
-                          <span className="custom-workbench-edit-layer-vary" title="This layer has non-default transform ranges">
-                            <RefreshCw size={11} aria-hidden="true" />
-                          </span>
-                        )}
-                        {(editor.layerTransformLocked?.[editor.selectors.length] ?? false) && (
-                          <span className="custom-workbench-edit-layer-lock" title="This layer's transforms are locked">
-                            <Lock size={11} aria-hidden="true" />
-                          </span>
-                        )}
-                      </button>
-                    )}
-                    {editor.selectors.map((selector, index) => {
-                    const active = editor.activeSelectorId === selector.id;
-                    const swatchColor = editor.layerSwatchColors?.[index] ?? editor.layerColors?.[index];
-                    const thumbnail = editor.layerThumbnails?.[index];
-                    const count = editor.groupLayerIndex
-                      ? Object.values(editor.groupLayerIndex).filter((layerIndex) => layerIndex === index).length
-                      : 0;
-                    const hasTransformEdits = editor.layerHasTransformEdits?.[index] ?? false;
-                    const transformLocked = editor.layerTransformLocked?.[index] ?? false;
-                    return (
-                      <button
-                        type="button"
-                        key={selector.id}
-                        className="custom-workbench-edit-layer-row"
-                        role="option"
-                        aria-selected={active}
-                        onClick={() => editor.onActiveSelectorChange(selector.id)}
-                      >
-                        <span className="custom-workbench-edit-layer-thumb" aria-hidden="true">
-                          {thumbnail ? <img src={thumbnail} alt="" draggable={false} /> : null}
-                          <span
-                            className="custom-workbench-edit-layer-swatch"
-                            style={swatchColor ? { background: swatchColor } : undefined}
-                          />
-                        </span>
-                        <span className="custom-workbench-edit-layer-label">{selector.label}</span>
-                        {hasTransformEdits && (
-                          <span className="custom-workbench-edit-layer-vary" title="This layer has non-default transform ranges">
-                            <RefreshCw size={11} aria-hidden="true" />
-                          </span>
-                        )}
-                        {transformLocked && (
-                          <span className="custom-workbench-edit-layer-lock" title="This layer's transforms are locked">
-                            <Lock size={11} aria-hidden="true" />
-                          </span>
-                        )}
-                        <span className="custom-workbench-edit-layer-count">{count}</span>
-                      </button>
-                    );
-                    })}
-                  </>) : editor.sticker?.targets.map((target, index) => {
-                    const active = editor.sticker?.activeTargetId === target.id;
-                    return (
-                      <button
-                        type="button"
-                        key={target.id}
-                        className="custom-workbench-edit-sticker-row"
-                        role="option"
-                        aria-selected={active}
-                        onClick={() => editor.sticker?.onActiveTargetChange(target.id)}
-                      >
-                        <span className="custom-workbench-edit-sticker-thumb" aria-hidden="true">
-                          {target.thumbnail ? <img src={target.thumbnail} alt="" draggable={false} /> : null}
-                        </span>
-                        <span className="custom-workbench-edit-sticker-label">
-                          {target.label || `Sticker ${index + 1}`}
-                        </span>
-                        {(target.variantCount ?? 1) > 1 && (
-                          <span className="custom-workbench-edit-layer-count" title={`${target.variantCount} random variants`}>
-                            {target.variantCount}
-                          </span>
-                        )}
-                        {(target.sharedWith ?? 0) > 0 && (
-                          <span
-                            className="custom-workbench-edit-layer-vary"
-                            title={`Shares its image with ${target.sharedWith} other sticker${target.sharedWith === 1 ? '' : 's'}`}
-                          >
-                            <Link2 size={11} aria-hidden="true" />
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                {!materialsActive && editor.mode === 'sticker' && editor.sticker && (() => {
-                  const active = editor.sticker.targets.find((target) => target.id === editor.sticker?.activeTargetId);
-                  return (
-                    <div className="custom-workbench-edit-sticker-actions" role="toolbar" aria-label="Sticker actions">
-                      <button
-                        type="button"
-                        title="Add sticker"
-                        aria-label="Add sticker"
-                        aria-expanded={stickerPickerOpen && stickerPickerPurpose === 'sticker'}
-                        onClick={() => toggleStickerPicker('sticker')}
-                      >
-                        <Plus size={13} />
-                      </button>
-                      <button type="button" title="Remove sticker" aria-label="Remove sticker" onClick={editor.sticker.onRemoveTarget}>
-                        <Trash2 size={13} />
-                      </button>
-                      {editor.sticker.onSetTargetTexture && (
-                        <button
-                          type="button"
-                          title={(active?.sharedWith ?? 0) > 0
-                            ? `Replace this sticker's image. The other ${active?.sharedWith} sticker${active?.sharedWith === 1 ? '' : 's'} using it keep theirs.`
-                            : "Replace this sticker's image"}
-                          aria-label="Replace this sticker's image"
-                          disabled={!active?.baseReference}
-                          onClick={() => stickerFileRef.current?.click()}
-                        >
-                          <ImageUp size={13} />
-                        </button>
-                      )}
-                      <input
-                        ref={stickerFileRef}
-                        type="file"
-                        accept={TEXTURE_FILE_ACCEPT}
-                        hidden
-                        onChange={(event) => {
-                          const file = event.currentTarget.files?.[0];
-                          event.currentTarget.value = '';
-                          if (file) replaceStickerImage(file);
-                        }}
-                      />
-                      <span />
-                      <button type="button" title="Move sticker earlier" aria-label="Move sticker earlier" disabled={!active?.canMoveEarlier} onClick={() => editor.sticker?.onMoveTarget(-1)}>
-                        <ArrowUp size={13} />
-                      </button>
-                      <button type="button" title="Move sticker later" aria-label="Move sticker later" disabled={!active?.canMoveLater} onClick={() => editor.sticker?.onMoveTarget(1)}>
-                        <ArrowDown size={13} />
-                      </button>
-                    </div>
-                  );
-                })()}
+                <EditorLayerList editor={editor} materialsActive={materialsActive} />
+                {!materialsActive && editor.mode === 'sticker' && editor.sticker && (
+                  <StickerEditToolbar
+                    sticker={editor.sticker}
+                    stickerFileRef={stickerFileRef}
+                    pickerOpen={stickerPickerOpen}
+                    pickerPurpose={stickerPickerPurpose}
+                    onTogglePicker={toggleStickerPicker}
+                    onReplaceImage={replaceStickerImage}
+                  />
+                )}
                 {!materialsActive && editor.mode === 'sticker' && editor.sticker && stickerPickerOpen && (
-                  <div
-                    className="custom-workbench-sticker-picker"
-                    data-purpose={stickerPickerPurpose}
-                    role="dialog"
-                    aria-label={stickerPickerPurpose === 'variant' ? 'Add variant' : 'Add sticker'}
-                  >
-                    <div className="custom-workbench-sticker-picker-head">
-                      <strong>{stickerPickerPurpose === 'variant' ? 'Add variant' : 'Add sticker'}</strong>
-                      <button type="button" aria-label="Close sticker picker" onClick={() => setStickerPickerOpen(false)}>
-                        <X size={13} />
-                      </button>
-                    </div>
-                    <input
-                      type="search"
-                      value={stickerSearch}
-                      placeholder="Find sticker texture..."
-                      aria-label="Find sticker texture"
-                      autoFocus
-                      onChange={(event) => setStickerSearch(event.target.value)}
-                    />
-                    <div className="custom-workbench-sticker-picker-scope" role="group" aria-label="Sticker texture source">
-                      <button
-                        type="button"
-                        aria-pressed={!showAllStickerTextures}
-                        onClick={() => setShowAllStickerTextures(false)}
-                      >
-                        Current paint
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={showAllStickerTextures}
-                        onClick={() => setShowAllStickerTextures(true)}
-                      >
-                        All available
-                      </button>
-                    </div>
-                    <div className="custom-workbench-sticker-picker-list" role="listbox" aria-label="Sticker textures">
-                      {(showAllStickerTextures ? editor.sticker.allTextureChoices : editor.sticker.textureChoices)
-                        .filter((choice) => `${choice.label} ${choice.ref}`.toLowerCase().includes(stickerSearch.trim().toLowerCase()))
-                        .map((choice) => (
-                          <button
-                            type="button"
-                            key={choice.ref}
-                            role="option"
-                            aria-selected="false"
-                            title={choice.ref}
-                            onClick={() => {
-                              if (stickerPickerPurpose === 'variant') editor.sticker?.onAddVariant?.(choice.ref);
-                              else editor.sticker?.onAddTarget(choice.ref);
-                              setStickerPickerOpen(false);
-                              setStickerSearch('');
-                            }}
-                          >
-                            <span aria-hidden="true">
-                              {choice.thumbnail ? <img src={choice.thumbnail} alt="" loading="lazy" draggable={false} /> : null}
-                            </span>
-                            <strong>{choice.label}</strong>
-                            <small>{choice.ref}</small>
-                          </button>
-                        ))}
-                    </div>
-                  </div>
+                  <StickerTexturePicker
+                    sticker={editor.sticker}
+                    purpose={stickerPickerPurpose}
+                    search={stickerSearch}
+                    showAll={showAllStickerTextures}
+                    onOpenChange={setStickerPickerOpen}
+                    onSearchChange={setStickerSearch}
+                    onShowAllChange={setShowAllStickerTextures}
+                  />
                 )}
                 <div className="custom-workbench-edit-footer">
                   <div className="custom-workbench-history-actions">
@@ -1190,10 +471,10 @@ export function CustomWarpaintWorkbench({
                     aria-label={confirmRevert ? 'Confirm reverting all edits' : 'Revert all edits'}
                     onClick={() => {
                       if (!confirmRevert) {
-                        setConfirmRevert(true);
+                        armRevert();
                         return;
                       }
-                      setConfirmRevert(false);
+                      disarmRevert();
                       editor.onReset();
                     }}
                   >
@@ -1258,109 +539,17 @@ export function CustomWarpaintWorkbench({
                     const sticker = editor.sticker;
                     const active = sticker.targets.find((target) => target.id === sticker.activeTargetId);
                     const variants = sticker.variants ?? [];
-                    const total = variants.reduce((sum, variant) => sum + variant.weight, 0);
-                    const weightsEqual = variants.every((variant) => variant.weight === variants[0]?.weight);
                     const variantsPanel = variants.length > 0 ? (
-                      <div className="sticker-placement-editor-variants" role="listbox" aria-label="Sticker variants">
-                        {variants.map((variant) => {
-                          const label = variant.baseReference ? referenceLabel(variant.baseReference) : 'No texture';
-                          const percent = total > 0 ? Math.round((variant.weight / total) * 100) : 0;
-                          const onlyVariant = variants.length <= 1;
-                          const togglePreview = () => sticker.onPreviewVariant?.(variant.index);
-                          return (
-                            <div
-                              key={`${variant.index}:${variant.baseReference ?? ''}`}
-                              className="sticker-placement-editor-variant"
-                              role="option"
-                              tabIndex={0}
-                              aria-selected={variant.previewing}
-                              title="Preview this variant in the sticker editor"
-                              onClick={(event) => {
-                                // Controls inside the row keep their own clicks.
-                                if (event.target instanceof Element && event.target.closest('button, input')) return;
-                                togglePreview();
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
-                                event.preventDefault();
-                                togglePreview();
-                              }}
-                            >
-                              <span className="custom-workbench-edit-sticker-thumb" aria-hidden="true">
-                                {variant.thumbnail ? <img src={variant.thumbnail} alt="" draggable={false} /> : null}
-                              </span>
-                              <span className="sticker-placement-editor-variant-name" title={variant.baseReference}>{label}</span>
-                              <button
-                                type="button"
-                                className="sticker-placement-editor-variant-remove"
-                                title={onlyVariant ? 'A sticker needs at least one variant.' : 'Remove variant'}
-                                aria-label="Remove variant"
-                                disabled={onlyVariant}
-                                onClick={() => sticker.onRemoveVariant?.(variant.index)}
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                              <button
-                                type="button"
-                                className="sticker-placement-editor-variant-replace"
-                                title="Replace this variant's image"
-                                aria-label="Replace this variant's image"
-                                disabled={!variant.baseReference}
-                                onClick={() => {
-                                  variantReplaceIndexRef.current = variant.index;
-                                  variantFileRef.current?.click();
-                                }}
-                              >
-                                <ImageUp size={12} />
-                              </button>
-                              <span
-                                className="sticker-placement-editor-variant-chance"
-                                title={`Weight ${variant.weight} of ${total} total`}
-                              >
-                                {variant.previewing
-                                  ? <span title="Shown in the sticker editor">Previewing · </span>
-                                  : variant.picked && <span title="Drawn for the current seed">Picked · </span>}
-                                {percent}%
-                              </span>
-                              <StickerVariantWeightInput
-                                label={`Relative weight of ${label}`}
-                                weight={variant.weight}
-                                onCommit={(weight) => sticker.onSetVariantWeight?.(variant.index, weight)}
-                              />
-                            </div>
-                          );
-                        })}
-                        <input
-                          ref={variantFileRef}
-                          type="file"
-                          accept={TEXTURE_FILE_ACCEPT}
-                          hidden
-                          onChange={(event) => {
-                            const file = event.currentTarget.files?.[0];
-                            const index = variantReplaceIndexRef.current;
-                            event.currentTarget.value = '';
-                            if (file && index !== null) replaceVariantImage(index, file);
-                          }}
-                        />
-                        <div className="sticker-placement-editor-corner-actions">
-                          <button
-                            type="button"
-                            aria-expanded={stickerPickerOpen && stickerPickerPurpose === 'variant'}
-                            onClick={() => toggleStickerPicker('variant')}
-                          >
-                            <Plus size={13} aria-hidden="true" />
-                            Add variant
-                          </button>
-                          <button
-                            type="button"
-                            title={weightsEqual ? 'Every variant already has the same weight.' : 'Give every variant the same weight'}
-                            disabled={weightsEqual}
-                            onClick={() => sticker.onEqualizeVariantWeights?.()}
-                          >
-                            Equal weights
-                          </button>
-                        </div>
-                      </div>
+                      <StickerVariantList
+                        sticker={sticker}
+                        variants={variants}
+                        variantFileRef={variantFileRef}
+                        variantReplaceIndexRef={variantReplaceIndexRef}
+                        pickerOpen={stickerPickerOpen}
+                        pickerPurpose={stickerPickerPurpose}
+                        onTogglePicker={toggleStickerPicker}
+                        onReplaceVariantImage={replaceVariantImage}
+                      />
                     ) : undefined;
                     return (
                       <StickerPlacementEditor
@@ -1373,9 +562,7 @@ export function CustomWarpaintWorkbench({
                     );
                   })()
                   : (() => {
-                    // One switch instance, handed to whichever sub-view is
-                    // showing, so both keep a single header row and the
-                    // control never moves between them.
+                    // One switch instance serves both sub-views, so the control never moves.
                     const subView = editor.paintSubView ?? 'parts';
                     const subViewSwitch = (editor.transform || editor.graph) ? (
                       <div className="custom-workbench-paint-subview" role="group" aria-label="Layer view">
@@ -1443,8 +630,7 @@ export function CustomWarpaintWorkbench({
                         </label>
                       )}
                     </>);
-                    // A per-wear scope with no parts still offers Graph (and Transform), so its switch
-                    // stays visible beside the parts message. A top-level paint keeps the switch hidden there.
+                    // A per-wear scope with no parts still shows the switch; a top-level paint hides it.
                     const partsHeaderSlot = editor.enabled || editor.perWearScope ? subViewSwitch : undefined;
                     return editor.graph && subView === 'graph'
                       ? (
@@ -1471,10 +657,7 @@ export function CustomWarpaintWorkbench({
           )}
           </Suspense>
         </Tabs.Panel>
-        {/* Not Tabs.Panel: base-ui only activates a panel that has a matching
-            trigger inside Tabs.List, and these are reached from the source chips
-            in the header instead. Rendered conditionally on the same tab value,
-            so the drawer still shows exactly one surface at a time. */}
+        {/* Not Tabs.Panel: base-ui needs a trigger in Tabs.List, and these open from header chips. */}
         {tab === 'package' && (
           <div className="custom-workbench-panel" role="region" aria-label="Mounted archive">
             <Suspense fallback={<WorkbenchPanelFallback />}>

@@ -40,12 +40,8 @@ function positiveDimension(value: number | undefined, fallback: number): number 
 }
 
 /**
- * Produce a deterministic left-to-right layout for an operation forest.
- *
- * Each root owns a vertical subtree slot. Children are stacked in authored
- * order inside that slot, and each parent is centered over the combined child
- * bounds. Slots are disjoint, so nodes at the same depth cannot overlap even
- * when a preview makes one card substantially taller than its siblings.
+ * Deterministic left-to-right layout for an operation forest. Each root owns a disjoint vertical slot,
+ * children stack in authored order and parents centre over them, so nodes at one depth never overlap.
  */
 export function layoutOperationGraph(
   graph: OperationGraph,
@@ -95,8 +91,7 @@ export function layoutOperationGraph(
     if (node.id !== graph.outputId) depthOf(node.id);
   }
 
-  // A subtree's height includes the card height and the compact gaps between
-  // its ordered children. Memoization keeps large authored graphs linear.
+  // A subtree is as tall as its card or its stacked children, whichever is larger. Memoized to stay linear.
   const subtreeHeights = new Map<string, number>();
   const measureStack = new Set<string>();
   const subtreeHeightOf = (nodeId: string): number => {
@@ -162,8 +157,7 @@ export function layoutOperationGraph(
   for (const root of roots) {
     nextRootTop += placeSubtree(root, nextRootTop) + verticalGap;
   }
-  // Invalid/disconnected graphs still get deterministic, non-overlapping
-  // slots instead of disappearing from the editor.
+  // Disconnected nodes still get non-overlapping slots instead of disappearing.
   for (const node of graph.nodes) {
     if (node.id === graph.outputId || placed.has(node.id)) continue;
     nextRootTop += placeSubtree(node.id, nextRootTop) + verticalGap;

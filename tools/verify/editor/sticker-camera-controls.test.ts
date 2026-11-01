@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { isRapidInspectClickPair } from '../../../src/viewer/inspectControls';
+import { isRapidInspectClickPair } from '../../../src/viewer/inspectInput';
 
 test('rapid click pairs reset inspect only within the window and slop', () => {
   const first = { clientX: 50, clientY: 80, time: 1_000 };

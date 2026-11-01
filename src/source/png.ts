@@ -1,9 +1,8 @@
 import { crc32 } from './crc32';
 
 /**
- * PNG encoder for decoded Source textures. Canvas serialisation premultiplies
- * RGB by alpha, which is incorrect for texture data where the two channels
- * are intentionally independent.
+ * PNG encoder for decoded Source textures. Canvas serialisation premultiplies RGB by
+ * alpha, which corrupts texture data whose RGB and alpha are independent.
  */
 export function pngChunk(type: string, data: Uint8Array): Uint8Array {
   const chunk = new Uint8Array(data.length + 12);

@@ -4,7 +4,7 @@ const DATABASE_NAME = 'warpaint-viewer';
 const DATABASE_VERSION = 2;
 const DRAFT_STORE_NAME = 'editor-drafts';
 const CUSTOM_SOURCE_STORE_NAME = 'custom-source-files';
-const DRAFT_VERSION = 2;
+export const DRAFT_VERSION = 2;
 // Version 1 drafts held one operation under `messages`. They are still read, as a one-operation bundle.
 const LEGACY_DRAFT_VERSION = 1;
 const CUSTOM_SOURCE_VERSION = 1;
@@ -202,15 +202,12 @@ export async function deleteCustomSourceFiles(key: CustomSourceFileKind): Promis
 }
 
 /**
- * Draft keys are `custom:<defindex>:<definitions file>` for imported paints and
- * `stock:<kitId>` for built-in ones (see `editorDraftKey` in `App.tsx`). Only
- * the imported half belongs to a workspace: removing the definitions makes
- * every `custom:` draft unreachable, while a stock paint's draft outlives any
- * import and must survive the clear.
+ * Draft keys are `custom:<defindex>:<file>` for imported paints and `stock:<kitId>` for built-in ones.
+ * Only imported drafts belong to a workspace; stock drafts survive clearing the imports.
  */
 const CUSTOM_DRAFT_PREFIX = 'custom:';
 
-export function selectWorkspaceDraftKeys(keys: readonly IDBValidKey[]): string[] {
+function selectWorkspaceDraftKeys(keys: readonly IDBValidKey[]): string[] {
   return keys.filter((key): key is string => typeof key === 'string' && key.startsWith(CUSTOM_DRAFT_PREFIX));
 }
 
@@ -219,20 +216,14 @@ export interface WorkspaceClearResult {
   sources: number;
 }
 
-/**
- * Removes both imported source records and every imported-paint draft in one
- * read/write transaction, so a partial delete cannot leave the interface
- * cleared while the data comes back on the next reload. The caller clears live
- * state only after this resolves.
- */
+/** Removes imported sources and imported-paint drafts in one transaction, so a partial delete cannot return on reload. */
 export async function clearCustomWorkspace(): Promise<WorkspaceClearResult> {
   const database = await openDatabase();
   const transaction = database.transaction([DRAFT_STORE_NAME, CUSTOM_SOURCE_STORE_NAME], 'readwrite');
   const draftStore = transaction.objectStore(DRAFT_STORE_NAME);
   const sourceStore = transaction.objectStore(CUSTOM_SOURCE_STORE_NAME);
 
-  // Both reads are issued before the first await so they share one transaction
-  // turn; awaiting them one after another risks the transaction going inactive.
+  // Issue both reads before the first await, or the transaction may go inactive.
   const [draftKeys, sourceKeys] = await Promise.all([
     requestResult(draftStore.getAllKeys()),
     requestResult(sourceStore.getAllKeys()),

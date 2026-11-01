@@ -1,35 +1,30 @@
-// One-off script: build a paintkit name -> grade (rarity) mapping from the local
-// TF2 install and write it to public/data/grades.json.
+// Writes public/data/grades.json (paintkit name -> grade) from the local TF2 install.
+// update:warpaints runs it on every refresh.
 //
 //   node tools/extract/grades.mjs
 //
-// Source of truth: items_game.txt's item_collections block nests each collection's
-// war paint items under a rarity tier key (common/uncommon/rare/mythical/legendary/
-// ancient). Those tier keys are the same internal names items_game uses for the
-// war paint "grade" system (Rarity_Common_Weapon etc. localize to "Civilian",
-// "Freelance", "Mercenary", "Commando", "Assassin", "Elite"). Paintkit names are
-// resolved the same way warpaints.mjs resolves them, so keys line up with the
-// generated manifest without any extra normalization.
-//
-// This reads the same local files warpaints.mjs reads (no network, no re-download)
-// and does not modify warpaints.mjs or its output.
+// items_game's item_collections nest each collection's war paint items under a rarity tier key
+// (common ... ancient). Those keys map to the war paint grades (Civilian ... Elite). Names resolve
+// as in warpaints.mjs, so keys match manifest.json.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadRoot, parseContainer, decodeType, DEF_TYPE } from '../lib/proto.mjs';
-import { parseKV, kvGet } from '../lib/kv.mjs';
-import { loadLocalization, locLookup } from '../lib/localization.mjs';
+import { kvGet } from '../lib/kv.mjs';
+import { loadLocalization } from '../lib/localization.mjs';
+import {
+  readItemsGameKV, indexItemsByName, paintkitIndexOf, paintkitDisplayName,
+} from '../lib/items-game.mjs';
+import { TF_DIR } from '../lib/vpk.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..', '..');
-const STAGING = path.join(ROOT, 'staging');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
 
-const TF = 'C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2/tf';
+const TF = `${TF_DIR}/tf`;
 const VPD = `${TF}/scripts/protodefs/proto_defs.vpd`;
-const ITEMS_GAME = `${TF}/scripts/items/items_game.txt`;
 const LOC_PROTO = `${TF}/resource/tf_proto_obj_defs_english.txt`;
 
 // items_game rarity tier name -> war paint grade (see Rarity_*_Weapon loc tokens).
@@ -44,31 +39,6 @@ const TIER_TO_GRADE = {
 
 function log(...a) { console.log(...a); }
 
-function loadItemsGame() {
-  const cache = path.join(STAGING, 'items_game.json');
-  if (fs.existsSync(cache)) return JSON.parse(fs.readFileSync(cache, 'utf8'));
-  const kv = parseKV(fs.readFileSync(ITEMS_GAME, 'utf8'));
-  fs.mkdirSync(STAGING, { recursive: true });
-  fs.writeFileSync(cache, JSON.stringify(kv));
-  return kv;
-}
-
-function paintkitIndexOf(item) {
-  const sa = kvGet(item, 'static_attrs');
-  if (sa) {
-    const v = kvGet(sa, 'paintkit_proto_def_index');
-    if (v !== undefined && typeof v !== 'object') return Number(v);
-    if (v && typeof v === 'object') { const vv = kvGet(v, 'value'); if (vv !== undefined) return Number(vv); }
-  }
-  const attrs = kvGet(item, 'attributes');
-  if (attrs) {
-    const a = kvGet(attrs, 'paintkit_proto_def_index');
-    if (a !== undefined && typeof a !== 'object') return Number(a);
-    if (a && typeof a === 'object') { const vv = kvGet(a, 'value'); if (vv !== undefined) return Number(vv); }
-  }
-  return null;
-}
-
 function main() {
   log('[grades] decoding paintkit definitions ...');
   const root = loadRoot();
@@ -78,29 +48,23 @@ function main() {
   log('[grades] loading localization ...');
   const locProto = loadLocalization(LOC_PROTO);
 
-  // paintkit id -> display name, resolved exactly as warpaints.mjs resolves it.
+  // paintkit id -> display name, resolved as in warpaints.mjs.
   const nameById = new Map();
   for (const def of defs) {
-    const id = def.header.defindex;
-    const name = locLookup(locProto, def.loc_desctoken) || def.header.name || `paintkit_${id}`;
-    nameById.set(id, name);
+    nameById.set(def.header.defindex, paintkitDisplayName(locProto, def));
   }
   log(`[grades] resolved ${nameById.size} paintkit names`);
 
   log('[grades] parsing items_game.txt ...');
-  const kv = loadItemsGame();
+  const kv = readItemsGameKV();
   const gameRoot = kvGet(kv, 'items_game');
   const itemsGame = {
     items: kvGet(gameRoot, 'items') || {},
     collections: kvGet(gameRoot, 'item_collections') || {},
   };
-  const byName = new Map();
-  for (const it of Object.values(itemsGame.items)) {
-    if (it && typeof it === 'object' && typeof it.name === 'string') byName.set(it.name, it);
-  }
+  const byName = indexItemsByName(itemsGame.items);
 
-  // paintkit id -> grade, from the rarity-tier nesting under each non-reference
-  // collection's items block.
+  // paintkit id -> grade, from the rarity-tier nesting of each non-reference collection.
   const gradeById = new Map();
   let conflicts = 0;
   for (const entry of Object.values(itemsGame.collections)) {
@@ -148,8 +112,7 @@ function main() {
   fs.writeFileSync(outPath, JSON.stringify(sorted, null, 1));
   log(`[grades] wrote ${outPath}`);
 
-  // Cross-check against the current manifest, if present, so coverage is visible
-  // without a separate step.
+  // Report manifest coverage when a manifest exists.
   const manifestPath = path.join(PUBLIC_DATA, 'manifest.json');
   if (fs.existsSync(manifestPath)) {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));

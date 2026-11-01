@@ -4,9 +4,10 @@ import path from 'node:path';
 import * as THREE from 'three';
 import { test, vi } from 'vitest';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { FP_PORTRAIT_FRAME_CENTER, FirstPersonPreview, bindViewmodelBones, mergeViewmodelBones, viewmodelFov, viewmodelFrameTop, type ViewmodelManifest } from '../../../src/viewer/firstPerson';
+
+import { FP_PORTRAIT_FRAME_CENTER, FirstPersonPreview, bindViewmodelBones, mergeViewmodelBones, viewmodelFov, viewmodelFrameTop, type ViewmodelManifest } from '../../../src/viewer/firstPerson/firstPerson';
 import * as materialConfig from '../../../src/viewer/materialConfig';
-import { FishBonePhysics } from '../../../src/viewer/fishPhysics';
+import { FishBonePhysics } from '../../../src/viewer/firstPerson/fishPhysics';
 import { firstPersonAnimationGroups } from '../../../src/ui/stage/firstPersonAnimations';
 
 interface GlbDocument {
@@ -46,6 +47,7 @@ test('first-person assets cover every paintable weapon, retain UVs, and contain 
   const data = path.resolve('public/data');
   const catalog: { weapons: { key: string; model: string }[] } = JSON.parse(fs.readFileSync(path.join(data, 'manifest.json'), 'utf8'));
   const manifest: ViewmodelManifest = JSON.parse(fs.readFileSync(path.join(data, 'viewmodels/manifest.json'), 'utf8'));
+  const armsByKey = new Map<string, GlbDocument>();
   for (const weapon of catalog.weapons.filter(entry => entry.key !== 'paintkit_tool')) {
     const views = manifest.weapons.filter(entry => entry.weaponKey === weapon.key);
     assert.ok(views.length, `${weapon.key} has a first-person model`);
@@ -54,7 +56,12 @@ test('first-person assets cover every paintable weapon, retain UVs, and contain 
     // First-person GLBs can also contain loaded ammunition bodygroups.
     assert.ok(expected.size > 0 && [...expected].every(uv => actual.has(uv)), `${weapon.key} preserves paint UVs`);
     for (const view of views) {
-      const arms = readGlb(path.join(data, 'viewmodels', manifest.arms[view.armsKey].model)).document;
+      // Arms files are several MB each and shared by many views, so each is parsed once.
+      let arms = armsByKey.get(view.armsKey);
+      if (!arms) {
+        arms = readGlb(path.join(data, 'viewmodels', manifest.arms[view.armsKey].model)).document;
+        armsByKey.set(view.armsKey, arms);
+      }
       assert.ok(arms.skins?.length, `${view.armsKey} has a skeleton`);
       const names = new Set(arms.animations?.map(clip => clip.name));
       assert.ok(names.has(view.activity), `${view.weaponKey}/${view.class} idle exists`);

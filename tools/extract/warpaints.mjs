@@ -1,30 +1,24 @@
-// TF2 Warpaint Viewer - data extraction pipeline entry point.
-//   node tools/extract/warpaints.mjs [--only <step>]
-// Steps: protodefs, items, recipes, textures, weapons, manifest, verify (default: all).
-//
-// Produces:
-//   public/data/manifest.json
-//   public/data/protodefs-full.bin        (the whole container, for the export builder)
-//   public/data/protodefs-loc/<lang>.txt  (paintkit name tokens, one file per language)
-//   public/data/recipes/<paintkitId>.json  ({ trees, variants }; variants key =
-//                                            <weaponKey>_<team>[_w<n>] -> trees index)
-//   public/data/textures/<vpk path minus materials/>.webp   (lossless, compositor input)
-//   public/data/thumbnails/textures/...                      (32px editor previews)
-//   staging/weapon_models.json      (weaponKey -> [vpk-relative .mdl paths]) for the model agent
-//   staging/protodefs/*.json        (raw decoded proto dumps, for debugging)
-//   staging/items_game.json         (cached parsed items_game)
+// TF2 Warpaint Viewer data extraction pipeline entry point.
+//   node tools/extract/warpaints.mjs [--only <step>] [--force]
+// Steps: protodefs-base, export-snapshot, recipes, weapons, textures, icons, manifest, verify.
+// The proto decode always runs first. --force rebuilds textures and icons; otherwise outputs
+// whose source VPK data is unchanged are reused.
+// Writes under public/data/ and staging/.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadRoot, parseContainer, decodeType, DEF_TYPE } from '../lib/proto.mjs';
-import { parseKV, kvGet } from '../lib/kv.mjs';
+import { kvGet } from '../lib/kv.mjs';
 import { loadLocalization, locLookup } from '../lib/localization.mjs';
 import {
   buildIndex, resolveRecipe, WEAPON_SLOTS, texturePublicPath,
 } from '../lib/resolve.mjs';
-import { listVPK, TEXTURES_VPK, MISC_VPK } from '../lib/vpk.mjs';
+import {
+  readItemsGameKV, indexItemsByName, paintkitIndexOf, paintkitDisplayName,
+} from '../lib/items-game.mjs';
+import { listVPK, TEXTURES_VPK, MISC_VPK, TF_DIR } from '../lib/vpk.mjs';
 import { buildBundle } from '../lib/recipe-pack.mjs';
 import { extractInventoryIcons, generatePaintIcons, pickPaintIconRef } from './icons.mjs';
 import { readImageDimensions } from './image-dimensions.mjs';
@@ -41,18 +35,16 @@ const ROOT = path.join(__dirname, '..', '..');
 const STAGING = path.join(ROOT, 'staging');
 const PUBLIC_DATA = path.join(ROOT, 'public', 'data');
 
-const TF = 'C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2/tf';
+const TF = `${TF_DIR}/tf`;
 const VPD = `${TF}/scripts/protodefs/proto_defs.vpd`;
-const ITEMS_GAME = `${TF}/scripts/items/items_game.txt`;
 const LOC_PROTO = `${TF}/resource/tf_proto_obj_defs_english.txt`;
 const LOC_ENGLISH = `${TF}/resource/tf_english.txt`;
 
 const WEAR_LEVELS = [0.2, 0.4, 0.6, 0.8, 1.0];
 const WEAR_NAMES = ['Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn', 'Battle Scarred'];
 const COMPOSITE_1024_WEAPONS = new Set(['c_flameball', 'c_holymackerel', 'c_lochnload', 'c_quadball']);
-// Stock assets used by community proto definitions but not referenced by any
-// currently shipped Valve recipe. Keep them in the browser bundle so imported
-// definitions can fall back to TF2 exactly like built-in recipe inputs do.
+// Community proto definitions can reference stock textures that no shipped recipe uses;
+// ship them so imported paints fall back to TF2 like built-in recipe inputs.
 const CUSTOM_DEFINITION_TEXTURE_REFS = [
   'textures/models/workshop/weapons/c_models/c_blackbox/p_blackbox_groups_02.webp',
   'textures/models/weapons/c_models/c_flameball/p_flameball_ao.webp',
@@ -67,9 +59,7 @@ function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
 function collectLayerPreviewRefs(node, refs) {
   if (!node?.nodes) return;
   node.nodes.forEach((child, index) => {
-    // The leftmost texture in a combine chain (the unmasked base coat) is
-    // left out on purpose: its layer row falls back to the full-size texture,
-    // and generating it here only produced uncommitted thumbnails on refresh.
+    // Skip the leftmost (unmasked base) texture: its layer row uses the full-size texture.
     if (child.type === 'select' && index > 0) {
       const collectTextures = (candidate) => {
         if (candidate.type === 'texture_lookup') refs.add(candidate.texture);
@@ -84,18 +74,8 @@ function collectLayerPreviewRefs(node, refs) {
 
 const EXTRACT_STATE_PATH = path.join(STAGING, 'extract_state.json');
 
-// items_game parsing + prefab-aware field lookup
-
 function loadItemsGame() {
-  const cache = path.join(STAGING, 'items_game.json');
-  let kv;
-  if (fs.existsSync(cache)) {
-    kv = JSON.parse(fs.readFileSync(cache, 'utf8'));
-  } else {
-    kv = parseKV(fs.readFileSync(ITEMS_GAME, 'utf8'));
-    ensureDir(STAGING);
-    fs.writeFileSync(cache, JSON.stringify(kv));
-  }
+  const kv = readItemsGameKV();
   const root = kvGet(kv, 'items_game');
   return {
     items: kvGet(root, 'items') || {},
@@ -104,15 +84,10 @@ function loadItemsGame() {
   };
 }
 
-// Build paintkit defindex -> localized collection display name from items_game item_collections.
-// Collection items may be listed directly or nested under rarity grade keys; each item name maps
-// to an item def whose static_attrs (or attributes) carry paintkit_proto_def_index.
+// Paintkit defindex -> localized collection name. Items may be nested under rarity grade keys.
 function buildCollectionMap(itemsGame, locEnglish, locProto) {
   const machineByDisplay = new Map(); // display name -> items_game collection machine name
-  const byName = new Map();
-  for (const it of Object.values(itemsGame.items)) {
-    if (it && typeof it === 'object' && typeof it.name === 'string') byName.set(it.name, it);
-  }
+  const byName = indexItemsByName(itemsGame.items);
 
   const leafNames = (block, out) => {
     for (const [k, v] of Object.entries(block)) {
@@ -120,22 +95,6 @@ function buildCollectionMap(itemsGame, locEnglish, locProto) {
       else out.push(k);
     }
     return out;
-  };
-
-  const paintkitIndexOf = (item) => {
-    const sa = kvGet(item, 'static_attrs');
-    if (sa) {
-      const v = kvGet(sa, 'paintkit_proto_def_index');
-      if (v !== undefined && typeof v !== 'object') return Number(v);
-      if (v && typeof v === 'object') { const vv = kvGet(v, 'value'); if (vv !== undefined) return Number(vv); }
-    }
-    const attrs = kvGet(item, 'attributes');
-    if (attrs) {
-      const a = kvGet(attrs, 'paintkit_proto_def_index');
-      if (a !== undefined && typeof a !== 'object') return Number(a);
-      if (a && typeof a === 'object') { const vv = kvGet(a, 'value'); if (vv !== undefined) return Number(vv); }
-    }
-    return null;
   };
 
   const map = new Map(); // paintkitId -> displayName
@@ -185,11 +144,8 @@ function modelStem(modelPath) {
   return base.replace(/\.mdl$/i, '');
 }
 
-// items_game item definition index -> catalogued weapon key, for every item that
-// wears a model this viewer ships. A paintkit item definition template names its
-// weapon by items_game index, so an imported proto_def file can only be resolved
-// in the browser with this map. Reskins and festive/strange variants have their
-// own indexes and the same model, so this is deliberately many-to-one.
+// items_game item index -> weapon key. Imported proto_defs name weapons by this index, so the
+// browser needs this map. Reskins share a model, so the mapping is many-to-one.
 function buildItemDefMap(itemsGame, weaponRegistry) {
   const map = {};
   for (const [index, item] of Object.entries(itemsGame.items)) {
@@ -199,10 +155,6 @@ function buildItemDefMap(itemsGame, weaponRegistry) {
   }
   return map;
 }
-
-// ---------------------------------------------------------------------------
-// Step: decode proto defs
-// ---------------------------------------------------------------------------
 
 function stepProtodefs() {
   log('[protodefs] decoding proto_defs.vpd ...');
@@ -224,19 +176,14 @@ function stepProtodefs() {
   };
 }
 
-// Container defType values that never carry a paintkit definition itself: variables,
-// operations, item definitions and header-only prefabs. A community-authored proto_defs
-// JSON fragment (src/protodefs/jsonFragments.ts) supplies its own paintkit definition and
-// operation blocks, but references these by index, so the browser needs them shipped
-// separately from the 250 paintkit definitions (defType 9), which are 90%+ of the container's
-// bytes and are exactly what community files replace. Blocks are copied verbatim (still
-// raw protobuf payloads from parseContainer, never decoded), so parseContainer reads this
-// file with no new code on the browser side.
+// Non-paintkit defTypes shipped as raw protobuf blocks in protodefs-base.bin. Community JSON
+// fragments reference them by index but supply their own paintkit definitions (defType 9,
+// 90%+ of the container), so the browser needs these without the rest.
 const BASE_BLOB_DEF_TYPES = [
   DEF_TYPE.PAINTKIT_VARIABLES,
   DEF_TYPE.PAINTKIT_OPERATION,
   DEF_TYPE.PAINTKIT_ITEM_DEFINITION,
-  10, // DEF_TYPE_HEADER_ONLY - not in tools/lib/proto.mjs's DEF_TYPE (that module only names the four types the pipeline decodes), but the container tags it the same way.
+  10, // DEF_TYPE_HEADER_ONLY, not named in proto.mjs DEF_TYPE but tagged the same way by the container.
 ];
 
 function stepProtodefsBase(byType) {
@@ -259,10 +206,7 @@ function stepProtodefsBase(byType) {
   log(`[protodefs-base] wrote ${outPath} (${bytes.length} bytes) for defTypes ${BASE_BLOB_DEF_TYPES.join(',')}`);
 }
 
-// ---------------------------------------------------------------------------
-// Collect slots from a paintkit definition (named weapon slots + old-style repeated item[]).
-// ---------------------------------------------------------------------------
-
+// Named weapon slots plus the old-style repeated item[] of a paintkit definition.
 function collectSlots(def) {
   const slots = [];
   for (const name of WEAPON_SLOTS) {
@@ -276,26 +220,12 @@ function collectSlots(def) {
   return slots;
 }
 
-// ---------------------------------------------------------------------------
-// Export builder snapshot
-// ---------------------------------------------------------------------------
-//
-// The export builder splices a new paintkit into a complete proto_defs container
-// and names it in a complete localization file, then ships both inside the pack.
-// Neither can be a partial file: anything under tf/custom/ SHADOWS the game's own
-// copy rather than merging with it, so a stub would strip every other war paint's
-// definition or name from the player's client.
-//
-// protodefs-base.bin (above) stays as it is. It carries only the four defTypes a
-// community JSON fragment references, which is all the viewer needs to RESOLVE an
-// imported paint. Writing a pack needs the paintkit definitions too, hence a
-// second, whole-container copy.
-
+// Export builder snapshot. A pack splices a paintkit into a complete proto_defs container and
+// names it in a complete localization file. Neither can be partial: anything under tf/custom/
+// shadows the game's copy, so a stub would strip every other paint from the client.
 const LOC_PROTO_PATTERN = /^tf_proto_obj_defs_([a-z]+)\.txt$/i;
 
-// Whichever TF2 build these files came from. A pack built against a stale
-// snapshot removes any paint added since, so the number is carried into the
-// manifest, shown in the export panel, and repeated in the pack's README.
+// TF2 build of these files (steam.inf PatchVersion). A pack from a stale snapshot removes newer paints.
 function readGameBuild() {
   try {
     const inf = fs.readFileSync(`${TF}/steam.inf`, 'utf8');
@@ -315,17 +245,12 @@ function stepExportSnapshot() {
   for (const entry of fs.readdirSync(`${TF}/resource`)) {
     const language = LOC_PROTO_PATTERN.exec(entry)?.[1].toLowerCase();
     if (!language) continue;
-    // Copied byte for byte: these are UTF-16LE with a BOM and CRLF line endings,
-    // and the engine's KeyValues reader is unforgiving about all three.
+    // Copied byte for byte: UTF-16LE, BOM and CRLF are all required by the engine's KeyValues reader.
     fs.copyFileSync(`${TF}/resource/${entry}`, path.join(outDir, `${language}.txt`));
     languages.push(language);
   }
   log(`[export-snapshot] wrote protodefs-loc/ (${languages.length} languages: ${languages.sort().join(', ')})`);
 }
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 async function main() {
   const args = process.argv.slice(2);
@@ -344,8 +269,8 @@ async function main() {
   else if (vpkChanged) log('[extract] source vpks changed since last run; re-checking every texture and icon');
   else log('[extract] source vpks unchanged; skipping textures and icons whose output already exists');
 
-  const { defs, itemDefs, operations, variables, byType } = stepProtodefs();
-  const ctx = buildIndex(operations, itemDefs, variables);
+  const { defs, itemDefs, operations, byType } = stepProtodefs();
+  const ctx = buildIndex(operations, itemDefs);
 
   if (run('protodefs-base')) stepProtodefsBase(byType);
   if (run('export-snapshot')) stepExportSnapshot();
@@ -361,23 +286,17 @@ async function main() {
   const { byPaintkit: collectionByPaintkit, machineByDisplay } = buildCollectionMap(itemsGame, locEnglish, locProto);
   log(`[collections] mapped ${collectionByPaintkit.size} paintkits to collections`);
 
-  // Resolve everything ------------------------------------------------------
   log('[recipes] resolving recipes ...');
-  // The live texture compositor derives an omitted sticker spec as
-  // `<base>_s` (the SDK proto comment still calls the suffix `_spec`). Only
-  // retain that implicit ref when it is actually shipped; otherwise Source
-  // binds black and the sticker is matte.
+  // The compositor derives an omitted sticker spec as <base>_s. Keep that ref only when it is
+  // shipped; otherwise Source binds black and the sticker is matte.
   const compositorVpkPaths = new Set([...listVPK(TEXTURES_VPK), ...listVPK(MISC_VPK)]);
   const manifestPaintkits = [];
   const paintIconRefByKit = new Map(); // paintkit id -> representative pattern texture ref
   const weaponRegistry = new Map(); // weaponKey -> { key, name, itemDefIndex, modelPath }
   const allTextureRefs = new Set();
   const layerPreviewRefs = new Set();
-  // Lightwarps are shipped whole rather than only where a stock weapon material
-  // names one. A custom VMT imported at runtime (src/source/vmt.ts) is free to
-  // ask for any of them, and regularly does: Ghastly Guns lights its weapons
-  // with the Pyro's. There are only ~37 in the game and each is a ramp of a few
-  // KB, so the whole set costs less than guessing which ones authors will want.
+  // Ship every lightwarp, not just those stock materials name. Imported VMTs can ask for any
+  // of the ~37 (each a few KB), e.g. Ghastly Guns lights its weapons with the Pyro's.
   for (const vpkPath of compositorVpkPaths) {
     if (!/lightwarp[^/]*\.vtf$/i.test(vpkPath)) continue;
     const ref = texturePublicPath(vpkPath);
@@ -392,11 +311,10 @@ async function main() {
     const id = def.header.defindex;
     const slots = collectSlots(def);
     if (!slots.length) continue;
-    const name = locLookup(locProto, def.loc_desctoken) || def.header.name || `paintkit_${id}`;
+    const name = paintkitDisplayName(locProto, def);
     const hasTeam = !!def.has_team_textures;
-    // Both teams are always resolved. The game composites with the item's actual team whatever
-    // has_team_textures says; the flag only shows the inspect panel's team buttons. So a paint
-    // whose BLU differs from RED has team textures even with the flag off.
+    // Both teams always resolve: the game composites by the item's team regardless of
+    // has_team_textures, which only drives the inspect panel's team buttons.
     const teams = ['red', 'blu'];
 
     const kitWeapons = new Set();
@@ -421,8 +339,7 @@ async function main() {
       }
       kitWeapons.add(weaponKey);
       const materialOverride = slot.data?.material_override;
-      // The paint can model always uses its dedicated material. Unlike weapon
-      // slots, Source does not apply a paint-kit material override to it.
+      // Source does not apply a paint-kit material override to the paint can model.
       if (weaponKey !== 'paintkit_tool' && typeof materialOverride === 'string' && materialOverride) {
         kitMaterialOverrides[weaponKey] = materialOverride.toLowerCase();
       }
@@ -449,9 +366,8 @@ async function main() {
 
     if (!kitWeapons.size) { skipped.push({ id, reason: 'no resolvable weapons' }); continue; }
 
-    // BLU is kept for every weapon or for none. A weapon missing its BLU recipe would have no
-    // texture for a BLU item, so a per-slot drop is not safe. Refs come after this check so a
-    // dropped BLU pass does not add textures.
+    // BLU is kept for every weapon or none: a per-weapon drop leaves BLU items without a texture.
+    // Refs are added after this so a dropped pass adds none.
     const hasTeamTextures = hasTeam || kitBluDiffers;
     const keptRecipes = kitRecipes.filter((rec) => hasTeamTextures || rec.team === 'red');
     let kitPerWear = false;
@@ -513,7 +429,6 @@ async function main() {
     log(`[recipes] wrote ${byKit.size} bundles (${written} variants)`);
   }
 
-  // Weapons + material params -----------------------------------------------
   const weaponModels = {};
   let materialOverrides = {};
   if (run('weapons') || run('manifest') || run('textures')) {
@@ -523,7 +438,6 @@ async function main() {
     });
   }
 
-  // Textures ----------------------------------------------------------------
   let textureMetadata = {};
   if (run('textures')) {
     const result = await extractAndDecodeTextures({
@@ -545,7 +459,6 @@ async function main() {
     if (fs.existsSync(metadataPath)) textureMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
   }
 
-  // Backpack icons ------------------------------------------------------------
   let collectionIcons = {};
   if (run('icons') || run('manifest')) {
     const iconResult = await extractInventoryIcons({
@@ -569,10 +482,8 @@ async function main() {
     });
   }
 
-  // Manifest ----------------------------------------------------------------
   if (run('manifest') || run('recipes')) {
-    // Read back for the same reason the textures field below explains: a
-    // partial run must not drop what a full run established.
+    // Read back so a partial run keeps what a full run wrote.
     let previousManifest = null;
     try {
       previousManifest = JSON.parse(fs.readFileSync(path.join(PUBLIC_DATA, 'manifest.json'), 'utf8'));
@@ -587,16 +498,15 @@ async function main() {
         };
         const iconCamera = w.modelPath ? extractModelAttachment(w.modelPath, 'icon_camera') : null;
         const roundVector = (values) => values.map((value) => Math.round(value * 1e6) / 1e6);
-        // World-visible attached_models (the Rescue Ranger's screen) reuse the
-        // viewmodel import's assets, which this tool does not produce, so keep
-        // them across runs like the textures below.
+        // Keep attachments from the previous run: their assets come from the viewmodel import.
         const attachments = previousManifest?.weapons?.find((entry) => entry.key === w.key)?.attachments;
         return ({
         key: w.key,
         name: w.name,
         model: `models/${w.key}.glb`,
         ...(attachments ? { attachments } : {}),
-        ...(dimensions ? { compositeWidth: dimensions.width, compositeHeight: dimensions.height } : {}),
+        compositeWidth: dimensions.width,
+        compositeHeight: dimensions.height,
         ...(w.icon ? { icon: w.icon } : {}),
         ...(iconCamera ? {
           iconCamera: {
@@ -613,10 +523,8 @@ async function main() {
       paintkits: manifestPaintkits,
       weapons,
       materials: materialOverrides,
-      // Texture metadata is produced by the textures step. `--only manifest`
-      // does not run it, so writing the empty map would silently delete all
-      // 1,200 entries the compositor and the exporter read their dimensions and
-      // sampling flags from. Keep whatever the last full run wrote instead.
+      // Textures come from the textures step. An empty map on --only manifest would delete
+      // every entry the compositor reads, so keep the last full run's map.
       textures: Object.keys(textureMetadata).length ? textureMetadata : previousManifest?.textures ?? textureMetadata,
       collectionIcons,
       wearLevels: WEAR_LEVELS,
@@ -635,7 +543,6 @@ async function main() {
     log(`[manifest] wrote staging/weapon_models.json (${Object.keys(weaponModels).length} weapons)`);
   }
 
-  // Verify ------------------------------------------------------------------
   if (run('verify')) {
     verifyExtraction({ publicDataPath: PUBLIC_DATA, manifestPaintkits, allTextureRefs, skipped, log });
   }

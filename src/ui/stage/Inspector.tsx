@@ -1,11 +1,12 @@
 import { Fragment, memo, useEffect, useState } from 'react';
-import type { PreloadIntent } from '../../hooks/useIntentPreload';
 import type { ReactNode } from 'react';
 import {
   Camera, ChevronDown, Crosshair, Dices, Droplets, Flame, Hash, Sparkles, Sun, Undo2, Users,
 } from 'lucide-react';
+
+import type { PreloadIntent } from '../../hooks/useIntentPreload';
 import {
-  Control, IconSelectField, SelectField, SliderField, SwatchSelectField, TeamToggle, WearSliderField,
+  Control, IconSelectField, SelectField, SliderField, SwatchSelectField, TeamToggle, ToggleGroup, WearSliderField,
 } from '../common/controls';
 import type { IconOption, SwatchOption } from '../common/controls';
 import { LIGHTING_PRESETS } from '../../viewer/lighting/lighting';
@@ -21,8 +22,7 @@ import { matchesMobileLayout, TOUCH_ONLY_DEVICE } from '../../device';
 const rgbCss = ([r, g, b]: [number, number, number]) =>
   `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
 
-// Mobile browsers cap canvas area well below an 8K capture, so touch-only
-// devices stop at 4K.
+// Mobile browsers cap canvas area well below 8K, so touch-only devices stop at 4K.
 const SCREENSHOT_SIZE_OPTIONS = [
   { value: '1280', label: '720p' },
   { value: '1920', label: '1080p' },
@@ -46,8 +46,7 @@ const TURNTABLE_FORMAT_DESCRIPTIONS: Record<TurntableFormat, string> = {
   mp4: 'Smallest, no transparency',
 };
 
-// A collapsible group of controls. Expanded unless defaultOpen says otherwise;
-// each section keeps its own local, unpersisted open/closed state.
+// A collapsible group. Expanded unless defaultOpen says otherwise; state is local and not persisted.
 export function InspectorSection({ title, children, className = '', defaultOpen = true }: {
   title: string;
   children: ReactNode;
@@ -71,11 +70,8 @@ export function InspectorSection({ title, children, className = '', defaultOpen 
   );
 }
 
-// The seed is a 64-bit decimal. While focused, the field holds a free-typed
-// draft (digits only, empty allowed) so the user can clear it and retype;
-// the committed seed only updates on Enter or on blur with a non-empty
-// draft. Blurring with an empty/invalid draft reverts to the last committed
-// seed instead of leaving the field stuck empty.
+// The seed is a 64-bit decimal. While focused, the field holds a free-typed draft that
+// commits on Enter or a non-empty blur; an invalid draft reverts to the last committed seed.
 function SeedField({
   seed,
   onCommit,
@@ -152,9 +148,7 @@ function SeedField({
   );
 }
 
-// Hex readout for the turntable color swatch; mirrors the validation in
-// lightingFields.tsx's ColorRow (commit only on a full #rrggbb match, revert
-// the draft on blur otherwise).
+// Hex readout for the turntable color; commits only on a full #rrggbb match.
 function TurntableColorHexField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
@@ -215,8 +209,7 @@ export const Inspector = memo(function Inspector({
   onToggleLightingPanel: () => void;
   onSelectLight: (id: string) => void;
 }) {
-  // The mobile layout's Controls sheet is short, so the sections used less
-  // often start collapsed there. Decided once; resizing never folds them.
+  // Rarely used sections start collapsed on mobile. Decided once, so resizing never folds them.
   const [compact] = useState(matchesMobileLayout);
   const presetOptions = [
     ...LIGHTING_PRESETS.map((p) => ({ value: p.id, label: p.label })),
@@ -246,8 +239,7 @@ export const Inspector = memo(function Inspector({
   const turntableOverDiscordLimit = turntableEstimatedBytes > 10 * 1024 * 1024;
   const turntableEstimatedMb = (turntableEstimatedBytes / (1024 * 1024)).toFixed(1);
 
-  // First Person leads with its own controls, so the animation list is not
-  // below Item and Finish. Keyed, so moving it keeps the controls' state.
+  // First Person leads with its own controls. Keyed, so moving it keeps their state.
   const preview = <Fragment key="preview">{previewControls}</Fragment>;
 
   return (
@@ -316,8 +308,7 @@ export const Inspector = memo(function Inspector({
           <SwatchSelectField
             value={state.sheen}
             onChange={(v) => {
-              // Leaving Team Shine on a single-team warpaint re-locks the team
-              // toggle, so snap the team back to the kit's real texture.
+              // Leaving Team Shine re-locks the team toggle on single-team paints; snap it back.
               if (v !== 'team_shine' && !hasTeamTextures) onChange({ sheen: v, team: 'red' });
               else onChange({ sheen: v });
             }}
@@ -360,26 +351,15 @@ export const Inspector = memo(function Inspector({
           </Control>
 
           <Control group label={<span>Projection</span>}>
-            <div className="ui-toggle-group" role="group" aria-label="Projection">
-              <button
-                type="button"
-                className="ui-toggle-btn"
-                data-pressed={state.projection === 'perspective' || undefined}
-                aria-pressed={state.projection === 'perspective'}
-                onClick={() => onChange({ projection: 'perspective' })}
-              >
-                Perspective
-              </button>
-              <button
-                type="button"
-                className="ui-toggle-btn"
-                data-pressed={state.projection === 'orthographic' || undefined}
-                aria-pressed={state.projection === 'orthographic'}
-                onClick={() => onChange({ projection: 'orthographic' })}
-              >
-                Orthographic
-              </button>
-            </div>
+            <ToggleGroup
+              label="Projection"
+              value={state.projection}
+              options={[
+                { value: 'perspective', label: 'Perspective' },
+                { value: 'orthographic', label: 'Orthographic' },
+              ]}
+              onChange={(projection) => onChange({ projection })}
+            />
           </Control>
 
         </InspectorSection>
@@ -389,26 +369,15 @@ export const Inspector = memo(function Inspector({
         {/* First Person renders a live view, not the inspect pose an animated turntable needs, so it can only capture images. */}
         {!firstPersonActive && (
           <Control group label={<span>Output</span>}>
-            <div className="ui-toggle-group" role="group" aria-label="Output">
-              <button
-                type="button"
-                className="ui-toggle-btn"
-                data-pressed={state.captureFormat === 'image' || undefined}
-                aria-pressed={state.captureFormat === 'image'}
-                onClick={() => onChange({ captureFormat: 'image' })}
-              >
-                Image
-              </button>
-              <button
-                type="button"
-                className="ui-toggle-btn"
-                data-pressed={state.captureFormat === 'animated' || undefined}
-                aria-pressed={state.captureFormat === 'animated'}
-                onClick={() => onChange({ captureFormat: 'animated' })}
-              >
-                Animated
-              </button>
-            </div>
+            <ToggleGroup
+              label="Output"
+              value={state.captureFormat}
+              options={[
+                { value: 'image', label: 'Image' },
+                { value: 'animated', label: 'Animated' },
+              ]}
+              onChange={(captureFormat) => onChange({ captureFormat })}
+            />
           </Control>
         )}
 
@@ -463,26 +432,15 @@ export const Inspector = memo(function Inspector({
 
           {formatInfo.alpha !== null && (
             <Control group label={<span>Background</span>}>
-              <div className="ui-toggle-group" role="group" aria-label="Background">
-                <button
-                  type="button"
-                  className="ui-toggle-btn"
-                  data-pressed={state.turntableTransparent || undefined}
-                  aria-pressed={state.turntableTransparent}
-                  onClick={() => onChange({ turntableTransparent: true })}
-                >
-                  Transparent
-                </button>
-                <button
-                  type="button"
-                  className="ui-toggle-btn"
-                  data-pressed={!state.turntableTransparent || undefined}
-                  aria-pressed={!state.turntableTransparent}
-                  onClick={() => onChange({ turntableTransparent: false })}
-                >
-                  Solid
-                </button>
-              </div>
+              <ToggleGroup
+                label="Background"
+                value={state.turntableTransparent ? 'transparent' : 'solid'}
+                options={[
+                  { value: 'transparent', label: 'Transparent' },
+                  { value: 'solid', label: 'Solid' },
+                ]}
+                onChange={(background) => onChange({ turntableTransparent: background === 'transparent' })}
+              />
             </Control>
           )}
 

@@ -1,7 +1,6 @@
-// GLSL for the compositor. One uber fragment shader implements every combine op
-// from compositor_ps2x.fxc. Modes mirror ECombineOperation plus a TEXTURE mode
-// used for texture_lookup leaves and for applying a stage's own output
-// transform/adjust (combine stages carry these fields too).
+// GLSL for the compositor: one uber fragment shader covering every combine op from
+// compositor_ps2x.fxc. Modes mirror ECombineOperation, plus TEXTURE for texture_lookup
+// leaves and stage output transforms.
 
 export const MODE_MULTIPLY = 0;
 export const MODE_ADD = 1;
@@ -9,8 +8,7 @@ export const MODE_LERP = 2;
 export const MODE_SELECT = 3;
 export const MODE_BLEND = 6;
 export const MODE_TEXTURE = 10; // sample with UV transform + AdjustLevels
-// Editor-only pass that turns a selector-writing group sticker into isolated
-// RGBA artwork. This is not part of Source's ECombineOperation enum.
+// Editor-only pass: isolated RGBA artwork for a selector-writing group sticker. Not in ECombineOperation.
 export const MODE_GROUP_STICKER_ARTWORK = 11;
 
 // RawShaderMaterial: three injects nothing, so declare the geometry attributes.
@@ -24,11 +22,9 @@ void main() {
 }
 `;
 
-// Source enables sRGB reads and writes around almost every compositor pass.
-// Shader math is linear, but the 8-bit intermediate targets store sRGB values;
-// this matters because quantizing linear RGB produced visibly wrong dark wear.
-// AdjustLevels replicates the fxc: Photoshop levels performed in sRGB space
-// (convert linear->sRGB, level, convert back), which is what TF2 does.
+// Source enables sRGB reads and writes around almost every pass. Shader math is linear, but
+// the 8-bit intermediate targets hold sRGB values; quantizing linear RGB visibly darkens wear.
+// AdjustLevels replicates the fxc: levels applied in sRGB space, as TF2 does.
 export const FRAG = /* glsl */ `
 precision highp float;
 in vec2 vUv;
@@ -78,10 +74,9 @@ void writeLinear(vec4 c) {
   fragColor = vec4(lin2srgb(clamp(c.rgb, 0.0, 1.0)), clamp(c.a, 0.0, 1.0));
 }
 
-// Photoshop levels, as compositor_ps2x.fxc AdjustLevels(float4). Real recipes
-// carry degenerate ranges (white == black, e.g. adjustOffset [0,0]); HLSL's
-// saturate(inf/NaN) turns that into a threshold at the black point, which we
-// reproduce explicitly since GLSL clamp(NaN) is undefined.
+// Photoshop levels as compositor_ps2x.fxc AdjustLevels. Degenerate ranges (white == black)
+// threshold at the black point, as HLSL's saturate(inf/NaN) does; GLSL clamp(NaN) is
+// undefined, so that is spelled out.
 vec4 adjustLevels(vec4 src, vec3 bwg) {
   float black = bwg.x, white = bwg.y, gamma = bwg.z;
   if (black == 0.0 && white == 1.0 && gamma == 1.0) return src;
@@ -98,11 +93,9 @@ vec4 adjustLevels(vec4 src, vec3 bwg) {
 
 void main() {
   if (uMode == ${MODE_GROUP_STICKER_ARTWORK}) {
-    // tex0 is the selector before this group sticker, tex1/2 are the final
-    // paint with that selector forced to zero/one, and tex3 is the original
-    // local sticker mask. Sampling the endpoints at the authored destination
-    // produces the exact visible block without baking neighbouring pixels into
-    // it or clipping the source to an earlier crop.
+    // tex0 is the selector before this sticker, tex1/2 the final paint with it forced to 0
+    // and 1, tex3 the local sticker mask. Sampling the endpoints at the destination gives the
+    // exact block without neighbouring pixels.
     vec2 destinationUv = uDestTl
       + (uDestTr - uDestTl) * vUv.x
       + (uDestBl - uDestTl) * vUv.y;
@@ -116,9 +109,8 @@ void main() {
     vec4 endpointZero = samp(uTex1, destinationUv, uSrgb1);
     vec4 endpointOne = samp(uTex2, destinationUv, uSrgb2);
     vec3 desired = mix(endpointZero.rgb, endpointOne.rgb, selector);
-    // The selector blend already accounts for the mask's soft alpha. The
-    // isolated result therefore replaces the affected pixel as an opaque
-    // final colour, while pixels outside the source mask stay transparent.
+    // The selector blend already includes the mask's soft alpha, so the result is opaque
+    // inside the mask and transparent outside it.
     writeLinear(vec4(desired, 1.0));
     return;
   }
@@ -174,9 +166,8 @@ void main() {
     float a = det != 0.0 ? ( rel.x * V.y - rel.y * V.x) / det : -1.0;
     float b = det != 0.0 ? (-rel.x * U.y + rel.y * U.x) / det : -1.0;
     float inside = step(0.0, a) * step(a, 1.0) * step(0.0, b) * step(b, 1.0);
-    // a runs TL->TR (sticker u), b runs TL->BL (sticker v downward). Sources
-    // upload unflipped (flipY=false), so image top is v=0 and (a, b) samples
-    // the sticker upright in the v-down composite space.
+    // a runs TL->TR and b runs TL->BL. Sources upload unflipped, so (a, b) samples the
+    // sticker upright in the v-down composite space.
     vec4 c1 = adjustLevels(samp(uTex1, vec2(a, b), uSrgb1), uAdjust1);
     float stickerSpec = samp(uTex2, vec2(a, b), uSrgb2).r;
     float alpha = c1.a * inside;

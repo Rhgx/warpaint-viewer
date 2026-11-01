@@ -3,9 +3,13 @@ import { useStore } from 'zustand';
 import type { LightingStore } from '../../viewer/lighting/lightingStore';
 import { Copy, Eye, EyeOff, Plus, Redo2, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
 import {
+  CUSTOM_DIRECTION_LIMIT,
   CUSTOM_LIGHT_POSITION_LIMIT,
   CUSTOM_LIGHT_RANGE_LIMIT,
+  CUSTOM_SOFTNESS_MAX,
   MAX_CUSTOM_LIGHTS,
+  MAX_SPOT_ANGLE_DEGREES,
+  MIN_SPOT_ANGLE_DEGREES,
   createDefaultCustomLightingRig,
   type CustomLight,
   type CustomLightType,
@@ -32,8 +36,7 @@ interface LightingPanelProps {
   store: LightingStore;
 }
 
-// Name edits stay local until commit so clearing the field does not snap back
-// to the validator's fallback name on every keystroke.
+// Name edits stay local until commit, so clearing the field does not snap back to the fallback name.
 function NameInput({ light, onCommit }: { light: CustomLight; onCommit: (name: string) => void }) {
   const [draft, setDraft] = useState(light.name);
   useEffect(() => setDraft(light.name), [light.name]);
@@ -63,13 +66,7 @@ function NameInput({ light, onCommit }: { light: CustomLight; onCommit: (name: s
   );
 }
 
-/**
- * The lighting workspace, docked over the stage under the toolbar so the
- * controls sit beside the render they change. It is only mounted while the
- * Custom lighting preset is selected, and while it is open the viewport shows
- * light helpers and the move gizmo; closing it puts the viewport back to a
- * clean render without needing a separate edit mode.
- */
+/** Lighting workspace over the stage, mounted for the Custom preset; open, it shows light helpers. */
 export function LightingPanel({ store }: LightingPanelProps) {
   const rig = useStore(store, (state) => state.rig);
   const open = useStore(store, (state) => state.open);
@@ -87,7 +84,7 @@ export function LightingPanel({ store }: LightingPanelProps) {
     window.clearTimeout(resetTimer.current);
   }, []);
 
-  // A closed panel keeps no half-finished affordances waiting for the reopen.
+  // Closing drops any half-finished affordance, so reopening starts clean.
   useEffect(() => {
     if (open) return;
     setAddOpen(false);
@@ -122,8 +119,7 @@ export function LightingPanel({ store }: LightingPanelProps) {
     setAddOpen(false);
   };
 
-  // Reset is destructive and persists straight to storage, so it arms on the
-  // first click and only fires on a second one.
+  // Reset is destructive and saves straight to storage, so it arms on the first click.
   const resetRig = () => {
     window.clearTimeout(resetTimer.current);
     if (!resetArmed) {
@@ -313,8 +309,8 @@ export function LightingPanel({ store }: LightingPanelProps) {
                   label="Cone"
                   title="Cone angle in degrees"
                   value={selected.angleDegrees}
-                  min={1}
-                  max={90}
+                  min={MIN_SPOT_ANGLE_DEGREES}
+                  max={MAX_SPOT_ANGLE_DEGREES}
                   step={1}
                   onPreviewChange={(angleDegrees) => previewSelected((light) => (
                     light.type === 'spot' ? { ...light, angleDegrees } : light
@@ -328,7 +324,7 @@ export function LightingPanel({ store }: LightingPanelProps) {
                   title="Cone edge softness"
                   value={selected.softness}
                   min={0}
-                  max={1}
+                  max={CUSTOM_SOFTNESS_MAX}
                   step={0.01}
                   onPreviewChange={(softness) => previewSelected((light) => (
                     light.type === 'spot' ? { ...light, softness } : light
@@ -408,8 +404,8 @@ export function LightingPanel({ store }: LightingPanelProps) {
               <VectorRow
                 label="Aim"
                 value={selected.direction}
-                min={-1}
-                max={1}
+                min={-CUSTOM_DIRECTION_LIMIT}
+                max={CUSTOM_DIRECTION_LIMIT}
                 onChange={(direction) => updateSelected((light) => (
                   light.type === 'directional' ? { ...light, direction } : light
                 ))}

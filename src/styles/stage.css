@@ -1,4 +1,3 @@
-/* ---------- stage ---------- */
 .stage {
   position: relative;
   grid-column: 2;
@@ -49,20 +48,23 @@
 .canvas-wrap[data-model-part-picking] .viewer-canvas {
   cursor: crosshair;
 }
-/* Lives inside .stage-overlay-tl, stacked under .stage-header when both are
-   visible, so it no longer needs its own absolute position. */
-.composing-badge {
+/* The overlay badges share one shell so the two states read as one family. */
+.composing-badge,
+.advanced-camera-badge {
   display: flex;
   align-items: center;
-  gap: 6px;
   padding: 4px 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-pop);
   background: var(--panel);
-  color: var(--text-dim);
   font-size: 11px;
   letter-spacing: 0.5px;
+}
+/* Lives inside .stage-overlay-tl, stacked under .stage-header when both are visible. */
+.composing-badge {
+  gap: 6px;
+  color: var(--text-dim);
   pointer-events: auto;
 }
 .composing-badge-spinner {
@@ -74,20 +76,9 @@
   border-top-color: var(--accent);
   animation: composing-spin 700ms linear infinite;
 }
-/* Same shell as .composing-badge so the two overlay states read as one
-   family; only the label and the trailing exit key differ. */
 .advanced-camera-badge {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  padding: 4px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-pop);
-  background: var(--panel);
   color: var(--text);
-  font-size: 11px;
-  letter-spacing: 0.5px;
 }
 .advanced-camera-badge-exit {
   display: flex;
@@ -166,8 +157,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Floating pill inside the canvas so the footer is a single clean bar. Fades
-   out after the first pointer/wheel interaction with the canvas. */
+/* Floating pill inside the canvas; fades after the first pointer or wheel interaction. */
 .canvas-hint {
   position: absolute;
   z-index: 2;
@@ -189,8 +179,7 @@
   opacity: 1;
   transition: opacity 200ms ease;
 }
-/* Support link: small underlined text in the corner, dimmer than the stage
-   header so it reads as a footnote; the Boosty mark takes the text colour. */
+/* Support link: small underlined corner text, dimmer than the header so it reads as a footnote. */
 .stage-support-link {
   position: absolute;
   z-index: 2;
@@ -223,9 +212,7 @@
   outline-offset: 2px;
   border-radius: 2px;
 }
-/* Mobile layout: the hint pill wraps and spans nearly the full width, so keep
-   just the mark, give it a finger-sized target and lift it above a two-line
-   pill. The 40px box is centred where the bare mark used to sit. */
+/* Mobile: the hint shrinks to its mark, finger-sized and lifted above a two-line pill. */
 @media (max-width: 860px), (max-height: 500px) {
   .stage-support-link {
     right: env(safe-area-inset-right);
@@ -252,27 +239,20 @@
 .canvas-hint.dismissed {
   opacity: 0;
 }
-/* An open mobile panel covers the hint's slot. Scoped to the mobile layout
-   because a panel left open survives a resize to the desktop layout. */
+/* An open mobile panel covers the hint's slot. Mobile-only, since a panel left open survives a resize. */
 @media (max-width: 860px), (max-height: 500px) {
   .app:not([data-mobile-panel='none']) .canvas-hint {
     opacity: 0;
     visibility: hidden;
   }
 }
-/* The definitions prompt takes the bottom-center slot while it is up, so the
-   hint steps above it rather than sitting underneath. */
+/* The definitions prompt takes the bottom-center slot, so the hint steps above it. */
 .canvas-wrap[data-prompt] .canvas-hint {
   bottom: 62px;
 }
 
-/* ---------- stage identity header (top-left) ---------- */
-/* Stacks above the composing badge so the two never collide; both are
-   pointer-events: none so they never intercept orbit/pan/zoom on the
-   canvas underneath. The canvas backdrop (.canvas-wrap background above)
-   is always a dark, game-like scene regardless of app theme, so this uses
-   fixed light text + a shadow for legibility rather than the theme's
-   --text (which would go near-black in the light theme and disappear). */
+/* Stacks above the composing badge; pointer-events: none keeps orbit and zoom working.
+   Light text and a shadow stay legible on the always-dark canvas, where --text would vanish in light mode. */
 .stage-overlay-tl {
   position: absolute;
   z-index: 2;
@@ -307,8 +287,7 @@
 .stage-header-title .stage-header-name {
   min-width: 0;
 }
-/* The overlay ignores pointer input so the stage stays draggable; the details
-   button is the one clickable element in the header. */
+/* The overlay ignores pointer input so the stage stays draggable; the details button is the one exception. */
 .stage-header-info {
   align-self: center;
   color: rgb(244 246 248 / 62%);
@@ -324,9 +303,7 @@
   font-size: 11px;
   letter-spacing: 0.2px;
 }
-/* Mobile layout: moved below the toolbar (its top offset, its height of the
-   button plus 10px, and a 4px gap); at phone widths the two would otherwise
-   share the top row and overlap. */
+/* Mobile: moved below the toolbar. Its top offset is the toolbar height plus a 4px gap, so the two never overlap. */
 @media (max-width: 860px), (max-height: 500px) {
   .stage-overlay-tl {
     top: calc(env(safe-area-inset-top) + var(--stage-toolbar-btn) + 24px);

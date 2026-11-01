@@ -1,6 +1,5 @@
-// Download the curated TF2 paintable-weapon group reference and turn it into
-// the compact lookup table consumed by the editor. The guide is deliberately
-// kept as source data rather than scraped by the browser at runtime.
+// Download the curated TF2 paintable-weapon group reference and write the lookup table the editor
+// reads. The guide is kept as source data, not scraped at runtime.
 //
 // Usage: node tools/extract/group-names.mjs
 
@@ -69,9 +68,8 @@ if (Object.keys(textures).length < 80) {
 }
 
 const output = {
-  // The source is a curated reference, not a Valve-authored part-name API.
-  // Empty or unmapped values are intentionally omitted so the UI can fall
-  // back honestly instead of presenting a fabricated part name.
+  // Curated community reference, not a Valve API. Unmapped values are omitted so the UI falls
+  // back rather than showing an invented name.
   source: {
     title: 'War Paint Texture Groups Reference for War Paint Authors',
     url: GUIDE_URL.replace('&l=english', ''),

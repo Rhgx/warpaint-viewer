@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'vitest';
+
 import {
   parseProtoDefGroups,
   writeProtoDefGroups,
@@ -13,12 +14,13 @@ import {
 import { decodeLocalization, encodeLocalization, setPaintkitName, paintkitNameToken } from '../../../src/export/localization';
 import { loadRoot, parseContainer as parseContainerNode, decodeType, DEF_TYPE } from '../../lib/proto.mjs';
 import { loadLocalization } from '../../lib/localization.mjs';
+import { TF_DIR } from '../../lib/vpk.mjs';
 import { PUBLIC_DATA, ROOT } from '../fixtures';
 
 const STAGING = path.join(ROOT, 'staging');
 const CONTAINER = process.env.TF2_PROTODEFS ?? [
   path.join(PUBLIC_DATA, 'protodefs-full.bin'),
-  'C:/Program Files (x86)/Steam/steamapps/common/Team Fortress 2/tf/scripts/protodefs/proto_defs.vpd',
+  `${TF_DIR}/tf/scripts/protodefs/proto_defs.vpd`,
 ].find((candidate) => fs.existsSync(candidate));
 
 test('container and localization survive independent readers', (context) => {

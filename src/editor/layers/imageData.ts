@@ -27,11 +27,7 @@ export async function loadRgbaImageData(url: string): Promise<RgbaImageDataLike>
   }
 }
 
-/**
- * Decode only a fixed 32×32 colour thumbnail. This deliberately never reads
- * a full paint texture into CPU memory: it is just enough data for the editor
- * to choose a legible layer cue.
- */
+/** Decode a fixed 32x32 colour thumbnail, never a full paint texture; that is enough to pick a legible layer cue. */
 export async function loadRgbaThumbnail(url: string): Promise<RgbaImageDataLike> {
   const decoded = await decodeImageThumbnailExact(
     url,

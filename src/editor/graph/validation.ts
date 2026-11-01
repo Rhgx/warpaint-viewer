@@ -7,17 +7,8 @@ import type {
   OperationGraphNodeKind,
   OperationGraphValidation,
   OperationPortType,
-  OperationStageKind,
 } from './types';
-
-const STAGE_KINDS: readonly OperationStageKind[] = [
-  'texture_lookup',
-  'select',
-  'combine_add',
-  'combine_multiply',
-  'combine_lerp',
-  'apply_sticker',
-];
+import { CONTAINER_KINDS, STAGE_KINDS } from './operationGraph';
 
 function add(
   diagnostics: OperationGraphDiagnostic[],
@@ -55,9 +46,7 @@ function deepEqual(left: unknown, right: unknown): boolean {
 
 function compatible(actual: OperationPortType, expected: OperationPortType): boolean {
   if (actual === 'unknown' || expected === 'unknown') return true;
-  // TF2's operation stages all carry RGBA textures. Texture/mask labels are
-  // useful editor guidance, but the shader intentionally permits either role
-  // at every image input (notably Lerp's selector and sticker surfaces).
+  // TF2 stages all carry RGBA, so texture and mask labels are guidance only; the shader accepts either role.
   return actual === expected || isRoleCrossing(actual, expected);
 }
 
@@ -90,28 +79,10 @@ function expectedPortType(node: OperationGraphNode, index: number): OperationPor
   return 'none';
 }
 
-function hasContainer(kind: OperationGraphNodeKind): boolean {
-  return kind === 'combine_add'
-    || kind === 'combine_multiply'
-    || kind === 'combine_lerp'
-    || kind === 'apply_sticker';
-}
-
-/**
- * Validate the topology and authored-node invariants of a graph before it is
- * written back to proto-def messages. The graph is data-flow directed from a
- * child/source to its parent/target.
- */
 /** Kept short because this lands in a single-line status strip. */
 const MAX_SUMMARIZED_DIAGNOSTICS = 2;
 
-/**
- * One readable line from a validation run.
- *
- * A graph carries advisory warnings while it composes perfectly well, and a
- * single disconnected stage draws the same complaint from more than one rule,
- * so reporting every message turns one small mistake into a wall of text.
- */
+/** One readable status line from validation. Only errors show, one per node, so one mistake does not become a wall of text. */
 export function summarizeOperationGraphDiagnostics(
   diagnostics: readonly {
     readonly severity: OperationGraphDiagnosticSeverity;
@@ -119,8 +90,7 @@ export function summarizeOperationGraphDiagnostics(
     readonly nodeId?: string;
   }[],
 ): string | null {
-  // One complaint per node: a disconnected stage trips both the "no parent"
-  // and the "unreachable" check, which say the same thing twice.
+  // One complaint per node: a disconnected stage trips two checks that say the same thing.
   const seen = new Set<string>();
   const errors: string[] = [];
   for (const diagnostic of diagnostics) {
@@ -136,6 +106,10 @@ export function summarizeOperationGraphDiagnostics(
   return remaining > 0 ? `${shown.join(' ')} (${remaining} more)` : shown.join(' ');
 }
 
+/**
+ * Validate graph topology and authored-node invariants before writing back to proto-def messages.
+ * Edges run from child (source) to parent (target).
+ */
 export function validateOperationGraph(graph: OperationGraph): OperationGraphValidation {
   const diagnostics: OperationGraphDiagnostic[] = [];
   const byId = new Map<string, OperationGraphNode>();
@@ -243,7 +217,7 @@ export function validateOperationGraph(graph: OperationGraph): OperationGraphVal
       continue;
     }
 
-    if (!hasContainer(node.kind) && children.length > 0) {
+    if (!CONTAINER_KINDS.has(node.kind) && children.length > 0) {
       add(diagnostics, 'unexpected-inputs', `${node.label} does not accept graph inputs.`, node);
       continue;
     }
@@ -284,8 +258,7 @@ export function validateOperationGraph(graph: OperationGraph): OperationGraphVal
     }
   }
 
-  // Every authored node must be reachable from the synthetic output. This is
-  // separate from parent counting so a disconnected leaf is diagnosed too.
+  // Reachability is checked separately from parent counting, so a disconnected leaf is still reported.
   const reachable = new Set<string>();
   const markReachable = (nodeId: string): void => {
     if (reachable.has(nodeId)) return;
@@ -297,8 +270,7 @@ export function validateOperationGraph(graph: OperationGraph): OperationGraphVal
     if (!reachable.has(node.id)) add(diagnostics, 'orphan-node', `${node.label} is not on a path to Paint output.`, node);
   }
 
-  // Detect directed cycles in source -> target data flow. Edges into output
-  // are excluded because output is intentionally a terminal sentinel.
+  // Cycle check follows source to target, skipping edges into the terminal output.
   const visiting = new Set<string>();
   const visited = new Set<string>();
   const walk = (nodeId: string): void => {

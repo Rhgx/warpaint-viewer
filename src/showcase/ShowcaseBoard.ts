@@ -1,489 +1,49 @@
-// Mockup engine for the collection showcase board: a pegboard in the style of
-// Valve's case announcements where painted weapons are dragged onto a grid,
-// rotated within limits, posed, and exported as one image.
-//
-// The board runs its own renderer and its own compositor, so every weapon on
-// it can carry a different war paint without touching the main viewer.
+// Showcase board engine: a pegboard where painted weapons are dragged onto a grid,
+// rotated, posed and exported as one image.
+// It runs its own renderer and compositor, so each weapon can wear a different paint
+// without touching the main viewer.
 
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { Compositor, type ComposeResult } from '../compositor/compositor';
-import { configureTf2Material, createTf2Uniforms, type Tf2Uniforms } from '../viewer/materialConfig';
-import { TF2_VERTEXLIT_CACHE_KEY, installTf2VertexLit } from '../viewer/shaders/vertexlit';
-import { loadEditorEnvCube, makeEnvCube } from '../viewer/env';
-import type { RecipeNode, TextureResolver } from '../compositor/types';
-import type { TextureMetadata, WeaponEntry, WeaponMaterial } from '../data/types';
-import type { LayoutPacking, LayoutRows } from './layouts';
-import { HANGING_PARTS, POSE_RIGS, WEAPON_PARTS, defaultPose, isRigged, partOf, type PoseControl, type RestBone, type WeaponPart } from './poseRigs';
 
-export const BOARD_WIDTH = 200;
-export const BOARD_HEIGHT = 112;
-const FRAME_SIDE = 7;
+import { Compositor } from '../compositor/compositor';
+import { createTf2Uniforms } from '../viewer/materialConfig';
+import { loadEditorEnvCube, makeEnvCube } from '../viewer/env';
+import type { WeaponEntry } from '../data/types';
+import type { LayoutPacking, LayoutRows } from './layouts';
+import { POSE_RIGS, WEAPON_PARTS, defaultPose, isRigged, partOf, type RestBone } from './poseRigs';
+import { FRAME_SIDE, frameTexture, makeTf2Material, pegboardTexture, vignetteTexture } from './boardTextures';
+import { BOARD_HEIGHT, BOARD_WIDTH, GRID_CELL } from './boardMetrics';
+import { arrange, type BoardLayoutHost } from './boardLayout';
+import { cellKey, refreshFootprint } from './footprint';
+import type { BoardBackground, DragState, GridSize, ItemRuntime, MeshSubset, PoseHandle, ShowcaseBoardOptions, ShowcaseItem, ShowcasePaint, ShowcaseSnapshot, FitProblem } from './showcaseTypes';
+import { baseOrientation, findPartBases, partSubset, posedPositions, restingRoll } from './weaponGeometry';
+import { BoardPaints, MIN_SOURCE_SIZE } from './boardPaints';
+import { PoseHandles } from './poseHandles';
+
 const RESTING_LIFT = 1.4;
 const CARRY_LIFT = 7;
 /** Tilt and turn stay small so every weapon still reads as a side profile on the pegboard. */
 export const TILT_LIMIT = 30;
-/** How big a weapon at 100% is relative to its in-game size; every weapon shares it, so relative sizes stay true. */
+/** Scale of a weapon at 100%, shared by all weapons so their relative sizes stay true. */
 const BASE_SCALE = 1.5;
-/** Sizes a layout may give its weapons: the size slider's top, and small enough for a full board. */
-const LAYOUT_SCALE = { min: 0.25, max: 1.5 };
-/**
- * Paint resolutions a weapon may get: composed no larger than it is drawn (on
- * screen or in an export), so small weapons never wait on full-size textures.
- */
-const PAINT_SIZE = { min: 256, max: 1024 };
-/**
- * Sources are never decoded below this. Decoding costs the same at any size,
- * so one size shared by most paints decodes each texture once and lets a
- * layout decode its sources before it is picked.
- */
-const MIN_SOURCE_SIZE = 512;
-/** Paint texels per drawn pixel along the weapon; its side covers only part of the paint. */
-const PAINT_TEXELS_PER_PIXEL = 1.25;
-const SILHOUETTE_PX_PER_CELL = 8;
 const MAX_CELL_MARKERS = 6000;
 const HISTORY_LIMIT = 100;
 
-/**
- * Dual-core laptops with integrated graphics get a smaller, cheaper shadow map.
- * Matches the device heuristics the compositor cache already uses.
- */
+/** Dual-core laptops with integrated graphics get a smaller, cheaper shadow map. */
 const LOW_END = (navigator.hardwareConcurrency ?? 8) <= 4
   || ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) <= 4;
 
 const copyItem = (item: ShowcaseItem): ShowcaseItem => ({ ...item, paint: { ...item.paint }, pose: { ...item.pose }, hiddenParts: [...item.hiddenParts] });
 
-export type GridSize = 'fine' | 'normal' | 'coarse';
-export const GRID_CELL: Record<GridSize, number> = { fine: 1.25, normal: 2.5, coarse: 5 };
-export type BoardBackground = 'framed' | 'pegboard' | 'transparent';
-
-/** The paint on one item, with its own wear, team and pattern seed. */
-export interface ShowcasePaint {
-  kitId: number;
-  kitName: string;
-  team: 'red' | 'blu';
-  wearIndex: number;
-  seed: string;
-}
-
-export interface ShowcaseItem {
-  id: string;
-  weaponKey: string;
-  weaponName: string;
-  paint: ShowcasePaint;
-  x: number;
-  y: number;
-  roll: number;
-  tilt: number;
-  turn: number;
-  flipped: boolean;
-  /** Size on the board as a multiple of the default size, which keeps sizes true to each other. */
-  scale: number;
-  /** Hidden layers stay in the list but are not drawn, exported, or checked for fit. */
-  hidden: boolean;
-  pose: Record<string, number>;
-  /** Set when this item is a piece taken out of its weapon, such as a shell. */
-  part: string | null;
-  /** Pieces of this weapon left out of it, usually because they were taken out. */
-  hiddenParts: readonly string[];
-}
-
-/** Where a pose control's drag handle is on screen, in canvas pixels. */
-export interface PoseHandle {
-  controlId: string;
-  x: number;
-  y: number;
-}
-
-export type FitProblem = { kind: 'outside' } | { kind: 'overlap'; otherName: string } | null;
-
-export interface ShowcaseSnapshot {
-  items: readonly ShowcaseItem[];
-  selectedId: string | null;
-  problems: Readonly<Record<string, FitProblem>>;
-  /** Live feedback while dragging or rotating; null when idle. */
-  pending: { id: string; problem: FitProblem } | null;
-  dragging: boolean;
-  canUndo: boolean;
-  canRedo: boolean;
-}
-
-export interface ShowcaseBoardOptions {
-  canvas: HTMLCanvasElement;
-  weapons: readonly WeaponEntry[];
-  modelUrl: (weapon: WeaponEntry, rigged: boolean) => string;
-  resolveTexture: TextureResolver;
-  textureMetadata?: Record<string, TextureMetadata>;
-  textureMetadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined;
-  resolveRecipe: (kitId: number, weaponKey: string, team: 'red' | 'blu', wearIndex: number) => Promise<RecipeNode | null>;
-  /** The material a paint swaps in for a weapon, if any; otherwise the weapon wears its own. */
-  materialOverride: (weaponKey: string, kitId: number) => WeaponMaterial | undefined;
-  /** Face URLs for a material's $envmap, or null to reflect the default cubemap. */
-  resolveCubemap: (ref: string) => Promise<string[] | null>;
-}
-
-interface Footprint {
-  /** Every covered cell; other weapons keep their distance from all of them. */
-  cells: Set<number>;
-  /** Cells the weapon itself covers, leaving out pieces allowed past the board's edge. */
-  solid: Set<number>;
-  /** Bounds of the weapon without those pieces, relative to its position. */
-  body: { minX: number; minY: number; maxX: number; maxY: number };
-  /** Covered silhouette pixels, row 0 at the top. */
-  mask: Uint8Array;
-  maskWidth: number;
-  maskHeight: number;
-  originX: number;
-  originY: number;
-  width: number;
-  height: number;
-  minZ: number;
-  maxZ: number;
-  version: number;
-}
-
-interface ItemRuntime {
-  item: ShowcaseItem;
-  root: THREE.Group;
-  orient: THREE.Group;
-  meshes: THREE.Mesh[];
-  bones: Map<string, RestBone>;
-  footprint: Footprint | null;
-  material: THREE.MeshPhongMaterial;
-  uniforms: Tf2Uniforms;
-  /** Which material settings and maps the TF2 shader is configured with. */
-  materialKey: string;
-  /** The material names its own $envmap rather than reflecting the board's default. */
-  customEnvMap?: boolean;
-  /** Height of whatever this weapon rests on when overlaps are allowed. */
-  stackZ: number;
-  /**
-   * Posed vertex positions below the rotation, so a rotation only needs one
-   * matrix per vertex instead of re-skinning. Rebuilt when the pose or side changes.
-   */
-  local: {
-    key: string;
-    positions: Float32Array[];
-    projected: Float32Array[];
-    indices: (ArrayLike<number> | null)[];
-    /** Per mesh, 1 for each vertex on a piece allowed to hang past the board's edge. */
-    hanging: (Uint8Array | null)[];
-  } | null;
-  /** The paint the material shows or is waiting on. */
-  paintKey: string;
-  /** Settles once the material's own maps (normal, phong, cubemap...) are on. */
-  materialReady: Promise<void>;
-  /** Resolution of the paint it wears or is waiting on; it only ever grows. */
-  paintSize: number;
-  /** Which bones' triangles are drawn; changes when a piece is taken out or put back. */
-  visibility: string;
-  /** Per mesh, the vertices still drawn and the triangles renumbered onto them; null draws everything. */
-  subsets: (MeshSubset | null)[];
-}
-
-interface MeshSubset {
-  used: Uint32Array;
-  /** Triangles numbered by position in `used`, for the footprint. */
-  index: Uint32Array;
-  /** The same triangles on the original vertices, for drawing. */
-  drawIndex: Uint32Array;
-}
-
-interface DragState {
-  id: string;
-  grabX: number;
-  grabY: number;
-  fromX: number;
-  fromY: number;
-  external: boolean;
-  candidate: { x: number; y: number } | null;
-}
-
-const cellKey = (i: number, j: number) => (i + 2048) * 4096 + (j + 2048);
 const keyI = (key: number) => Math.floor(key / 4096) - 2048;
 const keyJ = (key: number) => (key % 4096) - 2048;
 
 let idCounter = 0;
 
-/**
- * The viewer's TF2 VertexLitGeneric shading on a board weapon: phong and
- * environment reflections masked by the paint's alpha, rim light, and the
- * self-illuminated sheen of Macaw override materials. The shader decodes the
- * sRGB composite itself.
- */
-function makeTf2Material(uniforms: Tf2Uniforms, envMap: THREE.CubeTexture): THREE.MeshPhongMaterial {
-  const material = new THREE.MeshPhongMaterial({
-    color: 0x9a9a9a,
-    shininess: 30,
-    specular: new THREE.Color(0x333333),
-    envMap,
-    combine: THREE.AddOperation,
-    reflectivity: 1,
-  });
-  material.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms);
-    installTf2VertexLit(shader);
-  };
-  material.customProgramCacheKey = () => `${TF2_VERTEXLIT_CACHE_KEY}-showcase`;
-  return material;
-}
-
-/**
- * The TF2 shader leaves out three's 1/pi Lambert factor, as Source does, so
- * lights run at Source strength and the board's own Lambert surfaces are
- * brightened by pi to look as they always have.
- */
+/** The TF2 shader omits three's 1/pi Lambert factor, as Source does, so lights run at Source strength; the board's Lambert surfaces are brightened by pi to match. */
 const SOURCE_LIGHT_SCALE = 1 / Math.PI;
-
-function pegboardTexture(): THREE.CanvasTexture {
-  const size = 64;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#6b5843';
-  ctx.fillRect(0, 0, size, size);
-  // Fibre noise keeps large boards from looking flat.
-  for (let i = 0; i < 260; i += 1) {
-    ctx.fillStyle = `rgba(${Math.random() < 0.5 ? '40,30,20' : '150,125,95'},${0.06 + Math.random() * 0.06})`;
-    ctx.fillRect(Math.random() * size, Math.random() * size, 1 + Math.random() * 3, 1);
-  }
-  const hole = ctx.createRadialGradient(size / 2 - 2, size / 2 - 2, 1, size / 2, size / 2, size * 0.2);
-  hole.addColorStop(0, '#1d150e');
-  hole.addColorStop(0.75, '#2c2117');
-  hole.addColorStop(1, 'rgba(60,45,32,0)');
-  ctx.fillStyle = hole;
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size * 0.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(180,150,115,0.35)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.arc(size / 2 + 0.5, size / 2 + 0.5, size * 0.19, 0.1 * Math.PI, 0.65 * Math.PI);
-  ctx.stroke();
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.anisotropy = 8;
-  return texture;
-}
-
-function vignetteTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 288;
-  const ctx = canvas.getContext('2d')!;
-  const gradient = ctx.createRadialGradient(256, 144, 60, 256, 144, 300);
-  gradient.addColorStop(0, 'rgba(0,0,0,0)');
-  gradient.addColorStop(1, 'rgba(0,0,0,0.55)');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 512, 288);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-function frameTexture(width: number, height: number): THREE.CanvasTexture {
-  const scale = 8;
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(width * scale);
-  canvas.height = Math.round(height * scale);
-  const ctx = canvas.getContext('2d')!;
-  const metal = ctx.createLinearGradient(0, 0, canvas.width * 0.35, canvas.height);
-  metal.addColorStop(0, '#4a4d52');
-  metal.addColorStop(0.45, '#2b2e32');
-  metal.addColorStop(1, '#1f2225');
-  ctx.fillStyle = metal;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const lip = (FRAME_SIDE - 0.6) * scale;
-  ctx.strokeStyle = '#8d9196';
-  ctx.lineWidth = 0.8 * scale;
-  ctx.strokeRect(lip, lip, canvas.width - lip * 2, canvas.height - lip * 2);
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = scale * 0.5;
-  ctx.strokeRect(scale * 0.4, scale * 0.4, canvas.width - scale * 0.8, canvas.height - scale * 0.8);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
-  return texture;
-}
-
-type Axis = 0 | 1 | 2;
-const AXIS_VECTORS = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)];
-
-/**
- * Weapons whose thinnest axis is not the side worth showing. The crossbow is
- * widest across its limbs, but reads best in profile like the other guns.
- */
-const FACE_AXIS_OVERRIDES: Record<string, Axis> = { c_crusaders_crossbow: 0 };
-
-/**
- * Weapons that rest standing rather than lying: the Back Scratcher hangs like
- * a rake on a pegboard, handle down and head up with its tines toward the viewer.
- */
-const RESTING_ROLL: Record<string, number> = { c_back_scratcher: -90 };
-
-/** Weapons whose working end rests pointing right, where every other weapon's points left. */
-const FACES_RIGHT = new Set(['c_powerjack']);
-
-/** The roll a weapon rests at; a piece taken out of one lies flat. */
-export function restingRoll(weaponKey: string, part: string | null): number {
-  return part ? 0 : RESTING_ROLL[weaponKey] ?? 0;
-}
-
-/**
- * Rest orientation on the board: the longest axis runs left to right and the
- * thinnest axis faces the camera, so guns lie in profile and blades show their
- * flat face. The authored inventory icon camera picks which of the two faces.
- */
-function baseOrientation(weapon: WeaponEntry, size: THREE.Vector3): THREE.Quaternion {
-  const extents = [size.x, size.y, size.z];
-  const byLength = ([0, 1, 2] as Axis[]).sort((a, b) => extents[b] - extents[a]);
-  const longAxis = byLength[0];
-  let viewAxis = FACE_AXIS_OVERRIDES[weapon.key] ?? byLength[2];
-  const forward = weapon.iconCamera?.forward;
-  if (!(weapon.key in FACE_AXIS_OVERRIDES) && forward && extents[byLength[2]] > extents[byLength[1]] * 0.85) {
-    // Nearly as wide as it is tall (a fish, a round blade), so thickness says
-    // little about which side is the face; the icon looks at the right one.
-    viewAxis = Math.abs(forward[byLength[1]]) > Math.abs(forward[byLength[2]]) ? byLength[1] : byLength[2];
-  }
-  if (viewAxis === longAxis) viewAxis = byLength[2];
-  const upAxis = ([0, 1, 2] as Axis[]).find((axis) => axis !== longAxis && axis !== viewAxis)!;
-  const side = (weapon.iconCamera?.position[viewAxis] ?? 1) >= 0 ? 1 : -1;
-  const view = AXIS_VECTORS[viewAxis].clone().multiplyScalar(side);
-  const long = AXIS_VECTORS[longAxis].clone();
-  // Pick the long direction that keeps the remaining axis pointing up.
-  if (new THREE.Vector3().crossVectors(view, long).dot(AXIS_VECTORS[upAxis]) < 0) long.negate();
-  const up = new THREE.Vector3().crossVectors(view, long);
-  const basis = new THREE.Matrix4().makeBasis(long, up, view);
-  return new THREE.Quaternion().setFromRotationMatrix(basis).invert();
-}
-
-/**
- * Vertex positions after skinning, in the space `toLocal` maps the mesh into.
- * One combined matrix per bone, so each vertex costs a few multiply-adds
- * rather than a full bone transform per influence.
- */
-function posedPositions(mesh: THREE.Mesh, toLocal: THREE.Matrix4, used: Uint32Array | null = null): Float32Array {
-  const position = mesh.geometry.getAttribute('position');
-  const count = used ? used.length : position.count;
-  const out = new Float32Array(count * 3);
-  if (!(mesh instanceof THREE.SkinnedMesh)) {
-    const e = toLocal.elements;
-    for (let slot = 0; slot < count; slot += 1) {
-      const index = used ? used[slot] : slot;
-      const x = position.getX(index), y = position.getY(index), z = position.getZ(index);
-      out[slot * 3] = e[0] * x + e[4] * y + e[8] * z + e[12];
-      out[slot * 3 + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
-      out[slot * 3 + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
-    }
-    return out;
-  }
-  const { bones, boneInverses } = mesh.skeleton;
-  const head = toLocal.clone().multiply(mesh.bindMatrixInverse);
-  const finals = bones.map((bone, index) => head.clone().multiply(bone.matrixWorld).multiply(boneInverses[index]).multiply(mesh.bindMatrix).elements);
-  const skinIndex = mesh.geometry.getAttribute('skinIndex');
-  const skinWeight = mesh.geometry.getAttribute('skinWeight');
-  for (let slot = 0; slot < count; slot += 1) {
-    const index = used ? used[slot] : slot;
-    const x = position.getX(index), y = position.getY(index), z = position.getZ(index);
-    let ox = 0, oy = 0, oz = 0;
-    for (let k = 0; k < 4; k += 1) {
-      const weight = skinWeight.getComponent(index, k);
-      if (!weight) continue;
-      const bone = skinIndex.getComponent(index, k);
-      const e = finals[bone];
-      ox += weight * (e[0] * x + e[4] * y + e[8] * z + e[12]);
-      oy += weight * (e[1] * x + e[5] * y + e[9] * z + e[13]);
-      oz += weight * (e[2] * x + e[6] * y + e[10] * z + e[14]);
-    }
-    out[slot * 3] = ox;
-    out[slot * 3 + 1] = oy;
-    out[slot * 3 + 2] = oz;
-  }
-  return out;
-}
-
-/**
- * For each bone, the foot of the part riding on it: the middle of its lowest
- * edge in the weapon's rest pose, stored in the bone's own space.
- */
-function findPartBases(mesh: THREE.SkinnedMesh, bones: Map<string, RestBone>): void {
-  const owner = dominantBones(mesh);
-  const position = mesh.geometry.getAttribute('position');
-  const point = new THREE.Vector3();
-  const lowest = new Map<string, number>();
-  owner.forEach((name, vertex) => {
-    point.fromBufferAttribute(position, vertex).applyMatrix4(mesh.bindMatrix);
-    lowest.set(name, Math.min(lowest.get(name) ?? Infinity, point.y));
-  });
-  const feet = new Map<string, { sum: THREE.Vector3; count: number }>();
-  owner.forEach((name, vertex) => {
-    point.fromBufferAttribute(position, vertex).applyMatrix4(mesh.bindMatrix);
-    if (point.y > (lowest.get(name) ?? Infinity) + 0.3) return;
-    const foot = feet.get(name) ?? { sum: new THREE.Vector3(), count: 0 };
-    foot.sum.add(point);
-    foot.count += 1;
-    feet.set(name, foot);
-  });
-  mesh.skeleton.bones.forEach((bone, index) => {
-    const rest = bones.get(bone.name);
-    const foot = feet.get(bone.name);
-    if (!rest || !foot || rest.base) return;
-    rest.base = foot.sum.divideScalar(foot.count).applyMatrix4(mesh.skeleton.boneInverses[index]);
-  });
-}
-
-/** The bone with the most weight on each vertex, by name. */
-const dominantBoneCache = new WeakMap<THREE.BufferGeometry, string[]>();
-function dominantBones(mesh: THREE.SkinnedMesh): string[] {
-  const cached = dominantBoneCache.get(mesh.geometry);
-  if (cached) return cached;
-  const skinIndex = mesh.geometry.getAttribute('skinIndex');
-  const skinWeight = mesh.geometry.getAttribute('skinWeight');
-  const names = mesh.skeleton.bones.map((bone) => bone.name);
-  const out: string[] = [];
-  for (let index = 0; index < skinIndex.count; index += 1) {
-    let best = 0;
-    for (let k = 1; k < 4; k += 1) if (skinWeight.getComponent(index, k) > skinWeight.getComponent(index, best)) best = k;
-    out.push(names[skinIndex.getComponent(index, best)] ?? '');
-  }
-  dominantBoneCache.set(mesh.geometry, out);
-  return out;
-}
-
-/**
- * Triangles that belong to a set of weapon parts (most of their corners are
- * on them), or everything else, as an index plus the vertices it uses.
- */
-function partSubset(mesh: THREE.SkinnedMesh, parts: readonly WeaponPart[], keep: boolean): MeshSubset {
-  const owner = dominantBones(mesh);
-  const inPart = (vertex: number) => parts.some((part) => part.bones.includes(owner[vertex]));
-  const source = mesh.geometry.getIndex();
-  const count = source ? source.count : owner.length;
-  const kept: number[] = [];
-  for (let corner = 0; corner + 2 < count; corner += 3) {
-    const a = source ? source.getX(corner) : corner;
-    const b = source ? source.getX(corner + 1) : corner + 1;
-    const c = source ? source.getX(corner + 2) : corner + 2;
-    const inside = Number(inPart(a)) + Number(inPart(b)) + Number(inPart(c)) >= 2;
-    if (inside === keep) kept.push(a, b, c);
-  }
-  const index = new Uint32Array(kept);
-  const remap = new Map<number, number>();
-  const used: number[] = [];
-  const compact = new Uint32Array(index.length);
-  index.forEach((vertex, corner) => {
-    let slot = remap.get(vertex);
-    if (slot === undefined) {
-      slot = used.length;
-      remap.set(vertex, slot);
-      used.push(vertex);
-    }
-    compact[corner] = slot;
-  });
-  return { used: new Uint32Array(used), index: compact, drawIndex: index };
-}
 
 export class ShowcaseBoard {
   readonly renderer: THREE.WebGLRenderer;
@@ -492,18 +52,12 @@ export class ShowcaseBoard {
   readonly #camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 2000);
   readonly #loader = new GLTFLoader();
   readonly #gltfs = new Map<string, Promise<GLTF>>();
-  readonly #materialMaps = new Map<string, Promise<THREE.Texture | null>>();
-  readonly #cubemaps = new Map<string, Promise<THREE.CubeTexture | null>>();
   /** What weapons reflect when their material names no cubemap: TF2's item preview cubemap. */
   #envMap = makeEnvCube(0x9fb8d6, 0x40382c);
   /** Ambient light on weapons, Source's six-sided ambient cube, shared by all of them. */
   readonly #ambientCube = Array.from({ length: 6 }, () => new THREE.Vector3(0.4, 0.4, 0.4));
-  /** Composited paints by paint key, shared by every item wearing the same one. */
-  readonly #paints = new Map<string, Promise<ComposeResult | null>>();
-  /** Lower-detail composites on show while a paint streams in, by paint key. */
-  readonly #previews = new Map<string, ComposeResult>();
-  readonly #retiredPreviews = new Set<ComposeResult>();
-  #paintSweep = 0;
+  readonly #boardPaints: BoardPaints;
+  readonly #handles: PoseHandles;
   readonly #compositor: Compositor;
   readonly #runtimes = new Map<string, ItemRuntime>();
   readonly #listeners = new Set<() => void>();
@@ -558,14 +112,29 @@ export class ShowcaseBoard {
   /** Each mesh's full geometry, kept while a subset of it is drawn. */
   readonly #sourceGeometry = new WeakMap<THREE.Mesh, THREE.BufferGeometry>();
   readonly #subsetGeometry = new Map<string, { geometry: THREE.BufferGeometry; subset: MeshSubset }>();
+  /** The board as the layout code sees it; built once, its accessors read live state. */
+  readonly #layoutHost: BoardLayoutHost;
 
   constructor(options: ShowcaseBoardOptions) {
     this.#options = options;
+    // Arrow functions keep `this` on the board; the accessors read the live values on every call.
+    this.#layoutHost = {
+      grid: () => this.#grid,
+      spacing: () => this.#spacing,
+      keepApart: () => this.#keepApart,
+      scene: this.#scene,
+      appendItem: (item) => { this.#items = [...this.#items, item]; },
+      reshape: (runtime) => this.#reshape(runtime),
+      problemAt: (id, x, y) => this.#problemAt(id, x, y),
+      nearestFreeSpot: (id, x, y, maxRing) => this.#nearestFreeSpot(id, x, y, maxRing),
+      applyTransform: (runtime) => this.#applyTransform(runtime),
+      rememberValid: (runtime) => this.#rememberValid(runtime),
+    };
     const renderer = new THREE.WebGLRenderer({ canvas: options.canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOW_END ? 1.25 : 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = true;
-    // three r186 folds the old soft variant into PCF; the map size sets the quality tier.
+    // PCF shadows; the shadow map size sets the quality tier.
     renderer.shadowMap.type = THREE.PCFShadowMap;
     // Weapons allowed past the board edge are cut where the frame begins.
     renderer.localClippingEnabled = true;
@@ -577,6 +146,18 @@ export class ShowcaseBoard {
       textureMetadataResolver: options.textureMetadataResolver,
     });
 
+    this.#boardPaints = new BoardPaints({
+      options,
+      renderer,
+      camera: this.#camera,
+      compositor: this.#compositor,
+      runtimes: this.#runtimes,
+      boardHeight: BOARD_HEIGHT,
+      getEnvMap: () => this.#envMap,
+      isDisposed: () => this.#disposed,
+      markDirty: () => { this.#dirty = true; },
+    });
+    this.#handles = new PoseHandles({ options, camera: this.#camera, runtimes: this.#runtimes });
     this.#camera.position.set(0, 0, 600);
     this.#ambient = new THREE.HemisphereLight(0xfff4e6, 0x3a3128, 1.35 * SOURCE_LIGHT_SCALE);
     this.#scene.add(this.#ambient);
@@ -663,8 +244,6 @@ export class ShowcaseBoard {
     this.#raf = requestAnimationFrame(this.#frameLoop);
   }
 
-  // ---------- store ----------
-
   subscribe = (listener: () => void): (() => void) => {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
@@ -678,28 +257,21 @@ export class ShowcaseBoard {
     return this.#snapshot;
   };
 
-  /**
-   * Mark the board changed. Listeners hear about it once per frame, so a burst
-   * of pointer events re-renders the panel at most once per frame.
-   */
+  /** Mark the board changed; listeners are notified once per frame, however many events arrive. */
   #emit(): void {
     this.#dirty = true;
     this.#snapshotStale = true;
     this.#notifyQueued = true;
   }
 
-  /**
-   * Parts that did not change keep their identity, so the panel sections that
-   * show them can skip re-rendering while a weapon is dragged or turned.
-   */
+  /** Unchanged parts keep their identity, so panel sections can skip re-rendering during a drag or turn. */
   #buildSnapshot(): ShowcaseSnapshot {
     const previous = this.#snapshot;
     const problemsKey = `${this.#footprintVersion}|${this.#rulesKey()}`;
     let problems = previous?.problems;
     const live = this.#liveEditId;
     if (previous && live && this.#liveRulesKey === this.#rulesKey() && previous.items.length === this.#items.length) {
-      // During a rotation or pose drag the edited weapon is the only one whose
-      // fit can change; everything is re-checked when the gesture settles.
+      // During a rotation or pose drag only the edited weapon's fit can change; the rest is re-checked on settle.
       const liveItem = this.#items.find((item) => item.id === live);
       const problem = liveItem ? this.#problemAt(live, liveItem.x, liveItem.y) : null;
       if (JSON.stringify(previous.problems[live] ?? null) !== JSON.stringify(problem)) problems = { ...previous.problems, [live]: problem };
@@ -725,8 +297,6 @@ export class ShowcaseBoard {
   #rulesKey(): string {
     return `${this.#grid}|${this.#spacing}|${this.#keepApart}|${this.#keepInside}`;
   }
-
-  // ---------- board settings ----------
 
   setGrid(grid: GridSize): void {
     this.#grid = grid;
@@ -772,10 +342,7 @@ export class ShowcaseBoard {
     this.#emit();
   }
 
-  /**
-   * Where the light comes from, as seen on the board: azimuth 0 is the right
-   * edge and 90 the top. A lower elevation grazes the board for longer shadows.
-   */
+  /** Light position on the board: azimuth 0 is the right edge and 90 the top; lower elevation gives longer shadows. */
   setLight(azimuth: number, elevation: number): void {
     this.#placeLight(azimuth, elevation);
     this.#dirty = true;
@@ -798,11 +365,7 @@ export class ShowcaseBoard {
     this.#dirty = true;
   }
 
-  /**
-   * Weapons take their ambient from the ambient cube instead of three's light:
-   * the board's sky colour above, its ground colour below, matching the
-   * hemisphere light the board itself is lit by.
-   */
+  /** Weapons take ambient from this cube (the board's sky above, ground below) instead of three's light. */
   #syncAmbientCube(): void {
     const sky = this.#ambient.color.clone().multiplyScalar(this.#ambient.intensity);
     const ground = this.#ambient.groundColor.clone().multiplyScalar(this.#ambient.intensity);
@@ -834,8 +397,6 @@ export class ShowcaseBoard {
     map.needsUpdate = true;
     this.#dirty = true;
   }
-
-  // ---------- items ----------
 
   async addAt(weaponKey: string, paint: ShowcasePaint, x?: number, y?: number): Promise<string | null> {
     const runtime = await this.#createRuntime(weaponKey, paint);
@@ -999,11 +560,7 @@ export class ShowcaseBoard {
     this.#emit();
   }
 
-  /**
-   * Turn by a step. A weapon being carried turns in hand and keeps following
-   * the pointer (its fit is checked on drop); one on the board settles, so a
-   * turn that does not fit springs back.
-   */
+  /** Turn by a step. A carried weapon turns in hand (its fit is checked on drop); one on the board settles, springing back if the turn does not fit. */
   rotateBy(id: string, degrees: number): void {
     const runtime = this.#runtimes.get(id);
     if (!runtime) return;
@@ -1082,13 +639,7 @@ export class ShowcaseBoard {
 
   #layoutRequest = 0;
 
-  /**
-   * Replace the board with a layout as one undo step. Every weapon loads first,
-   * then all share one size, chosen to fill the board, so true sizes stay true
-   * to each other. With `pack`, the rows only name the weapons; they are
-   * regrouped into rows or columns, by size or in the listed order, whichever
-   * lets them be largest.
-   */
+  /** Replace the board with a layout as one undo step; all weapons share the one size that fills the board. */
   async applyLayout(rows: LayoutRows, pack?: LayoutPacking, inward = false, upright = false): Promise<void> {
     const request = (this.#layoutRequest += 1);
     const loaded = await Promise.all(rows.map((row) => Promise.all(row.map((slot) => this.#createRuntime(slot.weaponKey, slot.paint, undefined, null, true)))));
@@ -1114,200 +665,7 @@ export class ShowcaseBoard {
   }
 
   #arrange(rows: ItemRuntime[][], pack: LayoutPacking | undefined, inward: boolean, upright: boolean): void {
-    const cell = GRID_CELL[this.#grid];
-    // Space around and between weapons: the spacing rule plus a cell, so
-    // rounding positions to the grid never brings two too close.
-    const gap = (this.#keepApart ? this.#spacing + 1 : 1) * cell;
-    const hangs = (runtime: ItemRuntime) => runtime.item.weaponKey in HANGING_PARTS && !runtime.item.part;
-    /** Groups run across the board (rows) or down it (columns, `vertical`). */
-    type Grouping = { groups: ItemRuntime[][]; vertical: boolean };
-    type Box = { minX: number; maxX: number; minY: number; maxY: number };
-
-    // Every weapon is measured unflipped at 100%. Turning one round mirrors
-    // its outline and its size scales with it, so these serve every candidate.
-    for (const runtime of rows.flat()) {
-      Object.assign(runtime.item, { roll: restingRoll(runtime.item.weaponKey, runtime.item.part), tilt: 0, turn: 0, scale: 1, flipped: false });
-      const hanging = HANGING_PARTS[runtime.item.weaponKey];
-      if (hanging && !runtime.item.part) runtime.item.pose = { ...runtime.item.pose, ...hanging.pose };
-      this.#reshape(runtime);
-    }
-    const mirror = (box: Box, flip: boolean): Box => (flip ? { ...box, minX: -box.maxX, maxX: -box.minX } : box);
-    // Outlines for a facing, mirrored when it differs from the one measured.
-    const full = (runtime: ItemRuntime, flip: boolean): Box => {
-      const footprint = runtime.footprint;
-      if (!footprint) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
-      const box = { minX: footprint.originX, maxX: footprint.originX + footprint.width, minY: footprint.originY, maxY: footprint.originY + footprint.height };
-      return mirror(box, flip !== runtime.item.flipped);
-    };
-    const body = (runtime: ItemRuntime, flip: boolean): Box => (runtime.footprint ? mirror(runtime.footprint.body, flip !== runtime.item.flipped) : full(runtime, flip));
-    // Muzzles point left unflipped. Facing inward, weapons before the middle
-    // of their row (or columns left of the middle) turn round to face right,
-    // and one that rests facing right turns round past the middle instead.
-    let turnInward = inward;
-    const flipOf = ({ groups, vertical }: Grouping, groupIndex: number, index: number) => {
-      const { item } = groups[groupIndex][index];
-      // A weapon resting upright would turn its back to the viewer.
-      if (!turnInward || restingRoll(item.weaponKey, item.part)) return false;
-      const [position, count] = vertical ? [groupIndex, groups.length] : [index, groups[groupIndex].length];
-      const middle = (count - 1) / 2;
-      return FACES_RIGHT.has(item.weaponKey) && !item.part ? position > middle + 0.01 : position < middle - 0.01;
-    };
-    // The space a weapon needs. Its height leaves out a hanging piece, which
-    // runs off the bottom; its width keeps it, unless the weapon ends the
-    // bottom row with the piece on the outer side, where it runs off that edge.
-    const space = (grouping: Grouping, groupIndex: number, index: number): Box => {
-      const runtime = grouping.groups[groupIndex][index];
-      const flip = flipOf(grouping, groupIndex, index);
-      const outline = full(runtime, flip);
-      if (!hangs(runtime)) return outline;
-      const own = body(runtime, flip);
-      const box = { ...outline, minY: own.minY, maxY: own.maxY };
-      const group = grouping.groups[groupIndex];
-      if (!grouping.vertical && groupIndex === grouping.groups.length - 1) {
-        if (index === 0) box.minX = Math.max(box.minX, own.minX);
-        if (index === group.length - 1) box.maxX = Math.min(box.maxX, own.maxX);
-      }
-      return box;
-    };
-    const along = (box: Box, vertical: boolean) => (vertical ? box.maxY - box.minY : box.maxX - box.minX);
-    // How much the weapons can grow before a group runs out of length or the groups out of room.
-    const fit = (grouping: Grouping) => {
-      const { groups, vertical } = grouping;
-      const length = vertical ? BOARD_HEIGHT : BOARD_WIDTH;
-      const breadth = vertical ? BOARD_WIDTH : BOARD_HEIGHT;
-      let byLength = Infinity;
-      let thickness = 0;
-      groups.forEach((group, groupIndex) => {
-        const boxes = group.map((_, index) => space(grouping, groupIndex, index));
-        byLength = Math.min(byLength, (length - gap * (group.length + 1)) / Math.max(1, boxes.reduce((sum, box) => sum + along(box, vertical), 0)));
-        thickness += Math.max(...boxes.map((box) => along(box, !vertical)));
-      });
-      return Math.min(byLength, (breadth - gap * (groups.length + 1)) / Math.max(1, thickness));
-    };
-    // Weapons with a hanging piece go along the bottom so it can run off the edge.
-    const sinkHanging = (groups: ItemRuntime[][]): ItemRuntime[][] => {
-      if (!groups.some((group) => group.some(hangs))) return groups;
-      if (pack) {
-        const rest = groups.map((group) => group.filter((runtime) => !hangs(runtime)));
-        const bottom = [...rest.pop() ?? [], ...groups.flat().filter(hangs)];
-        return [...rest, bottom].filter((group) => group.length > 0);
-      }
-      // A fixed layout keeps its rows together, such as a RED and BLU pair.
-      return [...groups.filter((group) => !group.some(hangs)), ...groups.filter((group) => group.some(hangs))];
-    };
-
-    const search = (): { grouping: Grouping; score: number } => {
-      let best: Grouping = { groups: sinkHanging(rows), vertical: false };
-      let bestFit = pack ? 0 : fit(best);
-      if (pack) {
-        const all = rows.flat();
-        // Columns would hang a piece over the weapon below, so a board with one sticks to rows.
-        for (const vertical of all.some(hangs) ? [false] : [false, true]) {
-          const size = (runtime: ItemRuntime, alongGroup: boolean) => along(full(runtime, false), alongGroup === vertical);
-          // By size, sorted by thickness so each group holds weapons of a
-          // similar size; either way cut into runs of about equal length.
-          const sorted = pack === 'size' ? [...all].sort((a, b) => size(b, false) - size(a, false)) : all;
-          const total = sorted.reduce((sum, runtime) => sum + size(runtime, true), 0);
-          for (let count = 1; count <= Math.min(6, sorted.length); count += 1) {
-            const groups: ItemRuntime[][] = [[]];
-            let length = 0;
-            for (const runtime of sorted) {
-              const extent = size(runtime, true);
-              if (groups.length < count && groups[groups.length - 1].length && length + extent / 2 > (total * groups.length) / count) groups.push([]);
-              groups[groups.length - 1].push(runtime);
-              length += extent;
-            }
-            const candidate = { groups: vertical ? groups : sinkHanging(groups), vertical };
-            const candidateFit = fit(candidate);
-            if (candidateFit > bestFit) {
-              best = candidate;
-              bestFit = candidateFit;
-            }
-          }
-        }
-      }
-      return { grouping: best, score: bestFit };
-    };
-    // Weapons already resting upright keep their roll either way.
-    const setRoll = (standing: boolean) => {
-      for (const runtime of rows.flat()) {
-        const rest = restingRoll(runtime.item.weaponKey, runtime.item.part);
-        runtime.item.roll = standing && !rest ? -90 : rest;
-        this.#reshape(runtime);
-      }
-    };
-    let { grouping: best } = search();
-    if (upright && !rows.flat().some(hangs)) {
-      // Standing upright, tips up like a weapon rack. Turning round would only
-      // show the other side there, so nothing faces inward.
-      const lying = fit(best);
-      setRoll(true);
-      turnInward = false;
-      const standing = search();
-      if (Math.min(standing.score, LAYOUT_SCALE.max) > Math.min(lying, LAYOUT_SCALE.max)) best = standing.grouping;
-      else {
-        setRoll(false);
-        turnInward = inward;
-      }
-    }
-    const factor = THREE.MathUtils.clamp(Math.floor(Math.min(fit(best), LAYOUT_SCALE.max) * 100) / 100, LAYOUT_SCALE.min, LAYOUT_SCALE.max);
-    const { groups, vertical } = best;
-    // Weapons whose hanging piece runs straight off a side edge, by that edge.
-    const sideways = new Map<ItemRuntime, 'left' | 'right'>();
-    groups.forEach((group, groupIndex) => group.forEach((runtime, index) => {
-      runtime.item.scale = factor;
-      runtime.item.flipped = flipOf(best, groupIndex, index);
-      this.#reshape(runtime);
-      const hanging = HANGING_PARTS[runtime.item.weaponKey];
-      if (!hanging || runtime.item.part || vertical || groupIndex !== groups.length - 1) return;
-      const outline = full(runtime, runtime.item.flipped);
-      const own = body(runtime, runtime.item.flipped);
-      const side = outline.maxX - own.maxX > own.minX - outline.minX ? 'right' : 'left';
-      if ((side === 'left' && index === 0) || (side === 'right' && index === group.length - 1)) {
-        runtime.item.pose = { ...runtime.item.pose, ...hanging.sidePose };
-        this.#reshape(runtime);
-        sideways.set(runtime, side);
-      }
-    }));
-
-    // Measured again at the final size and facing.
-    const boxes = groups.map((group, groupIndex) => group.map((_, index) => space(best, groupIndex, index)));
-    const length = vertical ? BOARD_HEIGHT : BOARD_WIDTH;
-    const breadth = vertical ? BOARD_WIDTH : BOARD_HEIGHT;
-    const thickness = boxes.map((group) => Math.max(...group.map((box) => along(box, !vertical))));
-    const freeAcross = Math.max(0, breadth - thickness.reduce((sum, value) => sum + value, 0)) / (groups.length + 1);
-    // Rows fill from the top, columns from the left; positions run from the board's corner.
-    let groupStart = freeAcross;
-    groups.forEach((group, groupIndex) => {
-      const groupCenter = groupStart + thickness[groupIndex] / 2;
-      groupStart += thickness[groupIndex] + freeAcross;
-      const freeAlong = Math.max(0, length - boxes[groupIndex].reduce((sum, box) => sum + along(box, vertical), 0)) / (group.length + 1);
-      let itemStart = freeAlong;
-      group.forEach((runtime, index) => {
-        const box = boxes[groupIndex][index];
-        const itemCenter = itemStart + along(box, vertical) / 2;
-        itemStart += along(box, vertical) + freeAlong;
-        const centerX = -BOARD_WIDTH / 2 + (vertical ? groupCenter : itemCenter);
-        const centerY = BOARD_HEIGHT / 2 - (vertical ? itemCenter : groupCenter);
-        // A hanging piece's weapon sits against the edge the piece runs off.
-        const side = sideways.get(runtime);
-        const x = side === 'right' ? Math.floor((BOARD_WIDTH / 2 - gap - box.maxX) / cell) * cell
-          : side === 'left' ? Math.ceil((-BOARD_WIDTH / 2 + gap - box.minX) / cell) * cell
-            : Math.round((centerX - (box.minX + box.maxX) / 2) / cell) * cell;
-        const y = hangs(runtime) && !side && !vertical && groupIndex === groups.length - 1
-          ? Math.round((-BOARD_HEIGHT / 2 + gap - box.minY) / cell) * cell
-          : Math.round((centerY - (box.minY + box.maxY) / 2) / cell) * cell;
-        // Rounding to the grid can still bring two weapons a cell too close.
-        const spot = this.#problemAt(runtime.item.id, x, y) ? this.#nearestFreeSpot(runtime.item.id, x, y, 4) ?? { x, y } : { x, y };
-        runtime.item.x = spot.x;
-        runtime.item.y = spot.y;
-        runtime.root.visible = true;
-        if (!runtime.root.parent) this.#scene.add(runtime.root);
-        this.#applyTransform(runtime);
-        this.#rememberValid(runtime);
-        this.#items = [...this.#items, runtime.item];
-      });
-    });
+    arrange(this.#layoutHost, rows, pack, inward, upright);
   }
 
   /** Change one item's paint, wear, team or pattern seed, as one undo step. */
@@ -1347,10 +705,7 @@ export class ShowcaseBoard {
     return pending;
   }
 
-  /**
-   * Fetch a layout's models and recipes and decode its sources ahead of a
-   * click that may follow, such as while the pointer rests on its button.
-   */
+  /** Load a layout's models, recipes and sources ahead of a click, such as while the pointer rests on its button. */
   preload(rows: LayoutRows): void {
     const paints = new Set<string>();
     for (const { weaponKey, paint } of rows.flat()) {
@@ -1418,8 +773,7 @@ export class ShowcaseBoard {
       };
       const runtime: ItemRuntime = { item, root: new THREE.Group(), orient: new THREE.Group(), meshes, bones, footprint: null, material, uniforms, materialKey: '', stackZ: 0, local: null, paintKey: '', materialReady: Promise.resolve(), paintSize: 0, visibility: '', subsets: [] };
       this.#syncVisibility(runtime);
-      // Measured on what is drawn, so a loose reload piece floating beside the
-      // weapon does not throw off its centre.
+      // Measured on what is drawn, so a loose reload piece beside the weapon does not shift its centre.
       model.updateMatrixWorld(true);
       const box = new THREE.Box3();
       const corner = new THREE.Vector3();
@@ -1454,10 +808,7 @@ export class ShowcaseBoard {
     }
   }
 
-  /**
-   * Draw only what belongs: a taken-out piece shows just its own triangles,
-   * and a weapon leaves out its loose reload pieces and anything taken out.
-   */
+  /** A taken-out piece draws only its own triangles; a weapon leaves out its loose and taken-out pieces. */
   #syncVisibility(runtime: ItemRuntime): void {
     const { item } = runtime;
     const part = partOf(item.weaponKey, item.part);
@@ -1536,225 +887,15 @@ export class ShowcaseBoard {
     this.select(runtime.item.id);
   }
 
-  /** A material map, loaded once and shared by every weapon that uses it. */
-  #materialMap(ref: string, wrap: THREE.Wrapping): Promise<THREE.Texture | null> {
-    const key = `${wrap}|${ref}`;
-    let pending = this.#materialMaps.get(key);
-    if (!pending) {
-      pending = Promise.resolve(this.#options.resolveTexture(ref))
-        .then((url) => new THREE.TextureLoader().loadAsync(url))
-        .then((texture) => {
-          // Raw data in glTF UV space, like the composite.
-          texture.flipY = false;
-          texture.colorSpace = THREE.NoColorSpace;
-          texture.wrapS = texture.wrapT = wrap;
-          return texture;
-        })
-        .catch(() => null);
-      this.#materialMaps.set(key, pending);
-    }
-    return pending;
-  }
+  #pixelsPerUnit(): number { return this.#boardPaints.pixelsPerUnit(); }
 
-  #cubemap(ref: string): Promise<THREE.CubeTexture | null> {
-    let pending = this.#cubemaps.get(ref);
-    if (!pending) {
-      pending = this.#options.resolveCubemap(ref)
-        .then((urls) => (urls ? new THREE.CubeTextureLoader().loadAsync(urls) : null))
-        .then((texture) => {
-          if (texture) texture.colorSpace = THREE.SRGBColorSpace;
-          return texture;
-        })
-        .catch(() => null);
-      this.#cubemaps.set(ref, pending);
-    }
-    return pending;
-  }
+  #sharpenPaints(pixelsPerUnit?: number): void { this.#boardPaints.sharpenPaints(pixelsPerUnit); }
 
-  /** Set up the TF2 shader for the weapon's material under its paint, as the viewer does. */
-  #applyMaterial(runtime: ItemRuntime): void {
-    const { weaponKey, paint } = runtime.item;
-    const weapon = this.#options.weapons.find((entry) => entry.key === weaponKey);
-    const source = this.#options.materialOverride(weaponKey, paint.kitId) ?? weapon?.material;
-    if (!source) return;
-    const key = JSON.stringify(source);
-    if (runtime.materialKey === key) return;
-    runtime.materialKey = key;
-    const { material, uniforms } = runtime;
-    configureTf2Material(source, material, uniforms);
-    material.normalMap = null;
-    uniforms.uTf2UseExponentMap.value = 0;
-    uniforms.uTf2UseLightwarp.value = 0;
-    uniforms.uTf2UseSelfIllumMask.value = 0;
-    uniforms.uTf2ExponentMap.value = null;
-    uniforms.uTf2LightwarpMap.value = null;
-    uniforms.uTf2SelfIllumMaskMap.value = null;
-    uniforms.uTf2DetailMap.value = null;
-    material.envMap = this.#envMap;
-    this.#dirty = true;
-    runtime.materialReady = this.#loadMaterialMaps(runtime, source, key);
-  }
+  #applyPaint(runtime: ItemRuntime, pixelsPerUnit?: number): Promise<void> { return this.#boardPaints.applyPaint(runtime, pixelsPerUnit); }
 
-  async #loadMaterialMaps(runtime: ItemRuntime, source: WeaponMaterial, key: string): Promise<void> {
-    const { material, uniforms } = runtime;
-    const [normal, exponent, lightwarp, selfIllum, detail, envMap] = await Promise.all([
-      source.normalMap ? this.#materialMap(source.normalMap, THREE.RepeatWrapping) : null,
-      source.phongExponentTexture ? this.#materialMap(source.phongExponentTexture, THREE.RepeatWrapping) : null,
-      // The diffuse-warp ramp is read clamped and without sRGB decode, as in Source.
-      source.lightwarpTexture ? this.#materialMap(source.lightwarpTexture, THREE.ClampToEdgeWrapping) : null,
-      source.selfIllumMask ? this.#materialMap(source.selfIllumMask, THREE.RepeatWrapping) : null,
-      source.detailTexture ? this.#materialMap(source.detailTexture, THREE.RepeatWrapping) : null,
-      source.envmapTexture ? this.#cubemap(source.envmapTexture) : null,
-    ]);
-    if (this.#disposed || runtime.materialKey !== key) return;
-    if (normal) {
-      material.normalMap = normal;
-      // Source normal maps use the DirectX (green-down) convention.
-      material.normalScale.set(1, -1);
-    }
-    if (exponent) {
-      uniforms.uTf2ExponentMap.value = exponent;
-      uniforms.uTf2UseExponentMap.value = 1;
-    }
-    if (lightwarp) {
-      uniforms.uTf2LightwarpMap.value = lightwarp;
-      uniforms.uTf2UseLightwarp.value = 1;
-    }
-    if (selfIllum) {
-      uniforms.uTf2SelfIllumMaskMap.value = selfIllum;
-      uniforms.uTf2UseSelfIllumMask.value = 1;
-    }
-    uniforms.uTf2DetailMap.value = detail;
-    material.envMap = envMap ?? this.#envMap;
-    runtime.customEnvMap = !!envMap;
-    material.needsUpdate = true;
-    this.#dirty = true;
-  }
+  #releaseRetiredPreviews(): void { this.#boardPaints.releaseRetiredPreviews(); }
 
-  /** Board units to drawing-buffer pixels at the current framing. */
-  #pixelsPerUnit(): number {
-    return this.renderer.domElement.width / Math.max(1, this.#camera.right - this.#camera.left);
-  }
-
-  /** The paint resolution a weapon needs when drawn at `pixelsPerUnit`. */
-  #paintSizeFor(runtime: ItemRuntime, pixelsPerUnit: number): number {
-    const footprint = runtime.footprint;
-    const drawn = (footprint ? Math.max(footprint.width, footprint.height) : BOARD_HEIGHT / 2) * pixelsPerUnit * PAINT_TEXELS_PER_PIXEL;
-    return THREE.MathUtils.clamp(2 ** Math.ceil(Math.log2(Math.max(1, drawn))), PAINT_SIZE.min, PAINT_SIZE.max);
-  }
-
-  /** Give weapons drawn larger than their paint a sharper one. */
-  #sharpenPaints(pixelsPerUnit = this.#pixelsPerUnit()): void {
-    for (const runtime of this.#runtimes.values()) {
-      if (runtime.paintKey && this.#paintSizeFor(runtime, pixelsPerUnit) > runtime.paintSize) void this.#applyPaint(runtime, pixelsPerUnit);
-    }
-  }
-
-  async #applyPaint(runtime: ItemRuntime, pixelsPerUnit = this.#pixelsPerUnit()): Promise<void> {
-    this.#applyMaterial(runtime);
-    const { kitId, team, wearIndex, seed } = runtime.item.paint;
-    // Never smaller than before: shrinking would compose again only to look worse.
-    const size = Math.max(runtime.paintSize, this.#paintSizeFor(runtime, pixelsPerUnit));
-    const key = `${kitId}|${runtime.item.weaponKey}|${team}|${wearIndex}|${seed}|${size}`;
-    if (runtime.paintKey === key) return;
-    runtime.paintKey = key;
-    runtime.paintSize = size;
-    let pending = this.#paints.get(key);
-    if (!pending) {
-      pending = (async () => {
-        const recipe = await this.#options.resolveRecipe(kitId, runtime.item.weaponKey, team, wearIndex);
-        if (!recipe) return null;
-        // Like the viewer, a paint shows at rising detail while its textures stream in.
-        const result = await this.#compositor.composeLatest(`showcase:${key}`, recipe, seed, { width: size, height: size, sourceLimit: Math.max(size, MIN_SOURCE_SIZE) },
-          () => this.#disposed, (preview) => this.#showPreview(key, preview));
-        this.#wearPaint(key, result?.texture ?? null);
-        return result;
-      })().catch((cause) => {
-        console.error('[showcase] compose failed', key, cause);
-        return null;
-      });
-      this.#paints.set(key, pending);
-    }
-    // Joining a paint that is still streaming in: show the detail it has reached.
-    const preview = this.#previews.get(key);
-    if (preview) this.#setMap(runtime, preview.texture);
-    const texture = (await pending)?.texture ?? null;
-    this.#sweepPaints();
-    // A newer paint on the same item may have finished first.
-    if (this.#disposed || runtime.paintKey !== key) return;
-    this.#setMap(runtime, texture);
-  }
-
-  #setMap(runtime: ItemRuntime, texture: THREE.Texture | null): void {
-    const { material } = runtime;
-    // Going from no map to a map (or back) changes the shader; swapping one for another does not.
-    if (!material.map !== !texture) material.needsUpdate = true;
-    material.map = texture;
-    material.color.set(texture ? 0xffffff : 0x9a9a9a);
-    this.#dirty = true;
-    this.#releaseRetiredPreviews();
-  }
-
-  /** Put a paint on every weapon wearing it, then free the preview it replaces. */
-  #wearPaint(key: string, texture: THREE.Texture | null): void {
-    if (this.#disposed) return;
-    for (const runtime of this.#runtimes.values()) if (runtime.paintKey === key) this.#setMap(runtime, texture);
-    this.#dropPreview(key);
-  }
-
-  #showPreview(key: string, preview: ComposeResult): void {
-    const wearers = [...this.#runtimes.values()].filter((runtime) => runtime.paintKey === key);
-    if (this.#disposed || !wearers.length) {
-      this.#compositor.releaseResult(preview);
-      return;
-    }
-    for (const runtime of wearers) this.#setMap(runtime, preview.texture);
-    this.#dropPreview(key);
-    this.#previews.set(key, preview);
-  }
-
-  #dropPreview(key: string): void {
-    const preview = this.#previews.get(key);
-    if (!preview) return;
-    this.#previews.delete(key);
-    this.#retiredPreviews.add(preview);
-    this.#releaseRetiredPreviews();
-  }
-
-  /**
-   * Recycle replaced previews once no weapon shows them; one that switched
-   * paint mid-stream keeps its last preview until the new paint arrives.
-   */
-  #releaseRetiredPreviews(): void {
-    for (const preview of this.#retiredPreviews) {
-      if ([...this.#runtimes.values()].some((runtime) => runtime.material.map === preview.texture)) continue;
-      this.#retiredPreviews.delete(preview);
-      this.#compositor.releaseResult(preview);
-    }
-  }
-
-  /**
-   * Free composites no item wears any more, once the current change settles,
-   * so trying seeds or removing weapons does not pile up render targets.
-   */
-  #sweepPaints(): void {
-    window.clearTimeout(this.#paintSweep);
-    this.#paintSweep = window.setTimeout(() => {
-      if (this.#disposed) return;
-      const worn = new Set([...this.#runtimes.values()].map((runtime) => runtime.paintKey));
-      for (const [key, pending] of this.#paints) {
-        if (worn.has(key)) continue;
-        this.#dropPreview(key);
-        this.#paints.delete(key);
-        // A weapon keeps showing its old paint until the new one is ready.
-        void pending.then((result) => {
-          if (!result || this.#disposed) return;
-          this.#retiredPreviews.add(result);
-          this.#releaseRetiredPreviews();
-        });
-      }
-    }, 0);
-  }
+  #sweepPaints(): void { this.#boardPaints.sweepPaints(); }
 
   #applyTransform(runtime: ItemRuntime): void {
     const { item, orient, root } = runtime;
@@ -1797,10 +938,7 @@ export class ShowcaseBoard {
     return false;
   }
 
-  /**
-   * With overlaps allowed, later weapons rest on top of earlier ones they
-   * cover, so stacked weapons never intersect. Board order is stacking order.
-   */
+  /** With overlaps allowed, later weapons rest on the earlier ones they cover; board order is stacking order. */
   #restack(): void {
     const placed: ItemRuntime[] = [];
     for (const item of this.#items) {
@@ -1850,161 +988,8 @@ export class ShowcaseBoard {
     this.#sweepPaints();
   }
 
-  // ---------- footprint ----------
-
-  /**
-   * Rasterise the posed, rotated weapon onto the board plane. The canvas is the
-   * silhouette shown while placing, and its covered cells are the footprint
-   * used for the fit rules.
-   */
   #refreshFootprint(runtime: ItemRuntime): void {
-    const cell = GRID_CELL[this.#grid];
-    const savedPosition = runtime.root.position.clone();
-    runtime.root.position.set(0, 0, 0);
-    runtime.root.updateMatrixWorld(true);
-    const key = `${JSON.stringify(runtime.item.pose)}|${runtime.item.flipped}|${runtime.visibility}`;
-    let cache = runtime.local;
-    if (!cache || cache.key !== key) {
-      // Skinning is the expensive part, so it only happens when the pose or
-      // side changes; rotations reuse these positions.
-      const toOrient = runtime.orient.matrixWorld.clone().invert();
-      const positions = runtime.meshes.map((mesh, meshIndex) => posedPositions(mesh, toOrient.clone().multiply(mesh.matrixWorld), runtime.subsets[meshIndex]?.used ?? null));
-      const indices = runtime.meshes.map((mesh, meshIndex) => runtime.subsets[meshIndex]?.index ?? mesh.geometry.getIndex()?.array ?? null);
-      const hangingBones = runtime.item.part ? undefined : HANGING_PARTS[runtime.item.weaponKey]?.bones;
-      const hanging = runtime.meshes.map((mesh, meshIndex) => {
-        if (!hangingBones || !(mesh instanceof THREE.SkinnedMesh)) return null;
-        const owner = dominantBones(mesh);
-        const used = runtime.subsets[meshIndex]?.used ?? null;
-        return Uint8Array.from({ length: positions[meshIndex].length / 3 }, (_, slot) => Number(hangingBones.includes(owner[used ? used[slot] : slot])));
-      });
-      cache = { key, positions, projected: positions.map((local) => new Float32Array((local.length / 3) * 2)), indices, hanging };
-      runtime.local = cache;
-    }
-    const e = runtime.orient.matrixWorld.elements;
-    runtime.root.position.copy(savedPosition);
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    let minZ = Infinity;
-    let maxZ = -Infinity;
-    const body = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
-    const projected = cache.positions.map((local, meshIndex) => {
-      const out = cache.projected[meshIndex];
-      const hanging = cache.hanging[meshIndex];
-      for (let index = 0, o = 0; index < local.length; index += 3, o += 2) {
-        const lx = local[index];
-        const ly = local[index + 1];
-        const lz = local[index + 2];
-        const x = e[0] * lx + e[4] * ly + e[8] * lz + e[12];
-        const y = e[1] * lx + e[5] * ly + e[9] * lz + e[13];
-        const z = e[2] * lx + e[6] * ly + e[10] * lz + e[14];
-        out[o] = x;
-        out[o + 1] = y;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-        if (z < minZ) minZ = z;
-        if (z > maxZ) maxZ = z;
-        if (!hanging?.[o / 2]) {
-          body.minX = Math.min(body.minX, x);
-          body.maxX = Math.max(body.maxX, x);
-          body.minY = Math.min(body.minY, y);
-          body.maxY = Math.max(body.maxY, y);
-        }
-      }
-      return out;
-    });
-    if (!Number.isFinite(minX)) return;
-    const originX = Math.floor(minX / cell) * cell;
-    const originY = Math.floor(minY / cell) * cell;
-    const cellsW = Math.max(1, Math.ceil((maxX - originX) / cell));
-    const cellsH = Math.max(1, Math.ceil((maxY - originY) / cell));
-    const width = cellsW * SILHOUETTE_PX_PER_CELL;
-    const height = cellsH * SILHOUETTE_PX_PER_CELL;
-    const previousMask = runtime.footprint?.mask;
-    const mask = previousMask && previousMask.length === width * height ? previousMask.fill(0) : new Uint8Array(width * height);
-    const scale = SILHOUETTE_PX_PER_CELL / cell;
-    const top = originY + cellsH * cell;
-    // 1 marks the weapon itself, 2 a piece that may hang past the edge; the weapon wins where they meet.
-    let value = 1;
-    const mark = (px: number, py: number) => {
-      const x = Math.floor(px);
-      const y = Math.floor(py);
-      if (x >= 0 && y >= 0 && x < width && y < height && mask[y * width + x] !== 1) mask[y * width + x] = value;
-    };
-    // Edges are walked pixel by pixel, so needle-thin parts like a hose or a
-    // barrel still register even when no pixel centre falls inside them.
-    const markEdge = (x0: number, y0: number, x1: number, y1: number) => {
-      const steps = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)));
-      for (let step = 0; step <= steps; step += 1) {
-        const t = steps ? step / steps : 0;
-        mark(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
-      }
-    };
-    projected.forEach((points, meshIndex) => {
-      const indices = cache.indices[meshIndex] ?? null;
-      const hanging = cache.hanging[meshIndex];
-      const count = indices ? indices.length : points.length / 2;
-      for (let corner = 0; corner + 2 < count; corner += 3) {
-        const a = (indices ? indices[corner] : corner) * 2;
-        const b = (indices ? indices[corner + 1] : corner + 1) * 2;
-        const c = (indices ? indices[corner + 2] : corner + 2) * 2;
-        value = hanging && hanging[a / 2] + hanging[b / 2] + hanging[c / 2] >= 2 ? 2 : 1;
-        const ax = (points[a] - originX) * scale, ay = (top - points[a + 1]) * scale;
-        const bx = (points[b] - originX) * scale, by = (top - points[b + 1]) * scale;
-        const cx = (points[c] - originX) * scale, cy = (top - points[c + 1]) * scale;
-        markEdge(ax, ay, bx, by);
-        markEdge(bx, by, cx, cy);
-        markEdge(cx, cy, ax, ay);
-        const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
-        if (Math.abs(area) < 1) continue;
-        const x0 = Math.max(0, Math.floor(Math.min(ax, bx, cx)));
-        const x1 = Math.min(width - 1, Math.ceil(Math.max(ax, bx, cx)));
-        const y0 = Math.max(0, Math.floor(Math.min(ay, by, cy)));
-        const y1 = Math.min(height - 1, Math.ceil(Math.max(ay, by, cy)));
-        const sign = area > 0 ? 1 : -1;
-        for (let py = y0; py <= y1; py += 1) {
-          const sy = py + 0.5;
-          for (let px = x0; px <= x1; px += 1) {
-            const sx = px + 0.5;
-            if (sign * ((bx - ax) * (sy - ay) - (by - ay) * (sx - ax)) < 0) continue;
-            if (sign * ((cx - bx) * (sy - by) - (cy - by) * (sx - bx)) < 0) continue;
-            if (sign * ((ax - cx) * (sy - cy) - (ay - cy) * (sx - cx)) < 0) continue;
-            mark(px, py);
-          }
-        }
-      }
-    });
-    const cells = new Set<number>();
-    const solid = new Set<number>();
-    const baseI = Math.round(originX / cell);
-    const baseJ = Math.round(originY / cell);
-    for (let by = 0; by < cellsH; by += 1) {
-      for (let bx = 0; bx < cellsW; bx += 1) {
-        let covered = 0;
-        let weapon = 0;
-        for (let py = 0; py < SILHOUETTE_PX_PER_CELL; py += 1) {
-          const row = (by * SILHOUETTE_PX_PER_CELL + py) * width + bx * SILHOUETTE_PX_PER_CELL;
-          for (let px = 0; px < SILHOUETTE_PX_PER_CELL; px += 1) {
-            const pixel = mask[row + px];
-            if (pixel) covered += 1;
-            if (pixel === 1) weapon += 1;
-          }
-        }
-        // A cell counts once the weapon covers a couple of its pixels, so a
-        // corner that barely touches it does not claim the whole cell.
-        const key = cellKey(baseI + bx, baseJ + (cellsH - 1 - by));
-        if (covered >= 2) cells.add(key);
-        if (weapon >= 2) solid.add(key);
-      }
-    }
-    runtime.footprint = {
-      cells, solid, mask, maskWidth: width, maskHeight: height, originX, originY, width: cellsW * cell, height: cellsH * cell, minZ, maxZ,
-      body: Number.isFinite(body.minX) ? body : { minX, minY, maxX, maxY },
-      version: (this.#footprintVersion += 1),
-    };
+    refreshFootprint(runtime, GRID_CELL[this.#grid], () => (this.#footprintVersion += 1));
   }
 
   #problemAt(id: string, x: number, y: number): FitProblem {
@@ -2167,8 +1152,6 @@ export class ShowcaseBoard {
     this.#ghost.position.set(x + footprint.originX + footprint.width / 2, y + footprint.originY + footprint.height / 2, 0.08);
     this.#ghost.visible = true;
   }
-
-  // ---------- pointer ----------
 
   #boardPoint(clientX: number, clientY: number): THREE.Vector2 | null {
     const rect = this.#options.canvas.getBoundingClientRect();
@@ -2351,116 +1334,11 @@ export class ShowcaseBoard {
     this.#lastValid.set(runtime.item.id, { roll, tilt, turn, flipped, scale, pose: { ...pose } });
   }
 
-  /** Where the selected item sits on screen, for the HTML rotation gizmo. */
-  screenInfo(id: string): { x: number; y: number; radius: number } | null {
-    const runtime = this.#runtimes.get(id);
-    const footprint = runtime?.footprint;
-    if (!runtime || !footprint) return null;
-    const canvas = this.#options.canvas;
-    const unitsPerPx = (this.#camera.right - this.#camera.left) / canvas.clientWidth;
-    const corners = [
-      [footprint.originX, footprint.originY],
-      [footprint.originX + footprint.width, footprint.originY + footprint.height],
-    ];
-    const reach = Math.max(...corners.flat().map(Math.abs));
-    const point = new THREE.Vector3(runtime.item.x, runtime.item.y, 0).project(this.#camera);
-    return {
-      x: (point.x + 1) / 2 * canvas.clientWidth,
-      y: (1 - point.y) / 2 * canvas.clientHeight,
-      radius: Math.min(reach * 0.75, 60) / unitsPerPx,
-    };
-  }
+  screenInfo(id: string): { x: number; y: number; radius: number } | null { return this.#handles.screenInfo(id); }
 
-  /** Drag handles for the selected weapon's pose controls, at the parts they move. */
-  poseHandles(id: string): PoseHandle[] {
-    const runtime = this.#runtimes.get(id);
-    const rig = runtime && !runtime.item.part ? POSE_RIGS[runtime.item.weaponKey] : undefined;
-    if (!runtime || !rig || runtime.item.hidden) return [];
-    runtime.root.updateMatrixWorld(true);
-    const handles: PoseHandle[] = [];
-    for (const control of rig.controls) {
-      const point = this.#handlePoint(runtime, control);
-      if (point) handles.push({ controlId: control.id, ...point });
-    }
-    return handles;
-  }
+  poseHandles(id: string): PoseHandle[] { return this.#handles.poseHandles(id); }
 
-  /**
-   * Where a handle travels as its control runs from min to max, sampled in
-   * canvas pixels. Dragging a handle picks the value whose point is nearest.
-   */
-  poseHandlePath(id: string, controlId: string): { values: number[]; points: { x: number; y: number }[] } | null {
-    const runtime = this.#runtimes.get(id);
-    const rig = runtime && !runtime.item.part ? POSE_RIGS[runtime.item.weaponKey] : undefined;
-    const control = rig?.controls.find((entry) => entry.id === controlId);
-    if (!runtime || !rig || !control) return null;
-    const values: number[] = [];
-    const points: { x: number; y: number }[] = [];
-    const steps = Math.min(180, Math.max(24, Math.round((control.max - control.min) / control.step)));
-    for (let step = 0; step <= steps; step += 1) {
-      const value = control.min + ((control.max - control.min) * step) / steps;
-      rig.apply(runtime.bones, { ...runtime.item.pose, [control.id]: value });
-      runtime.root.updateMatrixWorld(true);
-      const point = this.#handlePoint(runtime, control);
-      if (!point) continue;
-      values.push(value);
-      points.push(point);
-    }
-    rig.apply(runtime.bones, runtime.item.pose);
-    runtime.root.updateMatrixWorld(true);
-    return points.length ? { values, points } : null;
-  }
-
-  #handlePoint(runtime: ItemRuntime, control: PoseControl): { x: number; y: number } | null {
-    const anchor = control.handle ? this.#handleAnchor(runtime, control.handle) : null;
-    if (!anchor) return null;
-    // A skinned mesh's vertex position already includes the bone transform.
-    const point = anchor.mesh.getVertexPosition(anchor.vertex, new THREE.Vector3());
-    point.applyMatrix4(anchor.mesh.matrixWorld).project(this.#camera);
-    const canvas = this.#options.canvas;
-    return { x: (point.x + 1) / 2 * canvas.clientWidth, y: (1 - point.y) / 2 * canvas.clientHeight };
-  }
-
-  /** The vertex of a moving part farthest from its pivot, which travels the most. */
-  #handleAnchor(runtime: ItemRuntime, boneName: string): { mesh: THREE.SkinnedMesh; vertex: number } | null {
-    const cacheKey = `${runtime.item.weaponKey}|${boneName}`;
-    const cached = this.#anchors.get(cacheKey);
-    if (cached !== undefined) {
-      const mesh = cached && runtime.meshes[cached.meshIndex];
-      return mesh instanceof THREE.SkinnedMesh && cached ? { mesh, vertex: cached.vertex } : null;
-    }
-    const pivot = runtime.bones.get(boneName)?.bone;
-    const search: { best: { meshIndex: number; vertex: number } | null; farthest: number } = { best: null, farthest: -1 };
-    if (pivot) {
-      const restWorld = new THREE.Vector3();
-      const target = new THREE.Vector3();
-      runtime.meshes.forEach((mesh, meshIndex) => {
-        if (!(mesh instanceof THREE.SkinnedMesh)) return;
-        const owner = dominantBones(mesh);
-        const boneIndex = mesh.skeleton.bones.findIndex((bone) => bone.name === boneName);
-        if (boneIndex < 0) return;
-        // Pivot and vertices compared in bind space, where the mesh rests.
-        restWorld.setFromMatrixPosition(mesh.skeleton.boneInverses[boneIndex].clone().invert());
-        owner.forEach((name, vertex) => {
-          if (name !== boneName) return;
-          target.fromBufferAttribute(mesh.geometry.getAttribute('position'), vertex).applyMatrix4(mesh.bindMatrix);
-          const distance = target.distanceToSquared(restWorld);
-          if (distance > search.farthest) {
-            search.farthest = distance;
-            search.best = { meshIndex, vertex };
-          }
-        });
-      });
-    }
-    this.#anchors.set(cacheKey, search.best);
-    const found = search.best;
-    const mesh = found ? runtime.meshes[found.meshIndex] : null;
-    return found && mesh instanceof THREE.SkinnedMesh ? { mesh, vertex: found.vertex } : null;
-  }
-
-  readonly #anchors = new Map<string, { meshIndex: number; vertex: number } | null>();
-
-  // ---------- rendering ----------
+  poseHandlePath(id: string, controlId: string): { values: number[]; points: { x: number; y: number }[] } | null { return this.#handles.poseHandlePath(id, controlId); }
 
   #frameBounds(): { width: number; height: number } {
     if (this.#background === 'framed') {
@@ -2527,7 +1405,7 @@ export class ShowcaseBoard {
       // Paints and materials can change while waiting, so wait again until a pass finds nothing new.
       if (state === waitedFor) return;
       waitedFor = state;
-      await Promise.all([...keys.map((key) => this.#paints.get(key)), ...runtimes.map((runtime) => runtime.materialReady)]);
+      await Promise.all([...keys.map((key) => this.#boardPaints.pendingPaint(key)), ...runtimes.map((runtime) => runtime.materialReady)]);
     }
   }
 
@@ -2557,7 +1435,7 @@ export class ShowcaseBoard {
   dispose(): void {
     this.#disposed = true;
     cancelAnimationFrame(this.#raf);
-    window.clearTimeout(this.#paintSweep);
+    this.#boardPaints.cancelSweep();
     this.#cancelExternalDrag();
     window.removeEventListener('pointermove', this.#onWindowMove);
     window.removeEventListener('pointerup', this.#onWindowUp);

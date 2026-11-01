@@ -1,37 +1,13 @@
-import type { TextureMetadata } from '../data/types';
 import { encodeRgbaPng } from './png';
-import { opaqueRgbaThumbnail, SOURCE_THUMBNAIL_SIDE } from './thumbnail';
+import { decodeVtfToPngPair, VtfDecodeError } from './vtfDecodeCore';
+import type { DecodedVtfPng, VtfHeaderDetails } from './vtfDecodeCore';
 
-export interface VtfHeaderDetails {
-  verMajor: number;
-  verMinor: number;
-  width: number;
-  height: number;
-  highResFormat: number;
-  sampling: Partial<TextureMetadata>;
-}
-
-export interface DecodedVtfPng {
-  png: ArrayBuffer;
-  thumbnailPng: ArrayBuffer;
-  width: number;
-  height: number;
-  header: VtfHeaderDetails;
-}
+export { VtfDecodeError };
+export type { DecodedVtfPng };
 
 export interface DecodeVtfOptions {
   maxPixels?: number;
   limitDescription?: string;
-}
-
-export class VtfDecodeError extends Error {
-  readonly header: VtfHeaderDetails | undefined;
-
-  constructor(message: string, header?: VtfHeaderDetails) {
-    super(message);
-    this.name = 'VtfDecodeError';
-    this.header = header;
-  }
 }
 
 interface WorkerSuccess {
@@ -58,9 +34,14 @@ interface PendingDecode {
   reject: (reason?: unknown) => void;
 }
 
+/** Largest decoded image or cubemap face set, in pixels. Shared by every source decode path. */
+const MAX_DECODED_PIXELS = 16 * 1024 * 1024;
+/** The same limit as it appears in error messages. */
+const MAX_DECODED_PIXELS_LABEL = `${MAX_DECODED_PIXELS / (1024 * 1024)} megapixel limit`;
+
 const DEFAULT_OPTIONS: Required<DecodeVtfOptions> = {
-  maxPixels: 16 * 1024 * 1024,
-  limitDescription: '16 megapixel limit',
+  maxPixels: MAX_DECODED_PIXELS,
+  limitDescription: MAX_DECODED_PIXELS_LABEL,
 };
 
 let worker: Worker | null = null;
@@ -86,30 +67,9 @@ function decodeFailure(message: string, header?: VtfHeaderDetails): VtfDecodeErr
 }
 
 async function decodeOnMainThread(bytes: Uint8Array, options: Required<DecodeVtfOptions>): Promise<DecodedVtfPng> {
-  // This is deliberately dynamic: unsupported browsers and test environments
-  // retain the old behavior without pulling the decoder into the shell.
-  const { decodeVTF, parseVTFHeader } = await import('../../tools/lib/vtf-core.mjs');
-  let header: VtfHeaderDetails | undefined;
-  try {
-    header = parseVTFHeader(bytes) as VtfHeaderDetails;
-    const pixels = header.width * header.height;
-    if (!Number.isSafeInteger(pixels) || pixels > options.maxPixels) {
-      throw new Error(`VTF dimensions ${header.width} x ${header.height} exceed the ${options.limitDescription}.`);
-    }
-    const decoded = decodeVTF(bytes);
-    const [png, thumbnailPng] = await Promise.all([
-      encodeRgbaPng(decoded.rgba, decoded.width, decoded.height),
-      encodeRgbaPng(
-        opaqueRgbaThumbnail(decoded.rgba, decoded.width, decoded.height),
-        SOURCE_THUMBNAIL_SIDE,
-        SOURCE_THUMBNAIL_SIDE,
-      ),
-    ]);
-    return { png, thumbnailPng, width: decoded.width, height: decoded.height, header };
-  } catch (cause) {
-    if (cause instanceof VtfDecodeError) throw cause;
-    throw decodeFailure(cause instanceof Error ? cause.message : 'The image data could not be decoded.', header);
-  }
+  // Dynamic import keeps the decoder out of the main bundle; browsers without Worker land here.
+  const codec = await import('../../tools/lib/vtf-core.mjs');
+  return decodeVtfToPngPair(codec, bytes, options);
 }
 
 function fallBackPending(decodes: Iterable<PendingDecode>): void {
@@ -165,8 +125,7 @@ export async function decodeVtfToPng(bytes: Uint8Array, options?: DecodeVtfOptio
     const id = nextRequestId++;
     pending.set(id, { bytes, options: resolvedOptions, resolve, reject });
     try {
-      // Keep the caller's bytes intact: if a browser terminates the worker or
-      // cannot clone a message, the same request can safely use the fallback.
+      // Copy so the bytes survive a worker failure for the fallback to use.
       const transferable = bytes.slice().buffer;
       decoder.postMessage({ id, bytes: transferable, ...resolvedOptions }, [transferable]);
     } catch {
@@ -182,10 +141,8 @@ export async function decodeVtfCubemapToPng(bytes: Uint8Array): Promise<ArrayBuf
   const { decodeVTFCubemap, parseVTFHeader } = await import('../../tools/lib/vtf-core.mjs');
   const header = parseVTFHeader(bytes) as VtfHeaderDetails & { faces: number };
   const pixels = header.width * header.height * 6;
-  if (!Number.isSafeInteger(pixels) || pixels > MAX_CUBEMAP_PIXELS) {
-    throw new VtfDecodeError('VTF cubemap exceeds the 16 megapixel limit.', header);
+  if (!Number.isSafeInteger(pixels) || pixels > MAX_DECODED_PIXELS) {
+    throw new VtfDecodeError(`VTF cubemap exceeds the ${MAX_DECODED_PIXELS_LABEL}.`, header);
   }
   return Promise.all(decodeVTFCubemap(bytes).map((face) => encodeRgbaPng(face.rgba, face.width, face.height)));
 }
-
-const MAX_CUBEMAP_PIXELS = 16 * 1024 * 1024;
