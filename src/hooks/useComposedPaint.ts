@@ -266,6 +266,15 @@ export function useComposedPaint({
 
   const [composing, setComposing] = useState(false);
   const [visibleDefinitionGeneration, setVisibleDefinitionGeneration] = useState(-1);
+  // A lower-detail composite on the mesh while a cold paint streams in. It is
+  // released once anything else replaces it on the mesh.
+  const previewRef = useRef<{ result: ComposeResult; compositor: Compositor } | null>(null);
+  const dropPreview = useCallback(() => {
+    const preview = previewRef.current;
+    previewRef.current = null;
+    preview?.compositor.releaseResult(preview.result);
+  }, []);
+  useEffect(() => dropPreview, [dropPreview]);
 
   // Recompose when recipe inputs change: debounced, deduped, and the previous
   // texture stays on the mesh until the new one is ready (no untextured flash).
@@ -299,12 +308,20 @@ export function useComposedPaint({
       // secondary preview surface.
       const retained = lastResultRef.current;
       if (retained) {
+        // A cancelled request may have left its lower-detail preview on the
+        // mesh; the accepted result for this request goes back on.
+        if (previewRef.current) {
+          viewerRef.current?.setMap(retained.texture);
+          dropPreview();
+        }
         try {
           onVisibleResult?.(retained, { interactive });
         } catch (cause) {
           console.warn('[warpaint-viewer] composed preview consumer failed:', cause);
         }
       }
+      // A cancelled request may also have raised the badge on its way out.
+      setComposing(false);
       return;
     }
 
@@ -412,6 +429,7 @@ export function useComposedPaint({
         composeCacheRef.current.delete(composeKey);
         composeCacheRef.current.set(composeKey, cached);
         viewer.setMap(cached.texture);
+        dropPreview();
         try {
           onVisibleResult?.(cached, { interactive: false });
         } catch (cause) {
@@ -440,13 +458,22 @@ export function useComposedPaint({
         if (!firstPaintLoggedRef.current) advanceBoot(70, 'Composing initial warpaint…');
         // TF2 selects the complete paint-kit recipe for the wear category; it
         // does not crossfade that result with Factory New.
-        const result = await comp.composeLatest('visible-paint', recipe, state.seed, dimensions, () => cancelled);
+        // Cold paints show at rising detail as their textures stream in;
+        // pointer previews are already low resolution and skip this.
+        const showPreview = interactive ? undefined : (preview: ComposeResult) => {
+          viewer.setMap(preview.texture);
+          dropPreview();
+          previewRef.current = { result: preview, compositor: comp };
+          if (!firstPaintLoggedRef.current) advanceBoot(90, 'Sharpening warpaint…');
+        };
+        const result = await comp.composeLatest('visible-paint', recipe, state.seed, dimensions, () => cancelled, showPreview);
         if (!result) return;
         if (cancelled) {
           comp.releaseResult(result);
           return;
         }
         viewer.setMap(result.texture);
+        dropPreview();
         try {
           onVisibleResult?.(result, { interactive });
         } catch (cause) {
@@ -531,7 +558,7 @@ export function useComposedPaint({
       window.clearTimeout(badgeTimer);
       cancelPendingIdle?.();
     };
-  }, [suspended, interactive, interactiveRecipe, interactiveKey, onVisibleResult, engineReady, contextRestores, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState, lastResultRef, interactiveResultRef, composeCacheRef, lastComposeKeyRef, lastRequestKeyRef, firstPaintLoggedRef]);
+  }, [dropPreview, suspended, interactive, interactiveRecipe, interactiveKey, onVisibleResult, engineReady, contextRestores, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState, lastResultRef, interactiveResultRef, composeCacheRef, lastComposeKeyRef, lastRequestKeyRef, firstPaintLoggedRef]);
 
   return { composing, visibleDefinitionGeneration };
 }

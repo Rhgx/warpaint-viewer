@@ -1,10 +1,11 @@
 import { preloadIntent, type PreloadIntent } from '../../hooks/useIntentPreload';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
-import { Check, Copy, Film, HelpCircle, ImageDown, PackagePlus, Rotate3d, RotateCcw, X } from 'lucide-react';
+import { Check, Copy, Film, HelpCircle, ImageDown, LayoutGrid, PackagePlus, Rotate3d, RotateCcw, X } from 'lucide-react';
 import { ControlsHelpModal } from './ControlsHelpModal';
 import { SettingsDialog } from './SettingsDialog';
 import { TOUCH_ONLY_DEVICE, WORKSHOP_ENABLED } from '../../device';
+import { useSettings } from '../../settings';
 
 type Feedback = 'idle' | 'success' | 'error';
 
@@ -76,6 +77,8 @@ export function StageToolbar({
   autoSpin,
   onToggleAutoSpin,
   showAutoSpin,
+  showcaseOpen,
+  onToggleShowcase,
 }: {
   workbenchOpen: boolean;
   editingMode?: 'paint' | 'sticker' | 'lighting' | 'graph' | null;
@@ -89,8 +92,11 @@ export function StageToolbar({
   autoSpin: boolean;
   onToggleAutoSpin: () => void;
   showAutoSpin: boolean;
+  showcaseOpen: boolean;
+  onToggleShowcase: () => void;
 }) {
   const [capturing, setCapturing] = useState(false);
+  const showcaseEnabled = useSettings((s) => s.showcaseBoard) && WORKSHOP_ENABLED;
   const [controlsHelpOpen, setControlsHelpOpen] = useState(false);
   const controlsHelpTriggerRef = useRef<HTMLButtonElement | null>(null);
   const closeControlsHelp = useCallback(() => setControlsHelpOpen(false), []);
@@ -119,6 +125,21 @@ export function StageToolbar({
               onClick={onToggleWorkbench}
             >
               <PackagePlus size={15} />
+            </button>
+            <span className="stage-toolbar-divider" aria-hidden="true" />
+          </>
+        )}
+        {showcaseEnabled && (
+          <>
+            <button
+              type="button"
+              className="stage-toolbar-btn"
+              title="Showcase board"
+              aria-label="Open showcase board"
+              aria-pressed={showcaseOpen}
+              onClick={onToggleShowcase}
+            >
+              <LayoutGrid size={15} />
             </button>
             <span className="stage-toolbar-divider" aria-hidden="true" />
           </>

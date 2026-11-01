@@ -6,7 +6,7 @@ import './ui/stage/Inspector.css';
 import './styles/stage.css';
 import './styles/layout.css';
 import type { Viewer } from './viewer/Viewer';
-import { isStockMaterialCubemap } from './viewer/env';
+import { isStockMaterialCubemap, stockMaterialCubemapUrls } from './viewer/env';
 import type { Compositor } from './compositor/compositor';
 import type { PaintkitEntry } from './data/types';
 import { WarpaintList } from './ui/catalog/WarpaintList';
@@ -57,6 +57,7 @@ import { collectPackageStickerSpecularOverrides } from './workbench/assetSlots';
 import { ClearWorkspaceDialog } from './ui/common/ClearWorkspaceDialog';
 import { AppToasts } from './ui/common/AppToasts';
 import { matchesMobileLayout, WORKSHOP_ENABLED } from './device';
+import { useSettings } from './settings';
 
 // Selftest page is code-split: it never loads in normal use.
 const SelfTestPage = lazy(() => import('./dev/selftest').then((m) => ({ default: m.SelfTestPage })));
@@ -64,6 +65,7 @@ const SelfTestPage = lazy(() => import('./dev/selftest').then((m) => ({ default:
 // It is not needed to view a paint, so mount it only after the drawer opens.
 const loadWorkbench = () => import('./ui/workbench/CustomWarpaintWorkbench').then((m) => ({ default: m.CustomWarpaintWorkbench }));
 const CustomWarpaintWorkbench = lazy(loadWorkbench);
+const ShowcaseMode = lazy(() => import('./ui/showcase/ShowcaseMode'));
 
 const EMPTY_OVERRIDES: WarpaintAssetOverrides = { revision: 0, assets: {} };
 
@@ -102,6 +104,13 @@ function MainApp() {
   const [assetOverrideCache, setAssetOverrideCache] = useState<Record<string, WarpaintAssetOverrides>>({});
   const [catalogVisible, setCatalogVisible] = useState(true);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [showcaseOpen, setShowcaseOpen] = useState(false);
+  // Hidden while the Settings toggle is off; it comes back when the toggle does.
+  const showcaseActive = useSettings((s) => s.showcaseBoard) && WORKSHOP_ENABLED && showcaseOpen;
+  // The board covers the stage, so the 3D viewer stops drawing until it closes.
+  useEffect(() => {
+    viewerRef.current?.setSuspended(showcaseActive);
+  }, [showcaseActive, engineReady]);
   const [hintDismissed, setHintDismissed] = useState(false);
   const [cameraMode, setCameraMode] = useState<'inspect' | 'advanced'>('inspect');
   const [loadedAssetKey, setLoadedAssetKey] = useState('');
@@ -1049,6 +1058,8 @@ function MainApp() {
             autoSpin={autoSpin}
             onToggleAutoSpin={() => setAutoSpin((spinning) => !spinning)}
             showAutoSpin={!firstPersonActive}
+            showcaseOpen={showcaseOpen}
+            onToggleShowcase={() => setShowcaseOpen((open) => !open)}
           />
           {state.preset === CUSTOM_LIGHTING_ID && (
             <LightingPanel store={lightingStore} />
@@ -1077,6 +1088,24 @@ function MainApp() {
             />
           )}
         </div>
+        {showcaseActive && (
+          <Suspense fallback={null}>
+            <ShowcaseMode
+              manifest={data.manifest}
+              paintkits={paintkits}
+              selectedKit={selectedKit}
+              team={state.team}
+              wearIndex={state.wearIndex}
+              seed={state.seed}
+              resolveRecipe={resolveRecipe}
+              resolveTexture={(ref) => sourceProvider.resolve(ref)}
+              resolveCubemap={async (ref) => await sourceProvider.resolveCubemap(ref) ?? stockMaterialCubemapUrls(ref)}
+              textureMetadataResolver={(ref) => sourceProvider.metadataFor(ref)}
+              inspectorEl={inspectorRef.current}
+              onClose={() => setShowcaseOpen(false)}
+            />
+          </Suspense>
+        )}
         <div
           className="custom-workbench-slot"
           data-open={workbenchOpen ? '' : undefined}
@@ -1170,7 +1199,7 @@ function MainApp() {
         </div>
       </main>
       <aside className="inspector" id="viewer-controls-panel" ref={inspectorRef}>
-        <Inspector
+        {!showcaseActive && <Inspector
           firstPersonActive={firstPersonActive}
           previewControls={previewControls}
           manifest={data.manifest}
@@ -1188,7 +1217,7 @@ function MainApp() {
           lightingStore={lightingStore}
           onToggleLightingPanel={toggleLightingPanel}
           onSelectLight={selectLight}
-        />
+        />}
       </aside>
       <MobileTabStrip mobilePanel={mobilePanel} setMobilePanel={setMobilePanel} />
       <AppToasts

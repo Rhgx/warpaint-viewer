@@ -363,7 +363,7 @@ export function WearSliderField({
   onChange,
 }: {
   value: number;
-  names: string[];
+  names: readonly string[];
   onChange: (v: number) => void;
 }) {
   const selected = Math.max(0, Math.min(4, Math.round(value)));

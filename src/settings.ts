@@ -10,6 +10,9 @@ interface SettingsState {
   /** Exact paint kit ID and op:<operation> matches in the warpaint filter. */
   advancedCatalogSearch: boolean;
   setAdvancedCatalogSearch(enabled: boolean): void;
+  /** The showcase board button in the stage toolbar (desktop only). */
+  showcaseBoard: boolean;
+  setShowcaseBoard(enabled: boolean): void;
 }
 
 // persist falls back to in-memory state when localStorage is unavailable, so
@@ -21,6 +24,8 @@ export const useSettings = create<SettingsState>()(
       setShowPaintkitDetails: (showPaintkitDetails) => set({ showPaintkitDetails }),
       advancedCatalogSearch: false,
       setAdvancedCatalogSearch: (advancedCatalogSearch) => set({ advancedCatalogSearch }),
+      showcaseBoard: false,
+      setShowcaseBoard: (showcaseBoard) => set({ showcaseBoard }),
     }),
     { name: 'warpaint-viewer:settings', version: 1 },
   ),

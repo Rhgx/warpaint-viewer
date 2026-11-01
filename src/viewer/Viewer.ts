@@ -380,6 +380,8 @@ export class Viewer {
   private raf = 0;
   private lastTime = 0;
   private disposed = false;
+  /** Another view covers the canvas (the showcase board), so nothing here is drawn. */
+  private suspended = false;
   private canvas: HTMLCanvasElement;
   private activeUnusual: UnusualEffect | null = null;
   private unusualId = 'none';
@@ -672,7 +674,7 @@ export class Viewer {
   private invalidate() {
     window.clearTimeout(this.sheenWakeTimer);
     this.sheenWakeTimer = 0;
-    if (this.disposed || this.raf || document.hidden || this.contextLost) return;
+    if (this.disposed || this.raf || document.hidden || this.contextLost || this.suspended) return;
     this.raf = requestAnimationFrame(this.renderFrame);
   }
 
@@ -692,7 +694,7 @@ export class Viewer {
   private renderFrame = () => {
     this.raf = 0;
     // A turntable capture owns the scene and steps its animations itself.
-    if (this.disposed || document.hidden || this.turntableCapturing) return;
+    if (this.disposed || document.hidden || this.turntableCapturing || this.suspended) return;
     // Thumbnail viewers share the particle uniform. Restore this drawing buffer's
     // scale before each frame, even when another viewer resized since our last one.
     setParticlePointScale(this.canvas.height);
@@ -831,6 +833,21 @@ export class Viewer {
         camera.setViewOffset(w, h, right / 2, bottom / 2, w, h);
       }
     }
+  }
+
+  setSuspended(suspended: boolean): void {
+    if (this.suspended === suspended) return;
+    this.suspended = suspended;
+    if (suspended) {
+      window.clearTimeout(this.sheenWakeTimer);
+      this.sheenWakeTimer = 0;
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      return;
+    }
+    this.lastTime = performance.now();
+    this.sheenLastTime = this.lastTime;
+    this.invalidate();
   }
 
   /** TF2-style inspect auto-spin taking `secondsPerTurn` per revolution, or null to stop. */

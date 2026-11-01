@@ -16,6 +16,8 @@ export function SettingsDialog() {
   const setShowPaintkitDetails = useSettings((s) => s.setShowPaintkitDetails);
   const advancedCatalogSearch = useSettings((s) => s.advancedCatalogSearch);
   const setAdvancedCatalogSearch = useSettings((s) => s.setAdvancedCatalogSearch);
+  const showcaseBoard = useSettings((s) => s.showcaseBoard);
+  const setShowcaseBoard = useSettings((s) => s.setShowcaseBoard);
 
   return (
     <Dialog.Root>
@@ -57,9 +59,21 @@ export function SettingsDialog() {
                   </div>
                   <SwitchField checked={advancedCatalogSearch} onChange={setAdvancedCatalogSearch} ariaLabel="Advanced catalog search" />
                 </div>
+                {WORKSHOP_ENABLED && (
+                  <div className="settings-row">
+                    <div className="settings-row-text">
+                      <span>Showcase board</span>
+                      <span className="settings-row-description">
+                        Arrange painted weapons on a pegboard and save it as one image.
+                      </span>
+                    </div>
+                    <SwitchField checked={showcaseBoard} onChange={setShowcaseBoard} ariaLabel="Showcase board" />
+                  </div>
+                )}
                 {!WORKSHOP_ENABLED && (
                   <div className="settings-row-description">
-                    Custom war paint files, the visual editor and definitions import are desktop features. Open the
+                    Custom war paint files, the visual editor, definitions import and the showcase board are desktop
+                    features. Open the
                     viewer on a computer to use them.
                   </div>
                 )}

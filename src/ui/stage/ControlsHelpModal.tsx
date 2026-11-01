@@ -18,7 +18,7 @@ import './ControlsHelpModal.css';
 
 type ControlsHelpModalProps = {
   open: boolean;
-  editingMode?: 'paint' | 'sticker' | 'lighting' | 'graph' | null;
+  editingMode?: 'paint' | 'sticker' | 'lighting' | 'graph' | 'showcase' | null;
   onClose: () => void;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
 };
@@ -126,7 +126,33 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
         </header>
 
         <div className="controls-help-body" data-mode={editingMode ?? 'camera'}>
-          {editingMode === 'lighting' ? (
+          {editingMode === 'showcase' ? (
+            <>
+              <section className="controls-help-section" aria-labelledby="showcase-board-heading">
+                <h3 id="showcase-board-heading">Board</h3>
+                <ControlRow keys={<><Key>Drag up from the tray</Key><Key>{TOUCH_ONLY_DEVICE ? 'Tap a card' : 'Click a card'}</Key></>}>Place a weapon</ControlRow>
+                <ControlRow keys={<Key>Drag a weapon</Key>}>Move it</ControlRow>
+                <ControlRow keys={<Key>{TOUCH_ONLY_DEVICE ? 'Tap a weapon' : 'Click a weapon'}</Key>}>Select it</ControlRow>
+                <ControlRow keys={<Key>Esc</Key>}>Deselect</ControlRow>
+                <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo</ControlRow>
+                <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo</ControlRow>
+              </section>
+              <section className="controls-help-section" aria-labelledby="showcase-selected-heading">
+                <h3 id="showcase-selected-heading">Selected or carried weapon</h3>
+                <ControlRow keys={<><Key>Q</Key><Key>E</Key></>}>Turn left or right by the rotation snap</ControlRow>
+                <ControlRow keys={<><Key>R</Key><Key>Shift+R</Key></>}>Turn right or left</ControlRow>
+                <ControlRow keys={<Key>F</Key>}>Show the other side</ControlRow>
+                <ControlRow keys={<Key>Arrow keys</Key>}>Nudge one grid cell</ControlRow>
+                <ControlRow keys={<><Key>Del</Key><Key>Backspace</Key></>}>Remove</ControlRow>
+              </section>
+              <section className="controls-help-section" aria-labelledby="showcase-handles-heading">
+                <h3 id="showcase-handles-heading">Handles</h3>
+                <ControlRow keys={<Key>Drag the rings</Key>}>Roll, tilt or turn</ControlRow>
+                <ControlRow keys={<Key>Drag a dot on the weapon</Key>}>Pose a moving part</ControlRow>
+                <ControlRow keys={<><Key>Shift</Key><Key>Drag</Key></>}>Turn or pose without snapping</ControlRow>
+              </section>
+            </>
+          ) : editingMode === 'lighting' ? (
             <>
               <section className="controls-help-section" aria-labelledby="lighting-pointer-heading">
                 <h3 id="lighting-pointer-heading">Light editing</h3>
