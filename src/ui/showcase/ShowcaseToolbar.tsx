@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { Copy, HelpCircle, ImageDown, Redo2, Trash2, Undo2, X } from 'lucide-react';
 
+import { canCopyImages } from '../../device';
 import type { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
 import { ControlsHelpModal } from '../stage/ControlsHelpModal';
 import { useBusy } from './useBusy';
@@ -35,9 +36,11 @@ export function ShowcaseToolbar({ board, onClose, hasItems, canUndo, canRedo, on
         <button type="button" className="stage-toolbar-btn" title="Save PNG" aria-label="Save PNG" disabled={busy || !hasItems} onClick={run(onSave)}>
           <ImageDown size={15} />
         </button>
-        <button type="button" className="stage-toolbar-btn" title="Copy image" aria-label="Copy image" disabled={busy || !hasItems} onClick={run(onCopy)}>
-          <Copy size={15} />
-        </button>
+        {canCopyImages() && (
+          <button type="button" className="stage-toolbar-btn" title="Copy image" aria-label="Copy image" disabled={busy || !hasItems} onClick={run(onCopy)}>
+            <Copy size={15} />
+          </button>
+        )}
         <span className="stage-toolbar-divider" aria-hidden="true" />
         <button type="button" className="stage-toolbar-btn" title="Clear board" aria-label="Clear board" disabled={!hasItems}
           onClick={() => board?.clear()}>

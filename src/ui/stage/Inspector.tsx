@@ -9,14 +9,14 @@ import {
   Control, IconSelectField, SelectField, SliderField, SwatchSelectField, TeamToggle, ToggleGroup, WearSliderField,
 } from '../common/controls';
 import type { IconOption, SwatchOption } from '../common/controls';
-import { LIGHTING_PRESETS } from '../../viewer/lighting/lighting';
+import { LIGHTING_PRESET_OPTIONS } from '../../viewer/lighting/lightingPresetIds';
 import { SHEEN_PRESETS, UNUSUAL_PRESETS, VIEW_ANGLES } from '../../viewer/presets';
 import type { Manifest } from '../../data/types';
 import { TURNTABLE_SECONDS, type ControlsState, type TurntableFormat, type TurntableProfile, type TurntableQuality } from '../../viewer/controls';
 import type { LightingStore } from '../../viewer/lighting/lightingStore';
-import { CUSTOM_LIGHTING_ID } from '../../viewer/lighting/customLighting';
+import { CUSTOM_LIGHTING_ID } from '../../viewer/lighting/customLightingModel';
 import { LightingRigSummary } from '../lighting/LightingRigSummary';
-import { TURNTABLE_FORMATS, turntablePlaybackFps } from '../../hooks/useScreenshotActions';
+import { TURNTABLE_FORMATS, turntablePlaybackFps } from '../../export/turntableFormats';
 import { matchesMobileLayout, TOUCH_ONLY_DEVICE } from '../../device';
 
 const rgbCss = ([r, g, b]: [number, number, number]) =>
@@ -212,7 +212,7 @@ export const Inspector = memo(function Inspector({
   // Rarely used sections start collapsed on mobile. Decided once, so resizing never folds them.
   const [compact] = useState(matchesMobileLayout);
   const presetOptions = [
-    ...LIGHTING_PRESETS.map((p) => ({ value: p.id, label: p.label })),
+    ...LIGHTING_PRESET_OPTIONS.map((p) => ({ value: p.id, label: p.label })),
     { value: CUSTOM_LIGHTING_ID, label: 'Custom' },
   ];
   const unusualOptions = UNUSUAL_PRESETS.map((p) => ({ value: p.id, label: p.label }));

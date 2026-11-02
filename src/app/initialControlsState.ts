@@ -1,7 +1,7 @@
 import type { ControlsState } from '../viewer/controls';
 import { DEFAULT_VIEWER_FOV } from '../viewer/presets';
 import { randomSeed } from '../hooks/useBootData';
-import { TURNTABLE_FORMATS } from '../hooks/useScreenshotActions';
+import { TURNTABLE_FORMATS } from '../export/turntableFormats';
 
 export function createInitialControlsState(): ControlsState {
   return {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BSP_MAP_LIGHTING } from './mapLighting.generated';
+import { LEGACY_PAINTKIT_ICON_LIGHTING_ID, PAINTKIT_ICON_LIGHTING_ID } from './lightingPresetIds';
 
 type AmbientCube = readonly [
   THREE.Vector3, THREE.Vector3, THREE.Vector3,
@@ -269,9 +270,6 @@ export const LIGHTING_PRESETS: LightingPreset[] = [
   mapPreset('indoors'),
   mapPreset('night'),
 ];
-
-export const PAINTKIT_ICON_LIGHTING_ID = 'paintkit-icon';
-export const LEGACY_PAINTKIT_ICON_LIGHTING_ID = 'paintkit-icon-legacy';
 
 const paintkitIconLighting: LightingPreset = {
   id: PAINTKIT_ICON_LIGHTING_ID,

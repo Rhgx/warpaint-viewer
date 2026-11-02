@@ -54,6 +54,9 @@ export type CustomWarpaintWorkbenchProps = {
   tab: WorkbenchTab;
   onTabChange: (tab: WorkbenchTab) => void;
   onResize: (height: number) => void;
+  /** Owned by the app so the drawer slot can drop its height transition during a drag. */
+  resizing: boolean;
+  onResizingChange: (resizing: boolean) => void;
   onClose: () => void;
 };
 

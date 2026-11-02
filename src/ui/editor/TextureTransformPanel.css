@@ -69,6 +69,13 @@
   background: color-mix(in srgb, var(--accent) 14%, var(--panel));
   color: var(--accent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .texture-transform-panel-action[aria-pressed='true'] {
+    border-color: #426aae;
+    background: #243044;
+  }
+}
 .texture-transform-panel-action:disabled { cursor: default; opacity: 0.45; }
 
 .texture-transform-panel-body {
@@ -149,6 +156,12 @@
   padding: 6px 12px 6px 29px;
   border-top: 1px solid color-mix(in srgb, var(--border) 66%, transparent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .texture-transform-panel-mirror-row {
+    border-top: 1px solid rgba(52, 57, 63, 0.66);
+  }
+}
 .texture-transform-panel-mirror-row > span {
   margin-right: auto;
   color: var(--text);
@@ -186,6 +199,12 @@
 }
 .texture-transform-panel-check:hover:not(:has(input:disabled)) .texture-transform-panel-check-box {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .texture-transform-panel-check:hover:not(:has(input:disabled)) .texture-transform-panel-check-box {
+    border-color: #4c73b7;
+  }
 }
 .texture-transform-panel-check input:checked + .texture-transform-panel-check-box {
   border-color: var(--accent);

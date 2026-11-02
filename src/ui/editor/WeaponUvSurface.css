@@ -19,6 +19,12 @@
   );
   background-size: 16px 16px;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .weapon-uv-surface-underlay {
+    background-color: #1f2228;
+  }
+}
 
 .weapon-uv-surface-texture,
 .weapon-uv-surface-isolation-overlay {
@@ -34,6 +40,12 @@
 .weapon-uv-surface-texture {
   z-index: 1;
   background: color-mix(in srgb, var(--panel-2) 86%, black);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .weapon-uv-surface-texture {
+    background: #1f2228;
+  }
 }
 
 .weapon-uv-surface-isolation-overlay {

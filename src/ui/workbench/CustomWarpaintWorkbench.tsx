@@ -91,6 +91,8 @@ export function CustomWarpaintWorkbench({
   onResetAll,
   onClearWorkspace,
   onResize,
+  resizing,
+  onResizingChange,
   onClose,
   tab,
   onTabChange,
@@ -114,7 +116,6 @@ export function CustomWarpaintWorkbench({
   // Materials is not a `mode` value: the app owns `mode`, which only holds paint or sticker.
   const [materialsActive, setMaterialsActive] = useState(false);
   const [editorDownloadFormat, setEditorDownloadFormat] = useState<EditorDownloadFormat>('zip');
-  const [resizing, setResizing] = useState(false);
   const [dropping, setDropping] = useState(false);
   const [dropHint, setDropHint] = useState(false);
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
@@ -202,7 +203,7 @@ export function CustomWarpaintWorkbench({
   const variantReplaceIndexRef = useRef<number | null>(null);
 
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) =>
-    startWorkbenchResize(event, { sectionRef, onResize, setResizing });
+    startWorkbenchResize(event, { sectionRef, onResize, setResizing: onResizingChange });
 
   // Package files can be dropped anywhere on the workbench, not just the short bar.
   // Extensions decide the destination, so dropping and picking behave the same.

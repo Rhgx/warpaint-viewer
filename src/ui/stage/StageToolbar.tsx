@@ -4,7 +4,7 @@ import type { ComponentType } from 'react';
 import { Check, Copy, Film, HelpCircle, ImageDown, LayoutGrid, PackagePlus, Rotate3d, RotateCcw, X } from 'lucide-react';
 import { ControlsHelpModal, type ControlsEditingMode } from './ControlsHelpModal';
 import { SettingsDialog } from './SettingsDialog';
-import { TOUCH_ONLY_DEVICE, WORKSHOP_ENABLED } from '../../device';
+import { canCopyImages, TOUCH_ONLY_DEVICE, WORKSHOP_ENABLED } from '../../device';
 import { useSettings } from '../../settings';
 
 type Feedback = 'idle' | 'success' | 'error';
@@ -147,7 +147,7 @@ export function StageToolbar({
         />
         {/* iOS drops the user gesture across the capture await, so the
             clipboard write fails on touch-only devices; Save still works. */}
-        {captureFormat === 'image' && !TOUCH_ONLY_DEVICE && (
+        {captureFormat === 'image' && !TOUCH_ONLY_DEVICE && canCopyImages() && (
           <ToolbarButton label="Copy image" icon={Copy} disabled={capturing} onAction={withCapture(onCopyImage)} />
         )}
         <span className="stage-toolbar-divider" aria-hidden="true" />

@@ -2,8 +2,8 @@ import type { Team } from '../data/types';
 import {
   createDefaultCustomLightingRig,
   validateCustomLightingRig,
-} from './lighting/customLighting';
-import type { CustomLightingRig } from './lighting/customLighting';
+} from './lighting/customLightingModel';
+import type { CustomLightingRig } from './lighting/customLightingModel';
 
 const LIGHTING_STORAGE_KEY = 'warpaint-viewer.custom-lighting';
 

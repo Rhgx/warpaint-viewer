@@ -13,7 +13,7 @@ import {
   createDefaultCustomLightingRig,
   type CustomLight,
   type CustomLightType,
-} from '../../viewer/lighting/customLighting';
+} from '../../viewer/lighting/customLightingModel';
 import { SelectField } from '../common/controls';
 import { ColorRow, LightIcon, LightTypeBadge, ScalarRow, VectorRow } from './lightingFields';
 import {

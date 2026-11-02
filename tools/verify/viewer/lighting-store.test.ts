@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { createLightingStore } from '../../../src/viewer/lighting/lightingStore';
-import { createDefaultCustomLightingRig, MAX_CUSTOM_LIGHTS } from '../../../src/viewer/lighting/customLighting';
+import { createDefaultCustomLightingRig, MAX_CUSTOM_LIGHTS } from '../../../src/viewer/lighting/customLightingModel';
 
 test('lighting previews notify rig subscribers and commit one undo step', () => {
   const store = createLightingStore(createDefaultCustomLightingRig());

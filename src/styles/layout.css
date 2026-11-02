@@ -44,6 +44,12 @@
   transform: translateY(-50%);
   transition: var(--transition-fast);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .panel-edge-toggle {
+    border: 1px solid #6b737d;
+  }
+}
 /* Pads the pointer target past the 24px minimum, growing only into the stage. */
 .panel-edge-toggle::before {
   content: '';
@@ -140,6 +146,12 @@
     border-bottom: none;
     border-radius: var(--radius-md) var(--radius-md) 0 0;
     transform: none;
+  }
+  @supports not (color: color-mix(in srgb, red, red)) {
+    /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+    .panel-edge-toggle[data-side='right'] {
+      border: 1px solid #6b737d;
+    }
   }
   .panel-edge-toggle[data-side='right']::before {
     top: -6px;

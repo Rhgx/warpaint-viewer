@@ -24,6 +24,12 @@
   transform: translateY(var(--toast-swipe-movement-y, 0));
   transition: opacity 180ms ease, transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .app-toast {
+    background: rgba(30, 33, 38, 0.96);
+  }
+}
 
 .app-toast[data-starting-style] {
   opacity: 0;
@@ -43,6 +49,12 @@
 
 .app-toast[data-type='error'] {
   border-color: color-mix(in srgb, var(--fail) 55%, var(--border-strong));
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .app-toast[data-type='error'] {
+    border-color: #9e5b5f;
+  }
 }
 
 .app-toast-copy {
@@ -122,6 +134,13 @@
   background: color-mix(in srgb, var(--accent) 88%, var(--panel));
   border-color: color-mix(in srgb, var(--accent) 88%, var(--panel));
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .app-toast-action[data-primary='true']:hover:not(:disabled) {
+    background: #4680e5;
+    border-color: #4680e5;
+  }
+}
 
 .app-toast-action:disabled {
   cursor: wait;
@@ -132,6 +151,12 @@
 .app-toast-action:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 2px;
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .app-toast-dismiss:focus-visible, .app-toast-action:focus-visible {
+    outline: 2px solid rgba(76, 141, 255, 0.6);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

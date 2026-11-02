@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Copy, ImageDown } from 'lucide-react';
 
+import { canCopyImages } from '../../device';
 import { SelectField, SliderField, SwitchField } from '../common/controls';
 import type { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
 import { LightPad, Row, Section, Segmented, SliderRow } from './ShowcaseControls';
@@ -94,9 +95,11 @@ export const ExportSection = memo(function ExportSection({ board, settings, onCh
         <button type="button" className="showcase-btn showcase-btn-primary" disabled={busy || !hasItems} onClick={run(onSave)}>
           <ImageDown size={13} /> Save PNG
         </button>
-        <button type="button" className="showcase-btn" disabled={busy || !hasItems} onClick={run(onCopy)}>
-          <Copy size={13} /> Copy
-        </button>
+        {canCopyImages() && (
+          <button type="button" className="showcase-btn" disabled={busy || !hasItems} onClick={run(onCopy)}>
+            <Copy size={13} /> Copy
+          </button>
+        )}
       </div>
     </Section>
   );

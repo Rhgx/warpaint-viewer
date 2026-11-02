@@ -7,7 +7,7 @@ import {
   createDefaultCustomLightingRig,
   validateCustomLightingRig,
   type CustomLightingRig,
-} from '../../../src/viewer/lighting/customLighting';
+} from '../../../src/viewer/lighting/customLightingModel';
 import type { Viewer } from '../../../src/viewer/Viewer';
 
 type LightingViewer = Pick<Viewer,

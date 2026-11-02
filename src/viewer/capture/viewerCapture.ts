@@ -9,6 +9,7 @@ import { setParticlePointScale } from '../particles';
 import type { SheenOverlay } from '../overlays/sheenOverlay';
 import type { WeaponAttachments } from '../weaponAttachments';
 import { TOUCH_ONLY_DEVICE } from '../../device';
+import { TurntableStoppedError } from '../../export/turntableFormats';
 import {
   fitScreenshotCapture,
   resolveScreenshotCapture,
@@ -30,11 +31,6 @@ export interface TurntableOptions {
   readonly alpha: 'binary' | 'full';
   /** Render palette samples before the frames (GIF needs its palette up front). */
   readonly paletteSamples: boolean;
-}
-
-/** A turntable capture stopped on purpose (cancelled, or the scene changed under it). */
-export class TurntableStoppedError extends Error {
-  override name = 'TurntableStoppedError';
 }
 
 /** Receives a turntable capture as it renders. */

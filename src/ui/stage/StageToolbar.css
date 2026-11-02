@@ -12,6 +12,12 @@
   background: color-mix(in srgb, var(--panel) 82%, transparent);
   backdrop-filter: blur(6px);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .stage-toolbar {
+    background: rgba(30, 33, 38, 0.82);
+  }
+}
 .stage-toolbar-btn {
   display: flex;
   align-items: center;

@@ -13,3 +13,8 @@ export function matchesMobileLayout(): boolean {
 
 /** Custom war paint authoring (workbench, editors, definitions, source packages). */
 export const WORKSHOP_ENABLED = !TOUCH_ONLY_DEVICE;
+
+// Firefox ESR 115 has no ClipboardItem (Firefox 127+), so `new ClipboardItem` would throw there.
+export function canCopyImages(): boolean {
+  return typeof ClipboardItem !== 'undefined' && !!navigator.clipboard?.write;
+}

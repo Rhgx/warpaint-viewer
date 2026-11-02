@@ -304,9 +304,13 @@ export function ExportPanel({
     );
   }
 
+  // Pack always shows, so exactly one optional column leaves two columns in the grid.
+  const hasInGameColumn = Boolean(writesDefinitions && definitions);
+  const hasFilesColumn = plan.files.length > 0;
+
   return (
     <div className="export-panel">
-      <div className="export-grid">
+      <div className="export-grid" data-two-col={hasInGameColumn !== hasFilesColumn ? '' : undefined}>
         <section className="export-col" aria-label="Pack">
           <h3 className="export-col-title">Pack</h3>
           <label className="export-field">

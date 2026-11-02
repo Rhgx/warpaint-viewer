@@ -58,6 +58,11 @@ export class SheenOverlay {
     return this.sheenElapsed;
   }
 
+  // The performance.now() at which `elapsed` was last advanced.
+  get sampledAt(): number {
+    return this.sheenLastTime;
+  }
+
   /** Restarts the sweep clock at the given time, so hidden or suspended time does not advance it. */
   resetClock(now: number): void {
     this.sheenLastTime = now;

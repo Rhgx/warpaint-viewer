@@ -1,5 +1,5 @@
 import type { LightingStore } from './lightingStore';
-import { CUSTOM_LIGHTING_ID } from './customLighting';
+import { CUSTOM_LIGHTING_ID } from './customLightingModel';
 import type { Viewer } from '../Viewer';
 
 type LightingViewer = Pick<Viewer,

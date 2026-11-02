@@ -40,6 +40,13 @@
   font-weight: 600;
   pointer-events: none;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .showcase-warning {
+    border: 1px solid #a55b5f;
+    background: rgba(30, 33, 38, 0.9);
+  }
+}
 
 .showcase-tray {
   display: flex;
@@ -311,6 +318,12 @@
   color: var(--accent-text);
   background: color-mix(in srgb, var(--accent) 88%, white);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .showcase-btn-primary:hover:not(:disabled) {
+    background: #619bff;
+  }
+}
 .showcase-btn-danger:hover:not(:disabled) {
   border-color: var(--fail);
   color: var(--fail);
@@ -435,6 +448,18 @@
   stroke-linecap: round;
   transition: stroke-width 120ms ease;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(): precomputed per-variant values. */
+  .showcase-gizmo-axis[data-axis='roll'] .showcase-gizmo-line {
+    stroke: rgba(76, 141, 255, 0.8);
+  }
+  .showcase-gizmo-axis[data-axis='tilt'] .showcase-gizmo-line {
+    stroke: rgba(224, 96, 96, 0.8);
+  }
+  .showcase-gizmo-axis[data-axis='turn'] .showcase-gizmo-line {
+    stroke: rgba(70, 192, 122, 0.8);
+  }
+}
 .showcase-gizmo-back {
   stroke-dasharray: 3 4;
   opacity: 0.55;
@@ -475,6 +500,12 @@
 .showcase-gizmo-readout-bg {
   fill: color-mix(in srgb, var(--panel) 92%, transparent);
   stroke: var(--border-strong);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(); the build minifier drops same-property fallbacks, so this stays in its own block. */
+  .showcase-gizmo-readout-bg {
+    fill: rgba(30, 33, 38, 0.92);
+  }
 }
 .showcase-gizmo-readout {
   fill: var(--text);
@@ -553,6 +584,27 @@
 /* Paint names take their grade colour, blended toward the text like the catalog list. */
 .showcase-paint-name[data-grade] {
   color: color-mix(in srgb, var(--paint-grade) var(--grade-tint-strength), var(--text));
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(): precomputed per-variant values. */
+  .showcase-paint-name[data-grade='civilian'] {
+    color: #c3d1e1;
+  }
+  .showcase-paint-name[data-grade='freelance'] {
+    color: #89b2e1;
+  }
+  .showcase-paint-name[data-grade='mercenary'] {
+    color: #7c92fb;
+  }
+  .showcase-paint-name[data-grade='commando'] {
+    color: #a77afb;
+  }
+  .showcase-paint-name[data-grade='assassin'] {
+    color: #db67ea;
+  }
+  .showcase-paint-name[data-grade='elite'] {
+    color: #ec7d7d;
+  }
 }
 .showcase-paint-name[data-grade='civilian'] { --paint-grade: var(--grade-civilian); }
 .showcase-paint-name[data-grade='freelance'] { --paint-grade: var(--grade-freelance); }

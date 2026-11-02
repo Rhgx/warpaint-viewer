@@ -89,6 +89,12 @@
   border-color: var(--graph-accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--graph-accent) 25%, transparent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-search:focus-within {
+    box-shadow: 0 0 0 1px rgba(76, 141, 255, 0.25);
+  }
+}
 
 .operation-graph-search-input {
   min-width: 0;
@@ -218,6 +224,12 @@
   color: var(--graph-accent);
   background: color-mix(in srgb, var(--graph-accent) 14%, var(--graph-surface));
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-trace button[data-active='true'] {
+    background: #243044;
+  }
+}
 
 .operation-graph-trace button:disabled { cursor: not-allowed; opacity: .4; }
 .operation-graph-trace button:focus-visible { outline: 2px solid var(--graph-accent); outline-offset: -2px; }
@@ -228,6 +240,12 @@
   border-color: color-mix(in srgb, var(--graph-accent) 40%, var(--graph-border));
   color: var(--graph-accent);
   font-weight: 650;
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-add-button {
+    border-color: #3e5b8c;
+  }
 }
 
 .operation-graph-add-popover {
@@ -273,6 +291,52 @@
   color: var(--graph-kind, var(--graph-text-dim));
   background: color-mix(in srgb, var(--graph-kind, var(--graph-border)) 12%, transparent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-add-glyph {
+    border: 1px solid rgba(77, 84, 94, 0.45);
+    background: rgba(52, 57, 63, 0.12);
+  }
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(): precomputed per-variant values. */
+  .operation-graph-node-texture-lookup .operation-graph-add-glyph {
+    border: 1px solid rgba(90, 167, 222, 0.45);
+    background: rgba(90, 167, 222, 0.12);
+  }
+  .operation-graph-node-select .operation-graph-add-glyph {
+    border: 1px solid rgba(177, 138, 212, 0.45);
+    background: rgba(177, 138, 212, 0.12);
+  }
+  .operation-graph-node-combine-add .operation-graph-add-glyph {
+    border: 1px solid rgba(217, 149, 83, 0.45);
+    background: rgba(217, 149, 83, 0.12);
+  }
+  .operation-graph-node-combine-multiply .operation-graph-add-glyph {
+    border: 1px solid rgba(204, 145, 82, 0.45);
+    background: rgba(204, 145, 82, 0.12);
+  }
+  .operation-graph-node-combine-lerp .operation-graph-add-glyph {
+    border: 1px solid rgba(79, 191, 157, 0.45);
+    background: rgba(79, 191, 157, 0.12);
+  }
+  .operation-graph-node-apply-sticker .operation-graph-add-glyph {
+    border: 1px solid rgba(221, 128, 152, 0.45);
+    background: rgba(221, 128, 152, 0.12);
+  }
+  .operation-graph-node-operation-template .operation-graph-add-glyph {
+    border: 1px solid rgba(151, 161, 172, 0.45);
+    background: rgba(151, 161, 172, 0.12);
+  }
+  .operation-graph-node-invalid .operation-graph-add-glyph {
+    border: 1px solid rgba(224, 96, 96, 0.45);
+    background: rgba(224, 96, 96, 0.12);
+  }
+  .operation-graph-node-output .operation-graph-add-glyph {
+    border: 1px solid rgba(76, 141, 255, 0.45);
+    background: rgba(76, 141, 255, 0.12);
+  }
+}
 
 
 .operation-graph-canvas {
@@ -280,6 +344,12 @@
   min-height: 0;
   flex: 1 1 auto;
   background: color-mix(in srgb, var(--graph-surface-2) 40%, var(--graph-surface));
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-canvas {
+    background: #20242a;
+  }
 }
 
 .operation-graph-canvas .react-flow {
@@ -300,6 +370,7 @@
   overflow: hidden;
   border: 1px solid var(--graph-border);
   border-radius: var(--radius-sm, 4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   box-shadow: 0 2px 8px color-mix(in srgb, #000 10%, transparent);
 }
 
@@ -320,10 +391,21 @@
   border-radius: var(--radius-sm, 4px);
   background: color-mix(in srgb, var(--graph-surface) 88%, transparent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-canvas .react-flow__minimap {
+    background: rgba(30, 33, 38, 0.88);
+  }
+}
 
 .operation-graph-canvas .react-flow__minimap-mask { fill: color-mix(in srgb, var(--graph-accent) 12%, transparent); stroke: var(--graph-accent); }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-canvas .react-flow__minimap-mask {
+    fill: rgba(76, 141, 255, 0.12);
+  }
+}
 .operation-graph-canvas .react-flow__attribution { display: none; }
-
 
 .operation-graph-node {
   position: relative;
@@ -335,6 +417,7 @@
   border-radius: var(--radius-md, 6px);
   color: var(--graph-text);
   background: var(--graph-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   box-shadow: 0 1px 2px color-mix(in srgb, #000 12%, transparent);
   cursor: default;
   transition: opacity 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
@@ -379,14 +462,68 @@
 .operation-graph-node-output { --graph-kind: var(--graph-kind-output); }
 
 .operation-graph-node:hover { border-color: color-mix(in srgb, var(--graph-kind, var(--graph-accent)) 55%, var(--graph-border-strong)); }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-node:hover {
+    border-color: #4c73b7;
+  }
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(): precomputed per-variant values. */
+  .operation-graph-node-texture-lookup:hover {
+    border-color: #5482a4;
+  }
+  .operation-graph-node-select:hover {
+    border-color: #84729f;
+  }
+  .operation-graph-node-combine-add:hover {
+    border-color: #9a7858;
+  }
+  .operation-graph-node-combine-multiply:hover {
+    border-color: #937657;
+  }
+  .operation-graph-node-combine-lerp:hover {
+    border-color: #4e8f81;
+  }
+  .operation-graph-node-apply-sticker:hover {
+    border-color: #9c6c7e;
+  }
+  .operation-graph-node-operation-template:hover {
+    border-color: #767e89;
+  }
+  .operation-graph-node-invalid:hover {
+    border-color: #9e5b5f;
+  }
+  .operation-graph-node-output:hover {
+    border-color: #4c73b7;
+  }
+}
 .operation-graph-node[data-selected='true'] {
   border-color: var(--graph-accent);
   box-shadow: 0 0 0 1px var(--graph-accent), 0 8px 20px color-mix(in srgb, #000 22%, transparent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-node[data-selected='true'] {
+    box-shadow: 0 0 0 1px var(--graph-accent), 0 8px 20px rgba(0, 0, 0, 0.22);
+  }
+}
 .operation-graph-node[data-emphasis='dimmed'] { opacity: .26; }
 .operation-graph-node[data-search-match='false'] { opacity: .32; }
 .operation-graph-node[data-search-match='true'][data-emphasis='normal'] { border-color: color-mix(in srgb, var(--graph-warning) 75%, var(--graph-border-strong)); }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-node[data-search-match='true'][data-emphasis='normal'] {
+    border-color: #bb9345;
+  }
+}
 .operation-graph-node[data-locked='true'] { background: color-mix(in srgb, var(--graph-surface-2) 45%, var(--graph-surface)); }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-node[data-locked='true'] {
+    background: #21242a;
+  }
+}
 
 .operation-graph-node-header {
   display: flex;
@@ -399,6 +536,42 @@
   border-top-right-radius: calc(var(--radius-md, 6px) - 1px);
   background: color-mix(in srgb, var(--graph-kind, var(--graph-border)) 7%, transparent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-node-header {
+    background: rgba(52, 57, 63, 0.07);
+  }
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(): precomputed per-variant values. */
+  .operation-graph-node-texture-lookup .operation-graph-node-header {
+    background: rgba(90, 167, 222, 0.07);
+  }
+  .operation-graph-node-select .operation-graph-node-header {
+    background: rgba(177, 138, 212, 0.07);
+  }
+  .operation-graph-node-combine-add .operation-graph-node-header {
+    background: rgba(217, 149, 83, 0.07);
+  }
+  .operation-graph-node-combine-multiply .operation-graph-node-header {
+    background: rgba(204, 145, 82, 0.07);
+  }
+  .operation-graph-node-combine-lerp .operation-graph-node-header {
+    background: rgba(79, 191, 157, 0.07);
+  }
+  .operation-graph-node-apply-sticker .operation-graph-node-header {
+    background: rgba(221, 128, 152, 0.07);
+  }
+  .operation-graph-node-operation-template .operation-graph-node-header {
+    background: rgba(151, 161, 172, 0.07);
+  }
+  .operation-graph-node-invalid .operation-graph-node-header {
+    background: rgba(224, 96, 96, 0.07);
+  }
+  .operation-graph-node-output .operation-graph-node-header {
+    background: rgba(76, 141, 255, 0.07);
+  }
+}
 
 .operation-graph-node-glyph {
   display: grid;
@@ -409,6 +582,42 @@
   border-radius: var(--radius-sm, 4px);
   color: var(--graph-kind, var(--graph-text-dim));
   background: color-mix(in srgb, var(--graph-kind, var(--graph-border)) 15%, transparent);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-node-glyph {
+    background: rgba(52, 57, 63, 0.15);
+  }
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(): precomputed per-variant values. */
+  .operation-graph-node-texture-lookup .operation-graph-node-glyph {
+    background: rgba(90, 167, 222, 0.15);
+  }
+  .operation-graph-node-select .operation-graph-node-glyph {
+    background: rgba(177, 138, 212, 0.15);
+  }
+  .operation-graph-node-combine-add .operation-graph-node-glyph {
+    background: rgba(217, 149, 83, 0.15);
+  }
+  .operation-graph-node-combine-multiply .operation-graph-node-glyph {
+    background: rgba(204, 145, 82, 0.15);
+  }
+  .operation-graph-node-combine-lerp .operation-graph-node-glyph {
+    background: rgba(79, 191, 157, 0.15);
+  }
+  .operation-graph-node-apply-sticker .operation-graph-node-glyph {
+    background: rgba(221, 128, 152, 0.15);
+  }
+  .operation-graph-node-operation-template .operation-graph-node-glyph {
+    background: rgba(151, 161, 172, 0.15);
+  }
+  .operation-graph-node-invalid .operation-graph-node-glyph {
+    background: rgba(224, 96, 96, 0.15);
+  }
+  .operation-graph-node-output .operation-graph-node-glyph {
+    background: rgba(76, 141, 255, 0.15);
+  }
 }
 
 .operation-graph-node-heading {
@@ -448,6 +657,13 @@
   font-size: 9px;
   font-variant-numeric: tabular-nums;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-node-badge {
+    border: 1px solid rgba(224, 96, 96, 0.45);
+    background: rgba(224, 96, 96, 0.1);
+  }
+}
 
 
 .operation-graph-inputs {
@@ -467,6 +683,12 @@
 }
 
 .operation-graph-port-row:hover { background: color-mix(in srgb, var(--graph-surface-2) 60%, transparent); }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-port-row:hover {
+    background: rgba(36, 40, 47, 0.6);
+  }
+}
 
 .operation-graph-port-row .react-flow__handle {
   position: relative;
@@ -560,8 +782,20 @@
   transform: scale(1.5);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--graph-accent) 28%, transparent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-canvas[data-connecting='true'] .react-flow__handle-connecting, .operation-graph-canvas[data-connecting='true'] .react-flow__handle-valid {
+    box-shadow: 0 0 0 4px rgba(76, 141, 255, 0.28);
+  }
+}
 .operation-graph-canvas[data-connecting='true'] .react-flow__handle-connecting:not(.react-flow__handle-valid) {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--graph-danger) 28%, transparent);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-canvas[data-connecting='true'] .react-flow__handle-connecting:not(.react-flow__handle-valid) {
+    box-shadow: 0 0 0 4px rgba(224, 96, 96, 0.28);
+  }
 }
 .operation-graph-port-row .react-flow__handle:hover { transform: scale(1.35); }
 
@@ -571,6 +805,12 @@
   gap: 3px;
   padding: 5px 8px 6px;
   border-top: 1px solid color-mix(in srgb, var(--graph-border) 70%, transparent);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-node-summary {
+    border-top: 1px solid rgba(52, 57, 63, 0.7);
+  }
 }
 
 .operation-graph-summary-row {
@@ -607,9 +847,21 @@
   background: color-mix(in srgb, var(--graph-surface-2) 30%, var(--graph-surface));
   cursor: default;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-node-fields {
+    background: #202329;
+  }
+}
 
 .operation-graph-node-advanced { border-top: 1px solid var(--graph-border); }
 .operation-graph-node-advanced .operation-graph-node-fields { border-top: 1px solid color-mix(in srgb, var(--graph-border) 70%, transparent); }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-node-advanced .operation-graph-node-fields {
+    border-top: 1px solid rgba(52, 57, 63, 0.7);
+  }
+}
 
 .operation-graph-disclosure {
   display: flex;
@@ -656,6 +908,12 @@
   font-size: 9px;
   line-height: 1.4;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-note {
+    border-top: 1px solid rgba(52, 57, 63, 0.7);
+  }
+}
 
 .operation-graph-usage { display: block; }
 
@@ -681,6 +939,12 @@
   font-size: 9px;
   line-height: 1.4;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-diagnostics {
+    border-top: 1px solid rgba(52, 57, 63, 0.7);
+  }
+}
 
 .operation-graph-diagnostics li[data-severity='warning'] { color: var(--graph-warning); }
 
@@ -690,6 +954,12 @@
   padding: 6px 8px;
   border-top: 1px solid color-mix(in srgb, var(--graph-border) 70%, transparent);
   cursor: default;
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-reorder-list {
+    border-top: 1px solid rgba(52, 57, 63, 0.7);
+  }
 }
 
 .operation-graph-reorder-row {
@@ -720,6 +990,12 @@
   gap: 4px;
   padding: 3px 7px;
   border-top: 1px solid color-mix(in srgb, var(--graph-border) 70%, transparent);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-node-actions {
+    border-top: 1px solid rgba(52, 57, 63, 0.7);
+  }
 }
 
 .operation-graph-node-actions:empty { display: none; }
@@ -854,6 +1130,7 @@
   border-radius: 50%;
   color: var(--graph-text-dim);
   background: var(--graph-surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   box-shadow: 0 1px 4px color-mix(in srgb, #000 25%, transparent);
   cursor: pointer;
   pointer-events: all;
@@ -863,6 +1140,12 @@
   border-color: var(--graph-danger);
   color: var(--graph-danger);
   background: color-mix(in srgb, var(--graph-danger) 12%, var(--graph-surface));
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .operation-graph-edge-remove:hover {
+    background: #35292d;
+  }
 }
 
 .operation-graph-edge-remove:focus-visible { outline: 2px solid var(--graph-accent); outline-offset: 1px; }

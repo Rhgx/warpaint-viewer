@@ -6,11 +6,23 @@
   padding: 6px 8px;
   border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .graph-value-field {
+    border-top: 1px solid rgba(52, 57, 63, 0.7);
+  }
+}
 
 .graph-value-field:first-child { border-top: 0; }
 
 .graph-value-field[data-primary='true'] {
   background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .graph-value-field[data-primary='true'] {
+    background: rgba(76, 141, 255, 0.05);
+  }
 }
 
 .graph-value-head {
@@ -59,6 +71,12 @@
   color: var(--accent);
   background: var(--accent-soft);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .graph-value-bind[data-active='true'] {
+    border-color: #4167a9;
+  }
+}
 .graph-value-bind:disabled { cursor: default; opacity: .45; }
 
 .graph-value-control {
@@ -83,6 +101,12 @@
   font-weight: 650;
   letter-spacing: .03em;
   text-transform: uppercase;
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .graph-value-scope {
+    border: 1px solid #3c5682;
+  }
 }
 
 .graph-value-scope[data-locked='true'] {
@@ -116,6 +140,12 @@
 .graph-combobox-control:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .graph-combobox-control:focus-within {
+    box-shadow: 0 0 0 1px rgba(76, 141, 255, 0.3);
+  }
 }
 
 .graph-combobox[data-disabled='true'] .graph-combobox-control { opacity: .55; }
@@ -203,6 +233,13 @@
   letter-spacing: .06em;
   text-transform: uppercase;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .graph-combobox-group {
+    border-bottom: 1px solid rgba(52, 57, 63, 0.6);
+    background: #22262c;
+  }
+}
 
 .graph-combobox-option {
   display: flex;
@@ -283,6 +320,12 @@
   background: color-mix(in srgb, var(--panel-2) 55%, var(--panel));
   font-size: 9px;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .graph-combobox-footer {
+    background: #21252b;
+  }
+}
 
 /* The count yields first when space is tight; the key hints are the part nobody can guess. */
 .graph-combobox-status {
@@ -344,6 +387,12 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .graph-number:focus, .graph-text-input:focus {
+    box-shadow: 0 0 0 1px rgba(76, 141, 255, 0.3);
+  }
+}
 
 .graph-number:disabled,
 .graph-text-input:disabled { cursor: default; opacity: .55; }
@@ -371,6 +420,12 @@
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   color: var(--accent);
   background: var(--accent-soft);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .graph-range[data-varies='true'] .graph-range-mode {
+    border-color: #4167a9;
+  }
 }
 
 

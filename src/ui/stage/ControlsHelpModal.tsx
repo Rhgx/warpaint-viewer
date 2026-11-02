@@ -116,6 +116,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
         className="controls-help-modal"
         role="dialog"
         aria-modal="true"
+        data-mode={editingMode ?? 'camera'}
         data-camera-input-suspended=""
         aria-labelledby="controls-help-title"
         tabIndex={-1}

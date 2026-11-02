@@ -12,6 +12,14 @@ export const SHEEN_MASK_FRAMES = 60;
 export const SHEEN_SWEEP_SECONDS = SHEEN_MASK_FRAMES / SHEEN_FRAMERATE;
 export const SHEEN_PAUSE_SECONDS = 5;
 
+// Ms from the sheen clock to the next mask frame change while sweeping. Uses the same
+// frame index as the overlay's animation step, so pacing renders never change an image.
+export function msUntilNextSheenFrame(elapsedSeconds: number): number {
+  const tInCycle = elapsedSeconds % (SHEEN_SWEEP_SECONDS + SHEEN_PAUSE_SECONDS);
+  const nextFrame = Math.floor(SHEEN_FRAMERATE * tInCycle) + 1;
+  return (nextFrame / SHEEN_FRAMERATE - tInCycle) * 1000;
+}
+
 export interface SheenAssets {
   maskTexture: THREE.Texture;
   cubeTexture: THREE.CubeTexture;

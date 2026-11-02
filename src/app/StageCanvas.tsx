@@ -2,12 +2,12 @@ import type { ComponentProps, Dispatch, RefObject, SetStateAction } from 'react'
 
 import type { useEditorViewport } from '../editor/useEditorViewport';
 import type { useScreenshotActions } from '../hooks/useScreenshotActions';
-import { TURNTABLE_FORMATS } from '../hooks/useScreenshotActions';
+import { TURNTABLE_FORMATS } from '../export/turntableFormats';
 import type { useTextureOverrides } from './useTextureOverrides';
 import type { useTurntableCapture } from './useTurntableCapture';
 import type { useWorkspace } from './useWorkspace';
 import type { ControlsState } from '../viewer/controls';
-import { CUSTOM_LIGHTING_ID } from '../viewer/lighting/customLighting';
+import { CUSTOM_LIGHTING_ID } from '../viewer/lighting/customLightingModel';
 import type { Viewer } from '../viewer/Viewer';
 import type { WorkbenchTab } from '../workbench/types';
 import { DefinitionsPrompt } from '../ui/workbench/DefinitionsPrompt';
@@ -104,6 +104,7 @@ export function StageCanvas({
   return (
     <div
       className="canvas-wrap"
+      data-first-person={firstPersonActive ? '' : undefined}
       data-prompt={promptedCandidate ? '' : undefined}
       data-editor-selecting={editorInteractionActive && editorSelectionHeld ? '' : undefined}
       data-model-part-picking={stickerPartPickingActive ? '' : undefined}

@@ -112,6 +112,12 @@
   color: var(--text);
   font-size: 10.5px;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .definitions-candidate {
+    border: 1px solid #3f5f95;
+  }
+}
 .definitions-candidate svg { flex: none; color: var(--accent); }
 .definitions-candidate-path {
   flex: 1 1 auto;
@@ -139,6 +145,14 @@
   flex: none;
   gap: 7px;
   padding: 12px 16px 2px;
+}
+/* Fallback for browsers without :has() (Firefox ESR 115); the panel sets data-problems. */
+@supports not selector(:has(a)) {
+  .definitions-panel[data-problems] .definitions-empty {
+    flex: none;
+    gap: 7px;
+    padding: 12px 16px 2px;
+  }
 }
 
 .definitions-toolbar {
@@ -198,6 +212,12 @@
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 1px;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .definitions-btn:focus-within, .definitions-btn:focus-visible {
+    outline: 2px solid rgba(76, 141, 255, 0.6);
+  }
+}
 .definitions-btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .definitions-btn[data-busy] { cursor: progress; opacity: 0.6; }
 .definitions-btn:disabled,
@@ -208,6 +228,12 @@
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   background: var(--accent-soft);
   color: var(--text);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .definitions-btn[aria-pressed='true'] {
+    border-color: #4167a9;
+  }
 }
 .definitions-link {
   padding: 0;
@@ -222,11 +248,24 @@
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 1px;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .definitions-link:focus-visible {
+    outline: 2px solid rgba(76, 141, 255, 0.6);
+  }
+}
 .definitions-remove[data-confirm],
 .definitions-row-delete[data-confirm] {
   border-color: color-mix(in srgb, var(--fail) 55%, var(--border));
   background: color-mix(in srgb, var(--fail) 12%, var(--panel));
   color: var(--fail);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .definitions-remove[data-confirm], .definitions-row-delete[data-confirm] {
+    border-color: #934e51;
+    background: #35292d;
+  }
 }
 
 .definitions-list {
@@ -259,6 +298,12 @@
   transition: var(--transition-fast);
 }
 .definitions-row[data-loaded] { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .definitions-row[data-loaded] {
+    border-color: #4167a9;
+  }
+}
 .definitions-row[data-unsupported] { opacity: 0.55; }
 .definitions-row-main {
   display: flex;
@@ -296,6 +341,12 @@
   border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
   background: var(--accent-soft);
   color: var(--accent);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .definitions-row-chip[data-new] {
+    border: 1px solid #4167a9;
+  }
 }
 .definitions-row-rename {
   width: 100%;

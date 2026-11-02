@@ -66,9 +66,11 @@ function ImportPicker({
 export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
   const { status, summary, diagnostics, onRemove } = state;
   const [confirmRemove, armRemove] = useArmedConfirm();
+  // Same filter as DiagnosticsList, which renders nothing for info-only diagnostics.
+  const hasProblems = diagnostics.some((diagnostic) => diagnostic.level !== 'info');
 
   return (
-    <div className="source-package" data-status={status}>
+    <div className="source-package" data-status={status} data-problems={hasProblems ? '' : undefined}>
       {status === 'empty' && (
         <div className="source-package-empty">
           <PackageOpen size={22} />

@@ -64,6 +64,12 @@
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 76%, transparent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .material-overrides-panel-tools {
+    background: rgba(30, 33, 38, 0.76);
+  }
+}
 
 .material-overrides-panel-search {
   display: flex;
@@ -122,7 +128,19 @@
   grid-template-columns: 18px 28px minmax(0, 1fr) auto;
   user-select: none;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .material-overrides-panel-select-all-row {
+    background: #212733;
+  }
+}
 .material-overrides-panel-select-all-row:hover { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .material-overrides-panel-select-all-row:hover {
+    background: #222a37;
+  }
+}
 .material-overrides-panel-select-all-row:has(input:disabled) { cursor: default; opacity: 0.5; }
 .material-overrides-panel-select-all-row input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
 .material-overrides-panel-select-all-mark {
@@ -146,8 +164,20 @@
   grid-template-columns: 18px 28px minmax(120px, 190px) minmax(0, 1fr) auto;
   user-select: none;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .material-overrides-panel-row {
+    border-bottom: 1px solid rgba(52, 57, 63, 0.6);
+  }
+}
 .material-overrides-panel-row:hover { background: var(--panel-2); }
 .material-overrides-panel-row[data-drag-preview] { background: color-mix(in srgb, var(--accent) 10%, var(--panel-2)); }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .material-overrides-panel-row[data-drag-preview] {
+    background: #283244;
+  }
+}
 .material-overrides-panel-row input[type='checkbox'] { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); pointer-events: none; }
 
 .material-overrides-panel-empty {
@@ -201,7 +231,19 @@
   white-space: nowrap;
 }
 .material-overrides-panel-flag[data-kind='ok'] { color: var(--pass); background: color-mix(in srgb, var(--pass) 12%, transparent); }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .material-overrides-panel-flag[data-kind='ok'] {
+    background: rgba(70, 192, 122, 0.12);
+  }
+}
 .material-overrides-panel-flag[data-kind='warn'] { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .material-overrides-panel-flag[data-kind='warn'] {
+    background: rgba(224, 168, 60, 0.14);
+  }
+}
 
 .material-overrides-panel-foot {
   display: flex;
@@ -236,6 +278,13 @@
   border-color: color-mix(in srgb, var(--fail) 55%, var(--border));
   background: color-mix(in srgb, var(--fail) 12%, var(--panel));
   color: var(--fail);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .material-overrides-panel-clear:hover:not(:disabled) {
+    border-color: #934e51;
+    background: #35292d;
+  }
 }
 .material-overrides-panel-clear:disabled { cursor: default; opacity: 0.5; }
 

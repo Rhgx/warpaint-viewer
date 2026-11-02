@@ -3,11 +3,13 @@ import { test } from 'vitest';
 import * as THREE from 'three';
 import {
   MAX_CUSTOM_LIGHTS,
-  buildCustomLights,
   createDefaultCustomLightingRig,
+  validateCustomLightingRig,
+} from '../../../src/viewer/lighting/customLightingModel';
+import {
+  buildCustomLights,
   framePositionToWorld,
   updateCustomLightRuntime,
-  validateCustomLightingRig,
   worldPositionToFrame,
 } from '../../../src/viewer/lighting/customLighting';
 

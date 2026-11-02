@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import * as THREE from 'three';
-import { getPreset } from '../../../src/viewer/lighting/lighting';
+import { getPreset, LIGHTING_PRESETS } from '../../../src/viewer/lighting/lighting';
+import { LIGHTING_PRESET_OPTIONS } from '../../../src/viewer/lighting/lightingPresetIds';
 
 const EPSILON = 1e-6;
 
@@ -40,4 +41,8 @@ test('inspect lighting matches InspectionPanel.res in camera-local space', () =>
 
   assertVector(point.position, new THREE.Vector3(50, -200, -15), 'point source-panel position');
   assert.equal(point.distance, 0, 'point avoids Three smooth range cutoff');
+});
+
+test('selector options list the built lighting presets in order', () => {
+  assert.deepEqual(LIGHTING_PRESET_OPTIONS, LIGHTING_PRESETS.map(({ id, label }) => ({ id, label })));
 });

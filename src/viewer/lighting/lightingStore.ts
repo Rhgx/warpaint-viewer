@@ -1,8 +1,8 @@
 import { createStore } from 'zustand/vanilla';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { deleteLightFromRig, duplicateLightInRig } from '../../ui/lighting/lightingRig';
-import { validateCustomLightingRig } from './customLighting';
-import type { CustomLightingRig } from './customLighting';
+import { validateCustomLightingRig } from './customLightingModel';
+import type { CustomLightingRig } from './customLightingModel';
 import { SnapshotHistory } from '../../editor/history';
 
 interface LightingState {

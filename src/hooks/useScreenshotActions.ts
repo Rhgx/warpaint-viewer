@@ -1,11 +1,13 @@
 import { useCallback } from 'react';
 import type { RefObject } from 'react';
+
 import type { Viewer } from '../viewer/Viewer';
-import { TurntableStoppedError, type TurntableSink } from '../viewer/capture/viewerCapture';
+import type { TurntableSink } from '../viewer/capture/viewerCapture';
 import { TURNTABLE_SECONDS, type ControlsState, type TurntableFormat, type TurntableProfile } from '../viewer/controls';
 import type { TurntableWorkerRequest, TurntableWorkerResponse } from '../export/turntable.worker';
 import { downloadBlob } from '../ui/common/download';
-import { canEncodeMp4, canEncodeWebp, WebpEncoder } from '../export/animated';
+import type { WebpEncoder } from '../export/animated';
+import { TURNTABLE_FORMATS, TurntableStoppedError, turntablePlaybackFps } from '../export/turntableFormats';
 import { TOUCH_ONLY_DEVICE } from '../device';
 
 type TurntableSettings = Pick<
@@ -13,56 +15,14 @@ type TurntableSettings = Pick<
   'turntableFormat' | 'turntableProfiles' | 'turntableTransparent' | 'turntableColor'
 >;
 
-/** Per-format options and size estimates, measured on Taxi Cabbed. MP4 bitrate follows size, not frame rate. */
-export const TURNTABLE_FORMATS: Record<TurntableFormat, {
-  readonly label: string;
-  readonly extension: string;
-  readonly mime: string;
-  /** null: no transparency at all (always drawn on the background colour). */
-  readonly alpha: 'binary' | 'full' | null;
-  /** Output long edges offered, in pixels. */
-  readonly sizes: readonly number[];
-  readonly frameRates: readonly number[];
-  /** Whether the Quality setting applies (GIF is always 256 colours, APNG lossless). */
-  readonly hasQuality: boolean;
-  readonly defaults: TurntableProfile;
-  /** Rough, content-dependent size for `frames` frames over `seconds`. */
-  readonly estimateBytes: (profile: TurntableProfile, frames: number, seconds: number) => number;
-}> = {
-  gif: {
-    label: 'GIF', extension: 'gif', mime: 'image/gif', alpha: 'binary',
-    sizes: [360, 480, 640, 800], frameRates: [20, 25, 33, 50], hasQuality: false,
-    defaults: { maxEdge: 480, fps: 25, quality: 'high' },
-    estimateBytes: ({ maxEdge }, frames) => frames * maxEdge ** 2 * 0.06,
-  },
-  webp: {
-    label: 'WebP', extension: 'webp', mime: 'image/webp', alpha: 'full',
-    sizes: [360, 480, 640, 800], frameRates: [20, 25, 30, 50, 60], hasQuality: true,
-    defaults: { maxEdge: 640, fps: 30, quality: 'high' },
-    estimateBytes: ({ maxEdge, quality }, frames) => frames * maxEdge ** 2 * { standard: 0.03, high: 0.042, maximum: 0.055 }[quality],
-  },
-  apng: {
-    label: 'APNG', extension: 'png', mime: 'image/png', alpha: 'full',
-    sizes: [360, 480, 640, 800], frameRates: [20, 25, 30, 50, 60], hasQuality: false,
-    defaults: { maxEdge: 480, fps: 25, quality: 'high' },
-    estimateBytes: ({ maxEdge }, frames) => frames * maxEdge ** 2 * 0.19,
-  },
-  mp4: {
-    label: 'MP4', extension: 'mp4', mime: 'video/mp4', alpha: null,
-    sizes: [480, 640, 800, 1080, 1440], frameRates: [24, 30, 50, 60], hasQuality: true,
-    defaults: { maxEdge: 1080, fps: 60, quality: 'high' },
-    estimateBytes: ({ maxEdge, quality }, _frames, seconds) => seconds * maxEdge ** 2 * { standard: 0.14, high: 0.26, maximum: 0.46 }[quality],
-  },
-};
-
-/** Frame rate the format actually plays: GIF rounds to whole hundredths of a second. */
-export function turntablePlaybackFps(format: TurntableFormat, fps: number): number {
-  return format === 'gif' ? 100 / Math.round(100 / fps) : fps;
-}
-
 /** Animated formats this browser can encode (GIF and APNG always can). */
 export async function supportedTurntableFormats(): Promise<TurntableFormat[]> {
-  const [webp, mp4] = await Promise.all([canEncodeWebp().catch(() => false), canEncodeMp4().catch(() => false)]);
+  // Mediabunny loads on first use. If that fetch fails, only GIF and APNG are offered.
+  const animated = await import('../export/animated').catch(() => null);
+  const [webp, mp4] = await Promise.all([
+    animated?.canEncodeWebp().catch(() => false) ?? false,
+    animated?.canEncodeMp4().catch(() => false) ?? false,
+  ]);
   return (['gif', 'webp', 'apng', 'mp4'] as const).filter((format) =>
     (format !== 'webp' || webp) && (format !== 'mp4' || mp4));
 }
@@ -82,13 +42,23 @@ export type TurntableStatus =
 const MAX_FRAMES_IN_FLIGHT = TOUCH_ONLY_DEVICE ? 2 : 4;
 const PROGRESS_INTERVAL_MS = 100;
 
+interface TurntableSession {
+  readonly sink: TurntableSink;
+  finish: () => Promise<Blob>;
+  dispose: () => void;
+}
+
 /** WebP encodes on the main thread: in a worker each encode blocks it (about 5x slower at 640 px). */
-function createWebpSession(quality: TurntableProfile['quality'], onProgress: (encoded: number) => void) {
+function createWebpSession(
+  EncoderClass: typeof WebpEncoder,
+  quality: TurntableProfile['quality'],
+  onProgress: (encoded: number) => void,
+): TurntableSession {
   let encoder: WebpEncoder | null = null;
   let encoded = 0;
   const sink: TurntableSink = {
     start: ({ width, height, fps }) => {
-      encoder = new WebpEncoder(width, height, fps, quality);
+      encoder = new EncoderClass(width, height, fps, quality);
     },
     frame: async (rgba) => {
       await encoder!.addFrame(rgba);
@@ -200,13 +170,16 @@ export function useScreenshotActions({
       reportedAt = now;
       onStatus({ phase: 'rendering', format: turntableFormat, done, frames });
     };
-    const session = turntableFormat === 'webp'
-      ? createWebpSession(profile.quality, onProgress)
-      : createTurntableSession(turntableFormat, profile.quality, onProgress);
     let size = { width: 0, height: 0 };
+    let session: TurntableSession | undefined;
     try {
       const viewer = viewerRef.current;
       if (!viewer) throw new Error('Viewer not ready');
+      // WebP's encoder loads with the export, so mediabunny stays out of the startup bundle.
+      session = turntableFormat === 'webp'
+        ? createWebpSession((await import('../export/animated')).WebpEncoder, profile.quality, onProgress)
+        : createTurntableSession(turntableFormat, profile.quality, onProgress);
+      const { sink } = session;
       onStatus({ phase: 'rendering', format: turntableFormat, done: 0, frames });
       await viewer.captureTurntable({
         maxEdge: profile.maxEdge,
@@ -218,9 +191,9 @@ export function useScreenshotActions({
       }, {
         start: (info, samples) => {
           size = info;
-          session.sink.start(info, samples);
+          sink.start(info, samples);
         },
-        frame: session.sink.frame,
+        frame: sink.frame,
       }, signal);
       onStatus({ phase: 'finishing', format: turntableFormat });
       const file = await session.finish();
@@ -232,7 +205,7 @@ export function useScreenshotActions({
       if (cause instanceof TurntableStoppedError) onStatus({ phase: 'stopped', reason: cause.message });
       else onStatus({ phase: 'failed', message: cause instanceof Error ? cause.message : String(cause) });
     } finally {
-      session.dispose();
+      session?.dispose();
     }
   }, [viewerRef, baseName, turntableFormat, profile, turntableTransparent, turntableColor]);
 

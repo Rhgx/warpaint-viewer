@@ -1,6 +1,6 @@
 import { Aperture, SlidersHorizontal } from 'lucide-react';
 import { useStore } from 'zustand';
-import { CUSTOM_AMBIENT_MAX, CUSTOM_EXPOSURE_MAX, CUSTOM_EXPOSURE_MIN } from '../../viewer/lighting/customLighting';
+import { CUSTOM_AMBIENT_MAX, CUSTOM_EXPOSURE_MAX, CUSTOM_EXPOSURE_MIN } from '../../viewer/lighting/customLightingModel';
 import type { LightingStore } from '../../viewer/lighting/lightingStore';
 import { SwitchField } from '../common/controls';
 import { LightIcon, ScalarRow } from './lightingFields';

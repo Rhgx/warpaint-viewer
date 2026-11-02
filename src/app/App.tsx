@@ -7,7 +7,7 @@ import '../ui/stage/Inspector.css';
 import '../styles/stage.css';
 import '../styles/layout.css';
 import type { Viewer } from '../viewer/Viewer';
-import { isStockMaterialCubemap, stockMaterialCubemapUrls } from '../viewer/env';
+import { isStockMaterialCubemap, stockMaterialCubemapUrls } from '../viewer/stockCubemapUrls';
 import type { Compositor } from '../compositor/compositor';
 import type { PaintkitEntry } from '../data/types';
 import { WarpaintList } from '../ui/catalog/WarpaintList';
@@ -21,7 +21,7 @@ import { PanelEdgeToggle } from '../ui/common/PanelEdgeToggle';
 import type { WarpaintAssetOverrides } from '../workbench/types';
 import { revokeAssetOverrideCache } from '../workbench/assetUrls';
 import { BootLoader } from '../ui/boot/BootLoader';
-import { CUSTOM_LIGHTING_ID } from '../viewer/lighting/customLighting';
+import { CUSTOM_LIGHTING_ID } from '../viewer/lighting/customLightingModel';
 import { useBootData } from '../hooks/useBootData';
 import { useComposedPaint, useComposeCache } from '../hooks/useComposedPaint';
 import { createInitialControlsState } from './initialControlsState';
@@ -97,6 +97,8 @@ function MainApp() {
     setWorkbenchExpanded,
     workbenchHeight,
     setWorkbenchHeight,
+    workbenchResizing,
+    setWorkbenchResizing,
     workbenchTab,
     setWorkbenchTab,
     toggleWorkbench,
@@ -769,6 +771,8 @@ function MainApp() {
           className="custom-workbench-slot"
           data-open={workbenchOpen ? '' : undefined}
           data-expanded={workbenchExpanded ? '' : undefined}
+          data-editor-tab={workbenchMounted && workbenchTab === 'editor' ? '' : undefined}
+          data-resizing={workbenchResizing ? '' : undefined}
           inert={!workbenchOpen}
           style={workbenchHeight ? ({ '--workbench-h': `${workbenchHeight}px` } as CSSProperties) : undefined}
         >
@@ -844,6 +848,8 @@ function MainApp() {
                 onClearWorkspace={hasWorkspace ? openClearWorkspace : undefined}
                 // Height 0 restores the default clamp, which a resize-handle double-click asks for.
                 onResize={setWorkbenchHeight}
+                resizing={workbenchResizing}
+                onResizingChange={setWorkbenchResizing}
                 onClose={closeWorkbench}
               />
             </Suspense>

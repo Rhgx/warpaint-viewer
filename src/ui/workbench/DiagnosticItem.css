@@ -22,6 +22,28 @@
   font-size: 11px;
   line-height: 1.45;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .diagnostic {
+    border: 1px solid #5a6168;
+    background: #292d32;
+  }
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(): precomputed per-variant values. */
+  .diagnostic[data-level='error'] {
+    border: 1px solid #75484c;
+    background: #2f272b;
+  }
+  .diagnostic[data-level='warning'] {
+    border: 1px solid #75633e;
+    background: #2f2d28;
+  }
+  .diagnostic[data-level='info'] {
+    border: 1px solid #3d5988;
+    background: #222b3a;
+  }
+}
 .diagnostic[data-level='error'] { --diagnostic-tone: var(--fail); }
 .diagnostic[data-level='warning'] { --diagnostic-tone: var(--warn); }
 .diagnostic[data-level='info'] { --diagnostic-tone: var(--accent); }
@@ -65,6 +87,33 @@
   font-weight: 700;
   letter-spacing: 0.3px;
   white-space: nowrap;
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .diagnostic-code {
+    background: rgba(153, 161, 172, 0.16);
+  }
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(); the build minifier drops same-property fallbacks, so this stays in its own block. */
+  .diagnostic-code {
+    color: #aab1ba;
+  }
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(): precomputed per-variant values. */
+  .diagnostic[data-level='error'] .diagnostic-code {
+    background: rgba(224, 96, 96, 0.16);
+    color: #e37d7d;
+  }
+  .diagnostic[data-level='warning'] .diagnostic-code {
+    background: rgba(224, 168, 60, 0.16);
+    color: #e3b661;
+  }
+  .diagnostic[data-level='info'] .diagnostic-code {
+    background: rgba(76, 141, 255, 0.16);
+    color: #6ca1fd;
+  }
 }
 .diagnostic-source {
   min-width: 0;

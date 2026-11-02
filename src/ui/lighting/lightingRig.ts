@@ -1,4 +1,4 @@
-import { MAX_CUSTOM_LIGHTS } from '../../viewer/lighting/customLighting';
+import { MAX_CUSTOM_LIGHTS } from '../../viewer/lighting/customLightingModel';
 import type { CustomLight, CustomLightingRig, CustomLightType, FrameVector } from '../../viewer/lighting/customLighting';
 
 /** Pure helpers shared by the stage lighting panel and inspector summary. No JSX, for react/only-export-components. */

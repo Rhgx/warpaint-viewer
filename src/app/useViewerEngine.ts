@@ -7,10 +7,11 @@ import type { ResolveRecipe } from '../hooks/useComposedPaint';
 import type { DataSource } from '../data/loader';
 import type { PaintkitEntry } from '../data/types';
 import type { SourceTextureProvider } from '../source/provider';
-import { stockMaterialCubemapUrls } from '../viewer/env';
+import { stockMaterialCubemapUrls } from '../viewer/stockCubemapUrls';
 import type { ControlsState } from '../viewer/controls';
 import { TURNTABLE_SECONDS } from '../viewer/controls';
 import { DEFAULT_VIEWER_FOV, TF2_ITEM_PANEL_FOV, VIEW_ANGLES, weaponIconView } from '../viewer/presets';
+import { canUseWebGL2 } from '../viewer/webgl2';
 
 interface UseViewerEngineOptions {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -41,6 +42,8 @@ interface UseViewerEngineOptions {
   setLoadedAssetKey: (key: string) => void;
   setError: (message: string) => void;
 }
+
+const WEBGL2_UNAVAILABLE_MESSAGE = 'This browser cannot use WebGL 2, which the 3D viewer needs. Turn on hardware acceleration in the browser settings, update the graphics driver, or try another browser.';
 
 /** The renderer lifecycle: viewer/compositor setup, model loading, and the viewer-facing state sync. */
 export function useViewerEngine({
@@ -75,6 +78,13 @@ export function useViewerEngine({
   const viewAngleIdRef = useRef(viewAngleId);
   viewAngleIdRef.current = viewAngleId;
 
+  // Fetch the renderer chunks on mount, alongside the manifest. The viewer is still built only once data is ready.
+  // A failed prefetch is reported by the awaited import that builds the viewer, so these swallow it.
+  useEffect(() => {
+    import('../viewer/Viewer').catch(() => undefined);
+    import('../compositor/compositor').catch(() => undefined);
+  }, []);
+
   // Three.js loads dynamically so the UI shell paints before its chunk arrives.
   useEffect(() => {
     if (!canvasRef.current || !data) return;
@@ -84,29 +94,39 @@ export function useViewerEngine({
     let unsubscribeCameraMode: (() => void) | null = null;
     (async () => {
       advanceBoot(22, 'Starting renderer…');
-      const [{ Viewer: ViewerCls }, { Compositor: CompositorCls }] = await Promise.all([
-        import('../viewer/Viewer'),
-        import('../compositor/compositor'),
-      ]);
-      if (disposed || !canvasRef.current) return;
-      viewer = new ViewerCls(canvasRef.current);
-      compositor = new CompositorCls((ref) => sourceProvider.resolve(ref), {
-        renderer: viewer.renderer,
-        size: 1024,
-        textureMetadata: data.manifest.textures,
-        textureMetadataResolver: (ref) => sourceProvider.metadataFor(ref),
-      });
-      viewerRef.current = viewer;
-      compositorRef.current = compositor;
-      unsubscribeCameraMode = viewer.onCameraModeChange(setCameraMode);
-      // Dev-only escape hatch for debugging the viewer from the console.
-      if (import.meta.env.DEV) (window as unknown as { __viewer?: Viewer }).__viewer = viewer;
-      setEngineReady(true);
-      advanceBoot(34, 'Loading TF2 environment…');
-      await viewer.ready();
-      if (!disposed) {
-        setEnvironmentReady(true);
-        advanceBoot(43, 'Environment ready');
+      // Check before the lazy import so a missing WebGL 2 reports at once instead of hanging the boot screen.
+      if (!canUseWebGL2(() => document.createElement('canvas').getContext('webgl2'))) {
+        if (!disposed) setError(WEBGL2_UNAVAILABLE_MESSAGE);
+        return;
+      }
+      try {
+        const [{ Viewer: ViewerCls }, { Compositor: CompositorCls }] = await Promise.all([
+          import('../viewer/Viewer'),
+          import('../compositor/compositor'),
+        ]);
+        if (disposed || !canvasRef.current) return;
+        viewer = new ViewerCls(canvasRef.current);
+        compositor = new CompositorCls((ref) => sourceProvider.resolve(ref), {
+          renderer: viewer.renderer,
+          size: 1024,
+          textureMetadata: data.manifest.textures,
+          textureMetadataResolver: (ref) => sourceProvider.metadataFor(ref),
+        });
+        viewerRef.current = viewer;
+        compositorRef.current = compositor;
+        unsubscribeCameraMode = viewer.onCameraModeChange(setCameraMode);
+        // Dev-only escape hatch for debugging the viewer from the console.
+        if (import.meta.env.DEV) (window as unknown as { __viewer?: Viewer }).__viewer = viewer;
+        setEngineReady(true);
+        advanceBoot(34, 'Loading TF2 environment…');
+        await viewer.ready();
+        if (!disposed) {
+          setEnvironmentReady(true);
+          advanceBoot(43, 'Environment ready');
+        }
+      } catch (e) {
+        // Renderer creation errors would otherwise stop the boot silently.
+        if (!disposed) setError(`The 3D viewer could not start: ${String(e)}`);
       }
     })();
     return () => {
@@ -120,7 +140,7 @@ export function useViewerEngine({
       viewerRef.current = null;
       compositorRef.current = null;
     };
-  }, [data, advanceBoot, disposeCache, sourceProvider, canvasRef, viewerRef, compositorRef, setEngineReady, setEnvironmentReady, setCameraMode]);
+  }, [data, advanceBoot, disposeCache, sourceProvider, canvasRef, viewerRef, compositorRef, setEngineReady, setEnvironmentReady, setCameraMode, setError]);
 
   // A blank selection has no model work, so the empty stage is ready once the environment is.
   useEffect(() => {

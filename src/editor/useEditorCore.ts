@@ -10,7 +10,7 @@ import type { SourceTextureProvider } from '../source/provider';
 import { downloadBlob } from '../ui/common/download';
 import { shortcutTargetsEditableContent } from '../ui/common/shortcuts';
 import type { ControlsState } from '../viewer/controls';
-import { CUSTOM_LIGHTING_ID } from '../viewer/lighting/customLighting';
+import { CUSTOM_LIGHTING_ID } from '../viewer/lighting/customLightingModel';
 import type { WorkbenchTab } from '../workbench/types';
 import type { EditorDownloadFormat } from './export/definitionExport';
 import { useEditorDraft } from './useEditorDraft';

@@ -56,6 +56,12 @@ button {
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 2px;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .btn:focus-visible, .ui-select-trigger:focus-visible, .ui-input:focus-visible, .ui-team-btn:focus-visible, .ui-toggle-btn:focus-visible, .ui-switch:focus-visible, .warpaint-item:focus-visible, .warpaint-tile:focus-visible, .order-toggle:focus-visible {
+    outline: 2px solid rgba(76, 141, 255, 0.6);
+  }
+}
 
 .btn {
   display: inline-flex;
@@ -251,6 +257,12 @@ button {
 .ui-swatch[data-split] {
   border-color: color-mix(in srgb, var(--border-strong) 70%, white 30%);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .ui-swatch[data-split] {
+    border-color: #82878e;
+  }
+}
 
 .ui-toggle-group {
   display: inline-flex;
@@ -377,6 +389,12 @@ button {
 .wear-slider-thumb:focus-visible {
   box-shadow: 0 0 0 2px var(--text), 0 0 0 5px color-mix(in srgb, var(--wear-color) 48%, transparent);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .wear-slider-thumb:focus-visible {
+    box-shadow: 0 0 0 2px var(--text), 0 0 0 5px var(--accent);
+  }
+}
 .wear-slider-labels {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -474,9 +492,21 @@ button {
   background: color-mix(in srgb, var(--red) 56%, var(--panel));
   color: color-mix(in srgb, #fff 76%, var(--muted));
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .ui-team-toggle[data-fixed] .ui-team-btn[data-side='red'] {
+    background: #83393c;
+  }
+}
 .ui-team-toggle[data-fixed] .ui-team-btn[data-side='blu'] {
   background: color-mix(in srgb, var(--blu) 56%, var(--panel));
   color: color-mix(in srgb, #fff 76%, var(--muted));
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .ui-team-toggle[data-fixed] .ui-team-btn[data-side='blu'] {
+    background: #405f85;
+  }
 }
 /* Locked toggles explain themselves in a line under the control, since touch screens never show tooltips. */
 .ui-team-note {
@@ -550,6 +580,12 @@ button {
   background: color-mix(in srgb, var(--border-strong) 80%, var(--panel));
   border-radius: var(--radius-sm);
   transition: var(--transition-fast);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .ui-scrollbar-thumb {
+    background: #444a53;
+  }
 }
 .ui-scrollbar-thumb:hover {
   background: var(--border-strong);

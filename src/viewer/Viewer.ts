@@ -1,20 +1,21 @@
 import * as THREE from 'three';
 
 import type { ViewmodelAsset, ViewmodelWeapon } from './firstPerson/firstPerson';
-import { getPreset, LEGACY_PAINTKIT_ICON_LIGHTING_ID } from './lighting/lighting';
+import { getPreset } from './lighting/lighting';
+import { LEGACY_PAINTKIT_ICON_LIGHTING_ID } from './lighting/lightingPresetIds';
 import {
   CUSTOM_LIGHTING_ID,
   CUSTOM_LIGHT_POSITION_LIMIT,
   createDefaultCustomLightingRig,
   validateCustomLightingRig,
   type CustomLightingRig,
-} from './lighting/customLighting';
+} from './lighting/customLightingModel';
 import { LightEditor } from './lighting/lightEditor';
 import { loadEditorEnvCube, makeEnvCube } from './env';
 import { InspectControls, INSPECT_MAX_DISTANCE_FACTOR } from './inspectControls';
 import type { CameraMode } from './inspectControls';
 import type { ViewAnglePreset } from './presets';
-import { SHEEN_SWEEP_SECONDS, SHEEN_PAUSE_SECONDS, computeSheenFrameData } from './overlays/sheen';
+import { SHEEN_SWEEP_SECONDS, SHEEN_PAUSE_SECONDS, computeSheenFrameData, msUntilNextSheenFrame } from './overlays/sheen';
 import { installTf2VertexLit, TF2_VERTEXLIT_CACHE_KEY } from './shaders/vertexlit';
 import { createUnusualEffect, setParticlePointScale } from './particles';
 import type { UnusualEffect } from './particles';
@@ -548,7 +549,18 @@ export class Viewer {
   private scheduleNextFrame(animated: boolean, sheenMeshes: readonly THREE.Mesh[]): void {
     const sheenActive = this.sheenOverlay.active && sheenMeshes.length > 0;
     const sheenAnimating = sheenActive && sheenMeshes.some((mesh) => mesh.visible);
-    if (animated || sheenAnimating) this.invalidate();
+    // A sweep that is the only animation changes only on its 25 fps frame boundaries.
+    // First-person keeps the vsync cadence.
+    const sheenOnly = sheenAnimating && !animated && !this.firstPersonStage.preview;
+    if (sheenOnly && !this.raf) {
+      window.clearTimeout(this.sheenWakeTimer);
+      // The clock was sampled before this frame rendered, so the render time counts against the wait.
+      const sinceSample = performance.now() - this.sheenOverlay.sampledAt;
+      this.sheenWakeTimer = window.setTimeout(() => {
+        this.sheenWakeTimer = 0;
+        this.invalidate();
+      }, Math.max(0, msUntilNextSheenFrame(this.sheenOverlay.elapsed) - sinceSample));
+    } else if (animated || sheenAnimating) this.invalidate();
     else if (sheenActive) {
       const cycle = SHEEN_SWEEP_SECONDS + SHEEN_PAUSE_SECONDS;
       this.sheenWakeTimer = window.setTimeout(() => {

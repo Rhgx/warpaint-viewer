@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ControlsState } from '../viewer/controls';
 import type { TurntableFormat } from '../export/turntable.worker';
 import { formatSize } from '../ui/common/formatSize';
-import { TURNTABLE_FORMATS, supportedTurntableFormats } from '../hooks/useScreenshotActions';
+import { TURNTABLE_FORMATS } from '../export/turntableFormats';
+import { supportedTurntableFormats } from '../hooks/useScreenshotActions';
 import type { TurntableStatus } from '../hooks/useScreenshotActions';
 
 /** Abort reason for the toast's Cancel button; any other stop offers a retry. */

@@ -4,7 +4,7 @@ import {
   isStockMaterialCubemap,
   materialCubemapIdentity,
   stockMaterialCubemapUrls,
-} from '../../../src/viewer/env';
+} from '../../../src/viewer/stockCubemapUrls';
 
 test('stock material cubemap manifest and Source aliases', () => {
   assert.equal(materialCubemapIdentity('Materials\\Cubemaps\\Cubemap_Gold001.HDR.VTF'), 'cubemaps/cubemap_gold001');

@@ -18,6 +18,13 @@
   box-shadow: var(--shadow-pop);
   animation: definitions-prompt-in 220ms ease;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .definitions-prompt {
+    border: 1px solid #3e5b8c;
+    background: rgba(30, 33, 38, 0.92);
+  }
+}
 .definitions-prompt > svg {
   flex: none;
   color: var(--accent);
@@ -73,6 +80,12 @@
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 1px;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .definitions-prompt-import:focus-visible {
+    outline: 2px solid rgba(76, 141, 255, 0.6);
+  }
+}
 .definitions-prompt-dismiss {
   display: flex;
   flex: none;
@@ -94,6 +107,12 @@
 .definitions-prompt-dismiss:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 1px;
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .definitions-prompt-dismiss:focus-visible {
+    outline: 2px solid rgba(76, 141, 255, 0.6);
+  }
 }
 
 @keyframes definitions-prompt-in {

@@ -505,8 +505,10 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
   );
 
   if (status !== 'loaded') {
+    // Same filter as DiagnosticsList, which renders nothing for info-only diagnostics.
+    const hasProblems = diagnostics.some((diagnostic) => diagnostic.level !== 'info');
     return (
-      <div className="definitions-panel" data-status={status}>
+      <div className="definitions-panel" data-status={status} data-problems={hasProblems ? '' : undefined}>
         {status === 'importing' ? (
           <div className="definitions-status">
             <LoaderCircle className="custom-workbench-spinner" size={16} />{' '}

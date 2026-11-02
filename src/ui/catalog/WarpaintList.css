@@ -155,6 +155,12 @@
   backdrop-filter: blur(6px);
   border-bottom: 1px solid var(--border);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .warpaint-group-label {
+    background: rgba(30, 33, 38, 0.82);
+  }
+}
 .warpaint-group-label-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -232,6 +238,27 @@
 .warpaint-tile[data-grade] {
   --item-grade-text: color-mix(in srgb, var(--item-grade-raw) var(--grade-tint-strength), var(--text));
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(): precomputed per-variant values. */
+  .warpaint-item[data-grade='civilian'], .warpaint-tile[data-grade='civilian'] {
+    --item-grade-text: #c3d1e1;
+  }
+  .warpaint-item[data-grade='freelance'], .warpaint-tile[data-grade='freelance'] {
+    --item-grade-text: #89b2e1;
+  }
+  .warpaint-item[data-grade='mercenary'], .warpaint-tile[data-grade='mercenary'] {
+    --item-grade-text: #7c92fb;
+  }
+  .warpaint-item[data-grade='commando'], .warpaint-tile[data-grade='commando'] {
+    --item-grade-text: #a77afb;
+  }
+  .warpaint-item[data-grade='assassin'], .warpaint-tile[data-grade='assassin'] {
+    --item-grade-text: #db67ea;
+  }
+  .warpaint-item[data-grade='elite'], .warpaint-tile[data-grade='elite'] {
+    --item-grade-text: #ec7d7d;
+  }
+}
 .warpaint-item[data-grade='civilian'],
 .warpaint-tile[data-grade='civilian'] {
   --item-grade-raw: var(--grade-civilian);
@@ -284,6 +311,27 @@
 }
 .warpaint-tile[data-grade] {
   border-color: color-mix(in srgb, var(--item-grade-raw) var(--grade-tint-strength), var(--border));
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 has no color-mix(): precomputed per-variant values. */
+  .warpaint-tile[data-grade='civilian'] {
+    border-color: #8b9aab;
+  }
+  .warpaint-tile[data-grade='freelance'] {
+    border-color: #517cab;
+  }
+  .warpaint-tile[data-grade='mercenary'] {
+    border-color: #445bc5;
+  }
+  .warpaint-tile[data-grade='commando'] {
+    border-color: #6f43c5;
+  }
+  .warpaint-tile[data-grade='assassin'] {
+    border-color: #a330b4;
+  }
+  .warpaint-tile[data-grade='elite'] {
+    border-color: #b44647;
+  }
 }
 .warpaint-tile:hover {
   border-color: var(--border-strong);

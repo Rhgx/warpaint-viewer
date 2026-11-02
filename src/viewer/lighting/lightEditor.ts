@@ -7,10 +7,10 @@ import {
   type CustomLight,
   type CustomLightRuntime,
   type CustomLightingRig,
-  validateCustomLightingRig,
   updateCustomLightRuntime,
   worldPositionToFrame,
 } from './customLighting';
+import { validateCustomLightingRig } from './customLightingModel';
 import {
   clientToNdc,
   createAimHandleTexture,

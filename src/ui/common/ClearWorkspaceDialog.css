@@ -54,10 +54,24 @@
   font-size: 11.5px;
   line-height: 1.4;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .clear-workspace-warning {
+    border: 1px solid #93763d;
+    background: #312f28;
+  }
+}
 .clear-workspace-warning svg { flex: none; margin-top: 1px; color: var(--warn); }
 .clear-workspace-warning[data-tone='error'] {
   border-color: color-mix(in srgb, var(--fail) 55%, var(--border));
   background: color-mix(in srgb, var(--fail) 10%, var(--panel));
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .clear-workspace-warning[data-tone='error'] {
+    border-color: #934e51;
+    background: #31272c;
+  }
 }
 .clear-workspace-warning[data-tone='error'] svg { color: var(--fail); }
 
@@ -95,6 +109,12 @@
 }
 .clear-workspace-btn[data-destructive]:hover:not(:disabled) {
   background: color-mix(in srgb, var(--fail) 88%, #000);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .clear-workspace-btn[data-destructive]:hover:not(:disabled) {
+    background: #c55454;
+  }
 }
 .clear-workspace-btn:disabled { cursor: wait; opacity: 0.62; }
 .clear-workspace-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

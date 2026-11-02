@@ -14,6 +14,7 @@ export function EditorLayerList({
   return (
     <div
       className="custom-workbench-edit-list"
+      data-materials={materialsActive ? '' : undefined}
       role="listbox"
       aria-label={materialsActive ? 'Material overrides' : (editor.mode === 'paint' ? 'Paint layers' : 'Stickers')}
     >

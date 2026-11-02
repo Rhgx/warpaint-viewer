@@ -3,6 +3,12 @@
   border-bottom: 1px solid color-mix(in srgb, var(--border) 66%, transparent);
   background: var(--panel);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .seed-range-field {
+    border-bottom: 1px solid rgba(52, 57, 63, 0.66);
+  }
+}
 .seed-range-field:last-of-type { border-bottom: 0; }
 
 .seed-range-field-head {
@@ -44,6 +50,12 @@
   background: var(--accent-soft);
   color: var(--text);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .seed-range-field[data-mode='varies'] .seed-range-field-mode {
+    border-color: #426aae;
+  }
+}
 .seed-range-field-mode:disabled { cursor: default; opacity: 0.5; }
 
 .seed-range-field-revert {
@@ -79,6 +91,13 @@
   font-size: 10px;
   font-weight: 650;
   cursor: pointer;
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .seed-range-field-diverge {
+    border: 1px solid #816b3e;
+    background: #312f28;
+  }
 }
 .seed-range-field-diverge:disabled { cursor: default; opacity: 0.5; }
 .seed-range-field-popover {
@@ -153,6 +172,14 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--panel) 75%, transparent);
   pointer-events: none;
   transform: translateX(-50%);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .seed-range-field-current-seed {
+    border: 1px solid #8d9195;
+    background: #777d86;
+    box-shadow: 0 0 0 1px rgba(30, 33, 38, 0.75);
+  }
 }
 .seed-range-field[data-mode='fixed'] .seed-range-field-fill { min-width: 3px; }
 .seed-range-field-track input[type='range'] {

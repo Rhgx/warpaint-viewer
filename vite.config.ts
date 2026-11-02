@@ -49,4 +49,9 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, '**/.tmp/**'],
   },
   base,
+  build: {
+    // Floor for the 2009-era Windows 7 browsers this app must still start in.
+    // Vite's default baseline-widely-available is chrome111/firefox114.
+    target: ['chrome109', 'edge109', 'firefox115', 'safari16'],
+  },
 })

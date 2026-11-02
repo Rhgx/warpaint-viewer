@@ -22,6 +22,10 @@
 .first-person-controls [role='alert'] { color: var(--fail); overflow-wrap: anywhere; }
 .first-person-controls [role='status'] { color: var(--text-dim); font-size: 11px; line-height: 1.5; }
 .canvas-wrap:has(.first-person-input-shield) .canvas-hint { display: none; }
+/* Fallback for browsers without :has() (Firefox ESR 115); StageCanvas sets data-first-person. */
+@supports not selector(:has(a)) {
+  .canvas-wrap[data-first-person] .canvas-hint { display: none; }
+}
 @media (hover: none) and (pointer: coarse) {
   .first-person-animation-option,
   .first-person-playback { min-height: var(--control-h); }

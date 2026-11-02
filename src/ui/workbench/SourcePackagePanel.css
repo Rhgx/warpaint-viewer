@@ -96,6 +96,12 @@
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 1px;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .source-package-btn:focus-within, .source-package-btn:focus-visible {
+    outline: 2px solid rgba(76, 141, 255, 0.6);
+  }
+}
 .source-package-btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .source-package-btn[data-busy] { cursor: progress; opacity: 0.6; }
 .source-package-btn svg { flex: none; }
@@ -106,6 +112,13 @@
   background: color-mix(in srgb, var(--fail) 12%, var(--panel));
   color: var(--fail);
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .source-package-remove[data-confirm] {
+    border-color: #934e51;
+    background: #35292d;
+  }
+}
 
 .source-package-details {
   display: flex;
@@ -115,6 +128,12 @@
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .source-package-details {
+    border-top: 1px solid rgba(52, 57, 63, 0.7);
+  }
 }
 .source-package-details-label {
   margin-right: 2px;
@@ -141,6 +160,14 @@
   gap: 7px;
   padding: 6px 16px 2px;
 }
+/* Fallback for browsers without :has() (Firefox ESR 115); the panel sets data-problems. */
+@supports not selector(:has(a)) {
+  .source-package[data-problems] .source-package-empty {
+    flex: none;
+    gap: 7px;
+    padding: 6px 16px 2px;
+  }
+}
 
 /* Drop target. The whole workbench accepts package files, so there is no small well to hunt for. */
 .custom-workbench[data-dropping] { outline: 2px dashed var(--accent); outline-offset: -2px; }
@@ -159,8 +186,20 @@
   pointer-events: none;
   text-align: center;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .source-package-dropzone {
+    background: #243044;
+  }
+}
 /* The unroutable-file hint reuses the dropzone position but tints toward failure. */
 .source-package-dropzone[data-variant='hint'] {
   background: color-mix(in srgb, var(--panel) 84%, var(--fail));
   color: var(--fail);
+}
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .source-package-dropzone[data-variant='hint'] {
+    background: #3d2b2f;
+  }
 }

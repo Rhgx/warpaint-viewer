@@ -30,6 +30,10 @@ export const TILT_LIMIT = 30;
 const BASE_SCALE = 1.5;
 const MAX_CELL_MARKERS = 6000;
 const HISTORY_LIMIT = 100;
+/** Same settle delay as the viewer: the buffer is resized once a layout reflow stops. */
+const RESIZE_DEBOUNCE_MS = 240;
+/** Live view margin around the board's frame; exports fit the frame exactly. */
+const FIT_PADDING = 1.06;
 
 /** Dual-core laptops with integrated graphics get a smaller, cheaper shadow map. */
 const LOW_END = (navigator.hardwareConcurrency ?? 8) <= 4
@@ -93,6 +97,8 @@ export class ShowcaseBoard {
   #background: BoardBackground = 'framed';
   #shadows = true;
   #raf = 0;
+  #resizeTimer = 0;
+  #observedResize = false;
   #snapshotStale = false;
   #problemsKey = '';
   /** The weapon in the middle of a rotation or pose drag, until it settles. */
@@ -155,7 +161,10 @@ export class ShowcaseBoard {
       boardHeight: BOARD_HEIGHT,
       getEnvMap: () => this.#envMap,
       isDisposed: () => this.#disposed,
-      markDirty: () => { this.#dirty = true; },
+      markDirty: () => {
+        this.#dirty = true;
+        this.#requestFrame();
+      },
     });
     this.#handles = new PoseHandles({ options, camera: this.#camera, runtimes: this.#runtimes });
     this.#camera.position.set(0, 0, 600);
@@ -188,6 +197,7 @@ export class ShowcaseBoard {
       }
       fallback.dispose();
       this.#dirty = true;
+      this.#requestFrame();
     });
 
     const pegboard = pegboardTexture();
@@ -237,11 +247,11 @@ export class ShowcaseBoard {
 
     options.canvas.addEventListener('pointerdown', this.#onPointerDown);
     options.canvas.addEventListener('pointermove', this.#onCanvasHover);
-    this.#resizeObserver = new ResizeObserver(() => this.#resize());
+    this.#resizeObserver = new ResizeObserver(() => this.#observeResize());
     this.#resizeObserver.observe(options.canvas);
     this.#snapshot = this.#buildSnapshot();
     this.#resize();
-    this.#raf = requestAnimationFrame(this.#frameLoop);
+    this.#requestFrame();
   }
 
   subscribe = (listener: () => void): (() => void) => {
@@ -260,6 +270,7 @@ export class ShowcaseBoard {
   /** Mark the board changed; listeners are notified once per frame, however many events arrive. */
   #emit(): void {
     this.#dirty = true;
+    this.#requestFrame();
     this.#snapshotStale = true;
     this.#notifyQueued = true;
   }
@@ -322,6 +333,7 @@ export class ShowcaseBoard {
     this.#shadowBoard.visible = background === 'transparent' && this.#shadows;
     this.#frame.visible = background === 'framed';
     this.#dirty = true;
+    this.#requestFrame();
     this.#resize();
   }
 
@@ -346,6 +358,7 @@ export class ShowcaseBoard {
   setLight(azimuth: number, elevation: number): void {
     this.#placeLight(azimuth, elevation);
     this.#dirty = true;
+    this.#requestFrame();
   }
 
   /** Whether weapons cast shadows on the board. */
@@ -355,6 +368,7 @@ export class ShowcaseBoard {
     // On a transparent background the shadows are all the board shows.
     this.#shadowBoard.visible = this.#background === 'transparent' && enabled;
     this.#dirty = true;
+    this.#requestFrame();
   }
 
   /** 0 keeps the board evenly lit, 1 gives hard, dark shadows. */
@@ -363,6 +377,7 @@ export class ShowcaseBoard {
     this.#ambient.intensity = (2.2 - strength * 1.4) * SOURCE_LIGHT_SCALE;
     this.#syncAmbientCube();
     this.#dirty = true;
+    this.#requestFrame();
   }
 
   /** Weapons take ambient from this cube (the board's sky above, ground below) instead of three's light. */
@@ -374,6 +389,7 @@ export class ShowcaseBoard {
     const faces = [side, side, sky, ground, sky.clone().lerp(side, 0.5), side];
     faces.forEach((color, index) => this.#ambientCube[index].set(color.r, color.g, color.b));
     this.#dirty = true;
+    this.#requestFrame();
   }
 
   #placeLight(azimuth: number, elevation: number): void {
@@ -396,6 +412,7 @@ export class ShowcaseBoard {
     map.offset.set(0.5, 0.5);
     map.needsUpdate = true;
     this.#dirty = true;
+    this.#requestFrame();
   }
 
   async addAt(weaponKey: string, paint: ShowcasePaint, x?: number, y?: number): Promise<string | null> {
@@ -430,6 +447,7 @@ export class ShowcaseBoard {
     this.#runtimes.set(runtime.item.id, runtime);
     this.#scene.add(runtime.root);
     this.#drag = { id: runtime.item.id, grabX: 0, grabY: 0, fromX: 0, fromY: 0, external: true, candidate: null };
+    this.#requestFrame();
     this.select(runtime.item.id);
     this.#dragTo(this.#lastPointer.x, this.#lastPointer.y);
     if (this.#releasedWhileLoading) {
@@ -527,6 +545,7 @@ export class ShowcaseBoard {
     this.#applyTransform(runtime);
     this.#replaceItem(runtime);
     this.#reshapeQueue.add(id);
+    this.#requestFrame();
     if (this.#liveEditId !== id) {
       // Start from a fully checked board, then track just this weapon.
       this.#liveEditId = null;
@@ -842,6 +861,7 @@ export class ShowcaseBoard {
       return cached.subset;
     });
     this.#dirty = true;
+    this.#requestFrame();
   }
 
   /** Show or leave out a piece of a weapon. */
@@ -1101,6 +1121,7 @@ export class ShowcaseBoard {
       if (item && this.#problemAt(item.id, item.x, item.y)) drawItem(item.id, item.x, item.y, 0xe06060);
     }
     this.#dirty = true;
+    this.#requestFrame();
     this.#cells.count = count;
     // Upload just the markers in use; the buffer holds thousands, most frames draw none.
     if (count) {
@@ -1203,6 +1224,7 @@ export class ShowcaseBoard {
       external: false,
       candidate: { x: runtime.item.x, y: runtime.item.y },
     };
+    this.#requestFrame();
     this.#options.canvas.style.cursor = 'grabbing';
     window.addEventListener('pointermove', this.#onWindowMove);
     window.addEventListener('pointerup', this.#onWindowUp);
@@ -1213,6 +1235,7 @@ export class ShowcaseBoard {
     if (!this.#drag) return;
     this.#queuedPointer = this.#lastPointer;
     this.#dirty = true;
+    this.#requestFrame();
   };
 
   #dragTo(clientX: number, clientY: number): void {
@@ -1360,20 +1383,48 @@ export class ShowcaseBoard {
     this.#camera.updateProjectionMatrix();
   }
 
+  /** Resizes the buffer now; exports and background changes call this directly. */
   #resize(): void {
     const canvas = this.#options.canvas;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     if (!width || !height) return;
     this.renderer.setSize(width, height, false);
-    this.#fitCamera(width / height, 1.06);
+    this.#fitCamera(width / height, FIT_PADDING);
     this.#sharpenPaints();
     this.#emit();
   }
 
-  #frameLoop = (): void => {
-    if (this.#disposed) return;
+  /** Observer callback: the first call sizes the buffer, later ones fit the view at once and resize after a settle. */
+  #observeResize(): void {
+    const canvas = this.#options.canvas;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    if (!width || !height) return;
+    if (!this.#observedResize) {
+      this.#observedResize = true;
+      this.#resize();
+      return;
+    }
+    // Matching the projection to the CSS box keeps the old buffer from squeezing while the layout moves.
+    this.#fitCamera(width / height, FIT_PADDING);
+    this.#dirty = true;
+    this.#requestFrame();
+    window.clearTimeout(this.#resizeTimer);
+    this.#resizeTimer = window.setTimeout(() => this.#resize(), RESIZE_DEBOUNCE_MS);
+  }
+
+  /** Schedules one frame; no-op while one is already queued or after disposal. */
+  #requestFrame(): void {
+    if (this.#disposed || this.#raf) return;
     this.#raf = requestAnimationFrame(this.#frameLoop);
+  }
+
+  #frameLoop = (): void => {
+    this.#raf = 0;
+    if (this.#disposed) return;
+    // A drag samples the pointer every vsync; with no drag the loop stops once nothing is queued.
+    if (this.#drag) this.#requestFrame();
     if (this.#drag && this.#queuedPointer) {
       const { x, y } = this.#queuedPointer;
       this.#queuedPointer = null;
@@ -1435,6 +1486,7 @@ export class ShowcaseBoard {
   dispose(): void {
     this.#disposed = true;
     cancelAnimationFrame(this.#raf);
+    window.clearTimeout(this.#resizeTimer);
     this.#boardPaints.cancelSweep();
     this.#cancelExternalDrag();
     window.removeEventListener('pointermove', this.#onWindowMove);

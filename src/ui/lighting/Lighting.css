@@ -154,6 +154,12 @@
   color: var(--text);
   font-size: 11px;
 }
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
+  .lighting-panel {
+    background: rgba(30, 33, 38, 0.92);
+  }
+}
 .lighting-panel[data-open] {
   display: flex;
 }
