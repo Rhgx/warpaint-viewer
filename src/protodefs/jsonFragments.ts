@@ -31,8 +31,8 @@ const SYNTHETIC_DEFINDEX_BASE = 900_000_000;
 const DEFINDEX_FIELD = /"defindex"\s*:\s*([^,}\]\s]+)/g;
 
 // Enum names map to numbers, as protobufjs does for decodeType(), so the JSON path
-// produces the same shape.
-const PROTO_DEF_TYPE_NUMBERS: Record<string, number> = {
+// produces the same shape. jsonExport.ts writes the names back out.
+export const PROTO_DEF_TYPE_NUMBERS: Record<string, number> = {
   DEF_TYPE_QUEST_MAP_NODE: 0,
   DEF_TYPE_QUEST_THEME: 2,
   DEF_TYPE_QUEST_MAP_REGION: 3,

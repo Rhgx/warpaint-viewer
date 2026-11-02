@@ -67,6 +67,13 @@ assert.deepStrictEqual(
 assert.equal(exported.fragments[0], exported.operation, 'paired result must expose the same operation fragment');
 assert.equal(exported.fragments[1], exported.definition, 'paired result must expose the same definition fragment');
 assert.ok(!exported.operation.text.includes('###') && !exported.definition.text.includes('###'), 'export must not emit placeholders');
+assert.ok(exported.definition.text.startsWith('{\n\t"header": {\n\t\t"defindex": 812346,'), 'export must use the dump script tab indentation');
+assert.ok(
+  exported.definition.text.includes('"type": "DEF_TYPE_PAINTKIT_OPERATION"')
+    && exported.definition.text.includes('"type": "DEF_TYPE_PAINTKIT_ITEM_DEFINITION"')
+    && !/"type": \d/.test(exported.definition.text),
+  'export must write enum names like the dump script, not their numbers',
+);
 
 const imported = normalizeProtoDefFragments([...exported.fragments]);
 assert.equal(imported[0].kind, 'operation');

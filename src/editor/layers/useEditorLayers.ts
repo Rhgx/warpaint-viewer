@@ -21,7 +21,7 @@ export function useEditorLayers({
   state,
 }: UseEditorLayersOptions) {
   const [activeEditorSelector, setActiveEditorSelector] = useState(0);
-  const [weaponBaseLayerActive, setWeaponBaseLayerActive] = useState(false);
+  const [weaponBaseLayerChosen, setWeaponBaseLayerChosen] = useState(false);
 
   const groupDiscovery = useMemo(
     () => editorCurrent ? discoverGroupSelectTargets(editorCurrent, provenanceRecipe?.provenance) : null,
@@ -34,6 +34,9 @@ export function useEditorLayers({
   );
   const transformDiscovery = currentLayerTransforms?.layers ?? null;
   const baseTextureTransform = currentLayerTransforms?.base ?? null;
+  // A weapon with no base layer shows the first layer instead, without forgetting the choice. Until its
+  // provenance loads the choice stands, so the selection does not flicker during a weapon switch.
+  const weaponBaseLayerActive = weaponBaseLayerChosen && (!provenanceRecipe || baseTextureTransform !== null);
   const editableGroupTargets = useMemo(() => (
     groupDiscovery?.targets.filter((target, index, targets) => (
       target.canToggle && targets.findIndex((candidate) => candidate.canToggle && candidate.sourceKey === target.sourceKey) === index
@@ -107,9 +110,10 @@ export function useEditorLayers({
     ? 0
     : Math.max(0, groupAssignmentTargets.indexOf(activeGroupAssignmentTarget));
 
+  // A paint switch starts on the first layer. A weapon switch keeps the chosen base layer, like the other layers.
   useEffect(() => {
-    setWeaponBaseLayerActive(false);
-  }, [editableKitId, state.weaponKey]);
+    setWeaponBaseLayerChosen(false);
+  }, [editableKitId]);
 
   useEffect(() => {
     if (activeEditorSelector >= editableGroupTargets.length) setActiveEditorSelector(0);
@@ -119,7 +123,7 @@ export function useEditorLayers({
     activeEditorSelector,
     setActiveEditorSelector,
     weaponBaseLayerActive,
-    setWeaponBaseLayerActive,
+    setWeaponBaseLayerActive: setWeaponBaseLayerChosen,
     groupDiscovery,
     transformDiscovery,
     baseTextureTransform,

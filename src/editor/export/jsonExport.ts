@@ -3,7 +3,7 @@
  * which accepts malformed snippets, so it imports without placeholder ids.
  */
 
-import { normalizeProtoDefFragments, type ProtoDefFragmentKind } from '../../protodefs/jsonFragments';
+import { normalizeProtoDefFragments, PROTO_DEF_TYPE_NUMBERS, type ProtoDefFragmentKind } from '../../protodefs/jsonFragments';
 import type { ProtoDefJsonFragment, ProtoDefKitBundle, ProtoDefKitMessages } from '../../protodefs/types';
 import { sanitizePackName } from '../../export/plan';
 
@@ -50,10 +50,18 @@ function operationReference(definition: JsonObject): number {
   return reference.defindex;
 }
 
+const PROTO_DEF_TYPE_NAMES = new Map(Object.entries(PROTO_DEF_TYPE_NUMBERS).map(([name, number]) => [number, name]));
+
+// Match the community proto_defs dump: tab indentation and enum names ("DEF_TYPE_PAINTKIT_OPERATION")
+// rather than their numbers. The importer maps the names back, so the round-trip guard still holds.
+function dumpStyleValue(key: string, value: unknown): unknown {
+  return key === 'type' && typeof value === 'number' ? PROTO_DEF_TYPE_NAMES.get(value) ?? value : value;
+}
+
 function serializeJson(value: JsonObject, label: string): string {
   let text: string | undefined;
   try {
-    text = JSON.stringify(value, null, 2);
+    text = JSON.stringify(value, dumpStyleValue, '\t');
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     throw new Error(`${label} cannot be serialized as JSON: ${message}`);
