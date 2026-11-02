@@ -26,6 +26,56 @@ export interface TextureTransformTarget {
   weaponOverridePath?: readonly string[];
 }
 
+export type TextureTransformField = TextureTransformRangeField | TextureTransformFlipField;
+
+const TEXTURE_TRANSFORM_FIELDS: readonly TextureTransformField[] = [
+  'rotation', 'scale_uv', 'translate_u', 'translate_v', 'flip_u', 'flip_v',
+];
+
+export interface TextureTransformFieldFacts {
+  /** The authored stage field names a variable rather than holding a literal. */
+  readonly variable: boolean;
+  /** Discovery found a resolvable value for this field. */
+  readonly editable: boolean;
+  /** The header variable is unique and inherits, so a weapon override write leaves other weapons unchanged. */
+  readonly headerInherits: boolean;
+}
+
+export type TextureTransformFieldFactMap = Readonly<Record<TextureTransformField, TextureTransformFieldFacts>>;
+
+/**
+ * Whether a weapon-scoped write of one field lands on the active weapon. Mirrors
+ * setSelectFieldValue: literal or absent fields write the shared header, and a
+ * variable field is weapon-local only through its own weapon source or an override collection.
+ */
+function isWeaponWritableField(
+  target: TextureTransformTarget,
+  field: TextureTransformField,
+  facts: TextureTransformFieldFacts,
+): boolean {
+  if (!facts.variable) return false;
+  const sourcePath = target.fieldSourcePaths?.[field];
+  if (sourcePath) return sourcePath[0] === 'definition' && sourcePath[1] !== 'header';
+  // An override write sets the header's inherit to true, which would activate overrides on other weapons when it was false.
+  return target.weaponOverridePath !== undefined && facts.headerInherits;
+}
+
+/** The transform fields a weapon-scoped edit changes on this weapon only; every other field writes the shared value. */
+export function weaponWritableTransformFields(
+  target: TextureTransformTarget,
+  facts: TextureTransformFieldFactMap,
+): TextureTransformField[] {
+  return TEXTURE_TRANSFORM_FIELDS.filter((field) => isWeaponWritableField(target, field, facts[field]));
+}
+
+// Transform edits open on the current weapon only when an editable field can be written there.
+export function defaultTransformScope(
+  target: TextureTransformTarget,
+  facts: TextureTransformFieldFactMap,
+): 'all' | 'weapon' {
+  return weaponWritableTransformFields(target, facts).some((field) => facts[field].editable) ? 'weapon' : 'all';
+}
+
 const TRANSFORM_STAGE_NAMES = new Set(['texture_lookup']);
 
 function textureTransformStage(operation: Record<string, unknown>, target: TextureTransformTarget): TextureStageMsg {

@@ -29,6 +29,8 @@ export interface SeedRangeFieldProps {
   readonly originalValue: SeedRangeValue;
   readonly divergence?: SeedRangeDivergence;
   readonly disabled?: boolean;
+  /** Locks the value controls only; the divergence button and its push action stay available. */
+  readonly valueDisabled?: boolean;
   readonly onChange: (value: SeedRangeValue) => void;
   readonly onPushToAll?: () => void;
   readonly onInteractionStart?: () => void;
@@ -88,11 +90,13 @@ export function SeedRangeField({
   originalValue,
   divergence,
   disabled = false,
+  valueDisabled = false,
   onChange,
   onPushToAll,
   onInteractionStart,
   onInteractionEnd,
 }: SeedRangeFieldProps) {
+  const valueLocked = disabled || valueDisabled;
   const [editing, setEditing] = useState<{ field: Bound; text: string } | null>(null);
   const [dragValue, setDragValue] = useState<SeedRangeValue | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -260,7 +264,7 @@ export function SeedRangeField({
   };
 
   const beginSliderDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (disabled || event.button !== 0) return;
+    if (valueLocked || event.button !== 0) return;
     event.preventDefault();
     const pointer = sliderPointerPosition(event);
     let bound: DragBound = 'min';
@@ -350,7 +354,7 @@ export function SeedRangeField({
   };
 
   const setMode = (nextMode: SeedRangeMode) => {
-    if (nextMode === value.mode || disabled) return;
+    if (nextMode === value.mode || valueLocked) return;
     const next: SeedRangeValue = nextMode === 'fixed'
       ? { mode: 'fixed', min: value.min, max: value.min }
       : (() => {
@@ -363,7 +367,7 @@ export function SeedRangeField({
   };
 
   const revertToOriginal = () => {
-    if (disabled) return;
+    if (valueLocked) return;
     onInteractionStart?.();
     onChange(originalValue);
     onInteractionEnd?.();
@@ -427,7 +431,7 @@ export function SeedRangeField({
           className="seed-range-field-mode"
           aria-label={`${label} variation`}
           value={displayValue.mode}
-          disabled={disabled}
+          disabled={valueLocked}
           onChange={(event) => setMode(event.target.value as SeedRangeMode)}
         >
           <option value="fixed">Fixed</option>
@@ -439,7 +443,7 @@ export function SeedRangeField({
             className="seed-range-field-revert"
             title={`Reset ${label} to its original value`}
             aria-label={`Reset ${label} to its original value`}
-            disabled={disabled}
+            disabled={valueLocked}
             onClick={revertToOriginal}
           >
             <RotateCcw size={12} aria-hidden="true" />
@@ -476,7 +480,7 @@ export function SeedRangeField({
               max={bounds[1]}
               step={step}
               value={displayValue.min}
-              disabled={disabled}
+              disabled={valueLocked}
               onKeyDown={(event) => handleRangeKeyDown('min', event)}
               onChange={(event) => handleRangeInput('min', event.target.value)}
             />
@@ -488,7 +492,7 @@ export function SeedRangeField({
                 max={bounds[1]}
                 step={step}
                 value={displayValue.max}
-                disabled={disabled}
+                disabled={valueLocked}
                 onKeyDown={(event) => handleRangeKeyDown('max', event)}
                 onChange={(event) => handleRangeInput('max', event.target.value)}
               />
@@ -505,7 +509,7 @@ export function SeedRangeField({
             max={bounds[1]}
             step={step}
             value={editing?.field === 'min' ? editing.text : format(displayValue.min)}
-            disabled={disabled}
+            disabled={valueLocked}
             onFocus={() => { cancelNumberBlurRef.current = false; }}
             onChange={(event) => handleNumberChange('min', event.target.value)}
             onBlur={(event) => finishNumberEditing('min', event.target.value)}
@@ -522,7 +526,7 @@ export function SeedRangeField({
                 max={bounds[1]}
                 step={step}
                 value={editing?.field === 'max' ? editing.text : format(displayValue.max)}
-                disabled={disabled}
+                disabled={valueLocked}
                 onFocus={() => { cancelNumberBlurRef.current = false; }}
                 onChange={(event) => handleNumberChange('max', event.target.value)}
                 onBlur={(event) => finishNumberEditing('max', event.target.value)}

@@ -1,13 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
+
 import {
+  defaultTransformScope,
   pushTextureTransformRangeToAllWeapons,
   setTextureTransformRange,
+  weaponWritableTransformFields,
+  type TextureTransformField,
+  type TextureTransformFieldFactMap,
+  type TextureTransformFieldFacts,
   type TextureTransformTarget,
 } from '../../../src/editor/transform/transformMutations';
 import { serializeProtoDefKitMessages } from '../../../src/editor/export/jsonExport';
 import { normalizeProtoDefFragments } from '../../../src/protodefs/jsonFragments';
-import { discoverBaseTextureTransformTarget, discoverTextureTransformTargets } from '../../../src/editor/transform/transformTargets';
+import { discoverBaseTextureTransformTarget, discoverTextureTransformTargets, transformFieldFacts } from '../../../src/editor/transform/transformTargets';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
 import { extractKitMessages, getKitWeaponSlots, resolveKitRecipeWithProvenance } from '../../../src/protodefs/kitQueries';
 import { dig, shippedProtoDefs } from '../fixtures';
@@ -137,6 +143,103 @@ test('team-texture and weapon-albedo bases use the intended transform policy', (
   assert.equal(baseFor(442).transformLocked, false, 'Die\'n Dasher layer 1 is editable');
   assert.equal(baseFor(423).transformLocked, true, 'Gobi Glazed weapon albedo stays locked');
   assert.equal(baseFor(390).transformLocked, false, 'Dragon Slayer custom paint base is editable');
+});
+
+const weaponOverridePath = ['definition', 'rocketlauncher', 'data', 'variable'] as const;
+
+// Fields that are variable-backed (with a resolvable value) and every other field literal or absent.
+function factsWithVariables(variable: readonly TextureTransformField[]): TextureTransformFieldFactMap {
+  const fact = (field: TextureTransformField): TextureTransformFieldFacts => ({
+    variable: variable.includes(field),
+    editable: true,
+    headerInherits: true,
+  });
+  return {
+    rotation: fact('rotation'),
+    scale_uv: fact('scale_uv'),
+    translate_u: fact('translate_u'),
+    translate_v: fact('translate_v'),
+    flip_u: fact('flip_u'),
+    flip_v: fact('flip_v'),
+  };
+}
+
+test('weapon scope covers only the fields a weapon-local write can reach', () => {
+  const overrideTarget: TextureTransformTarget = { stagePath, weaponOverridePath };
+  assert.deepEqual(
+    weaponWritableTransformFields(overrideTarget, factsWithVariables(['rotation'])),
+    ['rotation'],
+    'a variable field can receive a new weapon override; absent flips write the shared header',
+  );
+  assert.deepEqual(
+    weaponWritableTransformFields(overrideTarget, factsWithVariables([])),
+    [],
+    'literal or absent fields never reach a weapon-local value',
+  );
+  const sourceTarget: TextureTransformTarget = {
+    stagePath,
+    fieldSourcePaths: { translate_u: [...weaponOverridePath, '0'] },
+  };
+  assert.deepEqual(
+    weaponWritableTransformFields(sourceTarget, factsWithVariables(['translate_u', 'rotation'])),
+    ['translate_u'],
+    'without an override collection, only the field with its own weapon source is weapon-local',
+  );
+});
+
+test('transform edits default to the current weapon only when an editable field can be written there', () => {
+  const overrideTarget: TextureTransformTarget = { stagePath, weaponOverridePath };
+  assert.equal(defaultTransformScope({ stagePath }, factsWithVariables(['rotation'])), 'all');
+  assert.equal(defaultTransformScope(overrideTarget, factsWithVariables([])), 'all');
+  assert.equal(defaultTransformScope(overrideTarget, factsWithVariables(['rotation'])), 'weapon');
+  assert.equal(defaultTransformScope({
+    stagePath,
+    fieldSourcePaths: { rotation: [...weaponOverridePath, '0'] },
+  }, factsWithVariables(['rotation'])), 'weapon');
+  const blockedRotation = {
+    ...factsWithVariables(['rotation']),
+    rotation: { variable: true, editable: false, headerInherits: true },
+  };
+  assert.equal(defaultTransformScope(overrideTarget, blockedRotation), 'all');
+});
+
+test('a header variable that opts out of inheritance keeps its field shared', () => {
+  // Writing an override sets inherit to true, which would wake overrides on other weapons when it was false.
+  const shape = (inherit: boolean | undefined): ProtoDefKitMessages => ({
+    operation: {
+      header: { variables: [
+        { name: 'texture_layer_1', value: 'patterns/test/base' },
+        { name: 'texture_layer_1_rotate', value: '0 360', inherit },
+      ] },
+      operation_node: [{ stage: { texture_lookup: {
+        texture: { variable: 'texture_layer_1' },
+        rotation: { variable: 'texture_layer_1_rotate' },
+      } } }],
+    },
+    definition: { header: {}, rocketlauncher: { data: { variable: [] } } },
+  });
+  const provenance = [{
+    fieldPath: ['operation', 'operation_node', '0', 'stage', 'texture_lookup', 'texture'],
+    provenance: {
+      variableName: 'texture_layer_1',
+      effectiveValue: 'patterns/test/base',
+      sourcePath: ['operation', 'header', 'variables', '0'],
+      editableSourcePath: ['definition', 'rocketlauncher', 'data', 'variable', '0'],
+      scope: 'weapon' as const,
+      canOverride: true,
+    },
+  }];
+
+  const optedOut = discoverBaseTextureTransformTarget(shape(false), provenance);
+  assert.ok(optedOut);
+  assert.equal(optedOut.transform.rotation.headerInherits, false);
+  assert.deepEqual(weaponWritableTransformFields(optedOut.transform.target, transformFieldFacts(optedOut.transform)), []);
+  assert.equal(defaultTransformScope(optedOut.transform.target, transformFieldFacts(optedOut.transform)), 'all');
+
+  const inherits = discoverBaseTextureTransformTarget(shape(undefined), provenance);
+  assert.ok(inherits);
+  assert.deepEqual(weaponWritableTransformFields(inherits.transform.target, transformFieldFacts(inherits.transform)), ['rotation']);
+  assert.equal(defaultTransformScope(inherits.transform.target, transformFieldFacts(inherits.transform)), 'weapon');
 });
 
 test('texture transform scope, normalization and JSON round trip', () => {

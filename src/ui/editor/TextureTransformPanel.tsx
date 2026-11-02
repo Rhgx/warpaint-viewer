@@ -11,6 +11,10 @@ export interface TextureTransformFields {
   readonly offsetV: SeedRangeValue;
 }
 
+export type TextureTransformPanelField = keyof TextureTransformFields | 'flipU' | 'flipV';
+
+const SHARED_FIELD_NOTE = 'Shared by all weapons. Switch to All weapons to edit.';
+
 export interface TextureTransformPanelProps {
   readonly layerLabel: string;
   readonly layerIndex: number;
@@ -36,6 +40,8 @@ export interface TextureTransformPanelProps {
   /** Layer-level actions from the workbench, shown at the start of this head's action group. */
   readonly headerActions?: ReactNode;
   readonly disabled?: boolean;
+  /** Controls that write the shared value even in weapon scope; they are disabled there. */
+  readonly sharedFields?: readonly TextureTransformPanelField[];
   readonly onFieldChange: (key: keyof TextureTransformFields, value: SeedRangeValue) => void;
   readonly onFlipChange: (axis: 'u' | 'v', allowed: boolean) => void;
   readonly onScopeChange: (scope: 'all' | 'weapon') => void;
@@ -94,6 +100,7 @@ export function TextureTransformPanel({
   headerSlot,
   headerActions,
   disabled = false,
+  sharedFields,
   onFieldChange,
   onFlipChange,
   onScopeChange,
@@ -177,8 +184,9 @@ export function TextureTransformPanel({
           const originalValue = originalValues[config.key];
           const currentSeedValue = currentSeedValues?.[config.key];
           const bounds = authoredBounds(config.bounds, fieldValue, originalValue, currentSeedValue);
+          const shared = sharedFields?.includes(config.key) ?? false;
           return (
-          <div className="texture-transform-panel-field" key={config.key}>
+          <div className="texture-transform-panel-field" key={config.key} title={shared ? SHARED_FIELD_NOTE : undefined}>
             <SeedRangeField
               label={config.label}
               unit={config.unit}
@@ -190,6 +198,7 @@ export function TextureTransformPanel({
               originalValue={originalValue}
               divergence={divergence?.[config.key]}
               disabled={disabled}
+              valueDisabled={shared}
               onChange={(value) => onFieldChange(config.key, value)}
               onPushToAll={onPushFieldToAll ? () => onPushFieldToAll(config.key) : undefined}
               onInteractionStart={onInteractionStart}
@@ -201,21 +210,27 @@ export function TextureTransformPanel({
 
           <div className="texture-transform-panel-mirror-row">
             <span>Mirroring</span>
-            <label className="texture-transform-panel-check">
+            <label
+              className="texture-transform-panel-check"
+              title={sharedFields?.includes('flipU') ? SHARED_FIELD_NOTE : undefined}
+            >
               <input
                 type="checkbox"
                 checked={flipU}
-                disabled={disabled}
+                disabled={disabled || (sharedFields?.includes('flipU') ?? false)}
                 onChange={(event) => onFlipChange('u', event.target.checked)}
               />
               <span className="texture-transform-panel-check-box" aria-hidden="true"><Check size={10} /></span>
               <span>Flip U</span>
             </label>
-            <label className="texture-transform-panel-check">
+            <label
+              className="texture-transform-panel-check"
+              title={sharedFields?.includes('flipV') ? SHARED_FIELD_NOTE : undefined}
+            >
               <input
                 type="checkbox"
                 checked={flipV}
-                disabled={disabled}
+                disabled={disabled || (sharedFields?.includes('flipV') ?? false)}
                 onChange={(event) => onFlipChange('v', event.target.checked)}
               />
               <span className="texture-transform-panel-check-box" aria-hidden="true"><Check size={10} /></span>

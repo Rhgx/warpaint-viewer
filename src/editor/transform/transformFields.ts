@@ -1,7 +1,7 @@
 import type { RecipeNode } from '../../compositor/types';
 import type { SeedRangeValue } from '../../ui/editor/SeedRangeField';
-import type { TextureTransformFields } from '../../ui/editor/TextureTransformPanel';
-import type { TextureTransformRangeField, TextureTransformTarget } from './transformMutations';
+import type { TextureTransformFields, TextureTransformPanelField } from '../../ui/editor/TextureTransformPanel';
+import type { TextureTransformField, TextureTransformRangeField, TextureTransformTarget } from './transformMutations';
 import { protoTextureReference } from '../sticker/stickerTargets';
 import type { TextureTransformRangeFieldState, TextureTransformTargetInfo } from './transformTargets';
 
@@ -55,13 +55,17 @@ export function transformInfoHasEdits(info: TextureTransformTargetInfo): boolean
     || info.flipV.allowed;
 }
 
-export function transformInfosEqual(left: TextureTransformTargetInfo, right: TextureTransformTargetInfo): boolean {
-  return transformRangeStatesEqual(left.rotation, right.rotation)
-    && transformRangeStatesEqual(left.scaleUv, right.scaleUv)
-    && transformRangeStatesEqual(left.translateU, right.translateU)
-    && transformRangeStatesEqual(left.translateV, right.translateV)
-    && left.flipU.allowed === right.flipU.allowed
-    && left.flipV.allowed === right.flipV.allowed;
+const TRANSFORM_PANEL_FIELDS: readonly TextureTransformPanelField[] = ['rotation', 'scale', 'offsetU', 'offsetV', 'flipU', 'flipV'];
+
+const TRANSFORM_PANEL_FIELD_TO_PROTO: Record<TextureTransformPanelField, TextureTransformField> = {
+  ...TRANSFORM_FIELD_TO_PROTO,
+  flipU: 'flip_u',
+  flipV: 'flip_v',
+};
+
+/** Panel controls whose proto field a weapon-scoped edit cannot write on this weapon. */
+export function sharedTransformPanelFields(writable: readonly TextureTransformField[]): TextureTransformPanelField[] {
+  return TRANSFORM_PANEL_FIELDS.filter((key) => !writable.includes(TRANSFORM_PANEL_FIELD_TO_PROTO[key]));
 }
 
 /** Scope 'all' always writes the shared header default; 'weapon' keeps whatever weapon-local source discovery found. */

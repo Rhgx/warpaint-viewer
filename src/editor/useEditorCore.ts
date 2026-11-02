@@ -13,6 +13,7 @@ import type { ControlsState } from '../viewer/controls';
 import { CUSTOM_LIGHTING_ID } from '../viewer/lighting/customLightingModel';
 import type { WorkbenchTab } from '../workbench/types';
 import type { EditorDownloadFormat } from './export/definitionExport';
+import { provenanceRecipeKey, provenanceStatus } from './provenanceStatus';
 import { useEditorDraft } from './useEditorDraft';
 import { useProtoDefEditorSession } from './useProtoDefEditorSession';
 
@@ -186,14 +187,22 @@ export function useEditorCore({
   const [editorTool, setEditorTool] = useState<'paint' | 'sticker'>('paint');
   // Parts/Transform/Graph sub-view of paint mode, kept beside editorTool since it only matters in paint mode.
   const [paintSubView, setPaintSubView] = useState<'parts' | 'transform' | 'graph'>('parts');
-  const provenanceRecipeKey = editableKitId !== null && state.weaponKey
-    ? `${editableKitId}|${state.weaponKey}|${state.team}|${state.wearIndex}`
+  // Imported kits key provenance by source generation, so a re-import cannot reuse the replaced definitions.
+  const currentProvenanceRecipeKey = editableKitId !== null && state.weaponKey
+    ? provenanceRecipeKey({
+      kitId: editableKitId,
+      sourceGeneration: isCustomKitId(editableKitId) ? definitions.generation : 'stock',
+      weaponKey: state.weaponKey,
+      team: state.team,
+      wearIndex: state.wearIndex,
+    })
     : '';
   const [loadedProvenanceRecipe, setLoadedProvenanceRecipe] = useState<{
     readonly key: string;
     readonly recipe: ProtoDefRecipeWithProvenance | null;
   } | null>(null);
-  const provenanceRecipe = loadedProvenanceRecipe?.key === provenanceRecipeKey
+  const provenanceStatusNow = provenanceStatus(loadedProvenanceRecipe, currentProvenanceRecipeKey);
+  const provenanceRecipe = loadedProvenanceRecipe?.key === currentProvenanceRecipeKey
     ? loadedProvenanceRecipe.recipe
     : null;
   const editorSourceGenerationRef = useRef(definitions.generation);
@@ -239,7 +248,7 @@ export function useEditorCore({
       ? getImportedRecipeWithProvenance
       : getStockRecipeWithProvenance;
     void resolver(editableKitId, state.weaponKey, state.team, state.wearIndex).then((resolved) => {
-      if (!cancelled) setLoadedProvenanceRecipe({ key: provenanceRecipeKey, recipe: resolved });
+      if (!cancelled) setLoadedProvenanceRecipe({ key: currentProvenanceRecipeKey, recipe: resolved });
     });
     return () => { cancelled = true; };
   }, [
@@ -251,7 +260,7 @@ export function useEditorCore({
     editableKitId,
     editorCurrent,
     selectedKit,
-    provenanceRecipeKey,
+    currentProvenanceRecipeKey,
     state.team,
     state.weaponKey,
     state.wearIndex,
@@ -379,6 +388,7 @@ export function useEditorCore({
     paintSubView,
     setPaintSubView,
     provenanceRecipe,
+    provenanceStatus: provenanceStatusNow,
     editorDraftKey,
     editorDraft,
     editorDefinitionGeneration,

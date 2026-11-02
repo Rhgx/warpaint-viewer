@@ -109,6 +109,7 @@ export function useEditorTools({
     paintSubView,
     editorActiveScope,
     provenanceRecipe,
+    provenanceStatus,
     editorDraft,
     editorDefinitionGeneration,
   } = editor;
@@ -189,6 +190,7 @@ export function useEditorTools({
     editorOriginal,
     editorDefinitionGeneration,
     provenanceRecipe,
+    provenanceStatus,
     weaponSlots,
     paintSubView,
     beginSessionTransformGesture,

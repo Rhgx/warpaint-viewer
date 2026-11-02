@@ -8,7 +8,13 @@ import {
   type VarDefMsg,
   type VarFieldMsg,
 } from '../../protodefs/messages';
-import type { TextureTransformFlipField, TextureTransformRangeField, TextureTransformTarget } from './transformMutations';
+import type {
+  TextureTransformFieldFactMap,
+  TextureTransformFieldFacts,
+  TextureTransformFlipField,
+  TextureTransformRangeField,
+  TextureTransformTarget,
+} from './transformMutations';
 import { collectVariables } from '../layers/groupTargets';
 
 /** Proto defaults for the four range fields, mirrored from the resolver for parsing. */
@@ -25,11 +31,19 @@ export interface TextureTransformRangeFieldState {
   readonly mode: 'fixed' | 'varies';
   readonly min: number;
   readonly max: number;
+  /** The authored stage field names a variable rather than a literal. */
+  readonly variable: boolean;
+  /** The field's header variable is unique and does not opt out of inheritance. */
+  readonly headerInherits: boolean;
   readonly blockers: readonly TextureTransformFieldBlocker[];
 }
 
 interface TextureTransformFlipFieldState {
   readonly allowed: boolean;
+  /** The authored stage field names a variable rather than a literal. */
+  readonly variable: boolean;
+  /** The field's header variable is unique and does not opt out of inheritance. */
+  readonly headerInherits: boolean;
   readonly blockers: readonly TextureTransformFieldBlocker[];
 }
 
@@ -99,6 +113,16 @@ function findWeaponOverrideCollectionPath(
     }
   }
   return seen.size === 1 ? candidate : undefined;
+}
+
+/** Whether the field's header variable is unique and inherits. Only then can a weapon override leave other weapons unchanged. */
+function headerInherits(
+  field: VarFieldMsg | undefined,
+  variables: ReadonlyMap<string, VarDefMsg[]>,
+): boolean {
+  if (!field?.variable) return false;
+  const matches = variables.get(field.variable);
+  return matches?.length === 1 && matches[0].inherit !== false;
 }
 
 function parseAuthoredRange(
@@ -194,6 +218,8 @@ function buildRangeField(
       mode: parsed?.mode ?? 'fixed',
       min: parsed?.min ?? fallback[0],
       max: parsed?.max ?? fallback[1],
+      variable: Boolean(field?.variable),
+      headerInherits: headerInherits(field, variables),
       blockers,
     },
     sourcePath: resolved.sourcePath,
@@ -216,6 +242,8 @@ function buildFlipField(
   return {
     state: {
       allowed: parseAuthoredBool(resolved.value),
+      variable: Boolean(field?.variable),
+      headerInherits: headerInherits(field, variables),
       blockers,
     },
     sourcePath: resolved.sourcePath,
@@ -237,8 +265,10 @@ function textureFieldRef(field: VarFieldMsg, variables: ReadonlyMap<string, VarD
 }
 
 function blockedTarget(reason: TextureTransformTargetBlocker): TextureTransformTargetInfo {
-  const emptyRange: TextureTransformRangeFieldState = { mode: 'fixed', min: 0, max: 0, blockers: [] };
-  const emptyFlip: TextureTransformFlipFieldState = { allowed: false, blockers: [] };
+  const emptyRange: TextureTransformRangeFieldState = {
+    mode: 'fixed', min: 0, max: 0, variable: false, headerInherits: false, blockers: [],
+  };
+  const emptyFlip: TextureTransformFlipFieldState = { allowed: false, variable: false, headerInherits: false, blockers: [] };
   return {
     target: { stagePath: [] },
     rotation: emptyRange,
@@ -452,6 +482,28 @@ export function discoverTextureTransformTargets(
       : buildTarget(messages, precedingNode, precedingPath, variables, provenance, weaponOverridePath));
   });
   return { targets };
+}
+
+function fieldFacts(
+  state: Pick<TextureTransformRangeFieldState, 'variable' | 'headerInherits' | 'blockers'>,
+): TextureTransformFieldFacts {
+  return {
+    variable: state.variable,
+    editable: state.blockers.length === 0,
+    headerInherits: state.headerInherits,
+  };
+}
+
+/** Per-field facts that decide whether a weapon-scoped edit is weapon-local and whether it is editable. */
+export function transformFieldFacts(info: TextureTransformTargetInfo): TextureTransformFieldFactMap {
+  return {
+    rotation: fieldFacts(info.rotation),
+    scale_uv: fieldFacts(info.scaleUv),
+    translate_u: fieldFacts(info.translateU),
+    translate_v: fieldFacts(info.translateV),
+    flip_u: fieldFacts(info.flipU),
+    flip_v: fieldFacts(info.flipV),
+  };
 }
 
 /** Both discoveries for one definition, so callers memoize them together. */

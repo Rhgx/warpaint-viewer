@@ -11,7 +11,12 @@ import type { TextureTransformFields, TextureTransformPanelProps } from '../../u
 import type { ControlsState } from '../../viewer/controls';
 import type { Viewer } from '../../viewer/Viewer';
 import { groupByteToCompositorBucket } from '../layers/groupSampling';
-import { readTextureLayerTeamColors } from './transformMutations';
+import {
+  defaultTransformScope,
+  readTextureLayerTeamColors,
+  weaponWritableTransformFields,
+  type TextureTransformField,
+} from './transformMutations';
 import { collectResolvedLayerTextureNodes } from '../layers/recipeLayers';
 import { mapResolvedTextureReferences } from '../sticker/stickerSurface';
 import { collectResolvedLayerIsolationNodes, preferredLayerOccurrenceIndex } from './transformIsolation';
@@ -19,9 +24,9 @@ import {
   TRANSFORM_FIELD_TO_PROTO,
   TRANSFORM_LIVE_PREVIEW_MAX_SIZE,
   previewTextureTransformRange,
+  sharedTransformPanelFields,
   transformFieldsFromInfo,
   transformInfoHasEdits,
-  transformInfosEqual,
   transformRangeStatesEqual,
   transformTargetForScope,
 } from './transformFields';
@@ -29,6 +34,7 @@ import {
   discoverBaseTextureTransformTarget,
   discoverLayerTransforms,
   discoverTextureTransformTargets,
+  transformFieldFacts,
 } from './transformTargets';
 import type { EditorCore } from '../useEditorCore';
 import type { EditorLayers } from '../layers/useEditorLayers';
@@ -42,6 +48,7 @@ interface UseTransformEditorOptions extends
     | 'editorOriginal'
     | 'editorDefinitionGeneration'
     | 'provenanceRecipe'
+    | 'provenanceStatus'
     | 'weaponSlots'
     | 'paintSubView'
     | 'beginSessionTransformGesture'
@@ -91,6 +98,7 @@ export function useTransformEditor({
   editorOriginal,
   editorDefinitionGeneration,
   provenanceRecipe,
+  provenanceStatus,
   weaponSlots,
   paintSubView,
   beginSessionTransformGesture,
@@ -286,26 +294,39 @@ export function useTransformEditor({
     return layers;
   }, [baseTextureTransform, editableGroupTargets, layerTransformInfos]);
 
-  // Open on the weapon scope when this layer resolves a field from a weapon-local source. Scope is not a
-  // dependency, so the user can still change it afterwards.
+  // The scope is chosen once per layer session, when its target info and this weapon's provenance first
+  // exist. Edits rebuild discovery for the same layer, so a manual scope pick must survive them.
+  const transformScopeLayerRef = useRef<string | null>(null);
   useEffect(() => {
     const weaponInfo = weaponBaseLayerActive
       ? baseTextureTransform?.transform
       : activeGroupVisualIndex >= 0 ? transformDiscovery?.targets[activeGroupVisualIndex] : null;
-    const sharedInfo = weaponBaseLayerActive
-      ? sharedBaseTextureTransform?.transform
-      : activeGroupVisualIndex >= 0 ? sharedTransformDiscovery?.targets[activeGroupVisualIndex] : null;
-    const differsFromShared = Boolean(weaponInfo && sharedInfo && !transformInfosEqual(weaponInfo, sharedInfo));
-    setTransformScope(differsFromShared ? 'weapon' : 'all');
+    // Wait while this selection's provenance is in flight; it is the only source of weapon-local paths.
+    if (!weaponInfo || provenanceStatus === 'pending') return;
+    // Imported kits are replaced by a source load (generation); edits only bump editGeneration.
+    const sourceIdentity = editableKitId !== null && isCustomKitId(editableKitId) ? definitions.generation : 'stock';
+    const layerKey = [
+      editableKitId ?? '',
+      sourceIdentity,
+      state.weaponKey,
+      activeEditorLayerIndex,
+      weaponBaseLayerActive ? 'base' : activeGroupVisualIndex,
+    ].join('\0');
+    if (transformScopeLayerRef.current === layerKey) return;
+    transformScopeLayerRef.current = layerKey;
+    // Unresolved provenance has no weapon-local write to offer, so the layer opens on All weapons and stays there.
+    setTransformScope(provenanceStatus === 'ready'
+      ? defaultTransformScope(weaponInfo.target, transformFieldFacts(weaponInfo))
+      : 'all');
   }, [
     activeEditorLayerIndex,
     activeGroupVisualIndex,
+    definitions.generation,
     editableKitId,
-    sharedTransformDiscovery,
+    provenanceStatus,
     state.weaponKey,
     transformDiscovery,
     baseTextureTransform,
-    sharedBaseTextureTransform,
     weaponBaseLayerActive,
   ]);
 
@@ -533,6 +554,14 @@ export function useTransformEditor({
   const transformDisabled = editorStatus !== 'ready' || albedoTransformLocked
     || !activeTransformTargetInfo || activeTransformTargetInfo.blockers.length > 0;
   const activeTransformTarget = activeTransformTargetInfo?.target ?? null;
+  // Weapon scope edits only the fields that have a weapon-local place to write; the rest are shared by every weapon.
+  const weaponWritableFields = transformScope === 'weapon' && activeTransformTarget && activeTransformTargetInfo
+    ? weaponWritableTransformFields(activeTransformTarget, transformFieldFacts(activeTransformTargetInfo))
+    : null;
+  const canEditTransformField = (field: TextureTransformField) => (
+    weaponWritableFields === null || weaponWritableFields.includes(field)
+  );
+  const sharedTransformFields = weaponWritableFields ? sharedTransformPanelFields(weaponWritableFields) : undefined;
   const commitTransformField = (key: keyof TextureTransformFields, value: SeedRangeValue) => {
     if (!activeTransformTarget || transformDisabled) return;
     if (transformScope === 'all') {
@@ -544,6 +573,7 @@ export function useTransformEditor({
       );
       return;
     }
+    if (!canEditTransformField(TRANSFORM_FIELD_TO_PROTO[key])) return;
     setSessionTransformRange(transformTargetForScope(activeTransformTarget, transformScope), TRANSFORM_FIELD_TO_PROTO[key], value);
   };
   const handleTransformFieldChange = (key: keyof TextureTransformFields, value: SeedRangeValue) => {
@@ -557,20 +587,22 @@ export function useTransformEditor({
   };
   const handleTransformFlipChange = (axis: 'u' | 'v', allowed: boolean) => {
     if (!activeTransformTarget || transformDisabled) return;
+    if (!canEditTransformField(axis === 'u' ? 'flip_u' : 'flip_v')) return;
     setSessionTransformFlip(transformTargetForScope(activeTransformTarget, transformScope), axis, allowed);
   };
   const handleTransformResetAll = () => {
     if (!activeTransformTarget || transformDisabled) return;
+    if (weaponWritableFields?.length === 0) return;
     const target = transformTargetForScope(activeTransformTarget, transformScope);
     const original = originalTransformTargetInfo;
     const originalFields = transformFieldsFromInfo(original);
     beginSessionTransformGesture();
-    setSessionTransformRange(target, 'rotation', originalFields.rotation);
-    setSessionTransformRange(target, 'scale_uv', originalFields.scale);
-    setSessionTransformRange(target, 'translate_u', originalFields.offsetU);
-    setSessionTransformRange(target, 'translate_v', originalFields.offsetV);
-    setSessionTransformFlip(target, 'u', original?.flipU.allowed ?? false);
-    setSessionTransformFlip(target, 'v', original?.flipV.allowed ?? false);
+    if (canEditTransformField('rotation')) setSessionTransformRange(target, 'rotation', originalFields.rotation);
+    if (canEditTransformField('scale_uv')) setSessionTransformRange(target, 'scale_uv', originalFields.scale);
+    if (canEditTransformField('translate_u')) setSessionTransformRange(target, 'translate_u', originalFields.offsetU);
+    if (canEditTransformField('translate_v')) setSessionTransformRange(target, 'translate_v', originalFields.offsetV);
+    if (canEditTransformField('flip_u')) setSessionTransformFlip(target, 'u', original?.flipU.allowed ?? false);
+    if (canEditTransformField('flip_v')) setSessionTransformFlip(target, 'v', original?.flipV.allowed ?? false);
     endSessionTransformGesture();
   };
   const authoredTransformFields = transformFieldsFromInfo(activeTransformTargetInfo);
@@ -616,6 +648,7 @@ export function useTransformEditor({
     })(),
     uvSurfaceLoading: transformUvSurfaceLoading,
     disabled: transformDisabled,
+    sharedFields: sharedTransformFields,
     onFieldChange: handleTransformFieldChange,
     onFlipChange: handleTransformFlipChange,
     onScopeChange: setTransformScope,
