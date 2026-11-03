@@ -43,15 +43,11 @@ function shortName(ref: string): string {
 /** Assigns a source only once the card nears the viewport, so large grids stay cheap; the image element stays for layout. */
 function useNearViewport() {
   const elementRef = useRef<HTMLImageElement>(null);
-  const [nearViewport, setNearViewport] = useState(false);
+  const [nearViewport, setNearViewport] = useState(() => !('IntersectionObserver' in window));
 
   useEffect(() => {
     const element = elementRef.current;
-    if (!element) return;
-    if (!('IntersectionObserver' in window)) {
-      setNearViewport(true);
-      return;
-    }
+    if (!element || !('IntersectionObserver' in window)) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry?.isIntersecting) return;
@@ -79,15 +75,26 @@ function TexturePreview({
   packageGeneration: number;
 }) {
   const { elementRef, nearViewport } = useNearViewport();
-  const [src, setSrc] = useState(fallbackUrl);
+  const [resolved, setResolved] = useState<{
+    refPath: string;
+    fallbackUrl: string;
+    resolvePackageTexture: (ref: string) => Promise<string>;
+    packageGeneration: number;
+    url: string;
+  } | null>(null);
+  const isCurrent = resolved !== null
+    && resolved.refPath === refPath
+    && resolved.fallbackUrl === fallbackUrl
+    && resolved.resolvePackageTexture === resolvePackageTexture
+    && resolved.packageGeneration === packageGeneration;
+  const src = isCurrent ? resolved.url : fallbackUrl;
   useEffect(() => {
     if (!nearViewport) return;
     let cancelled = false;
-    setSrc(fallbackUrl);
     if (!refPath || !resolvePackageTexture) return;
     void resolvePackageTexture(refPath)
       .then((url) => {
-        if (!cancelled) setSrc(url);
+        if (!cancelled) setResolved({ refPath, fallbackUrl, resolvePackageTexture, packageGeneration, url });
       })
       .catch(() => undefined);
     return () => {

@@ -91,6 +91,7 @@ export function useEditorViewport({
   } = sticker;
   const [editorSelectionHeld, setEditorSelectionHeld] = useState(false);
   const editorInteractionActive = groupAssignActive || stickerPlacementActive;
+  if (!editorInteractionActive && editorSelectionHeld) setEditorSelectionHeld(false);
 
   // Paint-area selection uses Shift+click. Keep free-fly out and show the modifier through the cursor before the pointer reaches a part.
   useEffect(() => {
@@ -98,10 +99,7 @@ export function useEditorViewport({
     viewer?.setAdvancedCameraAvailable(!editorTabActive);
     viewer?.setEditorSelectionActive(editorInteractionActive);
     viewer?.setStickerPlacementActive(stickerPlacementActive);
-    if (!editorInteractionActive) {
-      setEditorSelectionHeld(false);
-      return;
-    }
+    if (!editorInteractionActive) return;
 
     const updateSelectionModifier = (event: KeyboardEvent) => {
       if (event.key === 'Shift') setEditorSelectionHeld(event.type === 'keydown');

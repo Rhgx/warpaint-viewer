@@ -40,6 +40,8 @@ import type { EditorCore } from '../useEditorCore';
 import type { EditorLayers } from '../layers/useEditorLayers';
 import type { PartsEditor } from '../layers/usePartsEditor';
 
+const NO_TRANSFORM_DIVERGENCE: Partial<Record<keyof TextureTransformFields, SeedRangeDivergence>> = {};
+
 interface UseTransformEditorOptions extends
   Pick<EditorCore,
     | 'editableKitId'
@@ -150,7 +152,7 @@ export function useTransformEditor({
   const transformDraftRef = useRef<{ key: keyof TextureTransformFields; value: SeedRangeValue } | null>(null);
   const transformDraftCommitGenerationRef = useRef<number | null>(null);
   const [transformDraft, setTransformDraft] = useState<{ key: keyof TextureTransformFields; value: SeedRangeValue } | null>(null);
-  const [transformDivergence, setTransformDivergence] = useState<Partial<Record<keyof TextureTransformFields, SeedRangeDivergence>>>({});
+  const [transformDivergence, setTransformDivergence] = useState(NO_TRANSFORM_DIVERGENCE);
 
   const sharedLayerTransforms = useMemo(
     () => editorCurrent ? discoverLayerTransforms(editorCurrent) : null,
@@ -365,12 +367,14 @@ export function useTransformEditor({
     return child?.type === 'texture_lookup' ? child : null;
   }, [activeGroupVisualIndex, activeTransformLayerNode, layerChildIndex, resolvedPreviewRecipe, state.seed, weaponBaseLayerActive]);
 
+  const divergenceTracked = paintSubView === 'transform' && editableKitId !== null
+    && (weaponBaseLayerActive || activeGroupVisualIndex >= 0) && activeTransformTargetInfo !== null;
+  if (!divergenceTracked && transformDivergence !== NO_TRANSFORM_DIVERGENCE) {
+    setTransformDivergence(NO_TRANSFORM_DIVERGENCE);
+  }
+
   useEffect(() => {
-    if (paintSubView !== 'transform' || editableKitId === null
-      || (!weaponBaseLayerActive && activeGroupVisualIndex < 0) || !activeTransformTargetInfo) {
-      setTransformDivergence({});
-      return;
-    }
+    if (!divergenceTracked) return;
     const resolver = isCustomKitId(editableKitId)
       ? getImportedRecipeWithProvenance
       : getStockRecipeWithProvenance;
@@ -404,11 +408,11 @@ export function useTransformEditor({
     activeGroupVisualIndex,
     activeTransformTargetInfo,
     data,
+    divergenceTracked,
     editableKitId,
     editorCurrent,
     getImportedRecipeWithProvenance,
     getStockRecipeWithProvenance,
-    paintSubView,
     state.team,
     state.wearIndex,
     weaponSlots,
@@ -449,15 +453,19 @@ export function useTransformEditor({
     });
   }, [compositorRef, editorTabActive, paintSubView]);
 
+  const uvSurfaceTracked = editorTabActive && paintSubView === 'transform';
+  if (!uvSurfaceTracked && (transformUvSurfaceUrl !== null || transformUvSurfaceLoading)) {
+    setTransformUvSurfaceUrl(null);
+    setTransformUvSurfaceLoading(false);
+  }
+
   useEffect(() => {
-    if (editorTabActive && paintSubView === 'transform') return;
+    if (uvSurfaceTracked) return;
     transformUvSurfaceGenerationRef.current += 1;
     const priorUrl = transformUvSurfaceUrlRef.current;
     transformUvSurfaceUrlRef.current = null;
-    setTransformUvSurfaceUrl(null);
-    setTransformUvSurfaceLoading(false);
     if (priorUrl) URL.revokeObjectURL(priorUrl);
-  }, [editorTabActive, paintSubView]);
+  }, [uvSurfaceTracked]);
 
   useEffect(() => () => {
     transformUvSurfaceGenerationRef.current += 1;

@@ -244,6 +244,8 @@ export function useComposedPaint({
   } = cache;
 
   const [composing, setComposing] = useState(false);
+  // Suspending cancels the request, so a raised badge would never be lowered by it.
+  if (suspended && composing) setComposing(false);
   const [visibleDefinitionGeneration, setVisibleDefinitionGeneration] = useState(-1);
   // Lower-detail composite shown while a cold paint streams in; released when replaced.
   const previewRef = useRef<{ result: ComposeResult; compositor: Compositor } | null>(null);
@@ -256,10 +258,7 @@ export function useComposedPaint({
 
   // Recompose on recipe input changes; the previous texture stays until the new one is ready.
   useEffect(() => {
-    if (suspended) {
-      setComposing(false);
-      return;
-    }
+    if (suspended) return;
     const ds = data;
     if (!engineReady || !ds || !selectedKit || !state.weaponKey || loadedAssetKey !== selectedAssetKey) return;
     if (!selectedKit.weapons.includes(state.weaponKey)) return;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
   assignSelectGroupExclusively,
@@ -222,7 +222,9 @@ export function useProtoDefEditorSession({
   const historyRef = useRef(new SnapshotHistory<ProtoDefKitBundle>());
   const requestRef = useRef(0);
   const loaderRef = useRef(loadKit);
-  loaderRef.current = loadKit;
+  useLayoutEffect(() => {
+    loaderRef.current = loadKit;
+  });
   const viewerWeaponKey = scope?.weaponKey;
   const viewerWear = scope?.wear;
   const viewer = useMemo<KitViewerScope | undefined>(
@@ -233,7 +235,9 @@ export function useProtoDefEditorSession({
   );
   // Edit callbacks read the viewer's scope through a ref so they keep stable identities.
   const viewerRef = useRef(viewer);
-  viewerRef.current = viewer;
+  useLayoutEffect(() => {
+    viewerRef.current = viewer;
+  });
 
   // Scope only picks the exposed operation; the bundle, history and dirty state are unaffected.
   const activeIndex = bundle ? activeOperationIndex(bundle, viewer) : 0;
@@ -314,6 +318,8 @@ export function useProtoDefEditorSession({
 
   // A kit selection starts a fresh session. Source refreshes stay explicit through reload(), so a new callback identity cannot discard work.
   useEffect(() => {
+    // The load resets the ref-backed bundle and history together with their state; refs cannot be reset during render.
+    // oxlint-disable-next-line react/set-state-in-effect
     void load(true);
     return () => { requestRef.current += 1; };
   }, [load]);

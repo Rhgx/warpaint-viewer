@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { Compositor } from '../compositor/compositor';
 import type { RecipeNode } from '../compositor/types';
 import type { PaintkitEntry, Team, WeaponEntry } from '../data/types';
@@ -52,11 +52,12 @@ export function useCustomWarpaintIcons({
   const visibleKitIdsRef = useRef(new Set<number>());
   const sessionRef = useRef<IconRenderSession | null>(null);
 
-  visibleKitIdsRef.current = new Set(visibleKitIds);
+  useLayoutEffect(() => {
+    visibleKitIdsRef.current = new Set(visibleKitIds);
+  }, [visibleKitIds]);
 
   useEffect(() => {
     sessionRef.current = null;
-    setIcons({});
 
     if (!enabled || !paintTool || !modelUrl) return;
     const renderable = kits.filter((kit) => kit.weapons.includes('paintkit_tool'));
@@ -198,6 +199,8 @@ export function useCustomWarpaintIcons({
       session.host = null;
       for (const url of session.createdUrls.values()) URL.revokeObjectURL(url);
       if (sessionRef.current === session) sessionRef.current = null;
+      // The icons point at the URLs revoked above, so they go with the session.
+      setIcons({});
     };
   }, [compositorRef, enabled, generation, getRecipe, kits, modelUrl, packageGeneration, paintTool, resolveTexture]);
 

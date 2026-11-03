@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SourceDiagnostic, SourcePackage, SourcePackageOpenResult, SourcePackageState, SourcePackageSummary } from '../source/contracts';
 import { isSupportedTexturePath, sourcePathExtension } from '../source/paths';
 import { SourceTextureProvider } from '../source/provider';
+import { useStableCallback } from './useStableCallback';
 import { AppError, appErrorDiagnostic, ERROR_CODES } from '../errors';
 import { WORKSHOP_ENABLED } from '../device';
 import {
@@ -75,21 +76,15 @@ export function useSourcePackage(
   const [activityRevision, setActivityRevision] = useState(0);
   const [state, setState] = useState<Pick<SourcePackageState, 'status' | 'diagnostics' | 'summary'>>({ status: 'empty', diagnostics: [] });
   const [suggestedPaintkitId, setSuggestedPaintkitId] = useState<number | undefined>();
-  const fallbackRef = useRef(fallback);
-  const hasBuiltInRef = useRef(hasBuiltIn);
   const importOperationRef = useRef(0);
   const persistenceDiagnosticRef = useRef<ReturnType<typeof importDiagnostic> | null>(null);
-  fallbackRef.current = fallback;
-  hasBuiltInRef.current = hasBuiltIn;
-  const providerRef = useRef<SourceTextureProvider | null>(null);
-  if (!providerRef.current) {
-    providerRef.current = new SourceTextureProvider(
-      (ref) => fallbackRef.current(ref),
-      () => setActivityRevision((value) => value + 1),
-      (ref) => hasBuiltInRef.current(ref),
-    );
-  }
-  const provider = providerRef.current;
+  const latestFallback = useStableCallback(fallback);
+  const latestHasBuiltIn = useStableCallback(hasBuiltIn);
+  const [provider] = useState(() => new SourceTextureProvider(
+    latestFallback,
+    () => setActivityRevision((value) => value + 1),
+    latestHasBuiltIn,
+  ));
 
   const sync = useCallback(() => {
     const snapshot = provider.snapshot();

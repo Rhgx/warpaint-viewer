@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
 import type { Viewer } from '../../viewer/Viewer';
-import type { ViewmodelManifest } from '../../viewer/firstPerson/firstPerson';
+import type { ViewmodelManifest, ViewmodelWeapon } from '../../viewer/firstPerson/firstPerson';
 import { Control, SelectField, SliderField, SwitchField, ToggleGroup } from '../common/controls';
 import { firstPersonAnimationGroups } from './firstPersonAnimations';
 import { InspectorSection } from './Inspector';
@@ -24,8 +24,8 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
   const [fishPhysics, setFishPhysics] = useState(true);
   const [showHands, setShowHands] = useState(true);
   const [spinBarrel, setSpinBarrel] = useState(false);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [error, setError] = useState('');
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [shown, setShown] = useState<{ weapon: ViewmodelWeapon; team: 'red' | 'blu'; viewer: Viewer; error: string | null } | null>(null);
   const active = enabled;
   const choices = manifest?.weapons.filter(weapon => weapon.weaponKey === weaponKey) ?? [];
   const weapon = choices.find(choice => choice.class === playerClass) ?? choices[0];
@@ -34,11 +34,21 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
   const selectedAnimation = animations.find(option => option.id === animation)
     ?? animations.find(option => option.clip === weapon?.activity) ?? animations[0];
   const activity = selectedAnimation?.clip ?? weapon?.activity ?? '';
+  let status: 'loading' | 'ready' | 'error' = 'loading';
+  let error = '';
+  if (!manifest) {
+    if (fetchError !== null) { status = 'error'; error = fetchError; }
+  } else if (!weapon) {
+    status = 'error';
+    error = 'No first-person model is available for this weapon.';
+  } else if (shown?.weapon === weapon && shown.team === team && shown.viewer === viewer) {
+    status = shown.error === null ? 'ready' : 'error';
+    error = shown.error ?? '';
+  }
 
   useEffect(() => {
     if (!active || manifest) return;
     const abort = new AbortController();
-    setStatus('loading');
     fetch(`${import.meta.env.BASE_URL}data/viewmodels/manifest.json`, { signal: abort.signal })
       .then(async response => {
         if (!response.ok) throw new Error(`Viewmodel assets could not be loaded (${response.status}).`);
@@ -46,22 +56,21 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
         setManifest(data);
       }).catch((reason: unknown) => {
         if (abort.signal.aborted) return;
-        setError(String(reason)); setStatus('error');
+        setFetchError(String(reason));
       });
-    return () => abort.abort();
+    return () => { abort.abort(); setFetchError(null); };
   }, [active, manifest]);
 
   useEffect(() => {
     if (!active || !manifest) return;
-    if (!weapon) { setError('No first-person model is available for this weapon.'); setStatus('error'); return; }
+    if (!weapon) return;
     let cancelled = false;
-    setStatus('loading');
     viewer.showFirstPerson(manifest.arms[weapon.armsKey], weapon, team).then(() => {
-      if (!cancelled) setStatus('ready');
+      if (!cancelled) setShown({ weapon, team, viewer, error: null });
     }).catch((reason: unknown) => {
-      if (!cancelled) { setError(String(reason)); setStatus('error'); }
+      if (!cancelled) setShown({ weapon, team, viewer, error: String(reason) });
     });
-    return () => { cancelled = true; viewer.clearFirstPerson(); };
+    return () => { cancelled = true; viewer.clearFirstPerson(); setShown(null); };
   }, [active, manifest, weapon, team, viewer]);
 
   useEffect(() => {

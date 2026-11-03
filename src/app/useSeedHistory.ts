@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { ControlsState } from '../viewer/controls';
 import { randomSeed } from '../hooks/useBootData';
@@ -16,6 +16,7 @@ export function useSeedHistory({
   setState,
 }: UseSeedHistoryOptions) {
   const seedHistoryRef = useRef<string[]>([]);
+  const [canUndoSeed, setCanUndoSeed] = useState(false);
 
   // Push history here, not in the setState updater: StrictMode may run an updater twice and double-push.
   const patch = useCallback(
@@ -24,6 +25,7 @@ export function useSeedHistory({
         const stack = seedHistoryRef.current;
         stack.push(state.seed);
         if (stack.length > SEED_HISTORY_CAP) stack.shift();
+        setCanUndoSeed(true);
       }
       setState((s) => ({ ...s, ...p }));
     },
@@ -34,9 +36,9 @@ export function useSeedHistory({
   const undoSeed = useCallback(() => {
     const prev = seedHistoryRef.current.pop();
     if (prev === undefined) return;
+    setCanUndoSeed(seedHistoryRef.current.length > 0);
     setState((s) => ({ ...s, seed: prev }));
   }, [setState]);
-  const canUndoSeed = seedHistoryRef.current.length > 0;
 
   const randomizeSeed = useCallback(() => patch({ seed: randomSeed() }), [patch]);
 

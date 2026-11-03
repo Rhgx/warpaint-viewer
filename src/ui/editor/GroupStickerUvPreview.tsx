@@ -233,7 +233,6 @@ export function GroupStickerUvPreview({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const runtimeRef = useRef<PreviewRuntime | null>(null);
   const quadRef = useRef(quad);
-  quadRef.current = quad;
   const { maskSrc, selectorBaseSrc, endpointZeroSrc, endpointOneSrc, levels } = sources;
   const [black, white, gamma] = levels;
 
@@ -265,6 +264,7 @@ export function GroupStickerUvPreview({
   }, [black, endpointOneSrc, endpointZeroSrc, gamma, maskSrc, selectorBaseSrc, white]);
 
   useLayoutEffect(() => {
+    quadRef.current = quad;
     runtimeRef.current?.draw(quad);
   }, [quad]);
 

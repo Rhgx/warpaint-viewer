@@ -38,6 +38,15 @@ const runtime = vi.hoisted(() => {
     if (changed(slot, deps)) Object.assign(slot, { set: true, deps, value: compute() });
     return slot.value;
   };
+  const useEffect = (effect: () => unknown, deps?: readonly unknown[]) => {
+    const slot = next();
+    if (!changed(slot, deps)) return;
+    Object.assign(slot, { set: true, deps });
+    pending.push(() => {
+      if (typeof slot.cleanup === 'function') (slot.cleanup as () => void)();
+      slot.cleanup = effect();
+    });
+  };
   return {
     effects: pending,
     mount<T>(hook: () => T): () => T {
@@ -61,15 +70,8 @@ const runtime = vi.hoisted(() => {
       useRef: (current: unknown) => memo([], () => ({ current })),
       useMemo: (factory: () => unknown, deps?: readonly unknown[]) => memo(deps, factory),
       useCallback: (callback: unknown, deps?: readonly unknown[]) => memo(deps, () => callback),
-      useEffect(effect: () => unknown, deps?: readonly unknown[]) {
-        const slot = next();
-        if (!changed(slot, deps)) return;
-        Object.assign(slot, { set: true, deps });
-        pending.push(() => {
-          if (typeof slot.cleanup === 'function') (slot.cleanup as () => void)();
-          slot.cleanup = effect();
-        });
-      },
+      useEffect,
+      useLayoutEffect: useEffect,
     },
   };
 });

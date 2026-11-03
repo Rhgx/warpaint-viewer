@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 
 import type { ResolveRecipe } from './useComposedPaint';
 import type { DataSource } from '../data/loader';
@@ -25,6 +25,15 @@ interface UseWorkbenchRecipesOptions {
   kitHasTeamTextures: boolean;
 }
 
+interface LoadedRecipes {
+  recipes: WearRecipe[];
+  scope: string;
+  variant: string;
+  complete: boolean;
+}
+
+const NO_RECIPES: LoadedRecipes = { recipes: [], scope: '', variant: '', complete: false };
+
 /** Fans recipes out for the open workbench surface and owns the resolved editor recipes. */
 export function useWorkbenchRecipes({
   workbenchMounted,
@@ -38,53 +47,38 @@ export function useWorkbenchRecipes({
   packageGeneration,
   kitHasTeamTextures,
 }: UseWorkbenchRecipesOptions) {
-  const [editorRecipes, setEditorRecipes] = useState<WearRecipe[]>([]);
-  const [editorLoading, setEditorLoading] = useState(false);
-  const editorRecipesRef = useRef<WearRecipe[]>([]);
-  const editorRecipeScopeRef = useRef('');
-  const editorRecipeVariantRef = useRef('');
-  const editorRecipeCompleteRef = useRef(false);
+  const [loaded, setLoaded] = useState(NO_RECIPES);
+  const [settledKey, setSettledKey] = useState('');
+
+  const kitReady = Boolean(workbenchMounted && data && selectedKit && state.weaponKey && selectedKit.weapons.includes(state.weaponKey));
+  const recipeScope = `${selectedKit?.id}|${state.weaponKey}|definition:${editorDefinitionGeneration}|package:${packageGeneration}|team:${kitHasTeamTextures}`;
+  const recipeVariant = `${state.team}|${state.wearIndex}`;
+  const surfaceLoadsNothing = workbenchTab === 'package' || workbenchTab === 'definitions';
+  const completeRecipeMatrix = workbenchTab === 'files' || workbenchTab === 'export';
+  const requestKey = `${recipeScope}|${recipeVariant}|${completeRecipeMatrix}`;
+  const cachedRecipesCoverSurface = loaded.scope === recipeScope
+    && loaded.recipes.length > 0
+    && (loaded.complete || (!completeRecipeMatrix && loaded.variant === recipeVariant));
+
+  const coversSurface = useEffectEvent(() => cachedRecipesCoverSurface);
+
+  // Recipes drop when there is nothing to show, or when a surface that loads none moves to another scope.
+  // A closed drawer keeps what it has.
+  if (loaded !== NO_RECIPES && (!kitReady || (workbenchOpen && surfaceLoadsNothing && loaded.scope !== recipeScope))) {
+    setLoaded(NO_RECIPES);
+    setSettledKey('');
+  }
+  const editorLoading = kitReady && workbenchOpen && !surfaceLoadsNothing && !cachedRecipesCoverSurface && settledKey !== requestKey;
 
   // Files and Export need every input the paint can use, across wears and teams.
   // Team-aware stages resolve texture_red and texture_blue to different refs, so
   // one team alone drops artwork. Edit needs only the active team and wear.
   useEffect(() => {
-    const clearEditorRecipes = () => {
-      editorRecipesRef.current = [];
-      editorRecipeScopeRef.current = '';
-      editorRecipeVariantRef.current = '';
-      editorRecipeCompleteRef.current = false;
-      setEditorRecipes([]);
-    };
     // Workbench-only: paused while the drawer is closed. A surface change refreshes only its own recipes.
-    if (!workbenchMounted || !data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) {
-      clearEditorRecipes();
-      setEditorLoading(false);
-      return;
-    }
-    if (!workbenchOpen) {
-      setEditorLoading(false);
-      return;
-    }
-    const recipeScope = `${selectedKit.id}|${state.weaponKey}|definition:${editorDefinitionGeneration}|package:${packageGeneration}|team:${kitHasTeamTextures}`;
-    const recipeVariant = `${state.team}|${state.wearIndex}`;
-    if (workbenchTab === 'package' || workbenchTab === 'definitions') {
-      if (editorRecipeScopeRef.current !== recipeScope) {
-        clearEditorRecipes();
-      }
-      setEditorLoading(false);
-      return;
-    }
+    if (!workbenchMounted || !data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) return;
+    if (!workbenchOpen || surfaceLoadsNothing) return;
+    if (coversSurface()) return;
     let cancelled = false;
-    const completeRecipeMatrix = workbenchTab === 'files' || workbenchTab === 'export';
-    const cachedRecipesCoverSurface = editorRecipeScopeRef.current === recipeScope
-      && editorRecipesRef.current.length > 0
-      && (editorRecipeCompleteRef.current || (!completeRecipeMatrix && editorRecipeVariantRef.current === recipeVariant));
-    if (cachedRecipesCoverSurface) {
-      setEditorLoading(false);
-      return;
-    }
-    setEditorLoading(true);
     const wearIndexes = completeRecipeMatrix && selectedKit.perWear
       ? data.manifest.wearLevels.map((_, index) => index)
       : [state.wearIndex];
@@ -96,21 +90,17 @@ export function useWorkbenchRecipes({
         wearIndexes.map((wearIndex) => resolveRecipe(selectedKit, state.weaponKey, team, wearIndex)
           .then((recipe) => ({ wearIndex, recipe }))),
       ),
-    ).then((loaded) => {
+    ).then((resolved) => {
       if (cancelled) return;
-      const recipes = loaded.flatMap(({ wearIndex, recipe }) => recipe ? [{ wearIndex, recipe }] : []);
-      editorRecipesRef.current = recipes;
-      editorRecipeScopeRef.current = recipeScope;
-      editorRecipeVariantRef.current = recipeVariant;
-      editorRecipeCompleteRef.current = completeRecipeMatrix;
-      setEditorRecipes(recipes);
+      const recipes = resolved.flatMap(({ wearIndex, recipe }) => recipe ? [{ wearIndex, recipe }] : []);
+      setLoaded({ recipes, scope: recipeScope, variant: recipeVariant, complete: completeRecipeMatrix });
     }).finally(() => {
-      if (!cancelled) setEditorLoading(false);
+      if (!cancelled) setSettledKey(requestKey);
     });
     return () => { cancelled = true; };
-  }, [workbenchMounted, workbenchOpen, workbenchTab, data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex, editorDefinitionGeneration, packageGeneration, kitHasTeamTextures]);
+  }, [workbenchMounted, workbenchOpen, workbenchTab, data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex, editorDefinitionGeneration, packageGeneration, kitHasTeamTextures, recipeScope, recipeVariant, completeRecipeMatrix, requestKey, surfaceLoadsNothing]);
 
-  return { editorLoading, editorRecipes };
+  return { editorLoading, editorRecipes: loaded.recipes };
 }
 
 interface UseExportDefinitionsOptions {

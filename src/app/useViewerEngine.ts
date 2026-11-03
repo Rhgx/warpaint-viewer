@@ -36,7 +36,8 @@ interface UseViewerEngineOptions {
   resetComposeKey: () => void;
   resolveRecipe: ResolveRecipe;
   // engineReady, environmentReady and cameraMode are read before this hook runs, so their state stays in the caller.
-  setEngineReady: (ready: boolean) => void;
+  // The viewer travels with the ready flag so the caller can render with it without reading viewerRef.
+  setEngineViewer: (viewer: Viewer | null) => void;
   setEnvironmentReady: (ready: boolean) => void;
   setCameraMode: (mode: 'inspect' | 'advanced') => void;
   setLoadedAssetKey: (key: string) => void;
@@ -68,7 +69,7 @@ export function useViewerEngine({
   disposeCache,
   resetComposeKey,
   resolveRecipe,
-  setEngineReady,
+  setEngineViewer,
   setEnvironmentReady,
   setCameraMode,
   setLoadedAssetKey,
@@ -76,7 +77,6 @@ export function useViewerEngine({
 }: UseViewerEngineOptions) {
   const [viewAngleId, setViewAngleId] = useState('default');
   const viewAngleIdRef = useRef(viewAngleId);
-  viewAngleIdRef.current = viewAngleId;
 
   // Fetch the renderer chunks on mount, alongside the manifest. The viewer is still built only once data is ready.
   // A failed prefetch is reported by the awaited import that builds the viewer, so these swallow it.
@@ -117,7 +117,7 @@ export function useViewerEngine({
         unsubscribeCameraMode = viewer.onCameraModeChange(setCameraMode);
         // Dev-only escape hatch for debugging the viewer from the console.
         if (import.meta.env.DEV) (window as unknown as { __viewer?: Viewer }).__viewer = viewer;
-        setEngineReady(true);
+        setEngineViewer(viewer);
         advanceBoot(34, 'Loading TF2 environment…');
         await viewer.ready();
         if (!disposed) {
@@ -131,7 +131,7 @@ export function useViewerEngine({
     })();
     return () => {
       disposed = true;
-      setEngineReady(false);
+      setEngineViewer(null);
       setEnvironmentReady(false);
       disposeCache();
       compositor?.dispose();
@@ -140,7 +140,7 @@ export function useViewerEngine({
       viewerRef.current = null;
       compositorRef.current = null;
     };
-  }, [data, advanceBoot, disposeCache, sourceProvider, canvasRef, viewerRef, compositorRef, setEngineReady, setEnvironmentReady, setCameraMode, setError]);
+  }, [data, advanceBoot, disposeCache, sourceProvider, canvasRef, viewerRef, compositorRef, setEngineViewer, setEnvironmentReady, setCameraMode, setError]);
 
   // A blank selection has no model work, so the empty stage is ready once the environment is.
   useEffect(() => {

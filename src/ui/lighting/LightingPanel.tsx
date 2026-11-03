@@ -39,7 +39,11 @@ interface LightingPanelProps {
 // Name edits stay local until commit, so clearing the field does not snap back to the fallback name.
 function NameInput({ light, onCommit }: { light: CustomLight; onCommit: (name: string) => void }) {
   const [draft, setDraft] = useState(light.name);
-  useEffect(() => setDraft(light.name), [light.name]);
+  const [syncedName, setSyncedName] = useState(light.name);
+  if (syncedName !== light.name) {
+    setSyncedName(light.name);
+    setDraft(light.name);
+  }
 
   const commit = () => {
     const next = draft.trim();
@@ -85,11 +89,14 @@ export function LightingPanel({ store }: LightingPanelProps) {
   }, []);
 
   // Closing drops any half-finished affordance, so reopening starts clean.
-  useEffect(() => {
-    if (open) return;
-    setAddOpen(false);
-    setResetArmed(false);
-  }, [open]);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (!open) {
+      setAddOpen(false);
+      setResetArmed(false);
+    }
+  }
 
   const selected = rig.lights.find((light) => light.id === selectedLightId) ?? null;
   const full = rig.lights.length >= MAX_CUSTOM_LIGHTS;

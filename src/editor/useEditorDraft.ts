@@ -57,17 +57,20 @@ export function useEditorDraft({
   // Without a key every storage path below is already inert.
   const key = enabled ? requestedKey : null;
   const [candidate, setCandidate] = useState<EditorDraftRecord | null>(null);
-  const [storageStatus, setStorageStatus] = useState<EditorDraftStatus>('idle');
+  const checksDraft = Boolean(key) && kitId !== null && Boolean(original);
+  const [storageStatus, setStorageStatus] = useState<EditorDraftStatus>(checksDraft ? 'checking' : 'idle');
   const [savedRevision, setSavedRevision] = useState<number | null>(null);
+  const [checkedInputs, setCheckedInputs] = useState({ key, kitId, original });
   const settledKeyRef = useRef<string | null>(null);
   const operationRef = useRef(0);
-  const storageQueueRef = useRef<Promise<void>>(Promise.resolve());
-
-  const enqueue = useCallback((operation: () => Promise<void>): Promise<void> => {
-    const queued = storageQueueRef.current.catch(() => undefined).then(operation);
-    storageQueueRef.current = queued;
-    return queued;
-  }, []);
+  const [enqueue] = useState(() => {
+    let tail: Promise<void> = Promise.resolve();
+    return (operation: () => Promise<void>): Promise<void> => {
+      const queued = tail.catch(() => undefined).then(operation);
+      tail = queued;
+      return queued;
+    };
+  });
 
   const save = useCallback(() => {
     if (!key || kitId === null || !current || !dirty || candidate || settledKeyRef.current !== key) return;
@@ -91,17 +94,19 @@ export function useEditorDraft({
     });
   }, [candidate, current, dirty, enqueue, key, kitId, paintName, revision]);
 
+  // A new paint, kit or baseline starts its draft check over.
+  if (checkedInputs.key !== key || checkedInputs.kitId !== kitId || checkedInputs.original !== original) {
+    setCheckedInputs({ key, kitId, original });
+    setCandidate(null);
+    setSavedRevision(null);
+    setStorageStatus(checksDraft ? 'checking' : 'idle');
+  }
+
   useEffect(() => {
     const operation = ++operationRef.current;
     settledKeyRef.current = null;
-    setCandidate(null);
-    setSavedRevision(null);
-    if (!key || kitId === null || !original) {
-      setStorageStatus('idle');
-      return;
-    }
+    if (!key || kitId === null || !original) return;
 
-    setStorageStatus('checking');
     void readEditorDraft(key).then((draft) => {
       if (operation !== operationRef.current) return;
       settledKeyRef.current = key;
@@ -122,6 +127,8 @@ export function useEditorDraft({
     if (!key || kitId === null || !current || settledKeyRef.current !== key || candidate) return;
     const operation = ++operationRef.current;
     if (!dirty) {
+      // Autosave: status moves with the debounced IndexedDB write or delete this effect schedules, guarded by operationRef.
+      // oxlint-disable-next-line react/set-state-in-effect
       setStorageStatus('idle');
       setSavedRevision(null);
       void enqueue(() => deleteEditorDraft(key)).catch(() => {

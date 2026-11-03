@@ -107,6 +107,10 @@ interface UsePartsEditorOptions extends
   activeTextureOverrides: Record<string, string>;
 }
 
+const NO_LAYER_MAP_IMAGES: Record<string, RgbaImageDataLike> = {};
+const NO_LAYER_THUMBNAILS: Record<string, RgbaImageDataLike | null> = {};
+const NO_LAYER_PREVIEW_URLS: Record<string, string | null> = {};
+
 /** Loads a group map through `cache`, keyed by package generation and override. Failed loads are evicted so they can retry. */
 function loadGroupImage(
   cache: Map<string, Promise<RgbaImageDataLike>>,
@@ -186,9 +190,9 @@ export function usePartsEditor({
   const autoAlbedoAssignmentKeysRef = useRef(new Set<string>());
   const [editorAssignmentNotice, setEditorAssignmentNotice] = useState<string | null>(null);
   const [showLayerMap, setShowLayerMap] = useState(false);
-  const [layerMapImages, setLayerMapImages] = useState<Record<string, RgbaImageDataLike>>({});
-  const [layerTextureThumbnails, setLayerTextureThumbnails] = useState<Record<string, RgbaImageDataLike | null>>({});
-  const [layerTexturePreviewUrls, setLayerTexturePreviewUrls] = useState<Record<string, string | null>>({});
+  const [layerMapImages, setLayerMapImages] = useState(NO_LAYER_MAP_IMAGES);
+  const [layerTextureThumbnails, setLayerTextureThumbnails] = useState(NO_LAYER_THUMBNAILS);
+  const [layerTexturePreviewUrls, setLayerTexturePreviewUrls] = useState(NO_LAYER_PREVIEW_URLS);
   const layerThumbnailCacheRef = useRef(new Map<string, Promise<RgbaImageDataLike | null>>());
   const layerThumbnailGenerationRef = useRef('');
   const [panelPreviewGroup, setPanelPreviewGroup] = useState<number | null>(null);
@@ -202,7 +206,14 @@ export function usePartsEditor({
     return () => window.clearTimeout(timeout);
   }, [editorAssignmentNotice]);
 
-  useEffect(() => setShowLayerMap(false), [editableKitId, state.weaponKey]);
+  // A different paint or weapon starts with its own layer map, requested texture and group image.
+  const [partsScope, setPartsScope] = useState({ kitId: editableKitId, weaponKey: state.weaponKey });
+  if (partsScope.kitId !== editableKitId || partsScope.weaponKey !== state.weaponKey) {
+    setPartsScope({ kitId: editableKitId, weaponKey: state.weaponKey });
+    setShowLayerMap(false);
+    setRequestedGroupTextureRef(null);
+    setGroupImage(null);
+  }
 
   const resolvedGroupTextureValue = activeGroupRef ? normalizeGroupTextureReference(activeGroupRef) : undefined;
   const activeGroupTextureValue = requestedGroupTextureRef ?? resolvedGroupTextureValue;
@@ -232,15 +243,11 @@ export function usePartsEditor({
     provenanceRecipe?.provenance,
   ]);
 
-  useEffect(() => {
-    if (requestedGroupTextureRef && requestedGroupTextureRef === resolvedGroupTextureValue) {
-      setRequestedGroupTextureRef(null);
-    }
-  }, [requestedGroupTextureRef, resolvedGroupTextureValue]);
+  if (requestedGroupTextureRef && requestedGroupTextureRef === resolvedGroupTextureValue) {
+    setRequestedGroupTextureRef(null);
+  }
 
   useEffect(() => {
-    setRequestedGroupTextureRef(null);
-    setGroupImage(null);
     groupImageCacheRef.current.clear();
     autoAlbedoAssignmentKeysRef.current.clear();
   }, [editableKitId, state.weaponKey]);
@@ -335,6 +342,12 @@ export function usePartsEditor({
     [baseLayerTextureRef, editableLayerTextureRefs],
   );
 
+  const hasLayerColorRefs = layerColorTextureRefs.some(Boolean);
+  if (!hasLayerColorRefs && (layerTextureThumbnails !== NO_LAYER_THUMBNAILS || layerTexturePreviewUrls !== NO_LAYER_PREVIEW_URLS)) {
+    setLayerTextureThumbnails(NO_LAYER_THUMBNAILS);
+    setLayerTexturePreviewUrls(NO_LAYER_PREVIEW_URLS);
+  }
+
   useEffect(() => {
     const generation = `${packageGeneration}:${definitions.generation}:${assetOverrides.revision}`;
     if (layerThumbnailGenerationRef.current !== generation) {
@@ -343,11 +356,7 @@ export function usePartsEditor({
     }
     const refs = [...new Set(layerColorTextureRefs
       .filter((ref): ref is string => Boolean(ref)))];
-    if (refs.length === 0) {
-      setLayerTextureThumbnails({});
-      setLayerTexturePreviewUrls({});
-      return;
-    }
+    if (refs.length === 0) return;
     let cancelled = false;
     void Promise.all(refs.map(async (ref) => {
       try {
@@ -428,13 +437,24 @@ export function usePartsEditor({
     groupImageCacheRef.current.clear();
   }, [activeTextureOverridesKey, packageGeneration]);
 
-  useEffect(() => {
+  const [groupImageInputs, setGroupImageInputs] = useState({
+    activeTextureOverrides,
+    displayedGroupRef,
+    sourceProvider,
+    packageGeneration,
+  });
+  if (groupImageInputs.activeTextureOverrides !== activeTextureOverrides
+    || groupImageInputs.displayedGroupRef !== displayedGroupRef
+    || groupImageInputs.sourceProvider !== sourceProvider
+    || groupImageInputs.packageGeneration !== packageGeneration) {
+    setGroupImageInputs({ activeTextureOverrides, displayedGroupRef, sourceProvider, packageGeneration });
     setHoverBucket(null);
     setGroupImageError(null);
-    if (!displayedGroupRef) {
-      setGroupImage(null);
-      return;
-    }
+    if (!displayedGroupRef) setGroupImage(null);
+  }
+
+  useEffect(() => {
+    if (!displayedGroupRef) return;
     let cancelled = false;
     void loadGroupImage(
       groupImageCacheRef.current,
@@ -445,8 +465,10 @@ export function usePartsEditor({
     ).then((image) => {
       if (!cancelled) setGroupImage(image);
     }).catch((cause) => {
-        console.warn('[warpaint-viewer] editable areas could not be loaded:', cause);
-        if (!cancelled) setGroupImageError('The editable areas could not be loaded.');
+      // Clearing a workspace can briefly ask for a path that does not exist; that load is already cancelled by then.
+      if (cancelled) return;
+      console.warn('[warpaint-viewer] editable areas could not be loaded:', cause);
+      setGroupImageError('The editable areas could not be loaded.');
     });
     return () => { cancelled = true; };
   }, [activeTextureOverrides, displayedGroupRef, sourceProvider, packageGeneration]);
@@ -454,11 +476,11 @@ export function usePartsEditor({
   const editorEnabled = editorStatus === 'ready' && Boolean(activeGroupEditTarget && groupImage);
   const groupAssignActive = editorEnabled && editorTabActive && editorTool === 'paint' && paintSubView === 'parts';
 
+  const layerMapActive = groupAssignActive && showLayerMap;
+  if (!layerMapActive && layerMapImages !== NO_LAYER_MAP_IMAGES) setLayerMapImages(NO_LAYER_MAP_IMAGES);
+
   useEffect(() => {
-    if (!groupAssignActive || !showLayerMap) {
-      setLayerMapImages({});
-      return;
-    }
+    if (!layerMapActive) return;
     const refs = [...new Set(groupAssignmentTargets.map((target) => target.groupsRef))];
     let cancelled = false;
     void Promise.all(refs.map(async (ref) => {
@@ -482,10 +504,9 @@ export function usePartsEditor({
     activeTextureOverrides,
     displayedGroupRef,
     groupAssignmentTargets,
-    groupAssignActive,
     groupImage,
+    layerMapActive,
     packageGeneration,
-    showLayerMap,
     sourceProvider,
   ]);
 
@@ -556,11 +577,13 @@ export function usePartsEditor({
     viewerRef,
   ]);
 
-  useEffect(() => {
-    if (groupAssignActive) return;
-    groupPointerRef.current = null;
+  if (!groupAssignActive && (hoverBucket !== null || panelPreviewGroup !== null)) {
     setHoverBucket(null);
     setPanelPreviewGroup(null);
+  }
+
+  useEffect(() => {
+    if (!groupAssignActive) groupPointerRef.current = null;
   }, [groupAssignActive]);
   const editorUnavailableReason = useMemo(() => {
     if (editableKitId === null) return 'Choose a war paint to edit.';

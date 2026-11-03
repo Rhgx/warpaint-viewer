@@ -84,7 +84,13 @@ function MainApp() {
   const inspectorRef = useRef<HTMLElement | null>(null);
   const compositorRef = useRef<Compositor | null>(null);
 
-  const [engineReady, setEngineReady] = useState(false);
+  const [engineViewer, setEngineViewer] = useState<Viewer | null>(null);
+  const engineReady = engineViewer !== null;
+  const [inspectorEl, setInspectorEl] = useState<HTMLElement | null>(null);
+  const attachInspector = useCallback((element: HTMLElement | null) => {
+    inspectorRef.current = element;
+    setInspectorEl(element);
+  }, []);
   const [firstPersonEnabled, setFirstPersonEnabled] = useState(false);
   const [autoSpin, setAutoSpin] = useState(false);
   const [environmentReady, setEnvironmentReady] = useState(false);
@@ -242,13 +248,11 @@ function MainApp() {
   const editorTabActive = workbenchOpen && workbenchTab === 'editor';
   const firstPersonActive = firstPersonEnabled && !!selectedKit && !!state.weaponKey
     && state.weaponKey !== 'paintkit_tool' && !editorTabActive && !lightingPanelOpen;
-  useEffect(() => {
-    // Reached only when a team layer is switched off or First Person is left;
-    // picking a paint already clamps the team.
-    if (selectedKit && !kitHasTeamTextures && !firstPersonActive && state.team === 'blu' && state.sheen !== 'team_shine') {
-      setState((current) => ({ ...current, team: 'red' }));
-    }
-  }, [kitHasTeamTextures, firstPersonActive, selectedKit, state.sheen, state.team]);
+  // Reached only when a team layer is switched off or First Person is left;
+  // picking a paint already clamps the team.
+  if (selectedKit && !kitHasTeamTextures && !firstPersonActive && state.team === 'blu' && state.sheen !== 'team_shine') {
+    setState((current) => ({ ...current, team: 'red' }));
+  }
   useMobileViewInset({
     viewerRef,
     inspectorRef,
@@ -552,7 +556,7 @@ function MainApp() {
     disposeCache,
     resetComposeKey,
     resolveRecipe,
-    setEngineReady,
+    setEngineViewer,
     setEnvironmentReady,
     setCameraMode,
     setLoadedAssetKey,
@@ -658,14 +662,14 @@ function MainApp() {
 
   const hasSelectedKit = !!selectedKit;
   // A fresh element every render would defeat the memoized Inspector.
-  const previewControls = useMemo(() => engineReady && viewerRef.current && <FirstPersonControls
-    viewer={viewerRef.current}
+  const previewControls = useMemo(() => engineViewer && <FirstPersonControls
+    viewer={engineViewer}
     weaponKey={state.weaponKey}
     team={state.team}
     enabled={firstPersonActive}
     onEnabledChange={setFirstPersonEnabled}
     disabled={!hasSelectedKit || !state.weaponKey || editorTabActive || lightingPanelOpen}
-  />, [editorTabActive, engineReady, firstPersonActive, hasSelectedKit, lightingPanelOpen, state.team, state.weaponKey]);
+  />, [editorTabActive, engineViewer, firstPersonActive, hasSelectedKit, lightingPanelOpen, state.team, state.weaponKey]);
 
   if (error) return <div className="fatal">Failed to start: {error}</div>;
   if (!data) return <BootLoader boot={boot} />;
@@ -763,7 +767,7 @@ function MainApp() {
               resolveCubemap={async (ref) => await sourceProvider.resolveCubemap(ref) ?? stockMaterialCubemapUrls(ref)}
               resolvePackageMaterial={(weaponKey, overrideId) => sourceProvider.resolveMaterial(weaponKey, overrideId)}
               textureMetadataResolver={(ref) => sourceProvider.metadataFor(ref)}
-              inspectorEl={inspectorRef.current}
+              inspectorEl={inspectorEl}
               onClose={() => setShowcaseOpen(false)}
             />
           </Suspense>
@@ -857,7 +861,7 @@ function MainApp() {
           )}
         </div>
       </main>
-      <aside className="inspector" id="viewer-controls-panel" ref={inspectorRef}>
+      <aside className="inspector" id="viewer-controls-panel" ref={attachInspector}>
         {!showcaseActive && <Inspector
           firstPersonActive={firstPersonActive}
           previewControls={previewControls}

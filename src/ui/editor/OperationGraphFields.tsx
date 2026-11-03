@@ -1,5 +1,5 @@
 import { Autocomplete } from '@base-ui/react/autocomplete';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Image as ImageIcon, Link2, Link2Off, Search, Variable, X } from 'lucide-react';
 import {
   operationGraphVarFieldScalarKey,
@@ -58,11 +58,14 @@ function GraphCombobox({
   // Entries held back until a search, as opposed to matches cut off by the visible cap.
   const deferredCount = query ? 0 : options.length - matches.length;
 
-  useEffect(() => {
-    if (open) return;
-    setInputValue(value);
-    setDirty(false);
-  }, [open, value]);
+  const [synced, setSynced] = useState({ open, value });
+  if (synced.open !== open || synced.value !== value) {
+    setSynced({ open, value });
+    if (!open) {
+      setInputValue(value);
+      setDirty(false);
+    }
+  }
 
   const commit = (next: string): void => {
     setOpen(false);
@@ -376,7 +379,11 @@ export function GraphValueField({
   const [pendingBinding, setPendingBinding] = useState(false);
   const bindingMode = Boolean(boundVariable) || pendingBinding;
 
-  useEffect(() => setPendingBinding(false), [boundVariable]);
+  const [syncedBinding, setSyncedBinding] = useState(boundVariable);
+  if (syncedBinding !== boundVariable) {
+    setSyncedBinding(boundVariable);
+    setPendingBinding(false);
+  }
 
   const declaration = boundVariable
     ? variables.find((variable) => variable.name === boundVariable)

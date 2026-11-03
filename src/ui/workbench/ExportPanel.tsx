@@ -223,6 +223,10 @@ export function ExportPanel({
     ? `TF2 definitions from ${snapshotDay}, included`
     : 'TF2 definitions, included';
 
+  const packageFileCount = definitions?.packageFileCount;
+  const packageMounted = definitions?.packageMounted;
+  const unresolvedTextureRefs = definitions?.unresolvedTextureRefs;
+
   const plan = useMemo(() => {
     const files = items.map((item) => ({
       ref: item.ref,
@@ -238,18 +242,18 @@ export function ExportPanel({
     );
     // A definition with no artwork installs cleanly and then renders nothing.
     // Published packs often name texture paths their archive lacks; the viewer then draws stock textures.
-    if (writesDefinitions && items.length === 0 && !definitions?.packageFileCount) {
+    if (writesDefinitions && items.length === 0 && !packageFileCount) {
       warnings.push(
-        definitions?.packageMounted
+        packageMounted
           ? 'None of this paint’s textures could be matched in the mounted package, so the pack carries its definitions only. The viewer is showing stock textures for the same reason: the paint’s texture paths and the archive’s layout do not line up.'
           : 'This pack carries the paint’s definitions but no textures. Replace its artwork in the Files tab, or mount the package its textures come from.',
       );
     }
-    if (writesDefinitions && definitions?.unresolvedTextureRefs.length) {
+    if (writesDefinitions && unresolvedTextureRefs?.length) {
       warnings.push(
-        `${definitions.unresolvedTextureRefs.length} custom texture path${definitions.unresolvedTextureRefs.length === 1 ? '' : 's'} `
+        `${unresolvedTextureRefs.length} custom texture path${unresolvedTextureRefs.length === 1 ? '' : 's'} `
         + `named by this paint exist in neither the mounted package nor TF2's stock data `
-        + `(for example ${definitions.unresolvedTextureRefs[0]}). The source package is incomplete.`,
+        + `(for example ${unresolvedTextureRefs[0]}). The source package is incomplete.`,
       );
     }
     const total = files.reduce((sum, file) => sum + (file.bytes ?? 0), 0);
@@ -259,9 +263,9 @@ export function ExportPanel({
     compression,
     textureMetadata,
     writesDefinitions,
-    definitions?.packageFileCount,
-    definitions?.packageMounted,
-    definitions?.unresolvedTextureRefs,
+    packageFileCount,
+    packageMounted,
+    unresolvedTextureRefs,
   ]);
 
   // Checked on pick, not at export, so a non-container file is reported while the picker is open.

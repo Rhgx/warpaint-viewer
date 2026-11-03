@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useState } from 'react';
+import { Fragment, memo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   Camera, ChevronDown, Crosshair, Dices, Droplets, Flame, Hash, Sparkles, Sun, Undo2, Users,
@@ -88,10 +88,6 @@ function SeedField({
   const [draft, setDraft] = useState(seed);
   const [focused, setFocused] = useState(false);
 
-  useEffect(() => {
-    if (!focused) setDraft(seed);
-  }, [seed, focused]);
-
   const commit = () => {
     const digits = draft.replace(/\D/g, '').slice(0, 20);
     if (!digits) {
@@ -109,8 +105,11 @@ function SeedField({
         className="ui-num-input seed-input"
         inputMode="numeric"
         aria-label="Paint seed"
-        value={draft}
-        onFocus={() => setFocused(true)}
+        value={focused ? draft : seed}
+        onFocus={() => {
+          setDraft(seed);
+          setFocused(true);
+        }}
         onChange={(event) => setDraft(event.currentTarget.value.replace(/\D/g, '').slice(0, 20))}
         onBlur={() => {
           commit();
@@ -151,7 +150,11 @@ function SeedField({
 // Hex readout for the turntable color; commits only on a full #rrggbb match.
 function TurntableColorHexField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (syncedValue !== value) {
+    setSyncedValue(value);
+    setDraft(value);
+  }
 
   return (
     <input

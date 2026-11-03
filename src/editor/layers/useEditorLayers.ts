@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ControlsState } from '../../viewer/controls';
 import type { WearRecipe } from '../../workbench/types';
 import { discoverGroupSelectTargets } from './groupTargets';
@@ -22,6 +22,7 @@ export function useEditorLayers({
 }: UseEditorLayersOptions) {
   const [activeEditorSelector, setActiveEditorSelector] = useState(0);
   const [weaponBaseLayerChosen, setWeaponBaseLayerChosen] = useState(false);
+  const [chosenForKitId, setChosenForKitId] = useState(editableKitId);
 
   const groupDiscovery = useMemo(
     () => editorCurrent ? discoverGroupSelectTargets(editorCurrent, provenanceRecipe?.provenance) : null,
@@ -111,13 +112,12 @@ export function useEditorLayers({
     : Math.max(0, groupAssignmentTargets.indexOf(activeGroupAssignmentTarget));
 
   // A paint switch starts on the first layer. A weapon switch keeps the chosen base layer, like the other layers.
-  useEffect(() => {
+  if (chosenForKitId !== editableKitId) {
+    setChosenForKitId(editableKitId);
     setWeaponBaseLayerChosen(false);
-  }, [editableKitId]);
+  }
 
-  useEffect(() => {
-    if (activeEditorSelector >= editableGroupTargets.length) setActiveEditorSelector(0);
-  }, [activeEditorSelector, editableGroupTargets.length]);
+  if (activeEditorSelector > 0 && activeEditorSelector >= editableGroupTargets.length) setActiveEditorSelector(0);
 
   return {
     activeEditorSelector,

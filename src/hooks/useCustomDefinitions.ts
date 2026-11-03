@@ -55,6 +55,7 @@ const MAX_DEFINITION_BYTES = 64 * 1024 * 1024;
 // a scan from reading a whole archive.
 const MAX_FRAGMENT_BYTES = 8 * 1024 * 1024;
 const MAX_FRAGMENT_ENTRIES = 24;
+const NO_FRAGMENTS: ProtoDefJsonFragment[] = [];
 
 interface CustomDefinitions {
   /** Selecting a kit is the app's business, so the view supplies onSelectKit. */
@@ -569,9 +570,10 @@ export function useCustomDefinitions({
   // A war paint's definitions ship inside its texture archive, as a whole container or,
   // more often, as JSON fragments. Find whichever is present so the pack imports in one go.
   const pkg = provider.package;
-  const [packageFragments, setPackageFragments] = useState<ProtoDefJsonFragment[]>([]);
+  const [foundFragments, setFoundFragments] = useState<{ pkg: typeof pkg; fragments: ProtoDefJsonFragment[] }>({ pkg: null, fragments: [] });
+  // Fragments read from an earlier package never count for the current one.
+  const packageFragments = foundFragments.pkg === pkg ? foundFragments.fragments : NO_FRAGMENTS;
   useEffect(() => {
-    setPackageFragments([]);
     if (!pkg || pkg.has(PACKAGE_PROTO_DEFS_PATH)) return;
     const entries = [...pkg.entries.values()]
       .filter((entry) => entry.path.endsWith('.json') && entry.size <= MAX_FRAGMENT_BYTES)
@@ -589,7 +591,7 @@ export function useCustomDefinitions({
           // An unreadable entry simply is not a candidate.
         }
       }
-      if (!cancelled && found.length) setPackageFragments(found);
+      if (!cancelled && found.length) setFoundFragments({ pkg, fragments: found });
     })();
     return () => { cancelled = true; };
   }, [pkg]);

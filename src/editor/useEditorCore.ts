@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { PaintkitEntry } from '../data/types';
 import { WORKSHOP_ENABLED } from '../device';
@@ -29,6 +29,8 @@ function resolveEditableKitId(
 ): number | null {
   return selectedKit && selectedKitId === requestedKitId ? selectedKitId : null;
 }
+
+const NO_WEAPON_SLOTS: ProtoDefKitWeaponSlot[] = [];
 
 /** A burst of edits or a drag builds one preview, once it has paused this long. */
 const PREVIEW_DEBOUNCE_MS = 120;
@@ -105,11 +107,9 @@ export function useEditorCore({
     ]).catch(() => undefined);
   }, [editorTabOpen]);
 
-  useEffect(() => {
-    if (editorTabOpen && selectedKitId !== null) {
-      setEditorRequestedKitId(selectedKitId);
-    }
-  }, [selectedKitId, editorTabOpen]);
+  if (editorTabOpen && selectedKitId !== null && editorRequestedKitId !== selectedKitId) {
+    setEditorRequestedKitId(selectedKitId);
+  }
   const editableKitId = resolveEditableKitId(selectedKitId, editorRequestedKitId, selectedKit);
   const loadEditorKit = useCallback((kitId: number) => (
     isCustomKitId(kitId) ? exportImportedKitBundle(kitId) : exportStockKitBundle(kitId)
@@ -168,15 +168,18 @@ export function useEditorCore({
     activeScope: editorActiveScope,
   } = editorSession;
   // Weapon slots come from the decoded source, not the session, so resolve them whenever the editable kit changes.
-  const [weaponSlots, setWeaponSlots] = useState<ProtoDefKitWeaponSlot[]>([]);
+  const [loadedWeaponSlots, setLoadedWeaponSlots] = useState<{
+    readonly kitId: number;
+    readonly slots: ProtoDefKitWeaponSlot[];
+  } | null>(null);
+  const weaponSlots = loadedWeaponSlots !== null && loadedWeaponSlots.kitId === editableKitId
+    ? loadedWeaponSlots.slots
+    : NO_WEAPON_SLOTS;
   useEffect(() => {
-    if (editableKitId === null) {
-      setWeaponSlots([]);
-      return;
-    }
+    if (editableKitId === null) return;
     let cancelled = false;
     void loadEditorKitWeaponSlots(editableKitId).then((slots) => {
-      if (!cancelled) setWeaponSlots(slots ?? []);
+      if (!cancelled) setLoadedWeaponSlots({ kitId: editableKitId, slots: slots ?? [] });
     });
     return () => { cancelled = true; };
   }, [editableKitId, loadEditorKitWeaponSlots]);
@@ -205,6 +208,7 @@ export function useEditorCore({
   const provenanceRecipe = loadedProvenanceRecipe?.key === currentProvenanceRecipeKey
     ? loadedProvenanceRecipe.recipe
     : null;
+  if (!currentProvenanceRecipeKey && loadedProvenanceRecipe) setLoadedProvenanceRecipe(null);
   const editorSourceGenerationRef = useRef(definitions.generation);
 
   // Retry once a restored imported paint's source hydrates, but never discard a draft being edited.
@@ -239,10 +243,7 @@ export function useEditorCore({
     : definitions.editGeneration;
 
   useEffect(() => {
-    if (editableKitId === null || !selectedKit || !state.weaponKey) {
-      setLoadedProvenanceRecipe(null);
-      return;
-    }
+    if (editableKitId === null || !selectedKit || !state.weaponKey) return;
     let cancelled = false;
     const resolver = isCustomKitId(editableKitId)
       ? getImportedRecipeWithProvenance
@@ -271,6 +272,8 @@ export function useEditorCore({
   useEffect(() => {
     if (editorStatus !== 'ready' || !editorBundle || editableKitId === null) return;
     let current = true;
+    // Pending must cover the debounce of this external preview build, so it starts with the effect that schedules it.
+    // oxlint-disable-next-line react/set-state-in-effect
     setEditorPreviewPending(true);
     setEditorPreviewError(null);
     const preview = isCustomKitId(editableKitId)
@@ -433,7 +436,9 @@ export function useEditorHistoryShortcuts({
 }: UseEditorHistoryShortcutsOptions) {
   // One listener for the editor tab, reading current actions from a ref instead of re-subscribing per render.
   const editorHistoryActionsRef = useRef({ undo, redo, canUndo, canRedo });
-  editorHistoryActionsRef.current = { undo, redo, canUndo, canRedo };
+  useLayoutEffect(() => {
+    editorHistoryActionsRef.current = { undo, redo, canUndo, canRedo };
+  });
 
   useEffect(() => {
     if (!editorTabActive || cameraMode === 'advanced' || (lightingPanelOpen && preset === CUSTOM_LIGHTING_ID)) return;

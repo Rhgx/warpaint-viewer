@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { CircleDot, Lightbulb, Sun } from 'lucide-react';
 import { SliderField } from '../common/controls';
@@ -39,14 +39,9 @@ function NumberReadout({
   const [draft, setDraft] = useState(() => formatScalar(value));
   const [focused, setFocused] = useState(false);
 
-  useEffect(() => {
-    if (!focused) setDraft(formatScalar(value));
-  }, [value, focused]);
-
   const commit = () => {
     const parsed = Number(draft);
     if (draft.trim() !== '' && Number.isFinite(parsed)) onChange(clampScalar(parsed, min, max));
-    else setDraft(formatScalar(value));
   };
 
   return (
@@ -55,8 +50,11 @@ function NumberReadout({
       inputMode="decimal"
       spellCheck={false}
       aria-label={ariaLabel}
-      value={draft}
-      onFocus={() => setFocused(true)}
+      value={focused ? draft : formatScalar(value)}
+      onFocus={() => {
+        setDraft(formatScalar(value));
+        setFocused(true);
+      }}
       onChange={(event) => setDraft(event.currentTarget.value)}
       onBlur={() => {
         commit();
@@ -164,7 +162,11 @@ export function ColorRow({
   onPreviewChange?: (value: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (syncedValue !== value) {
+    setSyncedValue(value);
+    setDraft(value);
+  }
 
   const apply = (next: string, commit: boolean) => {
     setDraft(next);

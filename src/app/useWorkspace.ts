@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { clearCustomWorkspace } from '../editor/draftStorage';
 import { WORKSHOP_ENABLED } from '../device';
@@ -93,12 +93,12 @@ export function useWorkspace({
   // Ask over the stage once per package; importing or dismissing answers it.
   const { packageCandidate } = definitions.state;
   const candidateKey = packageCandidate ? `${packageGeneration}:${packageCandidate.path}` : '';
-  const candidateKeyRef = useRef(candidateKey);
-  candidateKeyRef.current = candidateKey;
   const [answeredCandidateKey, setAnsweredCandidateKey] = useState('');
-  useEffect(() => {
-    if (definitions.generation > 0) setAnsweredCandidateKey(candidateKeyRef.current);
-  }, [definitions.generation]);
+  const [seenGeneration, setSeenGeneration] = useState(0);
+  if (seenGeneration !== definitions.generation) {
+    setSeenGeneration(definitions.generation);
+    if (definitions.generation > 0) setAnsweredCandidateKey(candidateKey);
+  }
   const promptedCandidate = packageCandidate
     && candidateKey !== answeredCandidateKey
     && definitions.state.status !== 'importing'

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   ConnectionLineType,
@@ -130,6 +130,7 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
   const flowWrapperRef = useRef<HTMLDivElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const nodeIdsRef = useRef<string[]>([]);
+  const flowNodesRef = useRef<FlowNode[]>([]);
   // Spot for the stage the toolbar is adding; consumed when that stage arrives.
   const placementRef = useRef<XYPosition | null>(null);
   const knownNodeIdsRef = useRef<ReadonlySet<string>>(new Set());
@@ -137,6 +138,7 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
   const selectedEdge = selectedEdgeId
     ? graph.edges.find((edge) => edge.id === selectedEdgeId)
     : undefined;
+  if (selectedEdgeId && !selectedEdge) setSelectedEdgeId(undefined);
   const validation = useMemo(() => validateOperationGraph(graph), [graph]);
   const diagnosticsByNode = useMemo(() => {
     const map = new Map<string, OperationGraphDiagnostic[]>();
@@ -195,19 +197,17 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
   }, [graph.nodes, normalizedQuery]);
   const searchMatches = useMemo(() => new Set(searchMatchIds), [searchMatchIds]);
 
-  useEffect(() => {
-    setSearchMatchIndex(0);
-  }, [normalizedQuery]);
-
-  useEffect(() => {
-    setSearchMatchIndex((index) => searchMatchIds.length > 0 ? Math.min(index, searchMatchIds.length - 1) : 0);
-  }, [searchMatchIds.length]);
-
-  useEffect(() => {
-    if (!activeNodeId) return;
-    const selectedMatchIndex = searchMatchIds.indexOf(activeNodeId);
-    if (selectedMatchIndex >= 0) setSearchMatchIndex(selectedMatchIndex);
-  }, [activeNodeId, searchMatchIds]);
+  const [searchSync, setSearchSync] = useState({ query: normalizedQuery, ids: searchMatchIds, activeNodeId });
+  if (searchSync.query !== normalizedQuery || searchSync.ids !== searchMatchIds || searchSync.activeNodeId !== activeNodeId) {
+    setSearchSync({ query: normalizedQuery, ids: searchMatchIds, activeNodeId });
+    // A new query starts at the first match, a shorter list clamps the cursor, and a selected match takes it over.
+    let nextIndex = searchSync.query !== normalizedQuery ? 0 : searchMatchIndex;
+    if (searchSync.ids.length !== searchMatchIds.length) {
+      nextIndex = searchMatchIds.length > 0 ? Math.min(nextIndex, searchMatchIds.length - 1) : 0;
+    }
+    const selectedMatchIndex = activeNodeId ? searchMatchIds.indexOf(activeNodeId) : -1;
+    setSearchMatchIndex(selectedMatchIndex >= 0 ? selectedMatchIndex : nextIndex);
+  }
   /** Selecting a stage traces its lineage and fades the rest of the canvas. */
   const relatedNodes = useMemo(() => {
     if (!activeNodeId) return new Set<string>();
@@ -216,15 +216,11 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
     return new Set([...upstream, ...downstream]);
   }, [activeNodeId, graph, traceMode]);
 
-  useEffect(() => {
+  const [syncedSelectedNodeId, setSyncedSelectedNodeId] = useState(selectedNodeId);
+  if (syncedSelectedNodeId !== selectedNodeId) {
+    setSyncedSelectedNodeId(selectedNodeId);
     setLocalSelectedNodeId(selectedNodeId);
-  }, [selectedNodeId]);
-
-  useEffect(() => {
-    if (selectedEdgeId && !graph.edges.some((edge) => edge.id === selectedEdgeId)) {
-      setSelectedEdgeId(undefined);
-    }
-  }, [graph.edges, selectedEdgeId]);
+  }
 
   useEffect(() => () => {
     if (measurementFrameRef.current !== null) cancelAnimationFrame(measurementFrameRef.current);
@@ -471,63 +467,69 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
 
   // Unchanged node data keeps its identity, so memoized cards skip renders during drags.
   // Node objects stay new: React Flow mutates selection state and relies on fresh nodes.
-  const flowNodeDataRef = useRef(new Map<string, FlowNodeData>());
-  const flowNodes = useMemo((): FlowNode[] => {
-    const previousData = flowNodeDataRef.current;
-    const nextData = new Map<string, FlowNodeData>();
-    const nodes = graph.nodes.map((node): FlowNode => {
-      const defaultPosition = layout[node.id] ?? { x: 0, y: 0 };
-      const isActive = activeNodeId === node.id;
-      const emphasis: FlowNodeData['emphasis'] = isActive
-        ? 'active'
-        // Greying the canvas for a stage with no connections would read as a fault.
-        : relatedNodes.size > 1
-          ? relatedNodes.has(node.id) ? 'related' : 'dimmed'
-          : 'normal';
-      const data: FlowNodeData = {
-        graphNode: node,
-        nodesById,
-        connectedEdges: connectedEdgesByTarget.get(node.id) ?? NO_ITEMS,
-        diagnostics: diagnosticsByNode.get(node.id) ?? NO_ITEMS,
-        variables,
-        textureOptions: textureOptions ?? NO_ITEMS,
-        ...(onPreviewNode ? (() => {
-          const previewUrl = onPreviewNode(node.id);
-          return previewUrl ? { previewUrl } : {};
-        })() : {}),
-        readOnly,
-        onSelectNode: selectNode,
-        onGraphChange,
-        onUpdateParameter,
-        onReorderInput,
-        onOpenTextureEditor,
-        onOpenSelectEditor,
-        onOpenStickerEditor,
-        onExportNode,
-        paintNames,
-        onSelectKit,
-        emphasis,
-        searchMatch: !normalizedQuery || searchMatches.has(node.id),
-      };
-      const previous = previousData.get(node.id);
-      const stableData = previous && sameFlowNodeData(previous, data) ? previous : data;
-      nextData.set(node.id, stableData);
-      return {
-        id: node.id,
-        type: 'operation',
-        position: positions[node.id] ?? { x: defaultPosition.x, y: defaultPosition.y },
-        ...(measurements[node.id] ? { measured: measurements[node.id] } : {}),
-        data: stableData,
-        className: `${operationNodeClass(node)} operation-graph-emphasis-${emphasis}`,
-        selected: isActive,
-        // Selected cards open editors and dropdowns, which must draw over their neighbours.
-        ...(isActive ? { zIndex: SELECTED_NODE_Z_INDEX } : {}),
-        draggable: !readOnly && node.kind !== 'output',
-      };
+  const nodeData = useMemo((): FlowNodeData[] => graph.nodes.map((node): FlowNodeData => {
+    const isActive = activeNodeId === node.id;
+    const emphasis: FlowNodeData['emphasis'] = isActive
+      ? 'active'
+      // Greying the canvas for a stage with no connections would read as a fault.
+      : relatedNodes.size > 1
+        ? relatedNodes.has(node.id) ? 'related' : 'dimmed'
+        : 'normal';
+    return {
+      graphNode: node,
+      nodesById,
+      connectedEdges: connectedEdgesByTarget.get(node.id) ?? NO_ITEMS,
+      diagnostics: diagnosticsByNode.get(node.id) ?? NO_ITEMS,
+      variables,
+      textureOptions: textureOptions ?? NO_ITEMS,
+      ...(onPreviewNode ? (() => {
+        const previewUrl = onPreviewNode(node.id);
+        return previewUrl ? { previewUrl } : {};
+      })() : {}),
+      readOnly,
+      onSelectNode: selectNode,
+      onGraphChange,
+      onUpdateParameter,
+      onReorderInput,
+      onOpenTextureEditor,
+      onOpenSelectEditor,
+      onOpenStickerEditor,
+      onExportNode,
+      paintNames,
+      onSelectKit,
+      emphasis,
+      searchMatch: !normalizedQuery || searchMatches.has(node.id),
+    };
+  }), [activeNodeId, connectedEdgesByTarget, diagnosticsByNode, graph.nodes, nodesById, normalizedQuery, onExportNode, onGraphChange, onOpenSelectEditor, onOpenStickerEditor, onOpenTextureEditor, onPreviewNode, onReorderInput, onSelectKit, onUpdateParameter, paintNames, readOnly, relatedNodes, searchMatches, selectNode, textureOptions, variables]);
+  const [stableNodeData, setStableNodeData] = useState<{ raw: FlowNodeData[]; stable: FlowNodeData[] }>(
+    () => ({ raw: [], stable: [] }),
+  );
+  let stableData = stableNodeData.stable;
+  if (stableNodeData.raw !== nodeData) {
+    const previousById = new Map(stableNodeData.stable.map((data) => [data.graphNode.id, data]));
+    stableData = nodeData.map((data) => {
+      const previous = previousById.get(data.graphNode.id);
+      return previous && sameFlowNodeData(previous, data) ? previous : data;
     });
-    flowNodeDataRef.current = nextData;
-    return nodes;
-  }, [activeNodeId, connectedEdgesByTarget, diagnosticsByNode, graph.nodes, layout, measurements, nodesById, normalizedQuery, onExportNode, onGraphChange, onOpenSelectEditor, onOpenStickerEditor, onOpenTextureEditor, onPreviewNode, onReorderInput, onSelectKit, onUpdateParameter, paintNames, positions, readOnly, relatedNodes, searchMatches, selectNode, textureOptions, variables]);
+    setStableNodeData({ raw: nodeData, stable: stableData });
+  }
+  const flowNodes = useMemo((): FlowNode[] => stableData.map((data): FlowNode => {
+    const node = data.graphNode;
+    const defaultPosition = layout[node.id] ?? { x: 0, y: 0 };
+    const isActive = data.emphasis === 'active';
+    return {
+      id: node.id,
+      type: 'operation',
+      position: positions[node.id] ?? { x: defaultPosition.x, y: defaultPosition.y },
+      ...(measurements[node.id] ? { measured: measurements[node.id] } : {}),
+      data,
+      className: `${operationNodeClass(node)} operation-graph-emphasis-${data.emphasis}`,
+      selected: isActive,
+      // Selected cards open editors and dropdowns, which must draw over their neighbours.
+      ...(isActive ? { zIndex: SELECTED_NODE_Z_INDEX } : {}),
+      draggable: !readOnly && node.kind !== 'output',
+    };
+  }), [layout, measurements, positions, readOnly, stableData]);
 
   const flowEdges = useMemo((): FlowEdge[] => graph.edges.map((edge) => {
     const onPath = relatedNodes.has(edge.source) && relatedNodes.has(edge.target);
@@ -558,9 +560,10 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
     };
   }), [activeNodeId, disconnectEdgeById, graph.edges, nodesById, readOnly, relatedNodes, selectedEdgeId]);
 
-  const flowNodesRef = useRef<FlowNode[]>(flowNodes);
-  flowNodesRef.current = flowNodes;
-  nodeIdsRef.current = graph.nodes.map((node) => node.id);
+  useLayoutEffect(() => {
+    flowNodesRef.current = flowNodes;
+    nodeIdsRef.current = graph.nodes.map((node) => node.id);
+  }, [flowNodes, graph.nodes]);
 
   const stageCount = graph.nodes.filter((node) => node.kind !== 'output').length;
   const errorCount = validation.diagnostics.filter((diagnostic) => diagnostic.severity === 'error').length;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
@@ -88,6 +88,20 @@ interface UseStickerEditorOptions extends
 
 type StickerVariantSource = StickerPlacementTarget['stickers'][number];
 
+interface GroupStickerResources {
+  key: string;
+  targetId: string;
+  maskUrl: string;
+  selectorBase: ComposeResult;
+  selectorBaseUrl: string;
+  endpointZero: ComposeResult;
+  endpointZeroUrl: string;
+  endpointOne: ComposeResult;
+  endpointOneUrl: string;
+  artworkUrl: string;
+  levels: readonly [number, number, number];
+}
+
 /** Every variant's weight as resolved for the selected weapon, team, and wear. */
 function resolvedVariantWeights(variants: readonly StickerVariantSource[]): number[] {
   return variants.map((variant) => stickerWeightFromString(variant.weight.resolvedValue));
@@ -171,26 +185,15 @@ export function useStickerEditor({
   const [groupStickerArtwork, setGroupStickerArtwork] = useState<Record<string, { key: string; url: string }>>({});
   const [stickerSurfaceUrl, setStickerSurfaceUrl] = useState<string | null>(null);
   const [stickerBaseSurfaceKey, setStickerBaseSurfaceKey] = useState<string | null>(null);
-  const [groupStickerResourcesKey, setGroupStickerResourcesKey] = useState<string | null>(null);
+  const [groupStickerResources, setGroupStickerResources] = useState<GroupStickerResources | null>(null);
+  const groupStickerResourcesKey = groupStickerResources?.key ?? null;
   const [stickerAspect, setStickerAspect] = useState(1);
   const [stickerSurfaceAspect, setStickerSurfaceAspect] = useState(1.6);
   const [stickerDraftStore] = useState(() => createStore<StickerPlacementQuad | null>(() => null));
   const stickerDraftActive = useStore(stickerDraftStore, (quad) => quad !== null);
   const stickerDraftRef = useRef<StickerPlacementQuad | null>(null);
   const stickerBaseSurfaceResultRef = useRef<ComposeResult | null>(null);
-  const groupStickerResourcesRef = useRef<{
-    key: string;
-    targetId: string;
-    maskUrl: string;
-    selectorBase: ComposeResult;
-    selectorBaseUrl: string;
-    endpointZero: ComposeResult;
-    endpointZeroUrl: string;
-    endpointOne: ComposeResult;
-    endpointOneUrl: string;
-    artworkUrl: string;
-    levels: readonly [number, number, number];
-  } | null>(null);
+  const groupStickerResourcesRef = useRef<GroupStickerResources | null>(null);
   const groupStickerPreparationRef = useRef<{
     targetId: string;
     context: ResolvedGroupStickerContext;
@@ -386,9 +389,11 @@ export function useStickerEditor({
     && selectedGroupStickerContext && stickerSurfaceComposeKey
     ? `${selectedStickerTarget.id}\0${stickerSurfaceComposeKey}\0${activeTextureOverrides[selectedGroupStickerContext.sticker.base] ?? selectedGroupStickerContext.sticker.base}\0${selectedGroupStickerContext.sticker.black}\0${selectedGroupStickerContext.sticker.white}\0${selectedGroupStickerContext.sticker.gamma}`
     : null;
-  groupStickerPreparationRef.current = selectedStickerTarget && selectedGroupStickerContext
-    ? { targetId: selectedStickerTarget.id, context: selectedGroupStickerContext }
-    : null;
+  useLayoutEffect(() => {
+    groupStickerPreparationRef.current = selectedStickerTarget && selectedGroupStickerContext
+      ? { targetId: selectedStickerTarget.id, context: selectedGroupStickerContext }
+      : null;
+  });
   const preparedGroupStickerArtwork = selectedStickerTarget
     ? groupStickerArtwork[selectedStickerTarget.id]
     : null;
@@ -400,21 +405,42 @@ export function useStickerEditor({
       : stickerTargetArtwork[selectedStickerTarget.id] ?? null
     : null;
   const exactGroupStickerResources = groupStickerResourcesKey === groupStickerComposeKey
-    ? groupStickerResourcesRef.current
+    ? groupStickerResources
     : null;
   // The draft stays authoritative until the provenance recipe reports the committed destination.
   // The base does not depend on destination, so retained resources avoid a preparation flash.
   const destinationEditSettling = Boolean(stickerDraftActive && selectedStickerTarget);
   const retainedGroupStickerResources = destinationEditSettling
-    && groupStickerResourcesRef.current?.targetId === selectedStickerTarget?.id
-    ? groupStickerResourcesRef.current
+    && groupStickerResources?.targetId === selectedStickerTarget?.id
+    ? groupStickerResources
     : null;
   const activeGroupStickerResources = exactGroupStickerResources ?? retainedGroupStickerResources;
   const effectiveStickerTextureUrl = stickerTextureUrl
     ?? (selectedStickerUsesComposedArtwork ? retainedGroupStickerResources?.artworkUrl ?? null : null);
 
-  useEffect(() => {
+  const [specularInputs, setSpecularInputs] = useState({
+    manualTextureOverrides,
+    packageGeneration,
+    selectedStickerSpecularRef,
+    selectedStickerUsesComposedArtwork,
+    sourceProvider,
+  });
+  if (specularInputs.manualTextureOverrides !== manualTextureOverrides
+    || specularInputs.packageGeneration !== packageGeneration
+    || specularInputs.selectedStickerSpecularRef !== selectedStickerSpecularRef
+    || specularInputs.selectedStickerUsesComposedArtwork !== selectedStickerUsesComposedArtwork
+    || specularInputs.sourceProvider !== sourceProvider) {
+    setSpecularInputs({
+      manualTextureOverrides,
+      packageGeneration,
+      selectedStickerSpecularRef,
+      selectedStickerUsesComposedArtwork,
+      sourceProvider,
+    });
     setStickerSpecularUrl(null);
+  }
+
+  useEffect(() => {
     if (selectedStickerUsesComposedArtwork || !selectedStickerSpecularRef) return;
     let cancelled = false;
     const override = manualTextureOverrides[selectedStickerSpecularRef];
@@ -444,35 +470,39 @@ export function useStickerEditor({
     stickerEditorEnabled
     && effectiveStickerTextureUrl
     && (stickerBaseSurfaceKey === stickerSurfaceComposeKey || destinationEditSettling)
-    && stickerBaseSurfaceResultRef.current
+    && stickerBaseSurfaceKey !== null
     && (!selectedStickerUsesComposedArtwork
       || groupStickerResourcesKey === groupStickerComposeKey
       || activeGroupStickerResources)
   );
 
-  useEffect(() => {
-    if (activeStickerTarget >= stickerTargets.length) setActiveStickerTarget(0);
-    if (stickerTargets.length === 0 && editorTool === 'sticker') setEditorTool('paint');
-  }, [activeStickerTarget, editorTool, setEditorTool, stickerTargets.length]);
+  if (activeStickerTarget > 0 && activeStickerTarget >= stickerTargets.length) setActiveStickerTarget(0);
 
   useEffect(() => {
-    if (!pendingAddedStickerRef) return;
+    if (stickerTargets.length === 0 && editorTool === 'sticker') setEditorTool('paint');
+  }, [editorTool, setEditorTool, stickerTargets.length]);
+
+  if (pendingAddedStickerRef) {
     const addedIndex = stickerTargets.findLastIndex((target) => target.stickers.some((sticker) => (
       sticker.base.resolvedValue === pendingAddedStickerRef
       || sticker.base.authoredValue === pendingAddedStickerRef
     )));
-    if (addedIndex < 0) return;
-    setActiveStickerTarget(addedIndex);
-    setPendingAddedStickerRef(null);
-  }, [pendingAddedStickerRef, stickerTargets]);
+    if (addedIndex >= 0) {
+      setActiveStickerTarget(addedIndex);
+      setPendingAddedStickerRef(null);
+    }
+  }
 
   useEffect(() => {
     updateStickerDraft(null);
   }, [activeStickerTarget, editableKitId, state.weaponKey, updateStickerDraft]);
 
-  useEffect(() => {
+  const previewVariantScope = JSON.stringify([activeStickerTarget, editableKitId, editorTool, state.weaponKey]);
+  const [seenPreviewVariantScope, setSeenPreviewVariantScope] = useState(previewVariantScope);
+  if (seenPreviewVariantScope !== previewVariantScope) {
+    setSeenPreviewVariantScope(previewVariantScope);
     setPreviewVariant(null);
-  }, [activeStickerTarget, editableKitId, editorTool, state.weaponKey]);
+  }
 
   useEffect(() => {
     viewerRef.current?.resetStickerGizmoAnchor();
@@ -558,9 +588,19 @@ export function useStickerEditor({
   ]);
 
   // Prepared group artwork depends on paint, weapon and seed, not destination, so destination-only edits stay instant.
-  useEffect(() => {
+  const groupArtworkScope = JSON.stringify([
+    editableKitId,
+    packageGeneration,
+    state.seed,
+    state.team,
+    state.wearIndex,
+    state.weaponKey,
+  ]);
+  const [seenGroupArtworkScope, setSeenGroupArtworkScope] = useState(groupArtworkScope);
+  if (seenGroupArtworkScope !== groupArtworkScope) {
+    setSeenGroupArtworkScope(groupArtworkScope);
     setGroupStickerArtwork({});
-  }, [editableKitId, packageGeneration, state.seed, state.team, state.wearIndex, state.weaponKey]);
+  }
 
   useEffect(() => () => {
     for (const artwork of stickerArtworkCacheRef.current.values()) artwork.dispose();
@@ -582,6 +622,8 @@ export function useStickerEditor({
 
     if (!engineReady || editorTool !== 'sticker' || !data || !stickerSurfaceNode || !stickerSurfaceComposeKey) {
       discardCurrentBase();
+      // The state resets pair with releasing the compositor result above; both follow the external base composition.
+      // oxlint-disable-next-line react/set-state-in-effect
       setStickerSurfaceUrl(null);
       return;
     }
@@ -641,7 +683,7 @@ export function useStickerEditor({
     };
     const previous = groupStickerResourcesRef.current;
     if (previous?.key === groupStickerComposeKey) {
-      setGroupStickerResourcesKey(groupStickerComposeKey);
+      setGroupStickerResources(previous);
       return;
     }
     if (previous) {
@@ -649,7 +691,7 @@ export function useStickerEditor({
       groupStickerResourcesRef.current = null;
       release(previous);
     }
-    setGroupStickerResourcesKey(null);
+    setGroupStickerResources(null);
 
     if (!engineReady || editorTool !== 'sticker' || !data || !compositor
       || !preparation || !groupStickerComposeKey) return;
@@ -695,7 +737,7 @@ export function useStickerEditor({
         for (const result of produced) compositor.releaseResult(result);
         return;
       }
-      groupStickerResourcesRef.current = {
+      const resources: GroupStickerResources = {
         key: groupStickerComposeKey,
         targetId,
         maskUrl,
@@ -708,14 +750,15 @@ export function useStickerEditor({
         artworkUrl,
         levels,
       };
+      groupStickerResourcesRef.current = resources;
       setGroupStickerArtwork((current) => ({
         ...current,
         [targetId]: { key: groupStickerComposeKey, url: artworkUrl },
       }));
-      setGroupStickerResourcesKey(groupStickerComposeKey);
+      setGroupStickerResources(resources);
     })().catch(() => {
       for (const result of produced) compositor.releaseResult(result);
-      if (!cancelled) setGroupStickerResourcesKey(null);
+      if (!cancelled) setGroupStickerResources(null);
     });
 
     return () => {
@@ -781,22 +824,30 @@ export function useStickerEditor({
     viewerRef.current?.clearModelPartHover();
   }, [viewerRef]);
 
-  const resetModelPartPicking = useCallback(() => {
+  const releaseModelPartPicking = useCallback(() => {
     viewerRef.current?.restoreHiddenModelParts();
     clearModelPartPickingInteraction();
-    setModelPartPickingActive(false);
-    setHiddenModelPartCount(0);
   }, [clearModelPartPickingInteraction, viewerRef]);
 
-  useEffect(() => {
-    // Hidden parts must not leak into another model or editor session.
-    if (stickerEditingActive && engineReady) return;
-    resetModelPartPicking();
-  }, [engineReady, resetModelPartPicking, stickerEditingActive]);
+  // Hidden parts must not leak into another model or editor session.
+  const modelPartPickingScope = JSON.stringify([selectedAssetKey, state.weaponKey]);
+  const [seenModelPartPickingScope, setSeenModelPartPickingScope] = useState(modelPartPickingScope);
+  const modelPartPickingIdle = !(stickerEditingActive && engineReady);
+  if (seenModelPartPickingScope !== modelPartPickingScope
+    || (modelPartPickingIdle && (modelPartPickingActive || hiddenModelPartCount !== 0))) {
+    setSeenModelPartPickingScope(modelPartPickingScope);
+    setModelPartPickingActive(false);
+    setHiddenModelPartCount(0);
+  }
 
   useEffect(() => {
-    resetModelPartPicking();
-  }, [resetModelPartPicking, selectedAssetKey, state.weaponKey]);
+    if (stickerEditingActive && engineReady) return;
+    releaseModelPartPicking();
+  }, [engineReady, releaseModelPartPicking, stickerEditingActive]);
+
+  useEffect(() => {
+    releaseModelPartPicking();
+  }, [releaseModelPartPicking, selectedAssetKey, state.weaponKey]);
 
   useEffect(() => {
     if (stickerPartPickingActive) return;

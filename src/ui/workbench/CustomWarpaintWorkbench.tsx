@@ -156,9 +156,7 @@ export function CustomWarpaintWorkbench({
   useEffect(() => disarmRevert(), [editor?.dirty, editor?.activeSelectorId, disarmRevert]);
 
   // The materials source can vanish without a remount, so leave the Materials view then.
-  useEffect(() => {
-    if (!editor?.materials) setMaterialsActive(false);
-  }, [editor?.materials]);
+  if (materialsActive && !editor?.materials) setMaterialsActive(false);
 
   useEffect(() => {
     if (!dropHint) return;
