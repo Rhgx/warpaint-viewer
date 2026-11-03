@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { configureTf2Material } from '../viewer/materialConfig';
+import { EMISSIVE_DEFAULT_SCROLL, EMISSIVE_DEFAULT_STRENGTH, createEmissiveMaterial, whiteTexture } from '../viewer/overlays/emissive';
 import type { WeaponMaterial } from '../data/types';
 import type { ComposeResult, Compositor } from '../compositor/compositor';
 import type { ItemRuntime, ShowcaseBoardOptions } from './showcaseTypes';
@@ -91,13 +92,31 @@ export class BoardPaints {
   #applyMaterial(runtime: ItemRuntime): void {
     const { weaponKey, paint } = runtime.item;
     const weapon = this.host.options.weapons.find((entry) => entry.key === weaponKey);
-    const source = this.host.options.materialOverride(weaponKey, paint.kitId) ?? weapon?.material;
-    if (!source) return;
+    const request = (runtime.materialRequest += 1);
+    // Anything waiting on the material keeps waiting on its maps when this finds the same material again.
+    const previous = runtime.materialReady;
+    runtime.materialReady = this.host.options.resolveMaterial(weaponKey, paint.kitId)
+      .catch((cause: unknown) => {
+        console.error('[showcase] material failed', weaponKey, cause);
+        return undefined;
+      })
+      .then((resolved) => {
+        const source = resolved ?? weapon?.material;
+        // A newer paint on the same item may have asked since.
+        if (!source || this.host.isDisposed() || request !== runtime.materialRequest) return previous;
+        return this.#configureMaterial(runtime, source) ?? previous;
+      });
+  }
+
+  #configureMaterial(runtime: ItemRuntime, source: WeaponMaterial): Promise<void> | null {
     const key = JSON.stringify(source);
-    if (runtime.materialKey === key) return;
+    if (runtime.materialKey === key) return null;
     runtime.materialKey = key;
     const { material, uniforms } = runtime;
     configureTf2Material(source, material, uniforms);
+    // The shader tests alpha with its own uniform; three's shadow pass only reads this, so cut-away parts cast no shadow.
+    material.alphaTest = uniforms.uTf2AlphaTestRef.value;
+    material.needsUpdate = true;
     material.normalMap = null;
     uniforms.uTf2UseExponentMap.value = 0;
     uniforms.uTf2UseLightwarp.value = 0;
@@ -107,13 +126,18 @@ export class BoardPaints {
     uniforms.uTf2SelfIllumMaskMap.value = null;
     uniforms.uTf2DetailMap.value = null;
     material.envMap = this.host.getEnvMap();
+    this.removeEmissive(runtime);
     this.host.markDirty();
-    runtime.materialReady = this.#loadMaterialMaps(runtime, source, key);
+    return this.#loadMaterialMaps(runtime, source, key);
   }
 
   async #loadMaterialMaps(runtime: ItemRuntime, source: WeaponMaterial, key: string): Promise<void> {
     const { material, uniforms } = runtime;
-    const [normal, exponent, lightwarp, selfIllum, detail, envMap] = await Promise.all([
+    // vertexlitgeneric_dx9.cpp skips the pass at zero strength.
+    const strength = source.emissiveBlendStrength ?? EMISSIVE_DEFAULT_STRENGTH;
+    const glows = !!source.emissiveBlend && strength > 0;
+    const glowMap = (ref: string | null | undefined) => (glows && ref ? this.#materialMap(ref, THREE.RepeatWrapping) : null);
+    const [normal, exponent, lightwarp, selfIllum, detail, envMap, glowBase, glowFlow, glowMask] = await Promise.all([
       source.normalMap ? this.#materialMap(source.normalMap, THREE.RepeatWrapping) : null,
       source.phongExponentTexture ? this.#materialMap(source.phongExponentTexture, THREE.RepeatWrapping) : null,
       // The diffuse-warp ramp is read clamped and without sRGB decode, as in Source.
@@ -121,6 +145,9 @@ export class BoardPaints {
       source.selfIllumMask ? this.#materialMap(source.selfIllumMask, THREE.RepeatWrapping) : null,
       source.detailTexture ? this.#materialMap(source.detailTexture, THREE.RepeatWrapping) : null,
       source.envmapTexture ? this.#cubemap(source.envmapTexture) : null,
+      glowMap(source.emissiveBlendBaseTexture),
+      glowMap(source.emissiveBlendFlowTexture),
+      glowMap(source.emissiveBlendTexture),
     ]);
     if (this.host.isDisposed() || runtime.materialKey !== key) return;
     if (normal) {
@@ -144,7 +171,55 @@ export class BoardPaints {
     material.envMap = envMap ?? this.host.getEnvMap();
     runtime.customEnvMap = !!envMap;
     material.needsUpdate = true;
+    // Switching to another paint and back loads the same material twice, and both loads land here.
+    this.removeEmissive(runtime);
+    if (glowBase) this.#addEmissive(runtime, source, strength, glowBase, glowFlow, glowMask);
     this.host.markDirty();
+  }
+
+  /** The scroll stays at time zero: the board draws on demand and exports one frame. */
+  #addEmissive(runtime: ItemRuntime, source: WeaponMaterial, strength: number, base: THREE.Texture, flow: THREE.Texture | null, mask: THREE.Texture | null): void {
+    const material = createEmissiveMaterial(runtime.material.side);
+    material.clippingPlanes = runtime.material.clippingPlanes;
+    const { uniforms } = material;
+    uniforms.uEmissiveCoverage.value = 1;
+    uniforms.uEmissiveStrength.value = strength;
+    uniforms.uEmissiveTint.value.setRGB(...(source.emissiveBlendTint ?? [1, 1, 1]));
+    uniforms.uEmissiveScroll.value.fromArray(source.emissiveBlendScrollVector ?? EMISSIVE_DEFAULT_SCROLL);
+    uniforms.uEmissiveBaseMap.value = base;
+    // A missing map would sample as black and swallow the glow.
+    uniforms.uEmissiveFlowMap.value = flow ?? whiteTexture();
+    uniforms.uEmissiveMap.value = mask ?? whiteTexture();
+    const overlays = runtime.meshes.filter((mesh) => !runtime.lenses.has(mesh)).map((mesh) => {
+      let overlay: THREE.Mesh;
+      if (mesh instanceof THREE.SkinnedMesh) {
+        const skinned = new THREE.SkinnedMesh(mesh.geometry, material);
+        skinned.bindMode = mesh.bindMode;
+        skinned.bind(mesh.skeleton, mesh.bindMatrix);
+        overlay = skinned;
+      } else {
+        overlay = new THREE.Mesh(mesh.geometry, material);
+      }
+      overlay.frustumCulled = false;
+      overlay.renderOrder = 1;
+      overlay.raycast = () => undefined;
+      mesh.add(overlay);
+      return overlay;
+    });
+    runtime.emissive = { material, overlays };
+  }
+
+  removeEmissive(runtime: ItemRuntime): void {
+    if (!runtime.emissive) return;
+    for (const overlay of runtime.emissive.overlays) overlay.removeFromParent();
+    runtime.emissive.material.dispose();
+    runtime.emissive = null;
+  }
+
+  syncEmissiveGeometry(runtime: ItemRuntime): void {
+    for (const overlay of runtime.emissive?.overlays ?? []) {
+      if (overlay.parent instanceof THREE.Mesh) overlay.geometry = overlay.parent.geometry;
+    }
   }
 
   /** Board units to drawing-buffer pixels at the current framing. */
@@ -167,6 +242,7 @@ export class BoardPaints {
   }
 
   async applyPaint(runtime: ItemRuntime, pixelsPerUnit = this.pixelsPerUnit()): Promise<void> {
+    if (runtime.item.image) return;
     this.#applyMaterial(runtime);
     const { kitId, team, wearIndex, seed } = runtime.item.paint;
     // Never smaller than before: shrinking would compose again only to look worse.

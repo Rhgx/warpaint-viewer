@@ -33,6 +33,13 @@
     <meta name="twitter:image" content="https://rhgx.github.io/warpaint-viewer/social-preview.png" />
     <meta name="twitter:image:alt" content="TF2 Warpaint Viewer logo" />
     <title>TF2 Warpaint Viewer</title>
+    <!-- Matches --bg in tokens.css; the stylesheets arrive too late to prevent a white flash. -->
+    <style>
+      html {
+        background: #16181c;
+        color-scheme: dark;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

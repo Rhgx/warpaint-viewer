@@ -44,11 +44,8 @@ export default defineConfig({
     rolldownOptions: { plugins: [emptyFs] },
   },
   server: {
-    // Transform the app shell before the browser asks for it.
     warmup: { clientFiles: ['./src/main.tsx', './src/app/App.tsx'] },
-    // The watcher crawls the whole root at startup. These gitignored folders hold tens of thousands of
-    // pipeline, scratch and build files the app never imports, and crawling them blocked the dev server
-    // (and its dependency prebundle) for most of a cold start.
+    // Crawling these gitignored folders blocked the dev server and its prebundle for most of a cold start.
     watch: { ignored: ['**/staging/**', '**/.tmp/**', '**/dist/**'] },
   },
   test: {

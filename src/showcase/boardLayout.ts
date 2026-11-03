@@ -4,17 +4,19 @@ import { BOARD_HEIGHT, BOARD_WIDTH, GRID_CELL } from './boardMetrics';
 import type { LayoutPacking } from './layouts';
 import { HANGING_PARTS } from './poseRigs';
 import type { FitProblem, GridSize, ItemRuntime, ShowcaseItem } from './showcaseTypes';
-import { FACES_RIGHT, restingRoll } from './weaponGeometry';
+import { FACES_RIGHT, restingRoll, shownSideFlip } from './weaponGeometry';
 
 // Lays weapons out on the board: rows or columns, the largest size that fits, and each weapon placed on the grid.
 /** Sizes a layout may give its weapons: the size slider's top, and small enough for a full board. */
-const LAYOUT_SCALE = { min: 0.25, max: 1.5 };
+export const LAYOUT_SCALE = { min: 0.25, max: 1.5 };
 
 /** What the layout reads and changes on the board; the board builds it once and its accessors read live state. */
 export interface BoardLayoutHost {
   grid(): GridSize;
   spacing(): number;
   keepApart(): boolean;
+  /** 0.5 to 1 of the largest fitting size. */
+  layoutSize(): number;
   readonly scene: THREE.Scene;
   appendItem(item: ShowcaseItem): void;
   reshape(runtime: ItemRuntime): void;
@@ -55,27 +57,22 @@ export function arrange(host: BoardLayoutHost, rows: ItemRuntime[][], pack: Layo
   let turnInward = inward;
   const flipOf = ({ groups, vertical }: Grouping, groupIndex: number, index: number) => {
     const { item } = groups[groupIndex][index];
+    const shown = shownSideFlip(item.weaponKey, item.part);
+    if (shown !== undefined) return shown;
     // A weapon resting upright would turn its back to the viewer.
     if (!turnInward || restingRoll(item.weaponKey, item.part)) return false;
     const [position, count] = vertical ? [groupIndex, groups.length] : [index, groups[groupIndex].length];
     const middle = (count - 1) / 2;
     return FACES_RIGHT.has(item.weaponKey) && !item.part ? position > middle + 0.01 : position < middle - 0.01;
   };
-  // Height leaves out a hanging piece, which runs off the bottom. Width keeps it, unless the
-  // weapon ends the bottom row with the piece on the outer side.
+  // Height leaves out a hanging piece, which runs off the bottom. Width keeps it.
   const space = (grouping: Grouping, groupIndex: number, index: number): Box => {
     const runtime = grouping.groups[groupIndex][index];
     const flip = flipOf(grouping, groupIndex, index);
     const outline = full(runtime, flip);
     if (!hangs(runtime)) return outline;
     const own = body(runtime, flip);
-    const box = { ...outline, minY: own.minY, maxY: own.maxY };
-    const group = grouping.groups[groupIndex];
-    if (!grouping.vertical && groupIndex === grouping.groups.length - 1) {
-      if (index === 0) box.minX = Math.max(box.minX, own.minX);
-      if (index === group.length - 1) box.maxX = Math.min(box.maxX, own.maxX);
-    }
-    return box;
+    return { ...outline, minY: own.minY, maxY: own.maxY };
   };
   const along = (box: Box, vertical: boolean) => (vertical ? box.maxY - box.minY : box.maxX - box.minX);
   // How much the weapons can grow before a group runs out of length or the groups out of room.
@@ -157,24 +154,12 @@ export function arrange(host: BoardLayoutHost, rows: ItemRuntime[][], pack: Layo
       turnInward = inward;
     }
   }
-  const factor = THREE.MathUtils.clamp(Math.floor(Math.min(fit(best), LAYOUT_SCALE.max) * 100) / 100, LAYOUT_SCALE.min, LAYOUT_SCALE.max);
+  const factor = THREE.MathUtils.clamp(Math.floor(Math.min(fit(best), LAYOUT_SCALE.max) * host.layoutSize() * 100) / 100, LAYOUT_SCALE.min, LAYOUT_SCALE.max);
   const { groups, vertical } = best;
-  // Weapons whose hanging piece runs straight off a side edge, by that edge.
-  const sideways = new Map<ItemRuntime, 'left' | 'right'>();
   groups.forEach((group, groupIndex) => group.forEach((runtime, index) => {
     runtime.item.scale = factor;
     runtime.item.flipped = flipOf(best, groupIndex, index);
     host.reshape(runtime);
-    const hanging = HANGING_PARTS[runtime.item.weaponKey];
-    if (!hanging || runtime.item.part || vertical || groupIndex !== groups.length - 1) return;
-    const outline = full(runtime, runtime.item.flipped);
-    const own = body(runtime, runtime.item.flipped);
-    const side = outline.maxX - own.maxX > own.minX - outline.minX ? 'right' : 'left';
-    if ((side === 'left' && index === 0) || (side === 'right' && index === group.length - 1)) {
-      runtime.item.pose = { ...runtime.item.pose, ...hanging.sidePose };
-      host.reshape(runtime);
-      sideways.set(runtime, side);
-    }
   }));
 
   // Measured again at the final size and facing.
@@ -196,12 +181,8 @@ export function arrange(host: BoardLayoutHost, rows: ItemRuntime[][], pack: Layo
       itemStart += along(box, vertical) + freeAlong;
       const centerX = -BOARD_WIDTH / 2 + (vertical ? groupCenter : itemCenter);
       const centerY = BOARD_HEIGHT / 2 - (vertical ? itemCenter : groupCenter);
-      // A hanging piece's weapon sits against the edge the piece runs off.
-      const side = sideways.get(runtime);
-      const x = side === 'right' ? Math.floor((BOARD_WIDTH / 2 - gap - box.maxX) / cell) * cell
-        : side === 'left' ? Math.ceil((-BOARD_WIDTH / 2 + gap - box.minX) / cell) * cell
-          : Math.round((centerX - (box.minX + box.maxX) / 2) / cell) * cell;
-      const y = hangs(runtime) && !side && !vertical && groupIndex === groups.length - 1
+      const x = Math.round((centerX - (box.minX + box.maxX) / 2) / cell) * cell;
+      const y = hangs(runtime) && !vertical && groupIndex === groups.length - 1
         ? Math.round((-BOARD_HEIGHT / 2 + gap - box.minY) / cell) * cell
         : Math.round((centerY - (box.minY + box.maxY) / 2) / cell) * cell;
       // Rounding to the grid can still bring two weapons a cell too close.

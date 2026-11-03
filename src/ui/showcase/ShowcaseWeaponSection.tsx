@@ -4,7 +4,7 @@ import { CopyPlus, Dices, FlipHorizontal2, PackageOpen, RotateCcw, RotateCw, Tra
 import type { PaintkitEntry } from '../../data/types';
 import { TILT_LIMIT, type ShowcaseBoard } from '../../showcase/ShowcaseBoard';
 import type { FitProblem, ShowcaseItem, ShowcasePaint } from '../../showcase/showcaseTypes';
-import { restingRoll } from '../../showcase/weaponGeometry';
+import { restingRoll, shownSideFlip } from '../../showcase/weaponGeometry';
 import { POSE_RIGS, WEAPON_PARTS, defaultPose, snapMarks, snapPose, type PoseControl } from '../../showcase/poseRigs';
 import { randomSeed } from '../../hooks/useBootData';
 import { SliderField, SwitchField, TeamToggle, WearSliderField } from '../common/controls';
@@ -57,7 +57,8 @@ export const WeaponSection = memo(function WeaponSection({ board, item, problem,
   const size = Math.round(item.scale * 100);
   const restPose = item.part ? {} : defaultPose(item.weaponKey);
   const restRoll = restingRoll(item.weaponKey, item.part);
-  const changed = item.roll !== restRoll || item.tilt !== 0 || item.turn !== 0 || item.flipped || item.scale !== 1
+  const restFlipped = shownSideFlip(item.weaponKey, item.part) ?? false;
+  const changed = item.roll !== restRoll || item.tilt !== 0 || item.turn !== 0 || item.flipped !== restFlipped || item.scale !== 1
     || JSON.stringify(item.pose) !== JSON.stringify(restPose);
   return (
     <Section
@@ -66,7 +67,7 @@ export const WeaponSection = memo(function WeaponSection({ board, item, problem,
       onClose={() => board.select(null)}
       canReset={changed}
       onReset={() => {
-        board.update(id, { roll: restRoll, tilt: 0, turn: 0, flipped: false, scale: 1, pose: restPose });
+        board.update(id, { roll: restRoll, tilt: 0, turn: 0, flipped: restFlipped, scale: 1, pose: restPose });
         board.settle(id);
       }}
     >
@@ -127,6 +128,155 @@ export const WeaponSection = memo(function WeaponSection({ board, item, problem,
         <button type="button" className="showcase-btn" title="Duplicate" onClick={() => void board.duplicate(id)}>{DUPLICATE_ICON}</button>
         <span className="showcase-actions-spacer" />
         <button type="button" className="showcase-btn showcase-btn-danger" title="Remove (Delete)" onClick={() => board.remove(id)}>{REMOVE_ICON}</button>
+      </div>
+    </Section>
+  );
+});
+
+/** Only what a picture can do: it has no paint, and lies flat. */
+export const ImageSection = memo(function ImageSection({ board, item, problem, rotationSnap, rotationStep }: {
+  board: ShowcaseBoard;
+  item: ShowcaseItem;
+  problem: FitProblem;
+  rotationSnap: number;
+  rotationStep: number;
+}) {
+  const { id } = item;
+  const settle = useCallback(() => board.settle(id), [board, id]);
+  const setRoll = useCallback((roll: number) => board.update(id, { roll }), [board, id]);
+  const setSize = useCallback((value: number) => board.update(id, { scale: value / 100 }), [board, id]);
+  const typeSize = useCallback((value: number) => { board.update(id, { scale: value / 100 }); board.settle(id); }, [board, id]);
+  return (
+    <Section
+      title={item.weaponName}
+      onClose={() => board.select(null)}
+      canReset={item.roll !== 0 || item.flipped || item.scale !== 1}
+      onReset={() => {
+        board.update(id, { roll: 0, flipped: false, scale: 1 });
+        board.settle(id);
+      }}
+    >
+      {problem && <span className="showcase-fit">{describeProblem(problem)}</span>}
+      <ValueSlider label="Roll" display={`${item.roll}°`} value={item.roll} min={-180} max={180} step={rotationSnap || 1}
+        markers={ZERO_MARK} onChange={setRoll} onCommit={settle} />
+      <SizeSlider size={Math.round(item.scale * 100)} onChange={setSize} onCommit={settle} onType={typeSize} />
+      <div className="showcase-actions">
+        <button type="button" className="showcase-btn" title={`Rotate ${rotationStep}° counterclockwise (Q)`}
+          onClick={() => board.rotateBy(id, rotationStep)}>{ROTATE_CCW_ICON}</button>
+        <button type="button" className="showcase-btn" title={`Rotate ${rotationStep}° clockwise (E)`}
+          onClick={() => board.rotateBy(id, -rotationStep)}>{ROTATE_CW_ICON}</button>
+        <button type="button" className="showcase-btn" title="Mirror (F)"
+          onClick={() => { board.update(id, { flipped: !item.flipped }); board.settle(id); }}>{FLIP_ICON}</button>
+        <button type="button" className="showcase-btn" title="Duplicate" onClick={() => void board.duplicate(id)}>{DUPLICATE_ICON}</button>
+        <span className="showcase-actions-spacer" />
+        <button type="button" className="showcase-btn showcase-btn-danger" title="Remove (Delete)" onClick={() => board.remove(id)}>{REMOVE_ICON}</button>
+      </div>
+    </Section>
+  );
+});
+
+function shared<T>(values: readonly T[]): T | null {
+  return values.length && values.every((value) => value === values[0]) ? values[0] : null;
+}
+
+export const MultiSection = memo(function MultiSection({ board, items, paintkits, wearNames, rotationSnap, rotationStep }: {
+  board: ShowcaseBoard;
+  items: readonly ShowcaseItem[];
+  paintkits: readonly PaintkitEntry[];
+  wearNames: readonly string[];
+  rotationSnap: number;
+  rotationStep: number;
+}) {
+  const [seedDraft, setSeedDraft] = useState<string | null>(null);
+  const ids = items.map((item) => item.id);
+  // Pictures only share the transform and actions: they have no paint, and lie flat.
+  const weapons = items.filter((item) => !item.image);
+  const weaponIds = weapons.map((item) => item.id);
+  const kitOf = (item: ShowcaseItem) => paintkits.find((kit) => kit.id === item.paint.kitId);
+  // Wear and team only reach the weapons whose paint varies by them, as on a single weapon.
+  const byWear = items.filter((item) => kitOf(item)?.perWear);
+  const byTeam = items.filter((item) => kitOf(item)?.hasTeamTextures);
+  const wear = shared(byWear.map((item) => item.paint.wearIndex));
+  const team = shared(byTeam.map((item) => item.paint.team));
+  const seed = shared(weapons.map((item) => item.paint.seed));
+  const roll = shared(items.map((item) => item.roll));
+  const tilt = shared(weapons.map((item) => item.tilt));
+  const turn = shared(weapons.map((item) => item.turn));
+  const size = shared(items.map((item) => Math.round(item.scale * 100)));
+  const settle = () => board.settleMany(ids);
+  // Esc blurs the input before the cleared draft renders, so the blur has to be told not to commit.
+  const seedCancelled = useRef(false);
+  const commitSeed = () => {
+    const typed = (seedDraft ?? '').trim();
+    setSeedDraft(null);
+    if (seedCancelled.current) {
+      seedCancelled.current = false;
+      return;
+    }
+    if (/^\d+$/.test(typed) && BigInt(typed) < 2n ** 64n) board.setPaintMany(weaponIds, { seed: BigInt(typed).toString() });
+  };
+  return (
+    <Section title={weapons.length === items.length ? `${items.length} weapons` : `${items.length} selected`} onClose={() => board.select(null)}>
+      {weapons.length > 0 && <p className="showcase-section-note">Pick a war paint in the catalog to repaint the ones it covers.</p>}
+      {byWear.length > 0 && (
+        <SliderRow label="Wear" value={wear === null ? 'Mixed' : wearNames[wear]}>
+          <WearSliderField value={wear ?? byWear[0].paint.wearIndex} names={wearNames}
+            onChange={(wearIndex) => board.setPaintMany(byWear.map((item) => item.id), { wearIndex })} />
+        </SliderRow>
+      )}
+      {byTeam.length > 0 && (
+        <SliderRow label="Team" value={team === null ? 'Mixed' : null}>
+          <TeamToggle team={team ?? byTeam[0].paint.team} onChange={(next) => board.setPaintMany(byTeam.map((item) => item.id), { team: next })} />
+        </SliderRow>
+      )}
+      {weapons.length > 0 && <Row label="Seed">
+        <span className="showcase-seed">
+          <input
+            className="ui-input showcase-seed-input"
+            inputMode="numeric"
+            aria-label="Pattern seed for all selected"
+            placeholder="Mixed"
+            value={seedDraft ?? seed ?? ''}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => setSeedDraft(event.currentTarget.value.replace(/\D/g, ''))}
+            onBlur={commitSeed}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur();
+              if (event.key === 'Escape') {
+                seedCancelled.current = true;
+                event.currentTarget.blur();
+              }
+            }}
+          />
+          <button type="button" className="showcase-btn" title="A random seed for each" aria-label="A random seed for each"
+            onClick={() => board.setPaintMany(weaponIds, () => ({ seed: randomSeed() }))}>
+            <Dices size={13} />
+          </button>
+        </span>
+      </Row>}
+      <div className="showcase-subheading">Transform</div>
+      <ValueSlider label="Roll" display={roll === null ? 'Mixed' : `${roll}°`} value={roll ?? items[0].roll} min={-180} max={180} step={rotationSnap || 1}
+        markers={ZERO_MARK} onChange={(value) => board.updateMany(ids, { roll: value })} onCommit={settle} />
+      {weapons.length > 0 && (
+        <>
+          <ValueSlider label="Tilt" display={tilt === null ? 'Mixed' : `${tilt}°`} value={tilt ?? weapons[0].tilt} min={-TILT_LIMIT} max={TILT_LIMIT} step={1}
+            markers={ZERO_MARK} onChange={(value) => board.updateMany(weaponIds, { tilt: value })} onCommit={settle} />
+          <ValueSlider label="Turn" display={turn === null ? 'Mixed' : `${turn}°`} value={turn ?? weapons[0].turn} min={-TILT_LIMIT} max={TILT_LIMIT} step={1}
+            markers={ZERO_MARK} onChange={(value) => board.updateMany(weaponIds, { turn: value })} onCommit={settle} />
+        </>
+      )}
+      <ValueSlider label="Size" display={size === null ? 'Mixed' : `${size}%`}
+        value={Math.min(SIZE_SLIDER.max, Math.max(SIZE_SLIDER.min, size ?? Math.round(items[0].scale * 100)))} min={SIZE_SLIDER.min} max={SIZE_SLIDER.max} step={5}
+        markers={HUNDRED_MARK} onChange={(value) => board.updateMany(ids, { scale: value / 100 })} onCommit={settle} />
+      <div className="showcase-actions">
+        <button type="button" className="showcase-btn" title={`Rotate each ${rotationStep}° counterclockwise (Q)`}
+          onClick={() => board.rotateMany(ids, rotationStep)}>{ROTATE_CCW_ICON}</button>
+        <button type="button" className="showcase-btn" title={`Rotate each ${rotationStep}° clockwise (E)`}
+          onClick={() => board.rotateMany(ids, -rotationStep)}>{ROTATE_CW_ICON}</button>
+        <button type="button" className="showcase-btn" title="Show the other side of each (F)" onClick={() => board.flipMany(ids)}>{FLIP_ICON}</button>
+        <button type="button" className="showcase-btn" title="Hide them" onClick={() => board.setHiddenMany(ids, true)}>{EYE_OFF_ICON}</button>
+        <span className="showcase-actions-spacer" />
+        <button type="button" className="showcase-btn showcase-btn-danger" title="Remove them (Delete)" onClick={() => board.removeMany(ids)}>{REMOVE_ICON}</button>
       </div>
     </Section>
   );

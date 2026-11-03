@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { GripVertical } from 'lucide-react';
 
 import type { Grade, Manifest } from '../../data/types';
@@ -13,18 +13,40 @@ import { EYE_ICON, EYE_OFF_ICON, Section } from './ShowcaseControls';
 const LAYER_ROW_HEIGHT = 36;
 
 /** Placed weapons, front first like an image editor's layers. Handles reorder only when weapons may overlap; otherwise the list is for picking and hiding. */
-function LayerList({ board, manifest, items, selectedId, problems, reorderable, grades }: {
+function LayerList({ board, manifest, items, selectedIds, problems, reorderable, grades }: {
   board: ShowcaseBoard | null;
   manifest: Manifest;
   grades: ReadonlyMap<number, Grade | undefined>;
   items: readonly ShowcaseItem[];
-  selectedId: string | null;
+  selectedIds: readonly string[];
   problems: Readonly<Record<string, FitProblem>>;
   reorderable: boolean;
 }) {
   const [drag, setDrag] = useState<{ id: string; from: number; to: number } | null>(null);
   // Front first: the last item on the board is drawn on top.
   const layers = useMemo(() => [...items].reverse(), [items]);
+  const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
+  // Where a Shift+click range starts: the row last clicked without Shift.
+  const anchorRef = useRef<string | null>(null);
+  const layersRef = useRef(layers);
+  useEffect(() => {
+    layersRef.current = layers;
+  }, [layers]);
+  const onRowClick = useCallback((id: string, event: ReactMouseEvent<HTMLLIElement>) => {
+    if (!board) return;
+    if (event.shiftKey && anchorRef.current) {
+      const order = layersRef.current.map((item) => item.id);
+      const from = order.indexOf(anchorRef.current);
+      const to = order.indexOf(id);
+      if (from >= 0 && to >= 0) {
+        board.setSelection(order.slice(Math.min(from, to), Math.max(from, to) + 1));
+        return;
+      }
+    }
+    anchorRef.current = id;
+    if (event.ctrlKey || event.metaKey) board.toggleSelected(id);
+    else board.select(id);
+  }, [board]);
   const icons = useMemo(() => new Map(manifest.weapons.map((weapon) => [weapon.key, weapon.icon])), [manifest]);
   const countRef = useRef(layers.length);
   useEffect(() => {
@@ -62,9 +84,10 @@ function LayerList({ board, manifest, items, selectedId, problems, reorderable, 
           : drag && index > drag.from && index <= drag.to ? -LAYER_ROW_HEIGHT
             : drag && index < drag.from && index >= drag.to ? LAYER_ROW_HEIGHT : 0;
         return (
-          <LayerRow key={item.id} board={board} item={item} index={index} icon={icons.get(item.weaponKey)} grade={grades.get(item.paint.kitId)}
-            selected={item.id === selectedId} problem={!!problems[item.id]} reorderable={reorderable}
-            offset={offset} dragging={drag?.id === item.id} onHandleDown={onHandleDown} />
+          <LayerRow key={item.id} board={board} item={item} index={index} grade={grades.get(item.paint.kitId)}
+            icon={item.image ? board?.imageUrl(item.image.assetId) : icons.get(item.weaponKey) && joinData(icons.get(item.weaponKey) ?? '')}
+            selected={selected.has(item.id)} problem={!!problems[item.id]} reorderable={reorderable}
+            offset={offset} dragging={drag?.id === item.id} onHandleDown={onHandleDown} onRowClick={onRowClick} />
         );
       })}
     </ol>
@@ -74,7 +97,7 @@ function LayerList({ board, manifest, items, selectedId, problems, reorderable, 
 const GRIP_ICON = <GripVertical size={13} />;
 
 /** One layer; rows whose weapon did not change skip re-rendering. */
-const LayerRow = memo(function LayerRow({ board, item, index, icon, grade, selected, problem, reorderable, offset, dragging, onHandleDown }: {
+const LayerRow = memo(function LayerRow({ board, item, index, icon, grade, selected, problem, reorderable, offset, dragging, onHandleDown, onRowClick }: {
   board: ShowcaseBoard | null;
   item: ShowcaseItem;
   index: number;
@@ -86,6 +109,7 @@ const LayerRow = memo(function LayerRow({ board, item, index, icon, grade, selec
   offset: number;
   dragging: boolean;
   onHandleDown: (id: string, from: number, event: ReactPointerEvent<HTMLSpanElement>) => void;
+  onRowClick: (id: string, event: ReactMouseEvent<HTMLLIElement>) => void;
 }) {
   return (
     <li
@@ -95,14 +119,14 @@ const LayerRow = memo(function LayerRow({ board, item, index, icon, grade, selec
       data-dragging={dragging || undefined}
       data-problem={problem || undefined}
       style={offset ? { transform: `translateY(${offset}px)` } : undefined}
-      onClick={() => !item.hidden && board?.select(item.id)}
+      onClick={(event) => !item.hidden && onRowClick(item.id, event)}
     >
       {reorderable && (
         <span className="showcase-layer-handle" title="Drag to change the order" onPointerDown={(event) => onHandleDown(item.id, index, event)}>
           {GRIP_ICON}
         </span>
       )}
-      {icon ? <img src={joinData(icon)} alt="" draggable={false} /> : <span className="showcase-layer-noicon" />}
+      {icon ? <img src={icon} alt="" draggable={false} /> : <span className="showcase-layer-noicon" />}
       <span className="showcase-layer-text">
         <span className="showcase-layer-name">{item.weaponName}</span>
         <span className="showcase-layer-paint showcase-paint-name" data-grade={grade}>{item.paint.kitName}</span>
@@ -119,18 +143,21 @@ const LayerRow = memo(function LayerRow({ board, item, index, icon, grade, selec
   );
 });
 
-export const LayersSection = memo(function LayersSection({ board, manifest, items, selectedId, problems, reorderable, grades }: {
+export const LayersSection = memo(function LayersSection({ board, manifest, items, selectedIds, problems, reorderable, grades, open, onOpenChange }: {
   board: ShowcaseBoard | null;
   manifest: Manifest;
   items: readonly ShowcaseItem[];
-  selectedId: string | null;
+  selectedIds: readonly string[];
   problems: Readonly<Record<string, FitProblem>>;
   reorderable: boolean;
   grades: ReadonlyMap<number, Grade | undefined>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   return (
-    <Section title={reorderable ? 'Layers' : 'Weapons'} aside={<span className="showcase-section-count">{items.length}</span>}>
-      <LayerList board={board} manifest={manifest} items={items} selectedId={selectedId} problems={problems} reorderable={reorderable} grades={grades} />
+    <Section title={reorderable ? 'Layers' : 'Weapons'} aside={<span className="showcase-section-count">{items.length}</span>}
+      open={open} onOpenChange={onOpenChange}>
+      <LayerList board={board} manifest={manifest} items={items} selectedIds={selectedIds} problems={problems} reorderable={reorderable} grades={grades} />
     </Section>
   );
 });

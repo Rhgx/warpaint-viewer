@@ -1,13 +1,10 @@
 import { memo } from 'react';
-import { Copy, ImageDown } from 'lucide-react';
 
-import { canCopyImages } from '../../device';
 import { SelectField, SliderField, SwitchField } from '../common/controls';
 import type { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
 import { LightPad, Row, Section, Segmented, SliderRow } from './ShowcaseControls';
-import { useBusy } from './useBusy';
 import {
-  EXPORT_KEYS, LOOK_KEYS, OUTPUT_WIDTHS, PLACEMENT_KEYS, ROTATION_SNAPS, defaultsFor, settingsChanged, type ShowcaseSettings,
+  EXPORT_KEYS, LOOK_KEYS, OUTPUT_WIDTHS, PLACEMENT_KEYS, ROTATION_SNAPS, defaultsFor, exportsBackdrop, settingsChanged, type ShowcaseSettings,
 } from './showcaseSettings';
 
 // Board-wide settings sections, shown when no weapon is selected.
@@ -75,32 +72,23 @@ export const LookSection = memo(function LookSection({ settings, onChange: set }
   );
 });
 
-export const ExportSection = memo(function ExportSection({ board, settings, onChange: set, hasItems, onSave, onCopy }: SettingsSectionProps & {
+export const ExportSection = memo(function ExportSection({ board, settings, onChange: set }: SettingsSectionProps & {
   board: ShowcaseBoard | null;
-  hasItems: boolean;
-  onSave: () => Promise<void>;
-  onCopy: () => Promise<void>;
 }) {
-  const [busy, run] = useBusy();
   return (
     <Section title="Export" canReset={settingsChanged(settings, EXPORT_KEYS)} onReset={() => set(defaultsFor(EXPORT_KEYS))}>
       <Row label="Resolution">
         <SelectField value={String(settings.outputWidth)} onChange={(value) => set({ outputWidth: Number(value) })}
           options={OUTPUT_WIDTHS.map((width) => {
-            const size = board?.outputSize(width) ?? { width, height: Math.round(width * 9 / 16) };
+            const size = board?.outputSize(width, exportsBackdrop(settings)) ?? { width, height: Math.round(width * 9 / 16) };
             return { value: String(width), label: `${size.width} × ${size.height}` };
           })} />
       </Row>
-      <div className="showcase-export-actions">
-        <button type="button" className="showcase-btn showcase-btn-primary" disabled={busy || !hasItems} onClick={run(onSave)}>
-          <ImageDown size={13} /> Save PNG
-        </button>
-        {canCopyImages() && (
-          <button type="button" className="showcase-btn" disabled={busy || !hasItems} onClick={run(onCopy)}>
-            <Copy size={13} /> Copy
-          </button>
-        )}
-      </div>
+      {settings.background !== 'transparent' && (
+        <Row label="Include backdrop">
+          <SwitchField checked={settings.exportBackdrop} onChange={(exportBackdrop) => set({ exportBackdrop })} ariaLabel="Include backdrop" />
+        </Row>
+      )}
     </Section>
   );
 });

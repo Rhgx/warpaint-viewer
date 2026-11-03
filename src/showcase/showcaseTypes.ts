@@ -37,6 +37,8 @@ export interface ShowcaseItem {
   part: string | null;
   /** Pieces of this weapon left out of it, usually because they were taken out. */
   hiddenParts: readonly string[];
+  /** Set when this item is an imported picture rather than a weapon; it then has no weapon key and a placeholder paint. */
+  image?: { assetId: string; aspect: number };
 }
 
 /** Where a pose control's drag handle is on screen, in canvas pixels. */
@@ -50,7 +52,9 @@ export type FitProblem = { kind: 'outside' } | { kind: 'overlap'; otherName: str
 
 export interface ShowcaseSnapshot {
   items: readonly ShowcaseItem[];
+  /** Null when none or several are selected. */
   selectedId: string | null;
+  selectedIds: readonly string[];
   problems: Readonly<Record<string, FitProblem>>;
   /** Live feedback while dragging or rotating; null when idle. */
   pending: { id: string; problem: FitProblem } | null;
@@ -67,8 +71,7 @@ export interface ShowcaseBoardOptions {
   textureMetadata?: Record<string, TextureMetadata>;
   textureMetadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined;
   resolveRecipe: (kitId: number, weaponKey: string, team: 'red' | 'blu', wearIndex: number) => Promise<RecipeNode | null>;
-  /** The material a paint swaps in for a weapon, if any; otherwise the weapon wears its own. */
-  materialOverride: (weaponKey: string, kitId: number) => WeaponMaterial | undefined;
+  resolveMaterial: (weaponKey: string, kitId: number) => Promise<WeaponMaterial | undefined>;
   /** Face URLs for a material's $envmap, or null to reflect the default cubemap. */
   resolveCubemap: (ref: string) => Promise<string[] | null>;
 }
@@ -104,6 +107,9 @@ export interface ItemRuntime {
   uniforms: Tf2Uniforms;
   /** Which material settings and maps the TF2 shader is configured with. */
   materialKey: string;
+  emissive: { material: THREE.ShaderMaterial; overlays: THREE.Mesh[] } | null;
+  /** The emissive pass leaves these out, as in the viewer. */
+  lenses: ReadonlySet<THREE.Mesh>;
   /** The material names its own $envmap rather than reflecting the board's default. */
   customEnvMap?: boolean;
   /** Height of whatever this weapon rests on when overlaps are allowed. */
@@ -121,6 +127,8 @@ export interface ItemRuntime {
   paintKey: string;
   /** Settles once the material's own maps (normal, phong, cubemap...) are on. */
   materialReady: Promise<void>;
+  /** Counts material lookups, so a slow one cannot replace the answer to a newer one. */
+  materialRequest: number;
   /** Resolution of the paint it wears or is waiting on; it only ever grows. */
   paintSize: number;
   /** Which bones' triangles are drawn; changes when a piece is taken out or put back. */
@@ -145,4 +153,5 @@ export interface DragState {
   fromY: number;
   external: boolean;
   candidate: { x: number; y: number } | null;
+  group?: readonly { id: string; dx: number; dy: number }[];
 }

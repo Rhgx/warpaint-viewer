@@ -1,21 +1,29 @@
 import { memo, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
-import { ChevronDown, Eye, EyeOff, RotateCcw, X } from 'lucide-react';
+import { Popover } from '@base-ui/react/popover';
+import { ChevronDown, Eye, EyeOff, HelpCircle, RotateCcw, X } from 'lucide-react';
 
 import { SliderField } from '../common/controls';
 
 // Panel building blocks shared by the showcase sections.
 
 /** A collapsible panel section, optionally with a button that returns its settings to the defaults. */
-export function Section({ title, children, onReset, canReset = false, aside, onClose }: {
+export function Section({ title, children, onReset, canReset = false, aside, onClose, open: controlledOpen, onOpenChange }: {
   title: string;
   children: ReactNode;
   onReset?: () => void;
   canReset?: boolean;
   aside?: ReactNode;
   onClose?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(true);
+  const [ownOpen, setOwnOpen] = useState(true);
+  const open = controlledOpen ?? ownOpen;
+  const setOpen = (update: (value: boolean) => boolean) => {
+    if (onOpenChange) onOpenChange(update(open));
+    else setOwnOpen(update);
+  };
   return (
     <div className="inspector-section showcase-section">
       <div className="showcase-section-header">
@@ -50,11 +58,30 @@ export function Row({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-export function SliderRow({ label, value, children }: { label: string; value: ReactNode; children: ReactNode }) {
+/** Opens on hover for a mouse and on tap for touch, like the paint details card. */
+function HintButton({ label, hint }: { label: string; hint: string }) {
+  return (
+    <Popover.Root>
+      <Popover.Trigger openOnHover delay={150} className="showcase-hint" aria-label={`What ${label} does`}>
+        <HelpCircle size={12} />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner side="top" align="start" sideOffset={6} collisionPadding={10} className="showcase-hint-positioner">
+          <Popover.Popup className="showcase-hint-popup">{hint}</Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+export function SliderRow({ label, value, children, hint }: { label: string; value: ReactNode; children: ReactNode; hint?: string }) {
   return (
     <div className="showcase-slider">
       <div className="showcase-slider-head">
-        <span>{label}</span>
+        <span className="showcase-slider-label">
+          {label}
+          {hint && <HintButton label={label} hint={hint} />}
+        </span>
         <span className="showcase-slider-value">{value}</span>
       </div>
       {children}
@@ -82,7 +109,7 @@ export function Segmented<T extends string | number>({ label, value, options, on
 }
 
 /** A slider row that only re-renders when its own value changes. */
-export const ValueSlider = memo(function ValueSlider({ label, display, value, min, max, step, markers, onChange, onCommit }: {
+export const ValueSlider = memo(function ValueSlider({ label, display, value, min, max, step, markers, onChange, onCommit, hint }: {
   label: string;
   display: string;
   value: number;
@@ -92,9 +119,10 @@ export const ValueSlider = memo(function ValueSlider({ label, display, value, mi
   markers?: readonly number[];
   onChange: (value: number) => void;
   onCommit?: (value: number) => void;
+  hint?: string;
 }) {
   return (
-    <SliderRow label={label} value={display}>
+    <SliderRow label={label} value={display} hint={hint}>
       <SliderField value={value} min={min} max={max} step={step} ariaLabel={label} markers={markers} onChange={onChange} onCommit={onCommit} />
     </SliderRow>
   );

@@ -208,7 +208,7 @@ export const POSE_RIGS: Record<string, PoseRig> = {
   c_sniperrifle: {
     controls: [{ id: 'cap', label: 'Close lens cap', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: 'vm_weapon_bone_2' }],
     apply(bones, values) {
-      rotateAboutModel(bones.get('vm_weapon_bone_2'), AXIS_X, -100 * percent(values, 'cap'));
+      rotateAboutModel(bones.get('vm_weapon_bone_2'), AXIS_X, 205 * percent(values, 'cap'));
     },
   },
   c_rocketlauncher: {
@@ -222,12 +222,11 @@ export const POSE_RIGS: Record<string, PoseRig> = {
 const SHELL: WeaponPart = { id: 'shell', label: 'Shell', bones: ['vm_weapon_bone'] };
 const SPARE_GRENADE: WeaponPart = { id: 'grenade', label: 'Spare grenade', bones: ['weapon_bone_4'], loose: true };
 
-/** Pieces allowed past the board's edge, like the Medi Gun's hose, which still keeps other weapons apart. `sidePose` runs it off a side edge, `pose` arcs it off the bottom. */
-export const HANGING_PARTS: Record<string, { bones: readonly string[]; pose: Record<string, number>; sidePose: Record<string, number> }> = {
+/** Pieces allowed past the board's edge, which still keep other weapons apart. `pose` arcs them off the bottom. */
+export const HANGING_PARTS: Record<string, { bones: readonly string[]; pose: Record<string, number> }> = {
   c_medigun: {
     bones: ['joint_hose01', ...HOSE_JOINTS],
     pose: { drop: 30, curl: 15, swing: 0, lever: LEVER_DOWN },
-    sidePose: { drop: 0, curl: 0, swing: 0, lever: LEVER_DOWN },
   },
 };
 

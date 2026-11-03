@@ -97,7 +97,7 @@ export function ShowcaseGizmo({ board, item, snap }: { board: ShowcaseBoard; ite
           <path className="showcase-gizmo-knob-tip" d="M -6.5 1 L -4 3.8 L -1.4 0.9 Z" />
         </g>
       </g>
-      <g transform={`rotate(${-item.roll} ${x} ${y})`}>
+      {!item.image && <g transform={`rotate(${-item.roll} ${x} ${y})`}>
         <g className="showcase-gizmo-axis" data-axis="tilt" data-state={state('tilt')}>
           <path className="showcase-gizmo-line showcase-gizmo-back" d={tiltArcs.back} />
           <path className="showcase-gizmo-line" d={tiltArcs.front} />
@@ -108,7 +108,7 @@ export function ShowcaseGizmo({ board, item, snap }: { board: ShowcaseBoard; ite
           <path className="showcase-gizmo-line" d={turnArcs.front} />
           <ellipse className="showcase-gizmo-hit" cx={x} cy={y} rx={radius * 0.86} ry={depth} {...handleProps('turn')} />
         </g>
-      </g>
+      </g>}
       {shown && (
         <g transform={`translate(${x} ${y + radius + 20})`}>
           <rect className="showcase-gizmo-readout-bg" x={-36} y={-12} width={72} height={24} rx={4} />

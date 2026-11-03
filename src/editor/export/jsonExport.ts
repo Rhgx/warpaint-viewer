@@ -52,8 +52,7 @@ function operationReference(definition: JsonObject): number {
 
 const PROTO_DEF_TYPE_NAMES = new Map(Object.entries(PROTO_DEF_TYPE_NUMBERS).map(([name, number]) => [number, name]));
 
-// Match the community proto_defs dump: tab indentation and enum names ("DEF_TYPE_PAINTKIT_OPERATION")
-// rather than their numbers. The importer maps the names back, so the round-trip guard still holds.
+// Matches the community proto_defs dump. The importer maps the enum names back, so the round-trip guard still holds.
 function dumpStyleValue(key: string, value: unknown): unknown {
   return key === 'type' && typeof value === 'number' ? PROTO_DEF_TYPE_NAMES.get(value) ?? value : value;
 }

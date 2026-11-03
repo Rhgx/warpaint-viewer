@@ -19,8 +19,10 @@ export interface ShowcaseSettings {
   shadow: number;
   background: BoardBackground;
   outputWidth: number;
+  exportBackdrop: boolean;
   /** Drag handles on the moving parts of the selected weapon, next to the pose sliders. */
   poseHandles: boolean;
+  weaponSize: number;
 }
 
 const DEFAULT_SETTINGS: ShowcaseSettings = {
@@ -37,21 +39,25 @@ const DEFAULT_SETTINGS: ShowcaseSettings = {
   shadow: 60,
   background: 'framed',
   outputWidth: 1920,
+  exportBackdrop: true,
   poseHandles: true,
+  weaponSize: 100,
 };
 
 export const PLACEMENT_KEYS = ['snapToGrid', 'grid', 'keepApart', 'spacing', 'keepInside', 'rotationSnap', 'showFootprints'] as const;
 export const LOOK_KEYS = ['lightAzimuth', 'lightElevation', 'shadows', 'shadow', 'background'] as const;
-export const EXPORT_KEYS = ['outputWidth'] as const;
+export const EXPORT_KEYS = ['outputWidth', 'exportBackdrop'] as const;
 type SettingKeys = readonly (keyof ShowcaseSettings)[];
 
 export const SETTINGS_STORAGE_KEY = 'warpaint-viewer:showcase-settings';
 export const ROTATION_SNAPS = [45, 30, 15, 5, 0];
+export const WEAPON_SIZE = { min: 50, max: 100, step: 5 };
 const ALLOWED_VALUES: Partial<Record<keyof ShowcaseSettings, readonly unknown[]>> = {
   grid: ['fine', 'normal', 'coarse'],
   background: ['framed', 'pegboard', 'transparent'],
   rotationSnap: ROTATION_SNAPS,
   outputWidth: OUTPUT_WIDTHS,
+  weaponSize: Array.from({ length: (WEAPON_SIZE.max - WEAPON_SIZE.min) / WEAPON_SIZE.step + 1 }, (_, index) => WEAPON_SIZE.min + index * WEAPON_SIZE.step),
 };
 
 /** Saved settings, keeping only values that still match the current options. */
@@ -74,6 +80,9 @@ export function loadSettings(): ShowcaseSettings {
   }
   return settings;
 }
+
+/** A transparent background has no backdrop to leave out, and keeps the shadows set in Look. */
+export const exportsBackdrop = (settings: ShowcaseSettings) => settings.exportBackdrop || settings.background === 'transparent';
 
 export function describeProblem(problem: FitProblem): string {
   if (!problem) return 'Fits on the board';

@@ -134,14 +134,20 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
               <section className="controls-help-section" aria-labelledby="showcase-board-heading">
                 <h3 id="showcase-board-heading">Board</h3>
                 <ControlRow keys={<><Key>Drag up from the tray</Key><Key>{TOUCH_ONLY_DEVICE ? 'Tap a card' : 'Click a card'}</Key></>}>Place a weapon</ControlRow>
-                <ControlRow keys={<Key>Drag a weapon</Key>}>Move it</ControlRow>
+                <ControlRow keys={<Key>Drag a weapon</Key>}>Move it, with the rest of the selection</ControlRow>
                 <ControlRow keys={<Key>{TOUCH_ONLY_DEVICE ? 'Tap a weapon' : 'Click a weapon'}</Key>}>Select it</ControlRow>
+                {!TOUCH_ONLY_DEVICE && (
+                  <>
+                    <ControlRow keys={<><Key>Ctrl</Key><Key>Click</Key></>}>Add a weapon to the selection, or take it out</ControlRow>
+                    <ControlRow keys={<><Key>Shift</Key><Key>Click in the list</Key></>}>Select a run of weapons</ControlRow>
+                  </>
+                )}
                 <ControlRow keys={<Key>Esc</Key>}>Deselect</ControlRow>
                 <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo</ControlRow>
                 <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo</ControlRow>
               </section>
               <section className="controls-help-section" aria-labelledby="showcase-selected-heading">
-                <h3 id="showcase-selected-heading">Selected or carried weapon</h3>
+                <h3 id="showcase-selected-heading">Selected or carried weapons</h3>
                 <ControlRow keys={<><Key>Q</Key><Key>E</Key></>}>Turn left or right by the rotation snap</ControlRow>
                 <ControlRow keys={<><Key>R</Key><Key>Shift+R</Key></>}>Turn right or left</ControlRow>
                 <ControlRow keys={<Key>F</Key>}>Show the other side</ControlRow>

@@ -14,15 +14,22 @@ import type { WeaponEntry } from '../data/types';
 import type { LayoutPacking, LayoutRows } from './layouts';
 import { POSE_RIGS, WEAPON_PARTS, defaultPose, isRigged, partOf, type RestBone } from './poseRigs';
 import { FRAME_SIDE, frameTexture, makeTf2Material, pegboardTexture, vignetteTexture } from './boardTextures';
-import { BOARD_HEIGHT, BOARD_WIDTH, GRID_CELL } from './boardMetrics';
+import { BOARD_HEIGHT, BOARD_WIDTH, GRID_CELL, LOGO_SPACE } from './boardMetrics';
 import { arrange, type BoardLayoutHost } from './boardLayout';
+import { compose } from './boardComposition';
 import { cellKey, refreshFootprint } from './footprint';
 import type { BoardBackground, DragState, GridSize, ItemRuntime, MeshSubset, PoseHandle, ShowcaseBoardOptions, ShowcaseItem, ShowcasePaint, ShowcaseSnapshot, FitProblem } from './showcaseTypes';
-import { baseOrientation, findPartBases, partSubset, posedPositions, restingRoll } from './weaponGeometry';
+import { baseOrientation, findPartBases, partSubset, posedPositions, restingRoll, shownSideFlip } from './weaponGeometry';
 import { BoardPaints, MIN_SOURCE_SIZE } from './boardPaints';
+import { prepareBoardImage, pruneBoardImages, readBoardImage, saveBoardImage } from './boardImages';
 import { PoseHandles } from './poseHandles';
 
 const RESTING_LIFT = 1.4;
+/** Pictures lie flat on the board, under the weapons. */
+const IMAGE_LIFT = 0.1;
+/** Enough that pictures stacked on each other keep their order. */
+const IMAGE_THICKNESS = 0.02;
+const IMAGE_PAINT: ShowcasePaint = { kitId: -1, kitName: 'Image', team: 'red', wearIndex: 0, seed: '0' };
 const CARRY_LIFT = 7;
 /** Tilt and turn stay small so every weapon still reads as a side profile on the pegboard. */
 export const TILT_LIMIT = 30;
@@ -39,12 +46,29 @@ const FIT_PADDING = 1.06;
 const LOW_END = (navigator.hardwareConcurrency ?? 8) <= 4
   || ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) <= 4;
 
-const copyItem = (item: ShowcaseItem): ShowcaseItem => ({ ...item, paint: { ...item.paint }, pose: { ...item.pose }, hiddenParts: [...item.hiddenParts] });
+const wrapRoll = (roll: number) => (((roll + 180) % 360) + 360) % 360 - 180;
+
+const copyItem = (item: ShowcaseItem): ShowcaseItem => ({ ...item, paint: { ...item.paint }, pose: { ...item.pose }, hiddenParts: [...item.hiddenParts], ...(item.image ? { image: { ...item.image } } : {}) });
 
 const keyI = (key: number) => Math.floor(key / 4096) - 2048;
 const keyJ = (key: number) => (key % 4096) - 2048;
 
 let idCounter = 0;
+
+interface AppliedLayout {
+  rows: LayoutRows;
+  pack: LayoutPacking | undefined;
+  inward: boolean;
+  upright: boolean;
+  logoSpace: boolean;
+}
+
+type ManyPatch = Partial<Pick<ShowcaseItem, 'roll' | 'tilt' | 'turn' | 'flipped' | 'scale'>>;
+
+interface HistoryEntry {
+  items: ShowcaseItem[];
+  layout: AppliedLayout | null;
+}
 
 /** The TF2 shader omits three's 1/pi Lambert factor, as Source does, so lights run at Source strength; the board's Lambert surfaces are brightened by pi to match. */
 const SOURCE_LIGHT_SCALE = 1 / Math.PI;
@@ -64,6 +88,9 @@ export class ShowcaseBoard {
   readonly #handles: PoseHandles;
   readonly #compositor: Compositor;
   readonly #runtimes = new Map<string, ItemRuntime>();
+  /** Kept after a picture is removed, so undo can bring it back. */
+  readonly #imageAssets = new Map<string, Promise<{ url: string; texture: THREE.Texture } | null>>();
+  readonly #imageUrls = new Map<string, string>();
   readonly #listeners = new Set<() => void>();
   readonly #raycaster = new THREE.Raycaster();
   readonly #board: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshLambertMaterial>;
@@ -74,7 +101,7 @@ export class ShowcaseBoard {
   readonly #cells: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   readonly #resizeObserver: ResizeObserver;
   #items: ShowcaseItem[] = [];
-  #selectedId: string | null = null;
+  #selection: readonly string[] = [];
   #pending: ShowcaseSnapshot['pending'] = null;
   #snapshot: ShowcaseSnapshot;
   #drag: DragState | null = null;
@@ -82,6 +109,9 @@ export class ShowcaseBoard {
   readonly #lastValid = new Map<string, Pick<ShowcaseItem, 'roll' | 'tilt' | 'turn' | 'flipped' | 'scale' | 'pose'>>();
   #grid: GridSize = 'normal';
   #spacing = 1;
+  #layoutSize = 1;
+  /** Between updateMany and settleMany. */
+  #groupEditing = false;
   #showGrid = false;
   #snap = true;
   #keepApart = true;
@@ -128,6 +158,7 @@ export class ShowcaseBoard {
       grid: () => this.#grid,
       spacing: () => this.#spacing,
       keepApart: () => this.#keepApart,
+      layoutSize: () => this.#layoutSize,
       scene: this.#scene,
       appendItem: (item) => { this.#items = [...this.#items, item]; },
       reshape: (runtime) => this.#reshape(runtime),
@@ -296,7 +327,8 @@ export class ShowcaseBoard {
       && JSON.stringify(previous.pending.problem) === JSON.stringify(this.#pending.problem) ? previous.pending : this.#pending;
     return {
       items: this.#items,
-      selectedId: this.#selectedId,
+      selectedId: this.#selection.length === 1 ? this.#selection[0] : null,
+      selectedIds: this.#selection,
       problems: problems ?? {},
       pending,
       dragging: !!this.#drag,
@@ -319,6 +351,11 @@ export class ShowcaseBoard {
   setSpacing(cells: number): void {
     this.#spacing = cells;
     this.#emit();
+  }
+
+  /** Applies from the next layout. */
+  setLayoutSize(fraction: number): void {
+    this.#layoutSize = THREE.MathUtils.clamp(fraction, 0.5, 1);
   }
 
   setShowGrid(show: boolean): void {
@@ -458,10 +495,12 @@ export class ShowcaseBoard {
 
   #pendingExternal = false;
   #releasedWhileLoading = false;
-  /** Board states before and after the current one; each entry is a full item list. */
-  #past: ShowcaseItem[][] = [];
-  #future: ShowcaseItem[][] = [];
+  #past: HistoryEntry[] = [];
+  #future: HistoryEntry[] = [];
   #committed: ShowcaseItem[] = [];
+  /** What Fill lays out again; undo restores it along with the weapons. */
+  #layout: AppliedLayout | null = null;
+  #committedLayout: AppliedLayout | null = null;
   #restoring = false;
   #lastPointer = { x: 0, y: 0 };
 
@@ -475,26 +514,32 @@ export class ShowcaseBoard {
   undo(): void {
     const previous = this.#past.pop();
     if (!previous || this.#restoring) return;
-    this.#future.push(this.#committed);
-    void this.#restore(previous);
+    this.#future.push({ items: this.#committed, layout: this.#committedLayout });
+    this.#layout = this.#committedLayout = previous.layout;
+    void this.#restore(previous.items);
   }
 
   redo(): void {
     const next = this.#future.pop();
     if (!next || this.#restoring) return;
-    this.#past.push(this.#committed);
-    void this.#restore(next);
+    this.#past.push({ items: this.#committed, layout: this.#committedLayout });
+    this.#layout = this.#committedLayout = next.layout;
+    void this.#restore(next.items);
   }
 
   #checkpoint(): void {
     if (this.#restoring) return;
     this.#flushReshapes();
     const current = this.#items.map(copyItem);
-    if (JSON.stringify(current) === JSON.stringify(this.#committed)) return;
-    this.#past.push(this.#committed);
+    if (JSON.stringify(current) === JSON.stringify(this.#committed)) {
+      this.#committedLayout = this.#layout;
+      return;
+    }
+    this.#past.push({ items: this.#committed, layout: this.#committedLayout });
     if (this.#past.length > HISTORY_LIMIT) this.#past.shift();
     this.#future = [];
     this.#committed = current;
+    this.#committedLayout = this.#layout;
   }
 
   async #restore(target: ShowcaseItem[]): Promise<void> {
@@ -509,7 +554,7 @@ export class ShowcaseBoard {
       for (const saved of target) {
         let runtime = this.#runtimes.get(saved.id);
         // A removed weapon comes back under its old id, so later steps still find it.
-        runtime ??= (await this.#createRuntime(saved.weaponKey, saved.paint, saved.id, saved.part)) ?? undefined;
+        runtime ??= (await (saved.image ? this.#createImageRuntime(saved.image, saved.weaponName, saved.id) : this.#createRuntime(saved.weaponKey, saved.paint, saved.id, saved.part))) ?? undefined;
         if (!runtime) continue;
         runtime.item = copyItem(saved);
         void this.#applyPaint(runtime);
@@ -520,7 +565,7 @@ export class ShowcaseBoard {
       }
       this.#items = items;
       this.#committed = target.map(copyItem);
-      if (this.#selectedId && !wanted.has(this.#selectedId)) this.#selectedId = null;
+      if (this.#selection.some((id) => !wanted.has(id))) this.#selection = this.#selection.filter((id) => wanted.has(id));
       this.#restack();
       this.#updateCellMarkers();
     } finally {
@@ -530,7 +575,131 @@ export class ShowcaseBoard {
   }
 
   select(id: string | null): void {
-    this.#selectedId = id;
+    this.setSelection(id ? [id] : []);
+  }
+
+  /** Hidden or unknown weapons are left out. */
+  setSelection(ids: readonly string[]): void {
+    const shown = new Set(this.#items.filter((item) => !item.hidden).map((item) => item.id));
+    this.#selection = [...new Set(ids)].filter((id) => shown.has(id));
+    this.#updateCellMarkers();
+    this.#emit();
+  }
+
+  toggleSelected(id: string): void {
+    this.setSelection(this.#selection.includes(id) ? this.#selection.filter((entry) => entry !== id) : [...this.#selection, id]);
+  }
+
+  removeMany(ids: readonly string[]): void {
+    const doomed = new Set(ids);
+    const runtimes = [...doomed].map((id) => this.#runtimes.get(id)).filter((runtime): runtime is ItemRuntime => !!runtime);
+    if (!runtimes.length) return;
+    this.#selection = this.#selection.filter((id) => !doomed.has(id));
+    this.#items = this.#items.filter((item) => !doomed.has(item.id));
+    for (const runtime of runtimes) this.#disposeRuntime(runtime);
+    this.#restack();
+    this.#checkpoint();
+    this.#updateCellMarkers();
+    this.#emit();
+  }
+
+  setHiddenMany(ids: readonly string[], hidden: boolean): void {
+    const runtimes = ids.map((id) => this.#runtimes.get(id)).filter((runtime): runtime is ItemRuntime => !!runtime);
+    if (!runtimes.length) return;
+    for (const runtime of runtimes) {
+      runtime.item.hidden = hidden;
+      this.#replaceItem(runtime);
+      this.#applyTransform(runtime);
+    }
+    if (hidden) this.#selection = this.#selection.filter((id) => !ids.includes(id));
+    this.#restack();
+    this.#checkpoint();
+    this.#updateCellMarkers();
+    this.#emit();
+  }
+
+  setPaintMany(ids: readonly string[], patch: Partial<ShowcasePaint> | ((paint: ShowcasePaint) => Partial<ShowcasePaint>)): void {
+    const runtimes = ids.map((id) => this.#runtimes.get(id)).filter((runtime): runtime is ItemRuntime => !!runtime && !runtime.item.image);
+    if (!runtimes.length) return;
+    for (const runtime of runtimes) {
+      const change = typeof patch === 'function' ? patch(runtime.item.paint) : patch;
+      runtime.item = { ...runtime.item, paint: { ...runtime.item.paint, ...change } };
+      void this.#applyPaint(runtime);
+    }
+    const changed = new Map(runtimes.map((runtime) => [runtime.item.id, runtime.item]));
+    this.#items = this.#items.map((item) => changed.get(item.id) ?? item);
+    this.#checkpoint();
+    this.#emit();
+  }
+
+  /** A live edit; settleMany() then keeps it or puts them all back. */
+  updateMany(ids: readonly string[], patch: ManyPatch | ((item: ShowcaseItem) => ManyPatch)): void {
+    this.#groupEditing = true;
+    for (const id of ids) {
+      const runtime = this.#runtimes.get(id);
+      if (!runtime) continue;
+      Object.assign(runtime.item, typeof patch === 'function' ? patch(runtime.item) : patch);
+      this.#limitAngles(runtime.item);
+      this.#applyTransform(runtime);
+      this.#replaceItem(runtime);
+      this.#reshapeQueue.add(id);
+    }
+    // Any of them can stop fitting, so the snapshot checks the whole board rather than one live weapon.
+    this.#liveEditId = null;
+    this.#requestFrame();
+    this.#emit();
+  }
+
+  settleMany(ids: readonly string[]): void {
+    this.#flushReshapes();
+    this.#groupEditing = false;
+    this.#liveEditId = null;
+    const runtimes = ids.map((id) => this.#runtimes.get(id)).filter((runtime): runtime is ItemRuntime => !!runtime);
+    if (!runtimes.length) return;
+    if (runtimes.some((runtime) => this.#problemAt(runtime.item.id, runtime.item.x, runtime.item.y))) {
+      for (const runtime of runtimes) {
+        const valid = this.#lastValid.get(runtime.item.id);
+        if (!valid) continue;
+        Object.assign(runtime.item, valid, { pose: { ...valid.pose } });
+        this.#reshape(runtime);
+        this.#replaceItem(runtime);
+      }
+      this.#restack();
+    } else {
+      for (const runtime of runtimes) this.#rememberValid(runtime);
+    }
+    this.#pending = null;
+    this.#checkpoint();
+    this.#updateCellMarkers();
+    this.#sharpenPaints();
+    this.#emit();
+  }
+
+  rotateMany(ids: readonly string[], degrees: number): void {
+    this.updateMany(ids, (item) => ({ roll: wrapRoll(item.roll + degrees) }));
+    this.settleMany(ids);
+  }
+
+  flipMany(ids: readonly string[]): void {
+    this.updateMany(ids, (item) => ({ flipped: !item.flipped }));
+    this.settleMany(ids);
+  }
+
+  nudgeMany(ids: readonly string[], dx: number, dy: number): void {
+    this.#flushReshapes();
+    const group = new Set(ids);
+    const runtimes = [...group].map((id) => this.#runtimes.get(id)).filter((runtime): runtime is ItemRuntime => !!runtime);
+    if (!runtimes.length) return;
+    const cell = GRID_CELL[this.#grid];
+    // The group keeps its own spacing, so only the rest of the board can block it.
+    if (runtimes.some((runtime) => this.#problemAt(runtime.item.id, runtime.item.x + dx * cell, runtime.item.y + dy * cell, group))) return;
+    for (const runtime of runtimes) {
+      runtime.item.x += dx * cell;
+      runtime.item.y += dy * cell;
+      this.#replaceItem(runtime);
+    }
+    this.#restack();
+    this.#checkpoint();
     this.#updateCellMarkers();
     this.#emit();
   }
@@ -539,8 +708,7 @@ export class ShowcaseBoard {
     const runtime = this.#runtimes.get(id);
     if (!runtime) return;
     Object.assign(runtime.item, patch);
-    runtime.item.tilt = THREE.MathUtils.clamp(runtime.item.tilt, -TILT_LIMIT, TILT_LIMIT);
-    runtime.item.turn = THREE.MathUtils.clamp(runtime.item.turn, -TILT_LIMIT, TILT_LIMIT);
+    this.#limitAngles(runtime.item);
     // The weapon turns right away; its footprint and fit follow on the next frame.
     this.#applyTransform(runtime);
     this.#replaceItem(runtime);
@@ -555,6 +723,13 @@ export class ShowcaseBoard {
       this.#liveRulesKey = this.#rulesKey();
     }
     this.#emit();
+  }
+
+  /** Pictures always lie flat. */
+  #limitAngles(item: ShowcaseItem): void {
+    const limit = item.image ? 0 : TILT_LIMIT;
+    item.tilt = THREE.MathUtils.clamp(item.tilt, -limit, limit);
+    item.turn = THREE.MathUtils.clamp(item.turn, -limit, limit);
   }
 
   /** Re-measure everything edited since the last frame, then re-check the fit once. */
@@ -572,7 +747,8 @@ export class ShowcaseBoard {
     const runtime = lastId ? this.#runtimes.get(lastId) : undefined;
     if (runtime && lastId) {
       const problem = this.#problemAt(lastId, runtime.item.x, runtime.item.y);
-      if (!problem) this.#rememberValid(runtime);
+      // A group only becomes valid together, which settleMany decides.
+      if (!problem && !this.#groupEditing) this.#rememberValid(runtime);
       this.#pending = problem ? { id: lastId, problem } : null;
     }
     this.#updateCellMarkers();
@@ -582,8 +758,9 @@ export class ShowcaseBoard {
   /** Turn by a step. A carried weapon turns in hand (its fit is checked on drop); one on the board settles, springing back if the turn does not fit. */
   rotateBy(id: string, degrees: number): void {
     const runtime = this.#runtimes.get(id);
-    if (!runtime) return;
-    const roll = ((((runtime.item.roll + degrees + 180) % 360) + 360) % 360) - 180;
+    // A carried group keeps its shape until it lands.
+    if (!runtime || this.#drag?.group) return;
+    const roll = wrapRoll(runtime.item.roll + degrees);
     if (this.#drag?.id === id) {
       runtime.item.roll = roll;
       this.#reshape(runtime);
@@ -620,7 +797,7 @@ export class ShowcaseBoard {
   remove(id: string): void {
     const runtime = this.#runtimes.get(id);
     if (!runtime) return;
-    if (this.#selectedId === id) this.select(null);
+    if (this.#selection.includes(id)) this.setSelection(this.#selection.filter((entry) => entry !== id));
     this.#items = this.#items.filter((item) => item.id !== id);
     this.#disposeRuntime(runtime);
     this.#restack();
@@ -631,11 +808,14 @@ export class ShowcaseBoard {
   async duplicate(id: string): Promise<void> {
     const source = this.#runtimes.get(id)?.item;
     if (!source) return;
-    const runtime = await this.#createRuntime(source.weaponKey, source.paint, undefined, source.part);
+    const runtime = await (source.image ? this.#createImageRuntime(source.image, source.weaponName) : this.#createRuntime(source.weaponKey, source.paint, undefined, source.part));
     if (!runtime) return;
     Object.assign(runtime.item, { roll: source.roll, tilt: source.tilt, turn: source.turn, flipped: source.flipped, scale: source.scale, pose: { ...source.pose }, hiddenParts: [...source.hiddenParts] });
     this.#reshape(runtime);
-    const spot = this.#findFreeSpot(runtime);
+    // Pictures may overlap, so a free spot would just be the board's corner; one step along shows there are two.
+    const beside = { x: source.x + GRID_CELL[this.#grid] * 2, y: source.y - GRID_CELL[this.#grid] * 2 };
+    const spot = !source.image ? this.#findFreeSpot(runtime)
+      : this.#problemAt(runtime.item.id, beside.x, beside.y) ? this.#nearestFreeSpot(runtime.item.id, beside.x, beside.y) : beside;
     if (!spot) {
       this.#disposeRuntime(runtime);
       return;
@@ -646,9 +826,102 @@ export class ShowcaseBoard {
     this.select(runtime.item.id);
   }
 
+  /** Puts a saved board back as the starting point, so undo cannot step to the empty board before it. */
+  async load(items: readonly ShowcaseItem[]): Promise<void> {
+    // Saved ids came from an earlier session's counter; new weapons must not reuse them.
+    for (const item of items) {
+      const saved = Number(/^item-(\d+)$/.exec(item.id)?.[1]);
+      if (Number.isSafeInteger(saved)) idCounter = Math.max(idCounter, saved);
+    }
+    this.#past = [];
+    this.#future = [];
+    this.#layout = this.#committedLayout = null;
+    await this.#restore(items.map(copyItem));
+    const keep = new Set(items.flatMap((item) => (item.image ? [item.image.assetId] : [])));
+    void pruneBoardImages(keep).catch((cause: unknown) => console.error('[showcase] could not clean up saved images', cause));
+  }
+
+  /** Puts a picture in the middle of the board, sized to the space a logo layout leaves. Rejects when the file is not an image. */
+  async addImage(file: Blob, name: string): Promise<void> {
+    const clears = this.#clears;
+    const { blob, aspect } = await prepareBoardImage(file);
+    const assetId = crypto.randomUUID();
+    this.#imageAssets.set(assetId, this.#loadImageAsset(assetId, blob));
+    // Without storage the picture still works for this session.
+    await saveBoardImage(assetId, blob).catch((cause: unknown) => console.error('[showcase] could not save the image', cause));
+    const runtime = await this.#createImageRuntime({ assetId, aspect }, name);
+    if (!runtime) throw new Error('could not load the image');
+    if (clears !== this.#clears) {
+      this.#disposeRuntime(runtime);
+      return;
+    }
+    this.#commitRuntime(runtime);
+    this.select(runtime.item.id);
+    this.#updateCellMarkers();
+    this.#emit();
+  }
+
+  /** The picture's own address, for showing it in the layer list. */
+  imageUrl(assetId: string): string | undefined {
+    return this.#imageUrls.get(assetId);
+  }
+
+  async #loadImageAsset(assetId: string, blob: Blob): Promise<{ url: string; texture: THREE.Texture } | null> {
+    const url = URL.createObjectURL(blob);
+    this.#imageUrls.set(assetId, url);
+    const texture = await new THREE.TextureLoader().loadAsync(url);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 8;
+    return { url, texture };
+  }
+
+  /** An autosaved picture whose file is gone gives null, and it drops off the board. */
+  #imageAsset(assetId: string): Promise<{ url: string; texture: THREE.Texture } | null> {
+    let pending = this.#imageAssets.get(assetId);
+    if (!pending) {
+      pending = readBoardImage(assetId).then((blob) => (blob ? this.#loadImageAsset(assetId, blob) : null)).catch((cause: unknown) => {
+        console.error('[showcase] could not load a saved image', cause);
+        return null;
+      });
+      this.#imageAssets.set(assetId, pending);
+    }
+    return pending;
+  }
+
+  /** Built like a weapon, so moving, turning, selecting, stacking and undo all treat it as one. */
+  async #createImageRuntime(image: NonNullable<ShowcaseItem['image']>, name: string, id?: string): Promise<ItemRuntime | null> {
+    const asset = await this.#imageAsset(image.assetId);
+    if (!asset || this.#disposed) return null;
+    const fit = Math.min(LOGO_SPACE.width / image.aspect, LOGO_SPACE.height) / BASE_SCALE;
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(fit * image.aspect, fit),
+      // Unlit, so a logo keeps its own colors whatever the board's light does.
+      new THREE.MeshBasicMaterial({ map: asset.texture, transparent: true, depthWrite: false, side: THREE.DoubleSide, clippingPlanes: this.#clipPlanes }),
+    );
+    const item: ShowcaseItem = {
+      id: id ?? `item-${(idCounter += 1)}`, weaponKey: '', weaponName: name, paint: IMAGE_PAINT, x: 0, y: 0, roll: 0, tilt: 0, turn: 0, flipped: false, scale: 1, hidden: false, pose: {}, part: null, hiddenParts: [], image,
+    };
+    const uniforms = createTf2Uniforms();
+    // Never drawn: the runtime's material is for weapons, and the plane has its own.
+    const material = new THREE.MeshPhongMaterial();
+    const runtime: ItemRuntime = { item, root: new THREE.Group(), orient: new THREE.Group(), meshes: [mesh], bones: new Map(), footprint: null, material, uniforms, materialKey: '', emissive: null, lenses: new Set(), stackZ: 0, local: null, paintKey: '', materialReady: Promise.resolve(), materialRequest: 0, paintSize: 0, visibility: '', subsets: [] };
+    const flip = new THREE.Group();
+    flip.name = 'flip';
+    flip.add(mesh);
+    runtime.orient.rotation.order = 'ZXY';
+    runtime.orient.add(flip);
+    runtime.root.add(runtime.orient);
+    this.#runtimes.set(item.id, runtime);
+    this.#applyTransform(runtime);
+    this.#refreshFootprint(runtime);
+    return runtime;
+  }
+
   clear(): void {
-    // A layout still loading would otherwise land on the cleared board.
+    // A layout or picture still loading would otherwise land on the cleared board.
     this.#layoutRequest += 1;
+    this.#clears += 1;
+    this.#layout = null;
     this.select(null);
     for (const runtime of [...this.#runtimes.values()]) this.#disposeRuntime(runtime);
     this.#items = [];
@@ -657,9 +930,10 @@ export class ShowcaseBoard {
   }
 
   #layoutRequest = 0;
+  #clears = 0;
 
   /** Replace the board with a layout as one undo step; all weapons share the one size that fills the board. */
-  async applyLayout(rows: LayoutRows, pack?: LayoutPacking, inward = false, upright = false): Promise<void> {
+  async applyLayout(rows: LayoutRows, pack?: LayoutPacking, inward = false, upright = false, logoSpace = false): Promise<void> {
     const request = (this.#layoutRequest += 1);
     const loaded = await Promise.all(rows.map((row) => Promise.all(row.map((slot) => this.#createRuntime(slot.weaponKey, slot.paint, undefined, null, true)))));
     const groups = loaded.map((row) => row.filter((runtime): runtime is ItemRuntime => !!runtime)).filter((row) => row.length > 0);
@@ -672,25 +946,30 @@ export class ShowcaseBoard {
     this.#drag = null;
     this.select(null);
     const keep = new Set(groups.flat());
-    for (const runtime of [...this.#runtimes.values()]) if (!keep.has(runtime)) this.#disposeRuntime(runtime);
-    this.#items = [];
-    if (groups.length) this.#arrange(groups, pack, inward, upright);
+    // A layout replaces the weapons; a logo already on the board stays where it is.
+    for (const runtime of [...this.#runtimes.values()]) if (!keep.has(runtime) && !runtime.item.image) this.#disposeRuntime(runtime);
+    this.#items = this.#items.filter((item) => item.image);
+    if (pack === 'composed') compose(this.#layoutHost, groups.flat(), logoSpace);
+    else if (groups.length) arrange(this.#layoutHost, groups, pack, inward, upright);
     // Painted once at their final size, so none composes at 100% only to shrink.
     for (const runtime of groups.flat()) void this.#applyPaint(runtime);
+    this.#layout = { rows, pack, inward, upright, logoSpace };
     this.#restack();
     this.#checkpoint();
     this.#updateCellMarkers();
     this.#emit();
   }
 
-  #arrange(rows: ItemRuntime[][], pack: LayoutPacking | undefined, inward: boolean, upright: boolean): void {
-    arrange(this.#layoutHost, rows, pack, inward, upright);
+  async reapplyLayout(): Promise<void> {
+    if (!this.#layout || !this.#items.some((item) => !item.image)) return;
+    const { rows, pack, inward, upright, logoSpace } = this.#layout;
+    await this.applyLayout(rows, pack, inward, upright, logoSpace);
   }
 
   /** Change one item's paint, wear, team or pattern seed, as one undo step. */
   setPaint(id: string, patch: Partial<ShowcasePaint>): void {
     const runtime = this.#runtimes.get(id);
-    if (!runtime) return;
+    if (!runtime || runtime.item.image) return;
     runtime.item = { ...runtime.item, paint: { ...runtime.item.paint, ...patch } };
     this.#items = this.#items.map((item) => (item.id === id ? runtime.item : item));
     void this.#applyPaint(runtime);
@@ -756,6 +1035,7 @@ export class ShowcaseBoard {
       const material = makeTf2Material(uniforms, this.#envMap);
       material.clippingPlanes = this.#clipPlanes;
       const meshes: THREE.Mesh[] = [];
+      const lenses = new Set<THREE.Mesh>();
       const bones = new Map<string, RestBone>();
       model.updateMatrixWorld(true);
       const modelInverse = model.getWorldQuaternion(new THREE.Quaternion()).invert();
@@ -765,6 +1045,8 @@ export class ShowcaseBoard {
           bones.set(object.name, { bone: object, position: object.position.clone(), quaternion: object.quaternion.clone(), modelInverse: restInModel.invert(), base: null });
         }
         if (object instanceof THREE.Mesh) {
+          const sourceMaterial: THREE.Material | THREE.Material[] = object.material;
+          if (!Array.isArray(sourceMaterial) && /(?:^|_)lens(?:$|_)/i.test(sourceMaterial.name)) lenses.add(object);
           object.material = material;
           object.castShadow = true;
           object.receiveShadow = true;
@@ -783,14 +1065,14 @@ export class ShowcaseBoard {
         roll: restingRoll(weaponKey, part?.id ?? null),
         tilt: 0,
         turn: 0,
-        flipped: false,
+        flipped: shownSideFlip(weaponKey, part?.id ?? null) ?? false,
         scale: 1,
         hidden: false,
         pose: part ? {} : defaultPose(weaponKey),
         part: part?.id ?? null,
         hiddenParts: [],
       };
-      const runtime: ItemRuntime = { item, root: new THREE.Group(), orient: new THREE.Group(), meshes, bones, footprint: null, material, uniforms, materialKey: '', stackZ: 0, local: null, paintKey: '', materialReady: Promise.resolve(), paintSize: 0, visibility: '', subsets: [] };
+      const runtime: ItemRuntime = { item, root: new THREE.Group(), orient: new THREE.Group(), meshes, bones, footprint: null, material, uniforms, materialKey: '', emissive: null, lenses, stackZ: 0, local: null, paintKey: '', materialReady: Promise.resolve(), materialRequest: 0, paintSize: 0, visibility: '', subsets: [] };
       this.#syncVisibility(runtime);
       // Measured on what is drawn, so a loose reload piece beside the weapon does not shift its centre.
       model.updateMatrixWorld(true);
@@ -860,6 +1142,7 @@ export class ShowcaseBoard {
       mesh.geometry = cached.geometry;
       return cached.subset;
     });
+    this.#boardPaints.syncEmissiveGeometry(runtime);
     this.#dirty = true;
     this.#requestFrame();
   }
@@ -931,7 +1214,7 @@ export class ShowcaseBoard {
     root.visible = !item.hidden;
     const rig = item.part ? undefined : POSE_RIGS[item.weaponKey];
     if (rig) rig.apply(runtime.bones, item.pose);
-    root.position.set(item.x, item.y, runtime.stackZ + (runtime.footprint ? -runtime.footprint.minZ : 4) + RESTING_LIFT);
+    root.position.set(item.x, item.y, runtime.stackZ + (item.image ? IMAGE_LIFT : (runtime.footprint ? -runtime.footprint.minZ : 4) + RESTING_LIFT));
   }
 
   /** Re-pose and re-measure: the resting height depends on the new footprint's depth. */
@@ -944,6 +1227,7 @@ export class ShowcaseBoard {
 
   #topOf(runtime: ItemRuntime): number {
     const footprint = runtime.footprint;
+    if (runtime.item.image) return runtime.stackZ + IMAGE_THICKNESS;
     return footprint ? runtime.stackZ + footprint.maxZ - footprint.minZ + RESTING_LIFT : 0;
   }
 
@@ -965,10 +1249,10 @@ export class ShowcaseBoard {
       const runtime = this.#runtimes.get(item.id);
       if (!runtime || item.hidden) continue;
       runtime.stackZ = 0;
-      if (!this.#keepApart) {
-        for (const below of placed) {
-          if (this.#overlaps(runtime, below)) runtime.stackZ = Math.max(runtime.stackZ, this.#topOf(below));
-        }
+      for (const below of placed) {
+        // Keeping apart only spares weapons from resting on each other; pictures always stack in order.
+        const stacks = !this.#keepApart || (item.image && below.item.image);
+        if (stacks && this.#overlaps(runtime, below)) runtime.stackZ = Math.max(runtime.stackZ, this.#topOf(below));
       }
       this.#applyTransform(runtime);
       placed.push(runtime);
@@ -993,7 +1277,7 @@ export class ShowcaseBoard {
     runtime.item.hidden = hidden;
     this.#replaceItem(runtime);
     this.#applyTransform(runtime);
-    if (hidden && this.#selectedId === id) this.#selectedId = null;
+    if (hidden) this.#selection = this.#selection.filter((entry) => entry !== id);
     this.#restack();
     this.#checkpoint();
     this.#updateCellMarkers();
@@ -1003,6 +1287,13 @@ export class ShowcaseBoard {
   #disposeRuntime(runtime: ItemRuntime): void {
     runtime.root.removeFromParent();
     runtime.material.dispose();
+    this.#boardPaints.removeEmissive(runtime);
+    if (runtime.item.image) {
+      for (const mesh of runtime.meshes) {
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
+    }
     this.#runtimes.delete(runtime.item.id);
     this.#releaseRetiredPreviews();
     this.#sweepPaints();
@@ -1012,7 +1303,8 @@ export class ShowcaseBoard {
     refreshFootprint(runtime, GRID_CELL[this.#grid], () => (this.#footprintVersion += 1));
   }
 
-  #problemAt(id: string, x: number, y: number): FitProblem {
+  /** `ignore` leaves out weapons moving with this one. */
+  #problemAt(id: string, x: number, y: number, ignore?: ReadonlySet<string>): FitProblem {
     const runtime = this.#runtimes.get(id);
     const footprint = runtime?.footprint;
     if (!footprint) return null;
@@ -1031,9 +1323,10 @@ export class ShowcaseBoard {
       // Parts may hang past the edge, but the weapon itself stays on the board.
       return { kind: 'outside' };
     }
-    if (!this.#keepApart) return null;
+    // Keeping apart is for weapons; a logo may lie under or near them.
+    if (!this.#keepApart || runtime.item.image) return null;
     for (const other of this.#items) {
-      if (other.id === id || other.hidden) continue;
+      if (other.id === id || other.hidden || other.image || ignore?.has(other.id)) continue;
       const otherRuntime = this.#runtimes.get(other.id);
       if (!otherRuntime?.footprint) continue;
       const otherI = Math.round(other.x / cell);
@@ -1053,6 +1346,23 @@ export class ShowcaseBoard {
   }
 
   #nearestFreeSpot(id: string, x: number, y: number, maxRing = 16): { x: number; y: number } | null {
+    return this.#nearestSpot((spotX, spotY) => !this.#problemAt(id, spotX, spotY), x, y, maxRing);
+  }
+
+  /** A group keeps its own spacing, so only the rest of the board counts. */
+  #dragProblem(drag: DragState, x: number, y: number): FitProblem {
+    if (!drag.group) return this.#problemAt(drag.id, x, y);
+    const carried = new Set([drag.id, ...drag.group.map((member) => member.id)]);
+    const own = this.#problemAt(drag.id, x, y, carried);
+    if (own) return own;
+    for (const member of drag.group) {
+      const problem = this.#problemAt(member.id, x + member.dx, y + member.dy, carried);
+      if (problem) return problem;
+    }
+    return null;
+  }
+
+  #nearestSpot(fits: (x: number, y: number) => boolean, x: number, y: number, maxRing = 16): { x: number; y: number } | null {
     const cell = GRID_CELL[this.#grid];
     for (let ring = 1; ring <= maxRing; ring += 1) {
       let best: { x: number; y: number } | null = null;
@@ -1063,7 +1373,7 @@ export class ShowcaseBoard {
           const distance = di * di + dj * dj;
           if (distance >= bestDistance) continue;
           const spot = { x: x + di * cell, y: y + dj * cell };
-          if (!this.#problemAt(id, spot.x, spot.y)) {
+          if (fits(spot.x, spot.y)) {
             best = spot;
             bestDistance = distance;
           }
@@ -1106,19 +1416,26 @@ export class ShowcaseBoard {
       const offsetJ = Math.round(y / cell);
       for (const key of footprint.cells) add(keyI(key) + offsetI, keyJ(key) + offsetJ, hex);
     };
+    const drag = this.#drag;
     if (this.#showGrid) {
       for (const item of this.#items) {
-        if (item.id !== this.#drag?.id) drawItem(item.id, item.x, item.y, 0x8a96a8);
+        if (item.id !== drag?.id && !drag?.group?.some((member) => member.id === item.id)) drawItem(item.id, item.x, item.y, 0x8a96a8);
       }
     }
-    const drag = this.#drag;
     if (drag?.candidate) {
-      const ok = !this.#problemAt(drag.id, drag.candidate.x, drag.candidate.y);
-      drawItem(drag.id, drag.candidate.x, drag.candidate.y, ok ? 0x46c07a : 0xe06060);
-    } else if (this.#selectedId) {
-      const item = this.#items.find((entry) => entry.id === this.#selectedId);
+      const hex = this.#dragProblem(drag, drag.candidate.x, drag.candidate.y) ? 0xe06060 : 0x46c07a;
+      drawItem(drag.id, drag.candidate.x, drag.candidate.y, hex);
+      for (const member of drag.group ?? []) drawItem(member.id, drag.candidate.x + member.dx, drag.candidate.y + member.dy, hex);
+    } else if (this.#selection.length === 1) {
+      const item = this.#items.find((entry) => entry.id === this.#selection[0]);
       // A selected weapon that fits keeps a clean view; only a conflict is marked.
       if (item && this.#problemAt(item.id, item.x, item.y)) drawItem(item.id, item.x, item.y, 0xe06060);
+    } else {
+      // Several selected have no gizmo, so their footprints show which they are.
+      for (const id of this.#selection) {
+        const item = this.#items.find((entry) => entry.id === id);
+        if (item) drawItem(item.id, item.x, item.y, this.#problemAt(item.id, item.x, item.y) ? 0xe06060 : 0x4f8dff);
+      }
     }
     this.#dirty = true;
     this.#requestFrame();
@@ -1208,13 +1525,19 @@ export class ShowcaseBoard {
   #onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0) return;
     const runtime = this.#pick(event.clientX, event.clientY);
+    if (event.ctrlKey || event.metaKey) {
+      if (runtime) this.toggleSelected(runtime.item.id);
+      return;
+    }
     if (!runtime) {
       this.select(null);
       return;
     }
     const point = this.#boardPoint(event.clientX, event.clientY);
     if (!point) return;
-    this.select(runtime.item.id);
+    // Pressing a weapon in a selection of several carries them all; letting go without moving selects just it.
+    const carriesGroup = this.#selection.length > 1 && this.#selection.includes(runtime.item.id);
+    if (!carriesGroup) this.select(runtime.item.id);
     this.#drag = {
       id: runtime.item.id,
       grabX: point.x - runtime.item.x,
@@ -1223,7 +1546,14 @@ export class ShowcaseBoard {
       fromY: runtime.item.y,
       external: false,
       candidate: { x: runtime.item.x, y: runtime.item.y },
+      group: carriesGroup
+        ? this.#selection.flatMap((id) => {
+          const other = id === runtime.item.id ? undefined : this.#runtimes.get(id)?.item;
+          return other ? [{ id, dx: other.x - runtime.item.x, dy: other.y - runtime.item.y }] : [];
+        })
+        : undefined,
     };
+    this.#updateCellMarkers();
     this.#requestFrame();
     this.#options.canvas.style.cursor = 'grabbing';
     window.addEventListener('pointermove', this.#onWindowMove);
@@ -1262,17 +1592,21 @@ export class ShowcaseBoard {
     drag.candidate = this.#snap
       ? { x: Math.round(rawX / cell) * cell, y: Math.round(rawY / cell) * cell }
       : { x: rawX, y: rawY };
-    const problem = this.#problemAt(drag.id, drag.candidate.x, drag.candidate.y);
+    const problem = this.#dragProblem(drag, drag.candidate.x, drag.candidate.y);
     // The weapon is carried above the board under the pointer; its flat
     // silhouette marks where it will land.
     let floor = 0;
     if (!this.#keepApart) {
       for (const item of this.#items) {
         const other = this.#runtimes.get(item.id);
-        if (other && other !== runtime) floor = Math.max(floor, this.#topOf(other));
+        if (other && other !== runtime && !drag.group?.some((member) => member.id === item.id)) floor = Math.max(floor, this.#topOf(other));
       }
     }
     runtime.root.position.set(rawX, rawY, floor + (runtime.footprint ? -runtime.footprint.minZ : 4) + CARRY_LIFT);
+    for (const member of drag.group ?? []) {
+      const carried = this.#runtimes.get(member.id);
+      carried?.root.position.set(rawX + member.dx, rawY + member.dy, floor + (carried.footprint ? -carried.footprint.minZ : 4) + CARRY_LIFT);
+    }
     this.#showGhost(drag.id, drag.candidate.x, drag.candidate.y, !problem);
     this.#pending = { id: drag.id, problem };
     this.#updateCellMarkers();
@@ -1301,10 +1635,33 @@ export class ShowcaseBoard {
     if (!runtime) return;
     // Released over the board: land on the spot under the pointer, or the
     // nearest one that fits. Released anywhere else: nothing is placed.
+    const fits = (x: number, y: number) => !this.#dragProblem(drag, x, y);
     const candidate = drag.candidate
-      ? (this.#problemAt(drag.id, drag.candidate.x, drag.candidate.y) ? this.#nearestFreeSpot(drag.id, drag.candidate.x, drag.candidate.y) : drag.candidate)
+      ? (fits(drag.candidate.x, drag.candidate.y) ? drag.candidate : this.#nearestSpot(fits, drag.candidate.x, drag.candidate.y))
       : null;
-    if (drag.external) {
+    if (drag.group) {
+      if (drag.candidate?.x === drag.fromX && drag.candidate.y === drag.fromY) {
+        // Never left its spot, so this was a click.
+        this.#restack();
+        this.select(drag.id);
+      } else {
+        // With nowhere for all of them to land, restacking puts the group back where it was.
+        if (candidate) {
+          runtime.item.x = candidate.x;
+          runtime.item.y = candidate.y;
+          this.#replaceItem(runtime);
+          for (const member of drag.group) {
+            const carried = this.#runtimes.get(member.id);
+            if (!carried) continue;
+            carried.item.x = candidate.x + member.dx;
+            carried.item.y = candidate.y + member.dy;
+            this.#replaceItem(carried);
+          }
+        }
+        this.#restack();
+        this.#checkpoint();
+      }
+    } else if (drag.external) {
       if (candidate) {
         runtime.item.x = candidate.x;
         runtime.item.y = candidate.y;
@@ -1312,7 +1669,7 @@ export class ShowcaseBoard {
         this.select(runtime.item.id);
       } else {
         this.#disposeRuntime(runtime);
-        this.#selectedId = null;
+        this.#selection = [];
       }
     } else {
       if (candidate) {
@@ -1363,15 +1720,15 @@ export class ShowcaseBoard {
 
   poseHandlePath(id: string, controlId: string): { values: number[]; points: { x: number; y: number }[] } | null { return this.#handles.poseHandlePath(id, controlId); }
 
-  #frameBounds(): { width: number; height: number } {
-    if (this.#background === 'framed') {
+  #frameBounds(backdrop = true): { width: number; height: number } {
+    if (backdrop && this.#background === 'framed') {
       return { width: BOARD_WIDTH + FRAME_SIDE * 2, height: BOARD_HEIGHT + FRAME_SIDE * 2 };
     }
     return { width: BOARD_WIDTH, height: BOARD_HEIGHT };
   }
 
-  #fitCamera(aspect: number, padding: number): void {
-    const bounds = this.#frameBounds();
+  #fitCamera(aspect: number, padding: number, backdrop = true): void {
+    const bounds = this.#frameBounds(backdrop);
     const width = bounds.width * padding;
     const height = bounds.height * padding;
     const halfH = Math.max(height, width / aspect) / 2;
@@ -1440,9 +1797,8 @@ export class ShowcaseBoard {
     this.renderer.render(this.#scene, this.#camera);
   };
 
-  /** Pixel size of an export at the given width, following the visible frame's aspect. */
-  outputSize(width: number): { width: number; height: number } {
-    const bounds = this.#frameBounds();
+  outputSize(width: number, backdrop = true): { width: number; height: number } {
+    const bounds = this.#frameBounds(backdrop);
     return { width, height: Math.round(width * bounds.height / bounds.width) };
   }
 
@@ -1460,20 +1816,19 @@ export class ShowcaseBoard {
     }
   }
 
-  /** Render the board alone (no gizmo, markers, or silhouette) at a fixed output width. */
-  async exportPng(outputWidth = 1920): Promise<Blob> {
+  async exportPng(outputWidth = 1920, backdrop = true): Promise<Blob> {
     // Paints sized for the screen are sharpened for the export first, and an
     // export taken while they are still streaming in would show them half done.
     this.#sharpenPaints(this.#pixelsPerUnit() * outputWidth / Math.max(1, this.renderer.domElement.width));
     await this.whenPainted();
     this.#flushReshapes();
-    const outputHeight = this.outputSize(outputWidth).height;
-    const hidden = [this.#cells, this.#ghost].filter((object) => object.visible);
+    const outputHeight = this.outputSize(outputWidth, backdrop).height;
+    const hidden = [this.#cells, this.#ghost, ...(backdrop ? [] : [this.#board, this.#vignette, this.#frame, this.#shadowBoard])].filter((object) => object.visible);
     for (const object of hidden) object.visible = false;
     const previousRatio = this.renderer.getPixelRatio();
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(outputWidth, outputHeight, false);
-    this.#fitCamera(outputWidth / outputHeight, 1);
+    this.#fitCamera(outputWidth / outputHeight, 1, backdrop);
     this.renderer.render(this.#scene, this.#camera);
     const blob = await new Promise<Blob | null>((resolve) => this.renderer.domElement.toBlob(resolve, 'image/png'));
     for (const object of hidden) object.visible = true;
@@ -1495,6 +1850,8 @@ export class ShowcaseBoard {
     this.#options.canvas.removeEventListener('pointermove', this.#onCanvasHover);
     this.#resizeObserver.disconnect();
     for (const runtime of this.#runtimes.values()) this.#disposeRuntime(runtime);
+    for (const pending of this.#imageAssets.values()) void pending.then((asset) => asset?.texture.dispose()).catch(() => undefined);
+    for (const url of this.#imageUrls.values()) URL.revokeObjectURL(url);
     this.#compositor.dispose();
     this.renderer.dispose();
   }

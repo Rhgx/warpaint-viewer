@@ -761,6 +761,7 @@ function MainApp() {
               resolveRecipe={resolveRecipe}
               resolveTexture={(ref) => sourceProvider.resolve(ref)}
               resolveCubemap={async (ref) => await sourceProvider.resolveCubemap(ref) ?? stockMaterialCubemapUrls(ref)}
+              resolvePackageMaterial={(weaponKey, overrideId) => sourceProvider.resolveMaterial(weaponKey, overrideId)}
               textureMetadataResolver={(ref) => sourceProvider.metadataFor(ref)}
               inspectorEl={inspectorRef.current}
               onClose={() => setShowcaseOpen(false)}

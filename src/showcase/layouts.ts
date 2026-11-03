@@ -12,7 +12,7 @@ interface LayoutSlot {
 
 /** Rows from top to bottom; each row is spread evenly across the board. */
 export type LayoutRows = LayoutSlot[][];
-export type LayoutPacking = 'size' | 'order';
+export type LayoutPacking = 'size' | 'order' | 'composed';
 
 export interface BoardLayout {
   id: string;
@@ -20,13 +20,15 @@ export interface BoardLayout {
   rows: LayoutRows;
   /**
    * Rows only list the weapons; the board regroups them into rows or columns, whichever makes
-   * them largest. 'size' groups similar sizes, 'order' keeps the listed order.
+   * them largest. 'size' groups similar sizes, 'order' keeps the listed order. 'composed' uses columns instead
+   * (see boardComposition.ts).
    */
   pack?: LayoutPacking;
   /** Turn weapons to face the middle of the board, as Valve's case boards do: left-half weapons face right, right-half ones left. */
   inward?: boolean;
   /** Also try every weapon standing upright, tip up, and keep whichever fills the board better. */
   upright?: boolean;
+  logoSpace?: boolean;
 }
 
 /** The 14 stock weapons the Gun Mettle cases show, in the order boards lead with. */
@@ -62,9 +64,9 @@ export function boardLayouts(kit: PaintkitEntry, paint: ShowcasePaint, wearCount
   const slot = (weaponKey: string, patch: Partial<ShowcasePaint> = {}): LayoutSlot => ({ weaponKey, paint: { ...paint, ...patch } });
   const layouts: BoardLayout[] = [];
 
-  const board = (id: string, label: string, keys: readonly string[], upright = false) => {
+  const board = (id: string, label: string, keys: readonly string[], pack: LayoutPacking = 'composed', upright = false) => {
     const shown = keys.slice(0, BOARD_LIMIT);
-    if (shown.length) layouts.push({ id, label, rows: chunk(shown.map((key) => slot(key)), Math.ceil(Math.sqrt(shown.length * 1.5))), pack: 'size', inward: true, upright });
+    if (shown.length) layouts.push({ id, label, rows: chunk(shown.map((key) => slot(key)), Math.ceil(Math.sqrt(shown.length * 1.5))), pack, inward: true, upright });
   };
   const unlocks = ordered.filter((key) => !STOCK.includes(key));
   if (!unlocks.length) {
@@ -76,7 +78,13 @@ export function boardLayouts(kit: PaintkitEntry, paint: ShowcasePaint, wearCount
     board('unlocks', 'Unlock guns', unlocks.filter((key) => !MELEE.has(key)));
     // Long blades stand in a row like a weapon rack when that fits them larger.
     const melee = ordered.filter((key) => MELEE.has(key));
-    if (melee.length > 1) board('melee', 'Melee', melee, true);
+    if (melee.length > 1) board('melee', 'Melee', melee, 'size', true);
+  }
+
+  const stock = ordered.filter((key) => STOCK.includes(key));
+  const framed = (stock.length ? stock : ordered).slice(0, BOARD_LIMIT);
+  if (framed.length > 1) {
+    layouts.push({ id: 'logo', label: 'With logo', rows: chunk(framed.map((key) => slot(key)), Math.ceil(Math.sqrt(framed.length * 1.5))), pack: 'composed', inward: true, logoSpace: true });
   }
 
   const wears = COMPARED_WEARS.filter((wearIndex) => wearIndex < wearCount);

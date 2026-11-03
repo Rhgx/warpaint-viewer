@@ -16,6 +16,7 @@ export const EMISSIVE_DEFAULT_STRENGTH = 1;
 const EMISSIVE_VERTEX = /* glsl */ `
 #include <common>
 #include <skinning_pars_vertex>
+#include <clipping_planes_pars_vertex>
 varying vec2 vEmissiveUv;
 void main() {
   vEmissiveUv = uv;
@@ -23,6 +24,7 @@ void main() {
   #include <begin_vertex>
   #include <skinning_vertex>
   #include <project_vertex>
+  #include <clipping_planes_vertex>
 }
 `;
 
@@ -31,6 +33,7 @@ void main() {
 // fail the compile and silently drop the whole pass.
 const EMISSIVE_FRAGMENT = /* glsl */ `
 #include <common>
+#include <clipping_planes_pars_fragment>
 uniform sampler2D uEmissiveBaseMap;
 uniform sampler2D uEmissiveFlowMap;
 uniform sampler2D uEmissiveMap;
@@ -38,8 +41,10 @@ uniform vec3 uEmissiveTint;
 uniform vec2 uEmissiveScroll;
 uniform float uEmissiveStrength;
 uniform float uEmissiveTime;
+uniform float uEmissiveCoverage;
 varying vec2 vEmissiveUv;
 void main() {
+  #include <clipping_planes_fragment>
   vec3 baseColor = sRGBTransferEOTF( texture2D( uEmissiveBaseMap, vEmissiveUv ) ).rgb;
   vec2 flowValue = texture2D( uEmissiveFlowMap, vEmissiveUv ).xy;
   vec2 emissiveUv = flowValue + uEmissiveScroll * uEmissiveTime;
@@ -51,10 +56,12 @@ void main() {
   // the preset's exposure too or it reads as half strength on brighter maps.
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  // On a see-through canvas, light added over nothing is lost unless it also counts as coverage.
+  gl_FragColor.a = uEmissiveCoverage * max( max( gl_FragColor.r, gl_FragColor.g ), gl_FragColor.b );
 }
 `;
 
-/** The pass material; one per Viewer, with textures and constants swapped in per applied material. */
+/** The pass material, with textures and constants swapped in per applied material. */
 export function createEmissiveMaterial(side: THREE.Side): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -65,9 +72,11 @@ export function createEmissiveMaterial(side: THREE.Side): THREE.ShaderMaterial {
       uEmissiveScroll: { value: new THREE.Vector2(...EMISSIVE_DEFAULT_SCROLL) },
       uEmissiveStrength: { value: 0 },
       uEmissiveTime: { value: 0 },
+      uEmissiveCoverage: { value: 0 },
     },
     vertexShader: EMISSIVE_VERTEX,
     fragmentShader: EMISSIVE_FRAGMENT,
+    clipping: true,
     // EnableAlphaBlending(ONE, ONE) with alpha writes off. three's AdditiveBlending
     // premultiplies by src alpha, which is zero here, so the factors are set explicitly.
     transparent: true,

@@ -17,6 +17,19 @@ const RESTING_ROLL: Record<string, number> = { c_back_scratcher: -90 };
 /** Weapons whose working end rests pointing right, where every other weapon's points left. */
 export const FACES_RIGHT = new Set(['c_powerjack']);
 
+/** Weapons with one side meant to be seen, by whether showing it takes a flip. Layouts never turn these round. */
+const SHOWN_SIDE_FLIP: Record<string, boolean> = {
+  c_flamethrower: true,
+  c_degreaser: true,
+  c_flameball: false,
+  c_minigun: false,
+  c_gatling_gun: true,
+};
+
+export function shownSideFlip(weaponKey: string, part: string | null): boolean | undefined {
+  return part ? undefined : SHOWN_SIDE_FLIP[weaponKey];
+}
+
 /** The roll a weapon rests at; a piece taken out of one lies flat. */
 export function restingRoll(weaponKey: string, part: string | null): number {
   return part ? 0 : RESTING_ROLL[weaponKey] ?? 0;

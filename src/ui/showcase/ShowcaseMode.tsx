@@ -2,24 +2,25 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { createPortal } from 'react-dom';
 
 import type { RecipeNode, TextureResolver } from '../../compositor/types';
-import type { Manifest, PaintkitEntry, TextureMetadata } from '../../data/types';
+import type { Manifest, PaintkitEntry, TextureMetadata, WeaponMaterial } from '../../data/types';
 import { joinData } from '../../data/loader';
 import { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
 import type { ShowcaseItem, ShowcasePaint, ShowcaseSnapshot } from '../../showcase/showcaseTypes';
+import { readSavedBoard, writeSavedBoard } from '../../showcase/boardStorage';
 import { boardLayouts } from '../../showcase/layouts';
 import { downloadBlob } from '../common/download';
 import { ShowcaseGizmo, ShowcasePoseHandles } from './ShowcaseGizmo';
-import { describeProblem, loadSettings, SETTINGS_STORAGE_KEY, type ShowcaseSettings } from './showcaseSettings';
+import { describeProblem, exportsBackdrop, loadSettings, SETTINGS_STORAGE_KEY, type ShowcaseSettings } from './showcaseSettings';
 import { LayersSection } from './ShowcaseLayers';
 import { LayoutsSection, type FeaturePick } from './ShowcaseLayouts';
 import { ExportSection, LookSection, PlacementSection } from './ShowcaseSettingsSections';
 import { ShowcaseToolbar } from './ShowcaseToolbar';
 import { ShowcaseTray } from './ShowcaseTray';
-import { WeaponSection } from './ShowcaseWeaponSection';
+import { ImageSection, MultiSection, WeaponSection } from './ShowcaseWeaponSection';
 import './Showcase.css';
 
 const EMPTY_SNAPSHOT: ShowcaseSnapshot = {
-  items: [], selectedId: null, problems: {}, pending: null, dragging: false, canUndo: false, canRedo: false,
+  items: [], selectedId: null, selectedIds: [], problems: {}, pending: null, dragging: false, canUndo: false, canRedo: false,
 };
 const VIEWMODEL_MODELS = `${import.meta.env.BASE_URL}data/viewmodels/models/`;
 
@@ -33,6 +34,7 @@ interface ShowcaseModeProps {
   resolveRecipe: (kit: PaintkitEntry, weaponKey: string, team: 'red' | 'blu', wearIndex: number) => Promise<RecipeNode | null>;
   resolveTexture: TextureResolver;
   resolveCubemap: (ref: string) => Promise<string[] | null>;
+  resolvePackageMaterial: (weaponKey: string, materialOverrideId?: string) => Promise<{ material: WeaponMaterial } | null>;
   textureMetadataResolver: (ref: string) => Partial<TextureMetadata> | undefined;
   inspectorEl: HTMLElement | null;
   onClose: () => void;
@@ -72,10 +74,12 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
       textureMetadata: manifest.textures,
       textureMetadataResolver: (ref) => latest.current.textureMetadataResolver(ref),
       resolveCubemap: (ref) => latest.current.resolveCubemap(ref),
-      // A paint can swap in its own material per weapon (the Macaw finishes).
-      materialOverride: (weaponKey, kitId) => {
-        const overrideId = latest.current.paintkits.find((kit) => kit.id === kitId)?.materialOverrides?.[weaponKey];
-        return overrideId ? manifest.materials?.[overrideId] : undefined;
+      // In the viewer's order: a mounted package's VMT, then the paint's own material (the Macaw finishes).
+      resolveMaterial: async (weaponKey, kitId) => {
+        const { paintkits, resolvePackageMaterial } = latest.current;
+        const overrideId = paintkits.find((kit) => kit.id === kitId)?.materialOverrides?.[weaponKey];
+        const packaged = await resolvePackageMaterial(weaponKey, overrideId);
+        return packaged?.material ?? (overrideId ? manifest.materials?.[overrideId] : undefined);
       },
       resolveRecipe: (kitId, weaponKey, team, wearIndex) => {
         const { paintkits, resolveRecipe } = latest.current;
@@ -83,19 +87,34 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
         return kit ? resolveRecipe(kit, weaponKey, team, wearIndex) : Promise.resolve(null);
       },
     });
-    setBoard(instance);
+    // The UI gets the board once the autosaved weapons are back, so nothing is dropped on it mid-restore
+    // and the empty board it starts as is never saved over them.
+    let disposed = false;
+    instance.load(readSavedBoard())
+      .catch((cause: unknown) => console.error('[showcase] could not restore the saved board', cause))
+      .finally(() => {
+        if (!disposed) setBoard(instance);
+      });
     if (import.meta.env.DEV) (window as unknown as { __showcase?: ShowcaseBoard }).__showcase = instance;
     return () => {
+      disposed = true;
       instance.dispose();
       setBoard(null);
     };
   }, [manifest]);
+
+  const unsavedItems = useRef<readonly ShowcaseItem[] | null>(null);
+  const saveNow = useCallback(() => {
+    if (unsavedItems.current) writeSavedBoard(unsavedItems.current);
+    unsavedItems.current = null;
+  }, []);
 
   // One effect per setting, so changing one never re-measures for the others.
   useEffect(() => { board?.setSnap(settings.snapToGrid); }, [board, settings.snapToGrid]);
   useEffect(() => { board?.setGrid(settings.grid); }, [board, settings.grid]);
   useEffect(() => { board?.setKeepApart(settings.keepApart); }, [board, settings.keepApart]);
   useEffect(() => { board?.setSpacing(settings.spacing); }, [board, settings.spacing]);
+  useEffect(() => { board?.setLayoutSize(settings.weaponSize / 100); }, [board, settings.weaponSize]);
   useEffect(() => { board?.setKeepInside(settings.keepInside); }, [board, settings.keepInside]);
   useEffect(() => { board?.setShowGrid(settings.showFootprints); }, [board, settings.showFootprints]);
   useEffect(() => { board?.setLight(settings.lightAzimuth, settings.lightElevation); }, [board, settings.lightAzimuth, settings.lightElevation]);
@@ -104,16 +123,29 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
   useEffect(() => { board?.setBackground(settings.background); }, [board, settings.background]);
 
   const snapshot = useSyncExternalStore(board?.subscribe ?? noopSubscribe, board?.getSnapshot ?? emptySnapshot);
+  useEffect(() => {
+    if (!board) return;
+    unsavedItems.current = snapshot.items;
+    const timer = window.setTimeout(saveNow, 400);
+    return () => window.clearTimeout(timer);
+  }, [board, snapshot.items, saveNow]);
+  useEffect(() => {
+    window.addEventListener('pagehide', saveNow);
+    return () => {
+      window.removeEventListener('pagehide', saveNow);
+      saveNow();
+    };
+  }, [saveNow]);
 
-  // Picking another paint in the catalog repaints the selected weapon, when that paint covers it.
   const previousKitId = useRef(selectedKit?.id);
   useEffect(() => {
     if (!board || !selectedKit || previousKitId.current === selectedKit.id) return;
     previousKitId.current = selectedKit.id;
-    const { selectedId, items } = board.getSnapshot();
-    const item = items.find((entry) => entry.id === selectedId);
-    if (!item || item.paint.kitId === selectedKit.id || !selectedKit.weapons.includes(item.weaponKey)) return;
-    board.setPaint(item.id, { kitId: selectedKit.id, kitName: selectedKit.name });
+    const { selectedIds, items } = board.getSnapshot();
+    const ids = items
+      .filter((item) => selectedIds.includes(item.id) && item.paint.kitId !== selectedKit.id && selectedKit.weapons.includes(item.weaponKey))
+      .map((item) => item.id);
+    if (ids.length) board.setPaintMany(ids, { kitId: selectedKit.id, kitName: selectedKit.name });
   }, [board, selectedKit]);
   const selected = snapshot.items.find((item) => item.id === snapshot.selectedId) ?? null;
 
@@ -127,6 +159,29 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
       const held = board.heldId;
       const id = held ?? board.getSnapshot().selectedId;
       if (event.key === 'Escape' && !held) board.select(null);
+      const { selectedIds } = board.getSnapshot();
+      if (!held && selectedIds.length > 1) {
+        const step = rotationStepRef.current;
+        const handled = (() => {
+          switch (event.key.toLowerCase()) {
+            case 'e': board.rotateMany(selectedIds, -step); return true;
+            case 'q': board.rotateMany(selectedIds, step); return true;
+            case 'r': board.rotateMany(selectedIds, event.shiftKey ? step : -step); return true;
+            case 'f': board.flipMany(selectedIds); return true;
+            default: break;
+          }
+          switch (event.key) {
+            case 'Delete': case 'Backspace': board.removeMany(selectedIds); return true;
+            case 'ArrowLeft': board.nudgeMany(selectedIds, -1, 0); return true;
+            case 'ArrowRight': board.nudgeMany(selectedIds, 1, 0); return true;
+            case 'ArrowUp': board.nudgeMany(selectedIds, 0, 1); return true;
+            case 'ArrowDown': board.nudgeMany(selectedIds, 0, -1); return true;
+            default: return false;
+          }
+        })();
+        if (handled) event.preventDefault();
+        return;
+      }
       if (!id) return;
       const step = rotationStepRef.current;
       const key = event.key.toLowerCase();
@@ -191,16 +246,33 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
   const trayPaint = useMemo<ShowcasePaint | null>(() => (selectedKit
     ? { kitId: selectedKit.id, kitName: selectedKit.name, team: props.team, wearIndex: props.wearIndex, seed: props.seed }
     : null), [selectedKit, props.team, props.wearIndex, props.seed]);
-  const warning = snapshot.pending?.problem ? describeProblem(snapshot.pending.problem) : null;
-  const outputWidth = settings.outputWidth;
+  const [imageError, setImageError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!imageError) return;
+    const timer = window.setTimeout(() => setImageError(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [imageError]);
+  const warning = snapshot.pending?.problem ? describeProblem(snapshot.pending.problem) : imageError;
+  const addImage = useCallback(async (file: File) => {
+    if (!board) return;
+    setImageError(null);
+    try {
+      await board.addImage(file, file.name.replace(/\.[^.]+$/, ''));
+    } catch (cause) {
+      console.error('[showcase] could not add the image', cause);
+      setImageError(`Could not open ${file.name}`);
+    }
+  }, [board]);
+  const { outputWidth } = settings;
+  const exportBackdrop = exportsBackdrop(settings);
   const exportPng = useCallback(async () => {
-    if (board) downloadBlob(await board.exportPng(outputWidth), 'showcase.png');
-  }, [board, outputWidth]);
+    if (board) downloadBlob(await board.exportPng(outputWidth, exportBackdrop), 'showcase.png');
+  }, [board, outputWidth, exportBackdrop]);
   const copyPng = useCallback(async () => {
     if (!board) return;
-    const blob = await board.exportPng(outputWidth);
+    const blob = await board.exportPng(outputWidth, exportBackdrop);
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-  }, [board, outputWidth]);
+  }, [board, outputWidth, exportBackdrop]);
   const changeSettings = useCallback((patch: Partial<ShowcaseSettings>) => setSettings((current) => ({ ...current, ...patch })), []);
 
   return (
@@ -215,14 +287,13 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
         )}
         {warning && <div className="showcase-warning" role="status">{warning}</div>}
         <ShowcaseToolbar board={board} onClose={onClose} hasItems={snapshot.items.length > 0}
-          canUndo={snapshot.canUndo} canRedo={snapshot.canRedo} onSave={exportPng} onCopy={copyPng} />
+          canUndo={snapshot.canUndo} canRedo={snapshot.canRedo} onSave={exportPng} onCopy={copyPng} onAddImage={addImage} />
       </div>
       <ShowcaseTray board={board} paint={trayPaint} weapons={trayWeapons} placedCounts={placedCounts} />
       {inspectorEl && createPortal(
         <ShowcasePanel board={board} manifest={manifest} paintkits={props.paintkits} snapshot={snapshot} selected={selected}
           kit={selectedKit} paint={trayPaint}
-          settings={settings} onSettingsChange={changeSettings}
-          onSave={exportPng} onCopy={copyPng} rotationStep={rotationStep} />,
+          settings={settings} onSettingsChange={changeSettings} rotationStep={rotationStep} />,
         inspectorEl,
       )}
     </div>
@@ -232,7 +303,7 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
 const noopSubscribe = () => () => undefined;
 const emptySnapshot = () => EMPTY_SNAPSHOT;
 
-function ShowcasePanel({ board, manifest, paintkits, kit, paint, snapshot, selected, settings, onSettingsChange, onSave, onCopy, rotationStep }: {
+function ShowcasePanel({ board, manifest, paintkits, kit, paint, snapshot, selected, settings, onSettingsChange, rotationStep }: {
   board: ShowcaseBoard | null;
   manifest: Manifest;
   paintkits: readonly PaintkitEntry[];
@@ -242,12 +313,19 @@ function ShowcasePanel({ board, manifest, paintkits, kit, paint, snapshot, selec
   selected: ShowcaseItem | null;
   settings: ShowcaseSettings;
   onSettingsChange: (patch: Partial<ShowcaseSettings>) => void;
-  onSave: () => Promise<void>;
-  onCopy: () => Promise<void>;
   rotationStep: number;
 }) {
   const problem = selected ? (snapshot.pending?.id === selected.id ? snapshot.pending.problem : snapshot.problems[selected.id]) : null;
+  const multiple = useMemo(() => {
+    if (snapshot.selectedIds.length < 2) return null;
+    const chosen = new Set(snapshot.selectedIds);
+    return snapshot.items.filter((item) => chosen.has(item.id));
+  }, [snapshot.items, snapshot.selectedIds]);
   const setPoseHandles = useCallback((poseHandles: boolean) => onSettingsChange({ poseHandles }), [onSettingsChange]);
+  // A layout fills the layer list, which would push the layouts down mid-click; collapse it as one is picked.
+  const [layersOpen, setLayersOpen] = useState(true);
+  const collapseLayers = useCallback(() => setLayersOpen(false), []);
+  const setWeaponSize = useCallback((weaponSize: number) => onSettingsChange({ weaponSize }), [onSettingsChange]);
   const grades = useMemo(() => new Map(paintkits.map((entry) => [entry.id, entry.grade])), [paintkits]);
   // The weapon the wears and RED and BLU show: the one picked, else the first placed in this paint.
   const [featured, setFeatured] = useState<string | null>(null);
@@ -270,21 +348,27 @@ function ShowcasePanel({ board, manifest, paintkits, kit, paint, snapshot, selec
   }), [kit, manifest]);
   return (
     <div className="showcase-panel">
-      <LayersSection board={board} manifest={manifest} items={snapshot.items} selectedId={snapshot.selectedId}
-        problems={snapshot.problems} reorderable={!settings.keepApart} grades={grades} />
-      {selected && board && (
+      <LayersSection board={board} manifest={manifest} items={snapshot.items} selectedIds={snapshot.selectedIds}
+        problems={snapshot.problems} reorderable={!settings.keepApart} grades={grades} open={layersOpen} onOpenChange={setLayersOpen} />
+      {selected?.image && board && (
+        <ImageSection board={board} item={selected} problem={problem ?? null} rotationSnap={settings.rotationSnap} rotationStep={rotationStep} />
+      )}
+      {selected && !selected.image && board && (
         <WeaponSection board={board} item={selected} problem={problem ?? null} rotationSnap={settings.rotationSnap} rotationStep={rotationStep}
           kit={paintkits.find((kit) => kit.id === selected.paint.kitId) ?? null} wearNames={manifest.wearNames}
           poseHandles={settings.poseHandles} onPoseHandlesChange={setPoseHandles} />
       )}
-      {/* Board-wide settings step aside while a weapon is being edited. */}
-      {!selected && (
+      {multiple && board && (
+        <MultiSection board={board} items={multiple} paintkits={paintkits} wearNames={manifest.wearNames}
+          rotationSnap={settings.rotationSnap} rotationStep={rotationStep} />
+      )}
+      {!selected && !multiple && (
         <>
-          {board && layouts.length > 0 && <LayoutsSection board={board} layouts={layouts} featureOptions={featureOptions} onFeature={feature} />}
+          {board && layouts.length > 0 && <LayoutsSection board={board} layouts={layouts} featureOptions={featureOptions} onFeature={feature} onApply={collapseLayers}
+            weaponSize={settings.weaponSize} onWeaponSizeChange={setWeaponSize} />}
           <PlacementSection settings={settings} onChange={onSettingsChange} />
           <LookSection settings={settings} onChange={onSettingsChange} />
-          <ExportSection board={board} settings={settings} onChange={onSettingsChange} hasItems={snapshot.items.length > 0}
-            onSave={onSave} onCopy={onCopy} />
+          <ExportSection board={board} settings={settings} onChange={onSettingsChange} />
         </>
       )}
     </div>

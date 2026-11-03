@@ -1,0 +1,79 @@
+import type { ShowcaseItem, ShowcasePaint } from './showcaseTypes';
+
+
+const BOARD_STORAGE_KEY = 'warpaint-viewer:showcase-board';
+const BOARD_VERSION = 1;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
+function parsePaint(value: unknown): ShowcasePaint | null {
+  if (!isRecord(value)
+    || !isFiniteNumber(value.kitId) || !Number.isSafeInteger(value.kitId)
+    || typeof value.kitName !== 'string'
+    || (value.team !== 'red' && value.team !== 'blu')
+    || !isFiniteNumber(value.wearIndex) || !Number.isSafeInteger(value.wearIndex)
+    || typeof value.seed !== 'string') return null;
+  return { kitId: value.kitId, kitName: value.kitName, team: value.team, wearIndex: value.wearIndex, seed: value.seed };
+}
+
+function parsePose(value: unknown): Record<string, number> | null {
+  if (!isRecord(value)) return null;
+  const pose: Record<string, number> = {};
+  for (const [control, angle] of Object.entries(value)) {
+    if (!isFiniteNumber(angle)) return null;
+    pose[control] = angle;
+  }
+  return pose;
+}
+
+function parseImage(value: unknown): ShowcaseItem['image'] | null {
+  if (!isRecord(value) || typeof value.assetId !== 'string' || !isFiniteNumber(value.aspect) || value.aspect <= 0) return null;
+  return { assetId: value.assetId, aspect: value.aspect };
+}
+
+function parseItem(value: unknown): ShowcaseItem | null {
+  if (!isRecord(value)) return null;
+  const paint = parsePaint(value.paint);
+  const pose = parsePose(value.pose);
+  const { id, weaponKey, weaponName, x, y, roll, tilt, turn, scale, flipped, hidden, part, hiddenParts } = value;
+  const image = value.image === undefined ? undefined : parseImage(value.image);
+  if (image === null) return null;
+  if (!paint || !pose
+    || typeof id !== 'string' || typeof weaponKey !== 'string' || typeof weaponName !== 'string'
+    || !isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(roll) || !isFiniteNumber(tilt) || !isFiniteNumber(turn)
+    || !isFiniteNumber(scale) || scale <= 0
+    || typeof flipped !== 'boolean' || typeof hidden !== 'boolean'
+    || (part !== null && typeof part !== 'string')
+    || !Array.isArray(hiddenParts) || !hiddenParts.every((entry) => typeof entry === 'string')) return null;
+  return { id, weaponKey, weaponName, paint, x, y, roll, tilt, turn, flipped, scale, hidden, pose, part, hiddenParts, ...(image ? { image } : {}) };
+}
+
+/** One bad item drops the whole save, so it never comes back half-restored. */
+export function parseSavedBoard(value: unknown): ShowcaseItem[] | null {
+  if (!isRecord(value) || value.version !== BOARD_VERSION || !Array.isArray(value.items)) return null;
+  const items = value.items.map(parseItem);
+  if (!items.every((item) => item !== null)) return null;
+  return new Set(items.map((item) => item.id)).size === items.length ? items : null;
+}
+
+export function readSavedBoard(): ShowcaseItem[] {
+  try {
+    return parseSavedBoard(JSON.parse(localStorage.getItem(BOARD_STORAGE_KEY) ?? 'null')) ?? [];
+  } catch {
+    // Damaged JSON or storage that cannot be read starts an empty board.
+    return [];
+  }
+}
+
+export function writeSavedBoard(items: readonly ShowcaseItem[]): void {
+  try {
+    if (items.length) localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify({ version: BOARD_VERSION, items }));
+    else localStorage.removeItem(BOARD_STORAGE_KEY);
+  } catch {
+    // Private browsing or a full quota: the board lasts for the session.
+  }
+}
