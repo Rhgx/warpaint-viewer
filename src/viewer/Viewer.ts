@@ -535,6 +535,7 @@ export class Viewer {
       this.activeUnusual.update(dt);
     }
     this.applyViewInset(this.viewInset.right, this.viewInset.bottom);
+    if (!this.shadersReady()) return;
     if (this.projectionMode === 'orthographic') {
       this.syncOrthoCamera();
       this.stickers.updateStickerGizmoOverlay();
@@ -545,6 +546,26 @@ export class Viewer {
     }
     this.scheduleNextFrame(!!controlsAnimating || emissiveAnimating || attachmentsAnimating || !!this.activeUnusual, this.sheenOverlay.meshes);
   };
+
+  /**
+   * Drawing with a new shader blocks the page until it compiles, the longest stall of a paint's first
+   * composite. So a changed material compiles in the background while the last frame stays up, and the frame follows.
+   */
+  private shadersReady(): boolean {
+    const version = [this.material, this.lensMaterial, this.sheenOverlay.material, this.emissiveOverlay.material].map((material) => material?.version ?? 0).join();
+    if (version === this.compiledShaders) return true;
+    if (!this.compilingShaders) {
+      this.compilingShaders = true;
+      void this.renderer.compileAsync(this.scene, this.camera).then(() => {
+        this.compilingShaders = false;
+        this.compiledShaders = version;
+        this.invalidate();
+      });
+    }
+    return false;
+  }
+  private compiledShaders = '';
+  private compilingShaders = false;
 
   private scheduleNextFrame(animated: boolean, sheenMeshes: readonly THREE.Mesh[]): void {
     const sheenActive = this.sheenOverlay.active && sheenMeshes.length > 0;
@@ -863,10 +884,9 @@ export class Viewer {
 
   private applyVisibleMap() {
     const map = visibleStickerEditorMap(this.composedMap, this.stickerEditorBaseMap);
-    if (this.material.map !== map) {
-      this.material.map = map;
-      this.material.needsUpdate = true;
-    }
+    // Swapping one texture for another keeps the shader; only gaining or losing one changes it.
+    if (!this.material.map !== !map) this.material.needsUpdate = true;
+    this.material.map = map;
     this.invalidate();
   }
 
