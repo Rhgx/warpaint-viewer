@@ -49,6 +49,18 @@ export const LOOK_KEYS = ['lightAzimuth', 'lightElevation', 'shadows', 'shadow',
 export const EXPORT_KEYS = ['outputWidth', 'exportBackdrop'] as const;
 type SettingKeys = readonly (keyof ShowcaseSettings)[];
 
+/** How this person likes to work, not what a board looks like: a file from someone else leaves these alone. */
+const PERSONAL_KEYS = ['snapToGrid', 'rotationSnap', 'showFootprints', 'poseHandles', 'outputWidth', 'exportBackdrop'] as const;
+export const withSharedSettings = (mine: ShowcaseSettings, theirs: ShowcaseSettings): ShowcaseSettings => ({
+  ...theirs,
+  ...Object.fromEntries(PERSONAL_KEYS.map((key) => [key, mine[key]])),
+});
+/** Whether two sets of settings give the same board, whatever each person's working preferences. */
+export const sameBoardSettings = (a: ShowcaseSettings, b: ShowcaseSettings) => (Object.keys(a) as (keyof ShowcaseSettings)[])
+  .every((key) => a[key] === b[key] || (PERSONAL_KEYS as readonly string[]).includes(key));
+
+export const sameSettings = (a: ShowcaseSettings, b: ShowcaseSettings) => (Object.keys(a) as (keyof ShowcaseSettings)[]).every((key) => a[key] === b[key]);
+
 export const SETTINGS_STORAGE_KEY = 'warpaint-viewer:showcase-settings';
 export const ROTATION_SNAPS = [45, 30, 15, 5, 0];
 export const WEAPON_SIZE = { min: 50, max: 100, step: 5 };
@@ -61,13 +73,7 @@ const ALLOWED_VALUES: Partial<Record<keyof ShowcaseSettings, readonly unknown[]>
 };
 
 /** Saved settings, keeping only values that still match the current options. */
-export function loadSettings(): ShowcaseSettings {
-  let saved: unknown = null;
-  try {
-    saved = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) ?? 'null');
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
+export function parseSettings(saved: unknown): ShowcaseSettings {
   if (!saved || typeof saved !== 'object') return DEFAULT_SETTINGS;
   const settings: ShowcaseSettings = { ...DEFAULT_SETTINGS };
   const record = saved as Record<string, unknown>;
@@ -79,6 +85,14 @@ export function loadSettings(): ShowcaseSettings {
     Object.assign(settings, { [key]: value });
   }
   return settings;
+}
+
+export function loadSettings(): ShowcaseSettings {
+  try {
+    return parseSettings(JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) ?? 'null'));
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
 }
 
 /** A transparent background has no backdrop to leave out, and keeps the shadows set in Look. */

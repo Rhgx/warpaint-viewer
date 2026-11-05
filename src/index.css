@@ -52,13 +52,21 @@ button {
 .ui-switch:focus-visible,
 .warpaint-item:focus-visible,
 .warpaint-tile:focus-visible,
-.order-toggle:focus-visible {
+.order-toggle:focus-visible,
+.showcase-slot-load:focus-visible,
+.showcase-slot-new:focus-visible,
+.showcase-slot-more:focus-visible,
+.showcase-slot-update:focus-visible,
+.showcase-slot-dismiss:focus-visible,
+.showcase-slot-deleted-actions button:focus-visible,
+.showcase-slot-line button:focus-visible,
+.showcase-share button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 2px;
 }
 @supports not (color: color-mix(in srgb, red, red)) {
   /* Chrome 109 keeps var() declarations and fails them at computed time, so the value is precomputed here. */
-  .btn:focus-visible, .ui-select-trigger:focus-visible, .ui-input:focus-visible, .ui-team-btn:focus-visible, .ui-toggle-btn:focus-visible, .ui-switch:focus-visible, .warpaint-item:focus-visible, .warpaint-tile:focus-visible, .order-toggle:focus-visible {
+  .btn:focus-visible, .ui-select-trigger:focus-visible, .ui-input:focus-visible, .ui-team-btn:focus-visible, .ui-toggle-btn:focus-visible, .ui-switch:focus-visible, .warpaint-item:focus-visible, .warpaint-tile:focus-visible, .order-toggle:focus-visible, .showcase-slot-load:focus-visible, .showcase-slot-new:focus-visible, .showcase-slot-more:focus-visible, .showcase-slot-update:focus-visible, .showcase-slot-dismiss:focus-visible, .showcase-slot-deleted-actions button:focus-visible, .showcase-slot-line button:focus-visible, .showcase-share button:focus-visible {
     outline: 2px solid rgba(76, 141, 255, 0.6);
   }
 }

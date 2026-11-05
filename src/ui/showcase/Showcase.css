@@ -707,6 +707,347 @@
   stroke-dasharray: 2 2;
 }
 
+.showcase-saved {
+  display: flex;
+  flex-direction: column;
+}
+.showcase-share {
+  margin-top: 6px;
+}
+.showcase-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.showcase-slot {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+.showcase-slot-load,
+.showcase-slot-new {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text-dim);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.showcase-slot-new {
+  border-style: dashed;
+  background: none;
+}
+.showcase-slot-load:hover:not(:disabled),
+.showcase-slot-new:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.showcase-slot-load:disabled,
+.showcase-slot-new:disabled {
+  cursor: default;
+}
+.showcase-slot-new:disabled .showcase-slot-text,
+.showcase-slot-new:disabled .showcase-slot-picture {
+  opacity: 0.65;
+}
+.showcase-slot[data-active] .showcase-slot-load {
+  border-color: var(--accent);
+}
+.showcase-slot-picture {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 64px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--panel-2);
+}
+.showcase-slot-new .showcase-slot-picture {
+  background: none;
+}
+/* Room for the whole name, which is all that tells two deleted saves of one paint apart. */
+.showcase-slot-new[data-deleted] .showcase-slot-picture {
+  width: 24px;
+}
+.showcase-slot-new[data-deleted] .showcase-slot-meta {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.showcase-slot-picture img,
+.showcase-slot-picture svg:not(.lucide) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.showcase-slot-picture rect {
+  fill: var(--text-dim);
+}
+.showcase-slot-picture rect.showcase-slot-image {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+.showcase-slot-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+/* Two lines, because what tells two saves of one paint apart tends to be at the end of the name. */
+.showcase-slot-name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.showcase-slot-name[data-hidden] {
+  visibility: hidden;
+}
+.showcase-slot-meta {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.showcase-slot-new .showcase-slot-name {
+  color: inherit;
+}
+.showcase-slot-modified {
+  color: var(--accent);
+  font-weight: 600;
+}
+.showcase-slot-more,
+.showcase-slot-update {
+  flex: none;
+  width: 28px;
+  min-width: 28px;
+  height: auto;
+  padding: 0;
+}
+.showcase-slot-update {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.showcase-slot-more[data-popup-open] {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.showcase-slot-rename {
+  position: absolute;
+  top: 0;
+  right: 32px;
+  bottom: 0;
+  left: 0;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.showcase-share {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 4px;
+}
+.showcase-share .showcase-btn {
+  padding: 0 4px;
+  white-space: nowrap;
+}
+.showcase-slot-status {
+  display: flex;
+  flex-direction: column;
+}
+.showcase-slot-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.showcase-slot-line[data-kind='error'] {
+  color: var(--fail);
+}
+.showcase-slot-line[data-kind='warning'] {
+  color: var(--text);
+}
+.showcase-slot-line[data-kind] > svg {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 2px;
+  color: #e0a84b;
+}
+.showcase-slot-full {
+  font-size: 11px;
+}
+.showcase-slot-deleted-actions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+}
+.showcase-slot-deleted-actions .showcase-btn {
+  flex: 1 1 0;
+  min-height: 24px;
+  height: auto;
+  padding: 0 6px;
+  font-size: 11px;
+}
+.showcase-slot-line span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.showcase-slot-line [data-undo],
+.showcase-slot-line [data-note-action] {
+  flex: none;
+  margin: -4px -6px -4px auto;
+  padding: 4px 6px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.showcase-slot-line [data-undo]:hover,
+.showcase-slot-line [data-note-action]:hover {
+  text-decoration: underline;
+}
+.showcase-slot-dismiss {
+  display: grid;
+  flex: none;
+  place-items: center;
+  align-self: flex-start;
+  width: 24px;
+  height: 24px;
+  margin: -3px -6px -3px 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.showcase-slot-dismiss:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.showcase-drop-hint {
+  position: absolute;
+  inset: 12px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.showcase-menu {
+  min-width: 170px;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
+  font-size: 12px;
+  outline: none;
+}
+.showcase-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+.showcase-menu-item[data-highlighted] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.showcase-menu-item[data-danger]:not([data-highlighted]) {
+  color: var(--fail);
+}
+.showcase-menu-item[data-danger][data-highlighted] {
+  background: var(--fail);
+  color: #fff;
+}
+.showcase-menu-item[data-disabled] {
+  cursor: default;
+  opacity: 0.45;
+}
+.showcase-menu-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 240px;
+}
+.showcase-menu-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.showcase-menu-detail {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.showcase-menu-item[data-highlighted] .showcase-menu-detail {
+  color: inherit;
+  opacity: 0.85;
+}
+.showcase-slot-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 256px;
+}
+.showcase-slot-preview img {
+  display: block;
+  width: 240px;
+  border-radius: 2px;
+}
+.showcase-menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
 .showcase-pairs {
   display: flex;
   flex-direction: column;

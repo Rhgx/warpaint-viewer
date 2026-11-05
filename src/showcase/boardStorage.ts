@@ -1,10 +1,11 @@
-import type { ShowcaseItem, ShowcasePaint } from './showcaseTypes';
+import type { LayoutPacking, LayoutRows } from './layouts';
+import type { AppliedLayout, ShowcaseItem, ShowcasePaint } from './showcaseTypes';
 
 
 const BOARD_STORAGE_KEY = 'warpaint-viewer:showcase-board';
 const BOARD_VERSION = 1;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
@@ -60,6 +61,30 @@ export function parseSavedBoard(value: unknown): ShowcaseItem[] | null {
   return new Set(items.map((item) => item.id)).size === items.length ? items : null;
 }
 
+const isPacking = (value: unknown): value is LayoutPacking => value === 'size' || value === 'order' || value === 'composed';
+
+/** A layout only feeds Fill, so a damaged one gives null rather than costing the weapons saved with it. */
+export function parseSavedLayout(value: unknown): AppliedLayout | null {
+  if (!isRecord(value) || !Array.isArray(value.rows)) return null;
+  const { pack, inward, upright, logoSpace } = value;
+  // JSON leaves out a pack that is undefined.
+  if ((pack !== undefined && !isPacking(pack))
+    || typeof inward !== 'boolean' || typeof upright !== 'boolean' || typeof logoSpace !== 'boolean') return null;
+  const rows: LayoutRows = [];
+  for (const row of value.rows) {
+    if (!Array.isArray(row)) return null;
+    const slots: LayoutRows[number] = [];
+    for (const slot of row) {
+      if (!isRecord(slot) || typeof slot.weaponKey !== 'string') return null;
+      const paint = parsePaint(slot.paint);
+      if (!paint) return null;
+      slots.push({ weaponKey: slot.weaponKey, paint });
+    }
+    rows.push(slots);
+  }
+  return { rows, pack, inward, upright, logoSpace };
+}
+
 export function readSavedBoard(): ShowcaseItem[] {
   try {
     return parseSavedBoard(JSON.parse(localStorage.getItem(BOARD_STORAGE_KEY) ?? 'null')) ?? [];
@@ -69,9 +94,12 @@ export function readSavedBoard(): ShowcaseItem[] {
   }
 }
 
+/** The version and items checked by `parseSavedBoard`, for a save that carries more alongside them. */
+export const boardSaveFields = (items: readonly ShowcaseItem[]) => ({ version: BOARD_VERSION, items });
+
 export function writeSavedBoard(items: readonly ShowcaseItem[]): void {
   try {
-    if (items.length) localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify({ version: BOARD_VERSION, items }));
+    if (items.length) localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(boardSaveFields(items)));
     else localStorage.removeItem(BOARD_STORAGE_KEY);
   } catch {
     // Private browsing or a full quota: the board lasts for the session.

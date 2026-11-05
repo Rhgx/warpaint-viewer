@@ -13,6 +13,8 @@ interface AppToastsProps {
   closeTurntableToast: () => void;
   workspaceCleared: { drafts: number } | null;
   onWorkspaceClearedClose: () => void;
+  droppedFileProblem: string | null;
+  onDroppedFileProblemClose: () => void;
 }
 
 export function AppToasts({
@@ -24,6 +26,8 @@ export function AppToasts({
   closeTurntableToast,
   workspaceCleared,
   onWorkspaceClearedClose,
+  droppedFileProblem,
+  onDroppedFileProblemClose,
 }: AppToastsProps) {
   return (
     <ToastViewport>
@@ -40,6 +44,15 @@ export function AppToasts({
         id="turntable"
         {...turntableToastProps}
         onClose={closeTurntableToast}
+      />
+      <ManagedToast
+        id="dropped-file"
+        open={droppedFileProblem !== null}
+        title="Could not open that"
+        description={droppedFileProblem ?? ''}
+        dismissible
+        timeout={6000}
+        onClose={onDroppedFileProblemClose}
       />
       <ManagedToast
         id="workspace-cleared"

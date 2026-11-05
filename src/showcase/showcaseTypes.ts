@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { RecipeNode, TextureResolver } from '../compositor/types';
 import type { TextureMetadata, WeaponEntry, WeaponMaterial } from '../data/types';
 import type { Tf2Uniforms } from '../viewer/materialConfig';
+import type { LayoutPacking, LayoutRows } from './layouts';
 import type { RestBone } from './poseRigs';
 
 // Data shapes shared by the showcase board, its runtime state and its UI.
@@ -39,6 +40,21 @@ export interface ShowcaseItem {
   hiddenParts: readonly string[];
   /** Set when this item is an imported picture rather than a weapon; it then has no weapon key and a placeholder paint. */
   image?: { assetId: string; aspect: number };
+}
+
+/** The ready-made layout on the board, which Fill lays out again. */
+export interface AppliedLayout {
+  rows: LayoutRows;
+  pack: LayoutPacking | undefined;
+  inward: boolean;
+  upright: boolean;
+  logoSpace: boolean;
+}
+
+/** What else a board edit changed, outside the board, so that undo and redo can take it along. */
+export interface BoardEditSideEffect {
+  undo: () => void;
+  redo: () => void;
 }
 
 /** Where a pose control's drag handle is on screen, in canvas pixels. */

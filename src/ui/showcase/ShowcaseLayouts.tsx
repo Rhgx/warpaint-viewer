@@ -12,7 +12,7 @@ import { useBusy } from './useBusy';
 // Ready-made board layouts, and the pickers for the weapons they feature.
 
 /** Ready-made arrangements of the current paint, each drawn as a small sketch. */
-export const LayoutsSection = memo(function LayoutsSection({ board, layouts, featureOptions, onFeature, onApply, weaponSize, onWeaponSizeChange }: {
+export const LayoutsSection = memo(function LayoutsSection({ board, layouts, featureOptions, onFeature, onApply, weaponSize, onWeaponSizeChange, pickerReset }: {
   board: ShowcaseBoard;
   layouts: readonly BoardLayout[];
   featureOptions: IconOption[];
@@ -22,10 +22,17 @@ export const LayoutsSection = memo(function LayoutsSection({ board, layouts, fea
   /** Percent of the largest size that fits. */
   weaponSize: number;
   onWeaponSizeChange: (weaponSize: number) => void;
+  /** Changes when the board is replaced from elsewhere, which leaves the weapon picker belonging to nothing. */
+  pickerReset: number;
 }) {
   const [busy, run] = useBusy();
   // The weapon picker belongs to the wears and the RED and BLU pair, so it shows once one is applied.
   const [appliedId, setAppliedId] = useState<string | null>(null);
+  const [seenReset, setSeenReset] = useState(pickerReset);
+  if (seenReset !== pickerReset) {
+    setSeenReset(pickerReset);
+    setAppliedId(null);
+  }
   const applied = appliedId && FEATURE_LAYOUTS.has(appliedId) ? layouts.find((layout) => layout.id === appliedId) : undefined;
   const featured = applied?.rows[0]?.[0]?.weaponKey;
   const reapply = (pick: FeaturePick) => {

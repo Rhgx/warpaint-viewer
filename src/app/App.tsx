@@ -29,7 +29,9 @@ import { useContextRestores } from './useContextRestores';
 import { useMobileViewInset } from './useMobileViewInset';
 import { useAssetPreload } from './useAssetPreload';
 import { useKitSuggestion } from './useKitSuggestion';
-import { useTextureOverrides } from './useTextureOverrides';
+import { manualOverridesOf, useTextureOverrides } from './useTextureOverrides';
+import { applyTextureOverrides } from '../hooks/useComposedPaint';
+import { collectPackageStickerSpecularOverrides } from '../workbench/assetSlots';
 import { useGuardedDefinitionsState } from './useGuardedDefinitionsState';
 import { useWorkbenchDrawer } from './useWorkbenchDrawer';
 import { useCatalogIcons } from './useCatalogIcons';
@@ -56,6 +58,8 @@ import { ClearWorkspaceDialog } from '../ui/common/ClearWorkspaceDialog';
 import { AppToasts } from '../ui/common/AppToasts';
 import { matchesMobileLayout, WORKSHOP_ENABLED } from '../device';
 import { useSettings } from '../settings';
+import { LAYOUT_FILE_EXTENSION } from '../showcase/boardFileName';
+import { useBoardFileDrop } from './useBoardFileDrop';
 
 // Selftest page is code-split: it never loads in normal use.
 const SelfTestPage = lazy(() => import('../dev/selftest').then((m) => ({ default: m.SelfTestPage })));
@@ -118,6 +122,12 @@ function MainApp() {
   const [showcaseOpen, setShowcaseOpen] = useState(false);
   // Hidden while the Settings toggle is off; it comes back when the toggle does.
   const showcaseActive = useSettings((s) => s.showcaseBoard) && WORKSHOP_ENABLED && showcaseOpen;
+  const setShowcaseBoard = useSettings((s) => s.setShowcaseBoard);
+  const openBoardForFile = useCallback(() => {
+    setShowcaseBoard(true);
+    setShowcaseOpen(true);
+  }, [setShowcaseBoard]);
+  const boardDrop = useBoardFileDrop(WORKSHOP_ENABLED && !showcaseActive, openBoardForFile);
   // The board covers the stage, so the 3D viewer stops drawing until it closes.
   useEffect(() => {
     viewerRef.current?.setSuspended(showcaseActive);
@@ -279,6 +289,18 @@ function MainApp() {
           : data?.getRecipe(kit, weaponKey, team, wearIndex) ?? Promise.resolve(null)
     ),
     [data, editableKitId, editorCurrent, getImportedRecipe, getStockRecipe],
+  );
+
+  // The board composes every paint itself, and can hold several at once, so each needs its own replaced textures.
+  const resolveShowcaseRecipe = useCallback(
+    async (kit: PaintkitEntry, weaponKey: string, team: ControlsState['team'], wearIndex: number) => {
+      const recipe = await resolveRecipe(kit, weaponKey, team, wearIndex);
+      return recipe && applyTextureOverrides(recipe, {
+        ...collectPackageStickerSpecularOverrides([{ wearIndex, recipe }], (ref) => Boolean(sourceProvider.packagePathFor(ref))),
+        ...manualOverridesOf(assetOverrideCache[String(kit.id)]),
+      });
+    },
+    [assetOverrideCache, resolveRecipe, sourceProvider],
   );
 
   const preloadWorkbench = useIntentPreload(useCallback(async () => {
@@ -698,6 +720,7 @@ function MainApp() {
         />
       </aside>
       <main className="stage">
+        {boardDrop.dragging && <div className="viewer-drop-hint">Drop a {LAYOUT_FILE_EXTENSION} file to open it on the Showcase Board.</div>}
         <PanelEdgeToggle
           side="left"
           open={catalogVisible}
@@ -762,12 +785,15 @@ function MainApp() {
               team={state.team}
               wearIndex={state.wearIndex}
               seed={state.seed}
-              resolveRecipe={resolveRecipe}
+              resolveRecipe={resolveShowcaseRecipe}
               resolveTexture={(ref) => sourceProvider.resolve(ref)}
               resolveCubemap={async (ref) => await sourceProvider.resolveCubemap(ref) ?? stockMaterialCubemapUrls(ref)}
               resolvePackageMaterial={(weaponKey, overrideId) => sourceProvider.resolveMaterial(weaponKey, overrideId)}
               textureMetadataResolver={(ref) => sourceProvider.metadataFor(ref)}
+              hasReplacedTextures={(kitId) => Object.keys(manualOverridesOf(assetOverrideCache[String(kitId)])).length > 0}
               inspectorEl={inspectorEl}
+              droppedBoardFile={boardDrop.file}
+              onDroppedBoardFileTaken={boardDrop.takeFile}
               onClose={() => setShowcaseOpen(false)}
             />
           </Suspense>
@@ -892,6 +918,8 @@ function MainApp() {
         closeTurntableToast={closeTurntableToast}
         workspaceCleared={workspaceCleared}
         onWorkspaceClearedClose={() => setWorkspaceCleared(null)}
+        droppedFileProblem={boardDrop.problem}
+        onDroppedFileProblemClose={boardDrop.clearProblem}
       />
       <ClearWorkspaceDialog
         open={clearWorkspaceOpen}

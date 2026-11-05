@@ -18,7 +18,7 @@ import { BOARD_HEIGHT, BOARD_WIDTH, GRID_CELL, LOGO_SPACE } from './boardMetrics
 import { arrange, type BoardLayoutHost } from './boardLayout';
 import { compose } from './boardComposition';
 import { cellKey, refreshFootprint } from './footprint';
-import type { BoardBackground, DragState, GridSize, ItemRuntime, MeshSubset, PoseHandle, ShowcaseBoardOptions, ShowcaseItem, ShowcasePaint, ShowcaseSnapshot, FitProblem } from './showcaseTypes';
+import type { AppliedLayout, BoardBackground, BoardEditSideEffect, DragState, GridSize, ItemRuntime, MeshSubset, PoseHandle, ShowcaseBoardOptions, ShowcaseItem, ShowcasePaint, ShowcaseSnapshot, FitProblem } from './showcaseTypes';
 import { baseOrientation, findPartBases, partSubset, posedPositions, restingRoll, shownSideFlip } from './weaponGeometry';
 import { BoardPaints, MIN_SOURCE_SIZE } from './boardPaints';
 import { prepareBoardImage, pruneBoardImages, readBoardImage, saveBoardImage } from './boardImages';
@@ -55,19 +55,13 @@ const keyJ = (key: number) => (key % 4096) - 2048;
 
 let idCounter = 0;
 
-interface AppliedLayout {
-  rows: LayoutRows;
-  pack: LayoutPacking | undefined;
-  inward: boolean;
-  upright: boolean;
-  logoSpace: boolean;
-}
-
 type ManyPatch = Partial<Pick<ShowcaseItem, 'roll' | 'tilt' | 'turn' | 'flipped' | 'scale'>>;
 
 interface HistoryEntry {
   items: ShowcaseItem[];
   layout: AppliedLayout | null;
+  /** What else changed in the step from this state to the next. */
+  sideEffect?: BoardEditSideEffect;
 }
 
 /** The TF2 shader omits three's 1/pi Lambert factor, as Source does, so lights run at Source strength; the board's Lambert surfaces are brightened by pi to match. */
@@ -511,18 +505,23 @@ export class ShowcaseBoard {
     window.removeEventListener('pointerup', this.#onWindowUp);
   }
 
-  undo(): void {
+  /** Resolves once the board is back. */
+  async undo(): Promise<void> {
+    if (this.#restoring) return;
     const previous = this.#past.pop();
-    if (!previous || this.#restoring) return;
-    this.#future.push({ items: this.#committed, layout: this.#committedLayout });
+    if (!previous) return;
+    previous.sideEffect?.undo();
+    this.#future.push({ items: this.#committed, layout: this.#committedLayout, sideEffect: previous.sideEffect });
     this.#layout = this.#committedLayout = previous.layout;
-    void this.#restore(previous.items);
+    await this.#restore(previous.items);
   }
 
   redo(): void {
+    if (this.#restoring) return;
     const next = this.#future.pop();
-    if (!next || this.#restoring) return;
-    this.#past.push({ items: this.#committed, layout: this.#committedLayout });
+    if (!next) return;
+    next.sideEffect?.redo();
+    this.#past.push({ items: this.#committed, layout: this.#committedLayout, sideEffect: next.sideEffect });
     this.#layout = this.#committedLayout = next.layout;
     void this.#restore(next.items);
   }
@@ -827,7 +826,7 @@ export class ShowcaseBoard {
   }
 
   /** Puts a saved board back as the starting point, so undo cannot step to the empty board before it. */
-  async load(items: readonly ShowcaseItem[]): Promise<void> {
+  async load(items: readonly ShowcaseItem[], savedImages: ReadonlySet<string> = new Set()): Promise<void> {
     // Saved ids came from an earlier session's counter; new weapons must not reuse them.
     for (const item of items) {
       const saved = Number(/^item-(\d+)$/.exec(item.id)?.[1]);
@@ -837,19 +836,38 @@ export class ShowcaseBoard {
     this.#future = [];
     this.#layout = this.#committedLayout = null;
     await this.#restore(items.map(copyItem));
-    const keep = new Set(items.flatMap((item) => (item.image ? [item.image.assetId] : [])));
+    const keep = new Set([...savedImages, ...items.flatMap((item) => (item.image ? [item.image.assetId] : []))]);
     void pruneBoardImages(keep).catch((cause: unknown) => console.error('[showcase] could not clean up saved images', cause));
+  }
+
+  /** The ready-made layout on the board, if any, for saving along with its weapons. */
+  get appliedLayout(): AppliedLayout | null {
+    return this.#layout;
+  }
+
+  /** Replaces the board with a saved one as one undo step, along with whatever else `sideEffect` covers. */
+  async replaceWith(items: readonly ShowcaseItem[], layout: AppliedLayout | null, sideEffect?: BoardEditSideEffect): Promise<void> {
+    if (this.#restoring) return;
+    // A layout or picture still loading would otherwise land on the restored board.
+    this.#layoutRequest += 1;
+    this.#clears += 1;
+    this.#cancelExternalDrag();
+    this.#drag = null;
+    this.select(null);
+    this.#flushReshapes();
+    this.#past.push({ items: this.#committed, layout: this.#committedLayout, sideEffect });
+    if (this.#past.length > HISTORY_LIMIT) this.#past.shift();
+    this.#future = [];
+    this.#layout = this.#committedLayout = layout;
+    // Fresh ids: a save's ids can belong to other weapons by now, and #restore would reuse those weapons' models.
+    await this.#restore(items.map((item) => ({ ...copyItem(item), id: `item-${(idCounter += 1)}` })));
   }
 
   /** Puts a picture in the middle of the board, sized to the space a logo layout leaves. Rejects when the file is not an image. */
   async addImage(file: Blob, name: string): Promise<void> {
     const clears = this.#clears;
-    const { blob, aspect } = await prepareBoardImage(file);
-    const assetId = crypto.randomUUID();
-    this.#imageAssets.set(assetId, this.#loadImageAsset(assetId, blob));
-    // Without storage the picture still works for this session.
-    await saveBoardImage(assetId, blob).catch((cause: unknown) => console.error('[showcase] could not save the image', cause));
-    const runtime = await this.#createImageRuntime({ assetId, aspect }, name);
+    const image = await this.importImage(file);
+    const runtime = await this.#createImageRuntime(image, name);
     if (!runtime) throw new Error('could not load the image');
     if (clears !== this.#clears) {
       this.#disposeRuntime(runtime);
@@ -859,6 +877,24 @@ export class ShowcaseBoard {
     this.select(runtime.item.id);
     this.#updateCellMarkers();
     this.#emit();
+  }
+
+  /** Stores a picture under a new id without placing it. Rejects when the file is not an image. */
+  async importImage(file: Blob): Promise<NonNullable<ShowcaseItem['image']>> {
+    const { blob, aspect } = await prepareBoardImage(file);
+    const assetId = crypto.randomUUID();
+    this.#imageAssets.set(assetId, this.#loadImageAsset(assetId, blob));
+    // Without storage the picture still works for this session.
+    await saveBoardImage(assetId, blob).catch((cause: unknown) => console.error('[showcase] could not save the image', cause));
+    return { assetId, aspect };
+  }
+
+  /** A picture's bytes, for sharing it: from storage, or from this session when storage failed. */
+  async imageFile(assetId: string): Promise<Blob | null> {
+    const stored = await readBoardImage(assetId).catch(() => null);
+    if (stored) return stored;
+    const url = this.#imageUrls.get(assetId);
+    return url ? (await fetch(url)).blob() : null;
   }
 
   /** The picture's own address, for showing it in the layer list. */
@@ -1796,6 +1832,33 @@ export class ShowcaseBoard {
     this.#dirty = false;
     this.renderer.render(this.#scene, this.#camera);
   };
+
+  /** A small picture of the board as it looks now, for telling saved layouts apart. Null if the browser cannot make one. */
+  thumbnail(width: number): string | null {
+    if (this.#disposed) return null;
+    this.#flushReshapes();
+    const hidden = [this.#cells, this.#ghost].filter((object) => object.visible);
+    for (const object of hidden) object.visible = false;
+    // A WebGL canvas can only be read straight after drawing, so this draws now rather than on the next frame.
+    this.renderer.render(this.#scene, this.#camera);
+    const source = this.renderer.domElement;
+    const bounds = this.#frameBounds();
+    const perUnit = source.width / (this.#camera.right - this.#camera.left);
+    const [sourceWidth, sourceHeight] = [bounds.width * perUnit, bounds.height * perUnit];
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = Math.round(width * bounds.height / bounds.width);
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(source, (source.width - sourceWidth) / 2, (source.height - sourceHeight) / 2, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+    }
+    for (const object of hidden) object.visible = true;
+    this.#dirty = true;
+    this.#requestFrame();
+    const url = canvas.toDataURL('image/webp', 0.8);
+    return context && url.startsWith('data:image/') ? url : null;
+  }
 
   outputSize(width: number, backdrop = true): { width: number; height: number } {
     const bounds = this.#frameBounds(backdrop);

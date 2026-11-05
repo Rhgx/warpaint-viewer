@@ -15,6 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 
+import { isLayoutFileName } from '../../showcase/boardFileName';
 import { collectSlots } from '../../workbench/assetSlots';
 import { fileExtension } from '../../workbench/textureImport';
 import type { WarpaintAssetState, WorkbenchTab } from '../../workbench/types';
@@ -238,10 +239,12 @@ export function CustomWarpaintWorkbench({
     },
     onDrop: (event: ReactDragEvent<HTMLElement>) => {
       if (!dragging(event)) return;
-      event.preventDefault();
       dragDepthRef.current = 0;
       setDropping(false);
       const files = [...event.dataTransfer.files];
+      // A shared board goes to the board, which listens on the window, wherever on the page it was dropped.
+      if (files.length === 1 && isLayoutFileName(files[0].name)) return;
+      event.preventDefault();
       if (files.length) routeImportedFiles(files);
     },
   };

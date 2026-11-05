@@ -12,6 +12,11 @@ interface UseTextureOverridesOptions {
   packageGeneration: number;
 }
 
+/** A paint's replaced textures, as original ref to replacement. */
+export const manualOverridesOf = (assetOverrides: WarpaintAssetOverrides | undefined): Record<string, string> => Object.fromEntries(
+  Object.entries(assetOverrides?.assets ?? {}).flatMap(([ref, asset]) => asset.output ? [[ref, asset.output]] : []),
+);
+
 export function useTextureOverrides({
   sourceProvider,
   assetOverrides,
@@ -19,12 +24,7 @@ export function useTextureOverrides({
   packageGeneration,
 }: UseTextureOverridesOptions) {
   const resolvePackageTexture = useCallback((ref: string) => sourceProvider.resolvePreview(ref), [sourceProvider]);
-  const manualTextureOverrides = useMemo(
-    () => Object.fromEntries(
-      Object.entries(assetOverrides.assets).flatMap(([ref, asset]) => asset.output ? [[ref, asset.output]] : []),
-    ),
-    [assetOverrides],
-  );
+  const manualTextureOverrides = useMemo(() => manualOverridesOf(assetOverrides), [assetOverrides]);
   const mountedSourcePackage = sourceProvider.package;
   const packageStickerSpecularOverrides = useMemo(
     () => collectPackageStickerSpecularOverrides(

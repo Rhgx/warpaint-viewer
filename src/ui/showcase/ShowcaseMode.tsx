@@ -5,18 +5,21 @@ import type { RecipeNode, TextureResolver } from '../../compositor/types';
 import type { Manifest, PaintkitEntry, TextureMetadata, WeaponMaterial } from '../../data/types';
 import { joinData } from '../../data/loader';
 import { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
-import type { ShowcaseItem, ShowcasePaint, ShowcaseSnapshot } from '../../showcase/showcaseTypes';
+import type { AppliedLayout, BoardEditSideEffect, ShowcaseItem, ShowcasePaint, ShowcaseSnapshot } from '../../showcase/showcaseTypes';
 import { readSavedBoard, writeSavedBoard } from '../../showcase/boardStorage';
 import { boardLayouts } from '../../showcase/layouts';
 import { downloadBlob } from '../common/download';
 import { ShowcaseGizmo, ShowcasePoseHandles } from './ShowcaseGizmo';
+import { readLayoutSlots, readSlotBackups, slotImages } from './layoutSlots';
 import { describeProblem, exportsBackdrop, loadSettings, SETTINGS_STORAGE_KEY, type ShowcaseSettings } from './showcaseSettings';
 import { LayersSection } from './ShowcaseLayers';
 import { LayoutsSection, type FeaturePick } from './ShowcaseLayouts';
+import { SavedLayoutsSection } from './ShowcaseSavedLayouts';
 import { ExportSection, LookSection, PlacementSection } from './ShowcaseSettingsSections';
 import { ShowcaseToolbar } from './ShowcaseToolbar';
 import { ShowcaseTray } from './ShowcaseTray';
 import { ImageSection, MultiSection, WeaponSection } from './ShowcaseWeaponSection';
+import { useSavedLayouts } from './useSavedLayouts';
 import './Showcase.css';
 
 const EMPTY_SNAPSHOT: ShowcaseSnapshot = {
@@ -36,12 +39,16 @@ interface ShowcaseModeProps {
   resolveCubemap: (ref: string) => Promise<string[] | null>;
   resolvePackageMaterial: (weaponKey: string, materialOverrideId?: string) => Promise<{ material: WeaponMaterial } | null>;
   textureMetadataResolver: (ref: string) => Partial<TextureMetadata> | undefined;
+  hasReplacedTextures: (kitId: number) => boolean;
   inspectorEl: HTMLElement | null;
+  /** Dropped on the viewer before the board was open, to open once it is. */
+  droppedBoardFile: File | null;
+  onDroppedBoardFileTaken: () => void;
   onClose: () => void;
 }
 
 export default function ShowcaseMode(props: ShowcaseModeProps) {
-  const { manifest, selectedKit, inspectorEl, onClose } = props;
+  const { manifest, selectedKit, inspectorEl, droppedBoardFile, onDroppedBoardFileTaken, onClose } = props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [board, setBoard] = useState<ShowcaseBoard | null>(null);
   const [settings, setSettings] = useState(loadSettings);
@@ -90,7 +97,7 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
     // The UI gets the board once the autosaved weapons are back, so nothing is dropped on it mid-restore
     // and the empty board it starts as is never saved over them.
     let disposed = false;
-    instance.load(readSavedBoard())
+    instance.load(readSavedBoard(), slotImages([...readLayoutSlots(), ...readSlotBackups()]))
       .catch((cause: unknown) => console.error('[showcase] could not restore the saved board', cause))
       .finally(() => {
         if (!disposed) setBoard(instance);
@@ -274,9 +281,75 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
   }, [board, outputWidth, exportBackdrop]);
   const changeSettings = useCallback((patch: Partial<ShowcaseSettings>) => setSettings((current) => ({ ...current, ...patch })), []);
+  // A slot can take seconds to load its models, and nothing may land on the board until it has.
+  const [restoring, setRestoring] = useState(false);
+  const restoreBoard = useCallback(async (items: readonly ShowcaseItem[], layout: AppliedLayout | null, sideEffect: BoardEditSideEffect) => {
+    if (!board) return false;
+    setRestoring(true);
+    try {
+      await board.replaceWith(items, layout, sideEffect);
+      return true;
+    } catch (cause) {
+      console.error('[showcase] could not load the saved layout', cause);
+      return false;
+    } finally {
+      setRestoring(false);
+    }
+  }, [board]);
+  const replaceSettings = useCallback((next: ShowcaseSettings) => setSettings(next), []);
+  // Set by the panel, which owns importing, for files dropped on the board.
+  const importDropped = useRef<((file: File) => Promise<string | null>) | null>(null);
+  const registerImport = useCallback((importFile: (file: File) => Promise<string | null>) => {
+    importDropped.current = importFile;
+  }, []);
+  const [dropping, setDropping] = useState<'image' | 'board' | null>(null);
+  // On the whole window: a file dropped beside the board would otherwise make the browser navigate to it, losing the session.
+  useEffect(() => {
+    const onDragOver = (event: DragEvent) => {
+      if (!event.dataTransfer?.types.includes('Files')) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      setDropping(event.dataTransfer.items[0]?.type.startsWith('image/') ? 'image' : 'board');
+    };
+    const onDragLeave = (event: DragEvent) => {
+      if (!event.relatedTarget) setDropping(null);
+    };
+    const onDrop = (event: DragEvent) => {
+      const files = event.dataTransfer?.files;
+      const file = files?.[0];
+      setDropping(null);
+      if (!file) return;
+      event.preventDefault();
+      if (files.length > 1) {
+        setImageError('Drop one file at a time.');
+        return;
+      }
+      if (file.type.startsWith('image/')) {
+        void addImage(file);
+        return;
+      }
+      // Clearing the selection brings the panel's saved boards back, where the result is reported.
+      board?.select(null);
+      void importDropped.current?.(file).then((problem) => setImageError(problem));
+    };
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, [addImage, board]);
+  // The panel registers its import in its own effect, which runs ahead of this one.
+  useEffect(() => {
+    if (!droppedBoardFile || !board || !importDropped.current) return;
+    onDroppedBoardFileTaken();
+    void importDropped.current(droppedBoardFile).then((problem) => setImageError(problem));
+  }, [board, droppedBoardFile, inspectorEl, onDroppedBoardFileTaken]);
 
   return (
-    <div className="showcase">
+    <div className="showcase" inert={restoring}>
       <div className="showcase-stage">
         <canvas ref={canvasRef} className="showcase-canvas" />
         {board && selected && !snapshot.dragging && (
@@ -286,13 +359,18 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
           </>
         )}
         {warning && <div className="showcase-warning" role="status">{warning}</div>}
+        {dropping && (
+          <div className="showcase-drop-hint" aria-hidden="true">
+            {dropping === 'image' ? 'Drop to add this picture to the board.' : 'Drop a .pegboard file to open it. Replaces the board.'}
+          </div>
+        )}
         <ShowcaseToolbar board={board} onClose={onClose} hasItems={snapshot.items.length > 0}
           canUndo={snapshot.canUndo} canRedo={snapshot.canRedo} onSave={exportPng} onCopy={copyPng} onAddImage={addImage} />
       </div>
       <ShowcaseTray board={board} paint={trayPaint} weapons={trayWeapons} placedCounts={placedCounts} />
       {inspectorEl && createPortal(
         <ShowcasePanel board={board} manifest={manifest} paintkits={props.paintkits} snapshot={snapshot} selected={selected}
-          kit={selectedKit} paint={trayPaint}
+          kit={selectedKit} paint={trayPaint} hasReplacedTextures={props.hasReplacedTextures} restoring={restoring} onRestore={restoreBoard} onReplaceSettings={replaceSettings} onRegisterImport={registerImport}
           settings={settings} onSettingsChange={changeSettings} rotationStep={rotationStep} />,
         inspectorEl,
       )}
@@ -303,14 +381,19 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
 const noopSubscribe = () => () => undefined;
 const emptySnapshot = () => EMPTY_SNAPSHOT;
 
-function ShowcasePanel({ board, manifest, paintkits, kit, paint, snapshot, selected, settings, onSettingsChange, rotationStep }: {
+function ShowcasePanel({ board, manifest, paintkits, kit, paint, hasReplacedTextures, snapshot, selected, restoring, onRestore, onReplaceSettings, onRegisterImport, settings, onSettingsChange, rotationStep }: {
   board: ShowcaseBoard | null;
   manifest: Manifest;
   paintkits: readonly PaintkitEntry[];
   kit: PaintkitEntry | null;
   paint: ShowcasePaint | null;
+  hasReplacedTextures: (kitId: number) => boolean;
   snapshot: ShowcaseSnapshot;
   selected: ShowcaseItem | null;
+  restoring: boolean;
+  onRestore: (items: readonly ShowcaseItem[], layout: AppliedLayout | null, sideEffect: BoardEditSideEffect) => Promise<boolean>;
+  onReplaceSettings: (settings: ShowcaseSettings) => void;
+  onRegisterImport: (importFile: (file: File) => Promise<string | null>) => void;
   settings: ShowcaseSettings;
   onSettingsChange: (patch: Partial<ShowcaseSettings>) => void;
   rotationStep: number;
@@ -342,12 +425,39 @@ function ShowcasePanel({ board, manifest, paintkits, kit, paint, snapshot, selec
     if (pick.pairs) setPairs(pick.pairs);
     return kit && paint ? boardLayouts(kit, paint, wearCount, nextFocus, nextPairs).find((layout) => layout.id === layoutId) : undefined;
   }, [kit, paint, wearCount, focus, pairs]);
+  // Bumped to drop the Layouts section's picker, which belongs to the layout a saved board just replaced.
+  const [pickerReset, setPickerReset] = useState(0);
+  const isKnownPaint = useCallback((kitId: number) => grades.has(kitId), [grades]);
+  const saved = useSavedLayouts({
+    board, items: snapshot.items, settings, featured, pairs, isKnownPaint, wearCount, selectedPaint: kit, hasReplacedTextures,
+    onSettingsChange: onReplaceSettings,
+    onFeaturedChange: (weapon, nextPairs) => {
+      setFeatured(weapon);
+      setPairs(nextPairs);
+      setPickerReset((count) => count + 1);
+    },
+    onApplyStart: collapseLayers,
+    onRestore,
+  });
+  // Controlled, so that a file dropped on the board can open it to show what happened.
+  const [savedOpen, setSavedOpen] = useState(true);
+  useEffect(() => {
+    onRegisterImport((file) => {
+      setSavedOpen(true);
+      return saved.importFile(file);
+    });
+  });
+  const { detachBoard } = saved;
+  const layoutApplied = useCallback(() => {
+    collapseLayers();
+    detachBoard();
+  }, [collapseLayers, detachBoard]);
   const featureOptions = useMemo(() => (kit?.weapons ?? []).flatMap((key) => {
     const weapon = manifest.weapons.find((entry) => entry.key === key);
     return weapon && key !== 'paintkit_tool' ? [{ value: key, label: weapon.name, icon: weapon.icon ? joinData(weapon.icon) : null }] : [];
   }), [kit, manifest]);
   return (
-    <div className="showcase-panel">
+    <div className="showcase-panel" inert={restoring}>
       <LayersSection board={board} manifest={manifest} items={snapshot.items} selectedIds={snapshot.selectedIds}
         problems={snapshot.problems} reorderable={!settings.keepApart} grades={grades} open={layersOpen} onOpenChange={setLayersOpen} />
       {selected?.image && board && (
@@ -364,8 +474,9 @@ function ShowcasePanel({ board, manifest, paintkits, kit, paint, snapshot, selec
       )}
       {!selected && !multiple && (
         <>
-          {board && layouts.length > 0 && <LayoutsSection board={board} layouts={layouts} featureOptions={featureOptions} onFeature={feature} onApply={collapseLayers}
-            weaponSize={settings.weaponSize} onWeaponSizeChange={setWeaponSize} />}
+          {board && layouts.length > 0 && <LayoutsSection board={board} layouts={layouts} featureOptions={featureOptions} onFeature={feature} onApply={layoutApplied}
+            weaponSize={settings.weaponSize} onWeaponSizeChange={setWeaponSize} pickerReset={pickerReset} />}
+          {board && <SavedLayoutsSection saved={saved} hasItems={snapshot.items.length > 0} open={savedOpen} onOpenChange={setSavedOpen} />}
           <PlacementSection settings={settings} onChange={onSettingsChange} />
           <LookSection settings={settings} onChange={onSettingsChange} />
           <ExportSection board={board} settings={settings} onChange={onSettingsChange} />
