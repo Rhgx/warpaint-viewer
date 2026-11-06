@@ -32,7 +32,6 @@ interface StageCanvasProps {
   firstPersonBarSlot: (element: HTMLElement | null) => void;
   selectedKit: ComponentProps<typeof StageOverlay>['selectedKit'];
   showStageHeader: ComponentProps<typeof StageOverlay>['showStageHeader'];
-  weaponName: ComponentProps<typeof StageOverlay>['weaponName'];
   manualTextureOverrides: ReturnType<typeof useTextureOverrides>['manualTextureOverrides'];
   composing: ComponentProps<typeof StageOverlay>['composing'];
   cameraMode: ComponentProps<typeof StageOverlay>['cameraMode'];
@@ -75,7 +74,6 @@ export function StageCanvas({
   firstPersonBarSlot,
   selectedKit,
   showStageHeader,
-  weaponName,
   manualTextureOverrides,
   composing,
   cameraMode,
@@ -118,7 +116,6 @@ export function StageCanvas({
       <StageOverlay
         selectedKit={selectedKit}
         showStageHeader={showStageHeader}
-        weaponName={weaponName}
         hasCustomFiles={Object.keys(manualTextureOverrides).length > 0}
         composing={composing}
         cameraMode={cameraMode}

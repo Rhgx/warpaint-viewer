@@ -11,7 +11,6 @@ const BADGE = 'pointer-events-auto flex items-center rounded-md border border-st
 interface StageOverlayProps {
   selectedKit: PaintkitEntry | null;
   showStageHeader: boolean;
-  weaponName: string;
   hasCustomFiles: boolean;
   composing: boolean;
   cameraMode: 'inspect' | 'advanced';
@@ -24,7 +23,6 @@ export function StageOverlay({
   paintkits,
   onSelectKit,
   showStageHeader,
-  weaponName,
   hasCustomFiles,
   composing,
   cameraMode,
@@ -35,6 +33,11 @@ export function StageOverlay({
   const directoryEntry = directory && selectedKit && !isCustomKitId(selectedKit.id)
     ? directory.entries[selectedKit.id]
     : undefined;
+  // Imported kits belong to no collection.
+  const details = [
+    selectedKit && !isCustomKitId(selectedKit.id) ? selectedKit.collection ?? 'Uncategorized' : null,
+    hasCustomFiles ? 'Custom files' : null,
+  ].filter(Boolean).join(' - ');
   return (
     // pointer-events-none keeps orbit and zoom working under it. Mobile: moved below the toolbar, by its height plus a gap.
     <div className="pointer-events-none absolute top-2.5 left-2.5 z-2 flex max-w-[min(60%,420px)] flex-col items-start gap-1.5 mobile:top-[calc(env(safe-area-inset-top)+var(--stage-toolbar-btn)+24px)] mobile:left-[calc(10px+env(safe-area-inset-left))] mobile:max-w-[calc(100%-20px-env(safe-area-inset-left)-env(safe-area-inset-right))]">
@@ -64,12 +67,7 @@ export function StageOverlay({
               />
             )}
           </div>
-          <div className="mt-px max-w-full truncate text-11 tracking-[0.2px] text-on-canvas/74">
-            {isCustomKitId(selectedKit.id)
-              ? weaponName
-              : `${selectedKit.collection ?? 'Uncategorized'} - ${weaponName}`}
-            {hasCustomFiles ? ' - Custom files' : ''}
-          </div>
+          {details && <div className="mt-px max-w-full truncate text-11 tracking-[0.2px] text-on-canvas/74">{details}</div>}
         </div>
       )}
       {composing && (

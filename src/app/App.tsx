@@ -788,7 +788,6 @@ function MainApp() {
             firstPersonBarSlot={setFirstPersonBarSlot}
             selectedKit={selectedKit}
             showStageHeader={showStageHeader}
-            weaponName={weaponName}
             manualTextureOverrides={manualTextureOverrides}
             composing={composing}
             cameraMode={cameraMode}
