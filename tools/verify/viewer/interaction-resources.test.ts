@@ -63,7 +63,6 @@ test('material cancellation while waiting for the environment prevents material 
     get material() { return untouched('material'); },
     get tf2Uniforms() { return untouched('tf2Uniforms'); },
     get renderer() { return untouched('renderer'); },
-    get texLoader() { return untouched('texLoader'); },
     get emissive() { return untouched('emissive'); },
     getEnvReady: () => envReady,
     getDefaultEnvMap: () => untouched('defaultEnvMap'),

@@ -247,14 +247,19 @@ export function useComposedPaint({
   // Suspending cancels the request, so a raised badge would never be lowered by it.
   if (suspended && composing) setComposing(false);
   const [visibleDefinitionGeneration, setVisibleDefinitionGeneration] = useState(-1);
-  // Lower-detail composite shown while a cold paint streams in; released when replaced.
-  const previewRef = useRef<{ result: ComposeResult; compositor: Compositor } | null>(null);
-  const dropPreview = useCallback(() => {
-    const preview = previewRef.current;
-    previewRef.current = null;
-    preview?.compositor.releaseResult(preview.result);
-  }, []);
-  useEffect(() => dropPreview, [dropPreview]);
+
+  // The compose below waits for the weapon, but its textures need not: they download alongside the model.
+  useEffect(() => {
+    if (suspended || interactive || !engineReady || !selectedKit || !state.weaponKey || loadedAssetKey === selectedAssetKey) return;
+    if (!selectedKit.weapons.includes(state.weaponKey)) return;
+    let cancelled = false;
+    resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex).then((recipe) => {
+      if (recipe && !cancelled) compositorRef.current?.prefetchFullSources(applyTextureOverrides(recipe, activeTextureOverrides), state.seed);
+    }).catch((cause: unknown) => {
+      console.warn('[warpaint-viewer] source prefetch failed:', cause);
+    });
+    return () => { cancelled = true; };
+  }, [suspended, interactive, engineReady, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, activeTextureOverrides, compositorRef]);
 
   // Recompose on recipe input changes; the previous texture stays until the new one is ready.
   useEffect(() => {
@@ -282,11 +287,6 @@ export function useComposedPaint({
       // from Parts) replays the retained result instead of recomposing.
       const retained = lastResultRef.current;
       if (retained) {
-        // Put the accepted result back if a cancelled request left its preview on the mesh.
-        if (previewRef.current) {
-          viewerRef.current?.setMap(retained.texture);
-          dropPreview();
-        }
         try {
           onVisibleResult?.(retained, { interactive });
         } catch (cause) {
@@ -378,7 +378,7 @@ export function useComposedPaint({
         composeCacheRef.current.delete(composeKey);
         composeCacheRef.current.set(composeKey, cached);
         viewer.setMap(cached.texture);
-        dropPreview();
+        if (import.meta.env.VITE_PERF_MARKS) performance.mark('wpv:paint-cached');
         try {
           onVisibleResult?.(cached, { interactive: false });
         } catch (cause) {
@@ -403,22 +403,18 @@ export function useComposedPaint({
       try {
         // Load only the textures this seed selects; do not block first paint on every alternative.
         if (!firstPaintLoggedRef.current) advanceBoot(70, 'Composing initial warpaint…');
-        // The wear category selects a whole recipe, with no crossfade. Cold paints
-        // show at rising detail as their textures stream in; pointer previews skip this.
-        const showPreview = interactive ? undefined : (preview: ComposeResult) => {
-          viewer.setMap(preview.texture);
-          dropPreview();
-          previewRef.current = { result: preview, compositor: comp };
-          if (!firstPaintLoggedRef.current) advanceBoot(90, 'Sharpening warpaint…');
-        };
-        const result = await comp.composeLatest('visible-paint', recipe, state.seed, dimensions, () => cancelled, showPreview);
+        // The wear category selects a whole recipe, with no crossfade.
+        const result = await comp.composeLatest('visible-paint', recipe, state.seed, dimensions, () => cancelled);
         if (!result) return;
         if (cancelled) {
           comp.releaseResult(result);
           return;
         }
         viewer.setMap(result.texture);
-        dropPreview();
+        if (import.meta.env.VITE_PERF_MARKS) {
+          performance.mark('wpv:paint-final');
+          (window as unknown as { __perfPaint?: unknown }).__perfPaint = { renderer: viewer.renderer, target: result.target };
+        }
         try {
           onVisibleResult?.(result, { interactive });
         } catch (cause) {
@@ -497,7 +493,7 @@ export function useComposedPaint({
       window.clearTimeout(badgeTimer);
       cancelPendingIdle?.();
     };
-  }, [dropPreview, suspended, interactive, interactiveRecipe, interactiveKey, onVisibleResult, engineReady, contextRestores, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState, lastResultRef, interactiveResultRef, composeCacheRef, lastComposeKeyRef, lastRequestKeyRef, firstPaintLoggedRef]);
+  }, [suspended, interactive, interactiveRecipe, interactiveKey, onVisibleResult, engineReady, contextRestores, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState, lastResultRef, interactiveResultRef, composeCacheRef, lastComposeKeyRef, lastRequestKeyRef, firstPaintLoggedRef]);
 
   return { composing, visibleDefinitionGeneration };
 }

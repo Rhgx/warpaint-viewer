@@ -9,7 +9,6 @@ export interface LatestComposeHost {
     resolved: ResolvedNode,
     dimensions: ComposeDimensions | undefined,
     cancelled: () => boolean,
-    onPreview?: (result: ComposeResult) => void,
   ) => Promise<ComposeResult | null>;
   readonly releaseResult: (result: ComposeResult) => void;
   readonly prefetchTiers: (recipe: ResolvedNode, size: number) => void;
@@ -21,7 +20,6 @@ interface LatestComposeRequest {
   readonly resolve: (result: ComposeResult | null) => void;
   readonly reject: (cause: unknown) => void;
   readonly cancelled?: () => boolean;
-  readonly onPreview?: (result: ComposeResult) => void;
 }
 
 interface LatestComposeChannel {
@@ -38,20 +36,15 @@ export class LatestComposeScheduler {
     this.host = host;
   }
 
-  /**
-   * Keep at most one pending composition per channel; a newer request replaces it.
-   * `onPreview`, when given, receives lower-detail composites while cold textures
-   * stream in. Each result belongs to the caller.
-   */
+  /** Keep at most one pending composition per channel; a newer request replaces it. */
   composeLatest(
     channel: string,
     recipe: RecipeNode,
     seed: PaintSeed,
     dimensions?: ComposeDimensions,
     cancelled?: () => boolean,
-    onPreview?: (result: ComposeResult) => void,
   ): Promise<ComposeResult | null> {
-    return this.composeResolvedLatest(channel, resolveRecipe(recipe, seed), dimensions, cancelled, onPreview);
+    return this.composeResolvedLatest(channel, resolveRecipe(recipe, seed), dimensions, cancelled);
   }
 
   composeResolvedLatest(
@@ -59,7 +52,6 @@ export class LatestComposeScheduler {
     recipe: ResolvedNode,
     dimensions?: ComposeDimensions,
     cancelled?: () => boolean,
-    onPreview?: (result: ComposeResult) => void,
   ): Promise<ComposeResult | null> {
     let state = this.latestComposeChannels.get(channel);
     if (!state) {
@@ -71,7 +63,7 @@ export class LatestComposeScheduler {
     if (dimensions?.sourceLimit) this.host.prefetchTiers(recipe, dimensions.sourceLimit);
     return new Promise<ComposeResult | null>((resolve, reject) => {
       state!.pending?.resolve(null);
-      state!.pending = { recipe, dimensions, resolve, reject, cancelled, onPreview };
+      state!.pending = { recipe, dimensions, resolve, reject, cancelled };
       if (!state!.running) void this.runLatestComposeChannel(channel, state!);
     });
   }
@@ -83,7 +75,7 @@ export class LatestComposeScheduler {
       state.pending = null;
       try {
         const result = await this.host.enqueue(() => state.pending || request.cancelled?.()
-          ? null : this.host.composeResolvedNow(request.recipe, request.dimensions, () => Boolean(state.pending) || Boolean(request.cancelled?.()), request.onPreview));
+          ? null : this.host.composeResolvedNow(request.recipe, request.dimensions, () => Boolean(state.pending) || Boolean(request.cancelled?.())));
         if (!result) {
           request.resolve(null);
         } else if (state.pending || request.cancelled?.()) {

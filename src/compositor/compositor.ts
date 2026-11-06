@@ -65,17 +65,6 @@ interface EvaluatedInput {
   target: THREE.WebGLRenderTarget | null;
 }
 
-/**
- * Lower-detail passes shown while a cold paint's textures stream in: sources capped
- * at `source` px, composed at no more than `output` px. Low-end machines skip the
- * middle step, since its uploads cost more smoothness than the sharper preview is worth.
- */
-const LOW_END_DEVICE = (globalThis.navigator?.hardwareConcurrency ?? 8) <= 4
-  || ((globalThis.navigator as (Navigator & { deviceMemory?: number }) | undefined)?.deviceMemory ?? 8) <= 4;
-const PREVIEW_TIERS: readonly { source: number; output: number }[] = LOW_END_DEVICE
-  ? [{ source: 256, output: 512 }]
-  : [{ source: 256, output: 512 }, { source: 1024, output: 1024 }];
-
 // Reimplements TF2's paintkit compositor on the GPU via three.js render targets,
 // sharing the viewer's WebGL context. Evaluates a resolved stage tree bottom-up
 // into ping-ponged 8-bit sRGB render targets, with shader math in linear space.
@@ -116,7 +105,7 @@ export class Compositor {
     );
     this.latestCompose = new LatestComposeScheduler({
       enqueue: (work) => this.enqueue(work),
-      composeResolvedNow: (resolved, dimensions, cancelled, onPreview) => this.composeResolvedNow(resolved, dimensions, cancelled, onPreview),
+      composeResolvedNow: (resolved, dimensions, cancelled) => this.composeResolvedNow(resolved, dimensions, cancelled),
       releaseResult: (result) => this.releaseResult(result),
       prefetchTiers: (recipe, size) => this.prefetchTiers(recipe, size),
     });
@@ -230,6 +219,13 @@ export class Compositor {
    */
   prefetchSources(recipe: RecipeNode, seed: PaintSeed, sourceLimit: number): void {
     this.prefetchTiers(resolveRecipe(recipe, seed), sourceLimit);
+  }
+
+  /** Start fetching, decoding and uploading a paint's full sources, so that its compose finds them ready. */
+  prefetchFullSources(recipe: RecipeNode, seed: PaintSeed): void {
+    const refs: { ref: string; nearest: boolean }[] = [];
+    this.collectRefs(resolveRecipe(recipe, seed), refs);
+    for (const { ref, nearest } of refs) void this.textures.load(ref, { nearest }).catch(() => null);
   }
 
   // Decode and upload inputs while the current paint is visible. A supplied seed
@@ -424,20 +420,15 @@ export class Compositor {
     return this.enqueue(() => this.composeResolvedNow(recipe, dimensions));
   }
 
-  /**
-   * Keep at most one pending composition per channel; a newer request replaces it.
-   * `onPreview`, when given, receives lower-detail composites while cold textures
-   * stream in. Each result belongs to the caller.
-   */
+  /** Keep at most one pending composition per channel; a newer request replaces it. */
   composeLatest(
     channel: string,
     recipe: RecipeNode,
     seed: PaintSeed,
     dimensions?: ComposeDimensions,
     cancelled?: () => boolean,
-    onPreview?: (result: ComposeResult) => void,
   ): Promise<ComposeResult | null> {
-    return this.latestCompose.composeLatest(channel, recipe, seed, dimensions, cancelled, onPreview);
+    return this.latestCompose.composeLatest(channel, recipe, seed, dimensions, cancelled);
   }
 
   composeResolvedLatest(
@@ -445,9 +436,8 @@ export class Compositor {
     recipe: ResolvedNode,
     dimensions?: ComposeDimensions,
     cancelled?: () => boolean,
-    onPreview?: (result: ComposeResult) => void,
   ): Promise<ComposeResult | null> {
-    return this.latestCompose.composeResolvedLatest(channel, recipe, dimensions, cancelled, onPreview);
+    return this.latestCompose.composeResolvedLatest(channel, recipe, dimensions, cancelled);
   }
 
   /**
@@ -507,8 +497,9 @@ export class Compositor {
   }
 
   private composeResolvedNow(resolved: ResolvedNode, dimensions?: ComposeDimensions): Promise<ComposeResult>;
-  private composeResolvedNow(resolved: ResolvedNode, dimensions: ComposeDimensions | undefined, cancelled: () => boolean, onPreview?: (result: ComposeResult) => void): Promise<ComposeResult | null>;
-  private async composeResolvedNow(resolved: ResolvedNode, dimensions?: ComposeDimensions, cancelled?: () => boolean, onPreview?: (result: ComposeResult) => void): Promise<ComposeResult | null> {
+  private composeResolvedNow(resolved: ResolvedNode, dimensions: ComposeDimensions | undefined, cancelled: () => boolean): Promise<ComposeResult | null>;
+  private async composeResolvedNow(resolved: ResolvedNode, dimensions?: ComposeDimensions, cancelled?: () => boolean): Promise<ComposeResult | null> {
+    if (import.meta.env.VITE_PERF_MARKS) performance.mark('wpv:compose-start');
     const fullWidth = dimensions?.width ?? this.renderTargets.width;
     const fullHeight = dimensions?.height ?? this.renderTargets.height;
     const refs: { ref: string; nearest: boolean }[] = [];
@@ -518,9 +509,8 @@ export class Compositor {
     // the duration of this compose.
     const unpin = this.textures.pin(uniqueRefs.map((r) => this.textures.keyFor(r.ref, { nearest: r.nearest })));
     try {
-      const allReady = () => uniqueRefs.every((r) => this.textures.isReady(r.ref, { nearest: r.nearest }));
       const limit = dimensions?.sourceLimit;
-      if (limit && !allReady()) {
+      if (limit && !uniqueRefs.every((r) => this.textures.isReady(r.ref, { nearest: r.nearest }))) {
         await Promise.all(uniqueRefs.map((r) => this.textures.loadTier(r.ref, limit, { nearest: r.nearest }).catch(() => null)));
         if (cancelled?.()) return null;
         this.renderTargets.setOutputSize(fullWidth, fullHeight);
@@ -531,30 +521,9 @@ export class Compositor {
           this.sourceTier = null;
         }
       }
-      const pending = Promise.all(uniqueRefs.map((r) => this.textures.load(r.ref, { nearest: r.nearest }).catch(() => null)));
-      if (onPreview && !allReady()) {
-        for (const tier of PREVIEW_TIERS) {
-          await Promise.all(uniqueRefs.map((r) => this.textures.loadTier(r.ref, tier.source, { nearest: r.nearest }).catch(() => null)));
-          if (cancelled?.()) return null;
-          if (allReady()) break;
-          const scale = Math.min(1, tier.output / Math.max(fullWidth, fullHeight));
-          this.renderTargets.setOutputSize(fullWidth * scale, fullHeight * scale);
-          this.sourceTier = tier.source;
-          let preview: ComposeResult;
-          try {
-            preview = await this.composeRoot(resolved);
-          } finally {
-            this.sourceTier = null;
-          }
-          if (cancelled?.()) {
-            this.releaseResult(preview);
-            return null;
-          }
-          onPreview(preview);
-        }
-      }
       this.renderTargets.setOutputSize(fullWidth, fullHeight);
-      const loaded = await pending;
+      const loaded = await Promise.all(uniqueRefs.map((r) => this.textures.load(r.ref, { nearest: r.nearest }).catch(() => null)));
+      if (import.meta.env.VITE_PERF_MARKS) performance.mark('wpv:sources-ready');
       // A newer input may have arrived while the textures were loading.
       if (cancelled?.()) return null;
       // Upload new inputs one task at a time. Left to the first draw, a cold
@@ -589,6 +558,7 @@ export class Compositor {
     // sRGB-tagged pooled target gets a second hardware conversion on later writes and
     // samples. The Viewer decodes once, in map_fragment. Fix colorSpace and wrapping
     // at creation; never re-upload a target after drawing it.
+    if (import.meta.env.VITE_PERF_MARKS) performance.mark('wpv:compose-end');
     return { texture: target.texture, target };
   }
 

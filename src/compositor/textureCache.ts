@@ -20,9 +20,9 @@ interface Entry {
   failed: boolean;
   // Decoded by this entry alone (THREE.Cache is off), so it is the bitmap's only owner.
   bitmap?: ImageBitmap;
-  /** The downloaded file, kept until the full texture is up so stand-ins decode from it. */
+  /** The downloaded file, kept until the full texture is up so smaller copies decode from it. */
   file?: Promise<Blob>;
-  /** Downscaled stand-ins shown while the full texture streams in, by size. */
+  /** Downscaled copies for small composites, by size. */
   tiers: Map<number, Promise<THREE.Texture>>;
   tierBitmaps: ImageBitmap[];
 }
@@ -35,7 +35,7 @@ const STRIP_BYTES = 256 * 1024;
 const UPLOAD_BUDGET_MS = 6;
 
 interface UploadJob { work: () => void; done: () => void; fail: (cause: unknown) => void }
-/** Pending uploads by priority, lowest first: small stand-ins go up before the full textures. */
+/** Pending uploads by priority, lowest first: small copies go up before the full textures. */
 const uploadQueues = new Map<number, UploadJob[]>();
 let uploadScheduled = false;
 
@@ -79,7 +79,7 @@ function queueUpload(work: () => void, priority: number): Promise<void> {
   });
 }
 
-/** Smaller textures upload first, so each detail level appears as soon as it can. */
+/** Smaller textures upload first, as they finish soonest. */
 const uploadPriority = (image: { width: number; height: number }) => Math.max(image.width, image.height);
 
 function isBitmap(image: unknown): image is ImageBitmap {
@@ -266,15 +266,15 @@ export class TextureCache {
     });
   }
 
-  /** Whether the full texture is already on the GPU, so a compose needs no stand-ins. */
+  /** Whether the full texture is already on the GPU, so a compose needs no smaller copies. */
   isReady(ref: string, opts: LoadOpts = {}): boolean {
     return this.cache.get(this.keyFor(ref, opts))?.settled ?? false;
   }
 
   /**
-   * A copy `size` px square, decoded straight from the file: a stand-in while
-   * the full texture streams in, or all a small composite needs. It does not
-   * start the full texture; once that is up, it is returned instead.
+   * A copy `size` px square, decoded straight from the file: all a small
+   * composite needs. It does not start the full texture; once that is up, it is
+   * returned instead.
    */
   loadTier(ref: string, size: number, opts: LoadOpts = {}): Promise<THREE.Texture> {
     const entry = this.entryFor(ref, opts);
@@ -357,7 +357,7 @@ export class TextureCache {
       tierBitmaps: [],
     };
     // An empty ref is a stage with no texture picked yet: it stays white, with no fetch
-    // or warning. The file is fetched up front so stand-ins can decode from it.
+    // or warning. The file is fetched up front so smaller copies can decode from it.
     entry.file = ref && this.decodesBitmaps ? Promise.resolve(this.resolve(ref)).then((url) => fetch(url)).then((response) => response.blob()) : undefined;
     this.cache.set(key, entry);
     return entry;
@@ -396,7 +396,7 @@ export class TextureCache {
       if (!ref) {
         onError();
       } else if (file) {
-        // Decoded off the main thread, raw; the file is kept so stand-ins can decode from it too.
+        // Decoded off the main thread, raw.
         file
           .then((blob) => createImageBitmap(blob, { imageOrientation: 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }))
           .then((bitmap) => {

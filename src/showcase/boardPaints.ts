@@ -34,9 +34,8 @@ export class BoardPaints {
   readonly #cubemaps = new Map<string, Promise<THREE.CubeTexture | null>>();
   /** Composited paints by paint key, shared by every item wearing the same one. */
   readonly #paints = new Map<string, Promise<ComposeResult | null>>();
-  /** Lower-detail composites on show while a paint streams in, by paint key. */
-  readonly #previews = new Map<string, ComposeResult>();
-  readonly #retiredPreviews = new Set<ComposeResult>();
+  /** Replaced composites a weapon may still be showing. */
+  readonly #retiredPaints = new Set<ComposeResult>();
   #paintSweep = 0;
 
   constructor(host: BoardPaintsHost) {
@@ -256,9 +255,8 @@ export class BoardPaints {
       pending = (async () => {
         const recipe = await this.host.options.resolveRecipe(kitId, runtime.item.weaponKey, team, wearIndex);
         if (!recipe) return null;
-        // Like the viewer, a paint shows at rising detail while its textures stream in.
         const result = await this.host.compositor.composeLatest(`showcase:${key}`, recipe, seed, { width: size, height: size, sourceLimit: Math.max(size, MIN_SOURCE_SIZE) },
-          () => this.host.isDisposed(), (preview) => this.#showPreview(key, preview));
+          () => this.host.isDisposed());
         this.#wearPaint(key, result?.texture ?? null);
         return result;
       })().catch((cause) => {
@@ -267,9 +265,6 @@ export class BoardPaints {
       });
       this.#paints.set(key, pending);
     }
-    // Joining a paint that is still streaming in: show the detail it has reached.
-    const preview = this.#previews.get(key);
-    if (preview) this.#setMap(runtime, preview.texture);
     const texture = (await pending)?.texture ?? null;
     this.sweepPaints();
     // A newer paint on the same item may have finished first.
@@ -284,44 +279,21 @@ export class BoardPaints {
     material.map = texture;
     material.color.set(texture ? 0xffffff : 0x9a9a9a);
     this.host.markDirty();
-    this.releaseRetiredPreviews();
+    this.releaseRetiredPaints();
   }
 
-  /** Put a paint on every weapon wearing it, then free the preview it replaces. */
+  /** Put a paint on every weapon wearing it. */
   #wearPaint(key: string, texture: THREE.Texture | null): void {
     if (this.host.isDisposed()) return;
     for (const runtime of this.host.runtimes.values()) if (runtime.paintKey === key) this.#setMap(runtime, texture);
-    this.#dropPreview(key);
   }
 
-  #showPreview(key: string, preview: ComposeResult): void {
-    const wearers = [...this.host.runtimes.values()].filter((runtime) => runtime.paintKey === key);
-    if (this.host.isDisposed() || !wearers.length) {
-      this.host.compositor.releaseResult(preview);
-      return;
-    }
-    for (const runtime of wearers) this.#setMap(runtime, preview.texture);
-    this.#dropPreview(key);
-    this.#previews.set(key, preview);
-  }
-
-  #dropPreview(key: string): void {
-    const preview = this.#previews.get(key);
-    if (!preview) return;
-    this.#previews.delete(key);
-    this.#retiredPreviews.add(preview);
-    this.releaseRetiredPreviews();
-  }
-
-  /**
-   * Recycle replaced previews once no weapon shows them; one that switched
-   * paint mid-stream keeps its last preview until the new paint arrives.
-   */
-  releaseRetiredPreviews(): void {
-    for (const preview of this.#retiredPreviews) {
-      if ([...this.host.runtimes.values()].some((runtime) => runtime.material.map === preview.texture)) continue;
-      this.#retiredPreviews.delete(preview);
-      this.host.compositor.releaseResult(preview);
+  /** Recycle replaced composites once no weapon shows them; a weapon keeps its old paint until the new one arrives. */
+  releaseRetiredPaints(): void {
+    for (const paint of this.#retiredPaints) {
+      if ([...this.host.runtimes.values()].some((runtime) => runtime.material.map === paint.texture)) continue;
+      this.#retiredPaints.delete(paint);
+      this.host.compositor.releaseResult(paint);
     }
   }
 
@@ -333,13 +305,12 @@ export class BoardPaints {
       const worn = new Set([...this.host.runtimes.values()].map((runtime) => runtime.paintKey));
       for (const [key, pending] of this.#paints) {
         if (worn.has(key)) continue;
-        this.#dropPreview(key);
         this.#paints.delete(key);
         // A weapon keeps showing its old paint until the new one is ready.
         void pending.then((result) => {
           if (!result || this.host.isDisposed()) return;
-          this.#retiredPreviews.add(result);
-          this.releaseRetiredPreviews();
+          this.#retiredPaints.add(result);
+          this.releaseRetiredPaints();
         });
       }
     }, 0);

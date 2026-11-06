@@ -1232,7 +1232,7 @@ export class ShowcaseBoard {
 
   #applyPaint(runtime: ItemRuntime, pixelsPerUnit?: number): Promise<void> { return this.#boardPaints.applyPaint(runtime, pixelsPerUnit); }
 
-  #releaseRetiredPreviews(): void { this.#boardPaints.releaseRetiredPreviews(); }
+  #releaseRetiredPaints(): void { this.#boardPaints.releaseRetiredPaints(); }
 
   #sweepPaints(): void { this.#boardPaints.sweepPaints(); }
 
@@ -1331,7 +1331,7 @@ export class ShowcaseBoard {
       }
     }
     this.#runtimes.delete(runtime.item.id);
-    this.#releaseRetiredPreviews();
+    this.#releaseRetiredPaints();
     this.#sweepPaints();
   }
 

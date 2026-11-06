@@ -27,6 +27,8 @@
     "verify:vpk-interop": "vitest run tools/verify/source/vpk-interop.test.mjs",
     "verify:vtf": "vitest run tools/verify/export/vtf-export.test.ts",
     "verify:e2e": "node tools/verify/e2e/showcase-boards.mjs",
+    "verify:perf": "node tools/verify/perf/measure.mjs",
+    "verify:perf:compare": "node tools/verify/perf/compare.mjs",
     "verify:ui:capture": "node tools/verify/ui/capture.mjs",
     "verify:ui:compare": "node tools/verify/ui/compare.mjs",
     "lint": "oxlint",

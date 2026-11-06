@@ -82,6 +82,9 @@ export class Viewer {
   private modelGroup = new THREE.Group(); // rotated/panned by InspectControls
   private centerGroup = new THREE.Group(); // offsets the mesh so its center sits at the origin
   private material: THREE.MeshPhongMaterial;
+  // Worn until a paint arrives. A weapon without any map would compile a second shader, and the first paint
+  // would then wait for this one to compile while its composite sat ready.
+  private readonly unpaintedMap = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
   private paintableMeshes: THREE.Mesh[] = [];
   private cullableGeometries: CullableGeometry[] = [];
   private lensMaterial = new THREE.MeshPhysicalMaterial({
@@ -234,8 +237,10 @@ export class Viewer {
     this.editorEnvMap = this.envMap;
     this.defaultEnvMap = this.envMap;
     this.lensMaterial.envMap = this.envMap;
+    this.unpaintedMap.needsUpdate = true;
     this.material = new THREE.MeshPhongMaterial({
       color: 0xffffff,
+      map: this.unpaintedMap,
       shininess: 30,
       specular: new THREE.Color(0x333333),
       envMap: this.envMap,
@@ -294,7 +299,6 @@ export class Viewer {
       material: this.material,
       tf2Uniforms: this.tf2Uniforms,
       renderer: this.renderer,
-      texLoader: this.texLoader,
       emissive: this.emissiveOverlay,
       getEnvReady: () => this.envReady,
       getDefaultEnvMap: () => this.defaultEnvMap,
@@ -891,10 +895,7 @@ export class Viewer {
   }
 
   private applyVisibleMap() {
-    const map = visibleStickerEditorMap(this.composedMap, this.stickerEditorBaseMap);
-    // Swapping one texture for another keeps the shader; only gaining or losing one changes it.
-    if (!this.material.map !== !map) this.material.needsUpdate = true;
-    this.material.map = map;
+    this.material.map = visibleStickerEditorMap(this.composedMap, this.stickerEditorBaseMap) ?? this.unpaintedMap;
     this.invalidate();
   }
 
@@ -1216,6 +1217,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     this.transformIsolation.rebuildTransformIsolationMeshes();
     this.stickers.rebuildStickerPreviewMeshesIfLoaded();
     this.invalidate();
+    if (import.meta.env.VITE_PERF_MARKS) performance.mark('wpv:weapon-shown');
   }
 
   private clearModel() {
@@ -1407,6 +1409,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     this.clearTransformIsolation();
     this.groupOverlays.disposeHighlightMaterial();
     this.sheenOverlay.dispose();
+    this.unpaintedMap.dispose();
     this.material.dispose();
     this.lensMaterial.dispose();
     this.modelPartPicking.disposeModelPartMaterials();

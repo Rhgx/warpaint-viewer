@@ -127,6 +127,7 @@ export function useViewerEngine({
         setEngineViewer(viewer);
         advanceBoot(34, 'Loading TF2 environment…');
         await viewer.ready();
+        if (import.meta.env.VITE_PERF_MARKS) performance.mark('wpv:env-ready');
         if (!disposed) {
           setEnvironmentReady(true);
           advanceBoot(43, 'Environment ready');
@@ -194,6 +195,7 @@ export function useViewerEngine({
       applyMaterial,
     ]).then(() => {
       if (cancelled) return;
+      if (import.meta.env.VITE_PERF_MARKS) performance.mark('wpv:assets-ready');
       setLoadedAssetKey(selectedAssetKey);
       advanceBoot(62, 'Weapon and material maps ready');
     }).catch((e) => {

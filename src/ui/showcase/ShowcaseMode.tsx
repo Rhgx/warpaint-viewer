@@ -102,7 +102,7 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
       .finally(() => {
         if (!disposed) setBoard(instance);
       });
-    if (import.meta.env.DEV) (window as unknown as { __showcase?: ShowcaseBoard }).__showcase = instance;
+    if (import.meta.env.DEV || import.meta.env.VITE_PERF_MARKS) (window as unknown as { __showcase?: ShowcaseBoard }).__showcase = instance;
     return () => {
       disposed = true;
       instance.dispose();
