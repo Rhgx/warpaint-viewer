@@ -43,6 +43,19 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Must parse in any browser, so no modern JavaScript here. main.tsx starts nothing without #root. -->
+    <script>
+      (function () {
+        var css = window.CSS;
+        // color-mix() is the Chrome 111 floor; registerProperty is Firefox 128 and Safari 16.4.
+        if (css && css.supports && css.registerProperty && css.supports('color', 'color-mix(in srgb, red, red)')) return;
+        var root = document.getElementById('root');
+        var message = document.createElement('p');
+        message.style.cssText = 'margin: 0; padding: 16px; color: #eef0f3; font: 14px/1.5 sans-serif';
+        message.textContent = 'This browser is too old for Warpaint Viewer. Update it to continue.';
+        root.parentNode.replaceChild(message, root);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

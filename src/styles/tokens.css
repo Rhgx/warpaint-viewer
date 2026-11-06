@@ -1,6 +1,8 @@
 :root {
   /* Dark theme only: the stage backdrop is always dark, so panels follow it in both appearances. */
   --bg: #16181c;
+  /* Behind the 3D view and the board. Matches the default in viewer/lighting/lighting.ts. */
+  --stage-bg: #1c1f24;
   --panel: #1e2126;
   --panel-2: #24282f;
   --text: #eef0f3;
@@ -52,12 +54,6 @@
 
   /* Shared, reduced-motion-aware transition for interactive surfaces. */
   --transition-fast: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
-}
-@supports not (color: color-mix(in srgb, red, red)) {
-  /* Chrome 109 has no color-mix(): precomputed value for the custom property. */
-  :root {
-    --accent-soft: #243044;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

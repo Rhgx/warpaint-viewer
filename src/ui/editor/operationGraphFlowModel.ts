@@ -53,7 +53,7 @@ export function portTypeLabel(type: OperationPortType): string {
 }
 
 export function portTypeClass(type: OperationPortType): string {
-  return `operation-graph-port-${type}`;
+  return `graph-port-${type}`;
 }
 
 export function canonicalDimension(value: number | undefined): number | undefined {
@@ -266,6 +266,6 @@ export function traceNodes(graph: OperationGraph, nodeId: string, direction: 'up
   return result;
 }
 
-export function operationNodeClass(node: OperationGraphNode): string {
-  return `operation-graph-node-${node.kind.replaceAll('_', '-')}`;
+export function operationNodeKind(node: OperationGraphNode): string {
+  return node.kind.replaceAll('_', '-');
 }

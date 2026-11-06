@@ -1,11 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Pause, Play } from 'lucide-react';
+import { Eye, Pause, Play } from 'lucide-react';
+
 import type { Viewer } from '../../viewer/Viewer';
 import type { ViewmodelManifest, ViewmodelWeapon } from '../../viewer/firstPerson/firstPerson';
-import { Control, SelectField, SliderField, SwitchField, ToggleGroup } from '../common/controls';
+import { Control, ControlLabel, SelectField } from '../common/controls';
 import { firstPersonAnimationGroups } from './firstPersonAnimations';
 import { InspectorSection } from './Inspector';
-import './FirstPersonControls.css';
+import { Button } from '../primitives/Button';
+import { Slider } from '../primitives/Slider';
+import { Switch } from '../primitives/Switch';
+import { ToggleGroup } from '../primitives/ToggleGroup';
+
+function SwitchRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="flex min-h-control cursor-pointer items-center justify-between gap-1.5 text-12 text-text [&>[role=switch]]:flex-none">
+      <span>{label}</span>
+      <Switch checked={checked} onChange={onChange} ariaLabel={label} />
+    </label>
+  );
+}
 
 export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled, onEnabledChange }: {
   viewer: Viewer;
@@ -77,7 +90,7 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
     if (active && status === 'ready') viewer.configureFirstPerson(fov, minimized, activity, paused, fishPhysics, showHands, spinBarrel);
   }, [active, status, viewer, fov, minimized, activity, paused, fishPhysics, showHands, spinBarrel]);
 
-  return <InspectorSection title="Preview" className="first-person-controls">
+  return <InspectorSection title="Preview" icon={Eye}>
       <Control group label="View mode">
         <ToggleGroup
           label="View mode"
@@ -101,24 +114,25 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
             label: choice.class === 'demo' ? 'Demoman' : choice.class[0].toUpperCase() + choice.class.slice(1),
           }))} />
         </Control>}
-        {animations.length > 0 && <div className="first-person-animations" role="group" aria-label="Animation">
-          <div className="first-person-animation-header">
-            <span>Animation <span className="first-person-animation-count">{animations.length}</span></span>
-            <button type="button" className="btn first-person-playback"
+        {animations.length > 0 && <div data-slot="first-person-animations" role="group" aria-label="Animation">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <ControlLabel>Animation <span className="text-text tabular-nums">{animations.length}</span></ControlLabel>
+            <Button data-slot="first-person-playback" className="text-11 text-text"
               aria-label={paused ? 'Play Animation' : 'Pause Animation'}
               title={paused ? 'Play Animation' : 'Pause Animation'}
               disabled={status !== 'ready'}
               onClick={() => setPaused(value => !value)}>
               {paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
               <span>{paused ? 'Play' : 'Pause'}</span>
-            </button>
+            </Button>
           </div>
-          <div className="first-person-animation-list">
-            {animationGroups.map(group => <div key={group.label} className="first-person-animation-group" role="group" aria-label={group.label}>
-              <div className="first-person-animation-group-label">{group.label}</div>
-              <div className="first-person-animation-options">
+          {/* On mobile the Controls sheet scrolls as a whole instead of nesting a scroll box. */}
+          <div className="scrollbar-slim max-h-65 overflow-y-auto overscroll-contain rounded-sm border border-border p-2 mobile:max-h-none">
+            {animationGroups.map(group => <div key={group.label} className="not-first:mt-2.5" role="group" aria-label={group.label}>
+              <div className="mb-1 text-10 text-dim">{group.label}</div>
+              <div className="grid grid-cols-2 gap-1">
                 {group.options.map(option => <button key={option.id} type="button"
-                  className="first-person-animation-option" aria-pressed={option.id === selectedAnimation?.id}
+                  className="min-h-control cursor-pointer rounded-[3px] border border-border bg-transparent px-1.75 py-1.25 text-left text-11 wrap-anywhere text-text focus-ring not-disabled:hover:border-strong not-disabled:hover:bg-panel focus-visible:-outline-offset-2 disabled:cursor-default disabled:opacity-50 aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-accent-text" aria-pressed={option.id === selectedAnimation?.id}
                   disabled={status !== 'ready'} onClick={() => setAnimation(option.id)}>
                   {option.label}
                 </button>)}
@@ -126,23 +140,15 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
             </div>)}
           </div>
         </div>}
-        {weaponKey === 'c_holymackerel' && <Control className="first-person-switch-row" label="Fish Bone Physics">
-          <SwitchField checked={fishPhysics} onChange={setFishPhysics} ariaLabel="Fish Bone Physics" />
-        </Control>}
-        <Control className="first-person-fov" label={<><span>Viewmodel FOV</span><span className="first-person-fov-value">{fov}</span></>}>
-          <SliderField min={54} max={120} step={1} value={fov} onChange={setFov} ariaLabel="Viewmodel FOV" markers={[54, 70, 90]} />
+        {weaponKey === 'c_holymackerel' && <SwitchRow label="Fish Bone Physics" checked={fishPhysics} onChange={setFishPhysics} />}
+        <Control label={<><span className="flex-auto">Viewmodel FOV</span><span className="text-text tabular-nums">{fov}</span></>}>
+          <Slider min={54} max={120} step={1} value={fov} onChange={setFov} ariaLabel="Viewmodel FOV" markers={[54, 70, 90]} />
         </Control>
-        <Control className="first-person-switch-row" label="Minimized Viewmodel">
-          <SwitchField checked={minimized} onChange={setMinimized} ariaLabel="Minimized Viewmodel" />
-        </Control>
-        {status === 'ready' && viewer.firstPersonHasSpinningBarrel && <Control className="first-person-switch-row" label="Spin Barrel">
-          <SwitchField checked={spinBarrel} onChange={setSpinBarrel} ariaLabel="Spin Barrel" />
-        </Control>}
-        <Control className="first-person-switch-row" label="Show Hands">
-          <SwitchField checked={showHands} onChange={setShowHands} ariaLabel="Show Hands" />
-        </Control>
-        {status === 'loading' && <span role="status">Loading arms and weapon...</span>}
-        {status === 'error' && <span role="alert">{error}</span>}
+        <SwitchRow label="Minimized Viewmodel" checked={minimized} onChange={setMinimized} />
+        {status === 'ready' && viewer.firstPersonHasSpinningBarrel && <SwitchRow label="Spin Barrel" checked={spinBarrel} onChange={setSpinBarrel} />}
+        <SwitchRow label="Show Hands" checked={showHands} onChange={setShowHands} />
+        {status === 'loading' && <span className="text-11 leading-normal text-dim" role="status">Loading arms and weapon...</span>}
+        {status === 'error' && <span className="wrap-anywhere text-fail" role="alert">{error}</span>}
       </>}
   </InspectorSection>;
 }

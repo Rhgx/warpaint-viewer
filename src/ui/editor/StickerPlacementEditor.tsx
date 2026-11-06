@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore, type StoreApi } from 'zustand';
 import type { CSSProperties, ReactNode } from 'react';
-import { Braces, Copy, Eye, EyeOff, Link2, Magnet, Minus, MoreHorizontal, Plus, Unlink2 } from 'lucide-react';
+import { Braces, Copy, Eye, EyeOff, Link2, Magnet, Minus, PanelLeft, Plus, Unlink2 } from 'lucide-react';
 
 import {
   constrainStickerPlacementToTexture,
@@ -29,6 +29,13 @@ import {
   type StickerViewport,
   type StickerViewportSize,
 } from '../../editor/sticker/stickerViewport';
+import { ControlLabel } from '../common/controls';
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { COMPACT_INPUTS, Input } from '../primitives/Input';
+import { InlineNotice } from '../primitives/Notice';
+import { ToggleGroup } from '../primitives/ToggleGroup';
+import { EDITOR_BUTTON, EDITOR_HEAD, EDITOR_NUMBER, EDITOR_TITLE } from './editorStyles';
 import {
   GroupStickerUvPreview,
   type GroupStickerPreviewSources,
@@ -53,7 +60,27 @@ import {
   type StickerSelectionTarget,
   type StickerTransformTool,
 } from './stickerPlacementEditorTypes';
-import './StickerPlacementEditor.css';
+
+// Quieter than a pressed tool until hovered, as with the other editor toggles.
+const TOOL = 'not-aria-pressed:text-dim not-disabled:not-aria-pressed:hover:text-text';
+const TOOL_DIVIDER = 'mx-px h-5 w-px bg-border max-[620px]:my-px max-[620px]:h-px max-[620px]:w-5';
+const ZOOM_BUTTON = 'h-full not-disabled:hover:bg-panel';
+const CORNER_ROW = 'grid grid-cols-[22px_minmax(0,1fr)_minmax(0,1fr)_var(--spacing-control)] items-center gap-1';
+const CORNER_INPUT = cn(EDITOR_NUMBER, 'px-1.5');
+const HANDLE = 'sticker-handle focus-ring';
+const CORNER_HANDLE: Record<StickerCorner, string> = {
+  'top-left': '-top-4 -left-4 cursor-nwse-resize',
+  'top-right': '-top-4 -right-4 cursor-nesw-resize',
+  'bottom-right': '-right-4 -bottom-4 cursor-nwse-resize',
+  'bottom-left': '-bottom-4 -left-4 cursor-nesw-resize',
+};
+const EDGE_HANDLE: Record<StickerEdge, string> = {
+  top: '-top-4 left-[calc(50%-16px)] cursor-ns-resize before:inset-x-2 before:inset-y-3',
+  right: 'top-[calc(50%-16px)] -right-4 cursor-ew-resize before:inset-x-3 before:inset-y-2',
+  bottom: '-bottom-4 left-[calc(50%-16px)] cursor-ns-resize before:inset-x-2 before:inset-y-3',
+  left: 'top-[calc(50%-16px)] -left-4 cursor-ew-resize before:inset-x-3 before:inset-y-2',
+};
+const TURN_HANDLE = "-top-9.5 left-[calc(50%-16px)] cursor-crosshair before:rounded-full after:pointer-events-none after:absolute after:-bottom-1.5 after:left-3.75 after:h-3.75 after:w-px after:bg-accent after:content-['']";
 
 export interface StickerPlacementEditorProps {
   readonly draftStore: StoreApi<StickerAffineQuad | null>;
@@ -611,11 +638,9 @@ export function StickerPlacementEditor({
   };
 
   const editCorner = (key: keyof typeof cornerDraft, text: string) => {
-    setCornerDraft((current) => {
-      const next = { ...current, [key]: text };
-      applyCornerDraft(next);
-      return next;
-    });
+    const next = { ...cornerDraft, [key]: text };
+    setCornerDraft(next);
+    applyCornerDraft(next);
   };
 
   /** Any deliberate view or placement change hands control back to the user. */
@@ -657,16 +682,18 @@ export function StickerPlacementEditor({
   const displayZoom = Math.round(viewport.zoom * fitPercent * 100);
 
   return (
-    <section className="sticker-placement-editor" aria-label={label} data-disabled={unavailable ? '' : undefined}>
-      <header className="sticker-placement-editor-heading">
-        <span className="sticker-placement-editor-title">{label}</span>
-        <div className="sticker-placement-editor-heading-actions">
-          <div className="sticker-placement-editor-tools" role="toolbar" aria-label="Sticker placement tools">
+    <section className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel', COMPACT_INPUTS)} data-slot="sticker-editor" aria-label={label} data-disabled={unavailable ? '' : undefined}>
+      <header className={EDITOR_HEAD}>
+        {/* A small basis, so that a long name truncates beside the tools rather than wrapping them to a new row. */}
+        <span className={cn(EDITOR_TITLE, 'flex-[1_1_96px]')}>{label}</span>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+          <div className="flex items-center gap-1.25 max-[620px]:flex-col max-[620px]:self-start" role="toolbar" aria-label="Sticker placement tools">
             {TOOLS.map(({ id, label: toolLabel, Icon }, index) => (
-              <button
+              <Button
                 key={id}
-                type="button"
-                className="sticker-placement-editor-tool"
+                variant="toggle"
+                size="icon"
+                className={TOOL}
                 aria-label={toolLabel}
                 aria-pressed={!modelPartPickingActive && tool === id}
                 title={`${toolLabel} (${index + 1})${id === 'scale'
@@ -678,12 +705,13 @@ export function StickerPlacementEditor({
                 onClick={() => setTool(id)}
               >
                 <Icon size={15} aria-hidden="true" />
-              </button>
+              </Button>
             ))}
-            <span className="sticker-placement-editor-tool-divider" aria-hidden="true" />
-            <button
-              type="button"
-              className="sticker-placement-editor-tool sticker-placement-editor-aspect-lock"
+            <span className={TOOL_DIVIDER} aria-hidden="true" />
+            <Button
+              variant="toggle"
+              size="icon"
+              className={TOOL}
               aria-label={isAspectLocked ? 'Unlock sticker proportions' : 'Lock sticker proportions'}
               aria-pressed={isAspectLocked}
               title={`${isAspectLocked ? 'Proportions locked' : 'Proportions unlocked'}. Hold Shift during a drag to temporarily ${isAspectLocked ? 'stretch freely' : 'keep proportions'}.`}
@@ -691,14 +719,15 @@ export function StickerPlacementEditor({
               onClick={() => setAspectLock(!isAspectLocked)}
             >
               {isAspectLocked ? <Link2 size={15} aria-hidden="true" /> : <Unlink2 size={15} aria-hidden="true" />}
-            </button>
+            </Button>
             {onModelPartPickingChange && (
               <>
-                <span className="sticker-placement-editor-tool-divider" aria-hidden="true" />
-                <span className="sticker-placement-editor-parts-group">
-                  <button
-                    type="button"
-                    className="sticker-placement-editor-tool sticker-placement-editor-parts-tool"
+                <span className={TOOL_DIVIDER} aria-hidden="true" />
+                <span className="contents max-[620px]:flex max-[620px]:items-center max-[620px]:gap-1.25">
+                  <Button
+                    variant="toggle"
+                    size="compact"
+                    className={cn(EDITOR_BUTTON, TOOL)}
                     aria-label={`${modelPartPickingActive ? 'Stop picking model parts' : 'Pick model parts to hide'}${hiddenModelPartCount > 0 ? ` (${hiddenModelPartCount} hidden)` : ''}`}
                     aria-pressed={modelPartPickingActive}
                     title={modelPartPickingActive
@@ -709,17 +738,18 @@ export function StickerPlacementEditor({
                   >
                     <EyeOff size={14} aria-hidden="true" />
                     <span>Parts</span>
+                    {/* Hidden rather than absent, so that the tools after it hold their place. */}
                     <span
-                      className={`sticker-placement-editor-parts-count${partsControlsExpanded ? '' : ' is-reserved'}`}
+                      className={cn('min-w-[1.25em] rounded-xs border border-current px-1 py-px text-center text-9 leading-[1.1] tabular-nums', !partsControlsExpanded && 'invisible')}
                       aria-hidden="true"
                     >
                       {hiddenModelPartCount}
                     </span>
-                  </button>
+                  </Button>
                   {onRestoreHiddenModelParts && (
-                    <button
-                      type="button"
-                      className={`sticker-placement-editor-tool sticker-placement-editor-parts-restore${partsControlsExpanded ? '' : ' is-reserved'}`}
+                    <Button
+                      size="compact"
+                      className={cn(EDITOR_BUTTON, !partsControlsExpanded && 'invisible')}
                       aria-label={`Show all hidden model parts (${hiddenModelPartCount})`}
                       aria-hidden={!partsControlsExpanded}
                       title="Show every hidden model part again"
@@ -729,37 +759,48 @@ export function StickerPlacementEditor({
                     >
                       <Eye size={14} aria-hidden="true" />
                       <span>Show all</span>
-                    </button>
+                    </Button>
                   )}
                 </span>
               </>
             )}
           </div>
           {onModelPartPickingChange && (
-            <output className="sticker-placement-editor-parts-status" aria-live="polite" aria-atomic="true">
+            <output className="sr-only" aria-live="polite" aria-atomic="true">
               {modelPartStatus}
             </output>
           )}
-          <span className="sticker-placement-editor-separator" aria-hidden="true" />
-          <label className="sticker-placement-editor-snap" title="Align edits to the grid. Hold Ctrl to snap just for one drag.">
-            <input type="checkbox" checked={isSnapEnabled} onChange={(event) => setSnap(event.target.checked)} disabled={unavailable} />
-            <Magnet size={12} aria-hidden="true" />
+          <span className="mx-0.5 my-1 w-px self-stretch bg-border" aria-hidden="true" />
+          <Button
+            variant="toggle"
+            size="compact"
+            className={cn(EDITOR_BUTTON, TOOL)}
+            data-slot="sticker-snap"
+            aria-pressed={isSnapEnabled}
+            title="Align edits to the grid. Hold Ctrl to snap just for one drag."
+            disabled={unavailable}
+            onClick={() => setSnap(!isSnapEnabled)}
+          >
+            <Magnet size={13} aria-hidden="true" />
             Snap
-          </label>
-          <div className="sticker-placement-editor-viewport-controls" role="group" aria-label="Zoom">
-            <button type="button" className="sticker-placement-editor-zoom-button" aria-label="Zoom out" onClick={() => setViewportZoom(viewport.zoom / 1.2)} disabled={unavailable} title="Zoom out (-)">
+          </Button>
+          <div className="inline-flex h-control items-center gap-0.5 rounded-sm border border-border bg-panel-2" role="group" aria-label="Zoom">
+            <Button variant="ghost" size="icon" className={ZOOM_BUTTON} aria-label="Zoom out" onClick={() => setViewportZoom(viewport.zoom / 1.2)} disabled={unavailable} title="Zoom out (-)">
               <Minus size={13} aria-hidden="true" />
-            </button>
-            <output className="sticker-placement-editor-zoom-readout" aria-live="polite">{displayZoom}%</output>
-            <button type="button" className="sticker-placement-editor-zoom-button" aria-label="Zoom in" onClick={() => setViewportZoom(viewport.zoom * 1.2)} disabled={unavailable} title="Zoom in (+)">
+            </Button>
+            <output className="min-w-9 text-center text-10 text-dim tabular-nums" aria-live="polite">{displayZoom}%</output>
+            <Button variant="ghost" size="icon" className={ZOOM_BUTTON} aria-label="Zoom in" onClick={() => setViewportZoom(viewport.zoom * 1.2)} disabled={unavailable} title="Zoom in (+)">
               <Plus size={13} aria-hidden="true" />
-            </button>
-            <button type="button" className="sticker-placement-editor-view-button" onClick={fitViewport} disabled={unavailable} title="Show the whole texture (0)">Fit</button>
-            <button type="button" className="sticker-placement-editor-view-button" onClick={zoomToActualPixels} disabled={unavailable} title="Actual pixels (100%)">100%</button>
+            </Button>
+            <span className="my-1 w-px self-stretch bg-border" aria-hidden="true" />
+            <Button variant="ghost" className={cn(ZOOM_BUTTON, EDITOR_BUTTON, 'min-w-0 px-1.5')} onClick={fitViewport} disabled={unavailable} title="Show the whole texture (0)">Fit</Button>
+            <span className="my-1 w-px self-stretch bg-border" aria-hidden="true" />
+            <Button variant="ghost" className={cn(ZOOM_BUTTON, EDITOR_BUTTON, 'min-w-0 px-1.5')} onClick={zoomToActualPixels} disabled={unavailable} title="Actual pixels (100%)">100%</Button>
           </div>
-          <button
-            type="button"
-            className="sticker-placement-editor-values-toggle"
+          <Button
+            variant="toggle"
+            size="icon"
+            className={TOOL}
             aria-label="Inspector"
             aria-expanded={valuesOpen}
             aria-pressed={valuesOpen}
@@ -767,26 +808,31 @@ export function StickerPlacementEditor({
             disabled={unavailable}
             onClick={() => setValuesOpen((open) => !open)}
           >
-            <MoreHorizontal size={15} aria-hidden="true" />
-          </button>
+            <PanelLeft size={15} aria-hidden="true" />
+          </Button>
         </div>
       </header>
 
-      <div className="sticker-placement-editor-workspace">
+      {/* Values sit beside the surface, never over it. */}
+      <div className="relative flex min-h-0 min-w-0 flex-1 items-stretch gap-3 px-3 pt-2 pb-3 max-[620px]:gap-2.5 max-[620px]:px-2.5">
         {valuesOpen ? (
-          <aside className="sticker-placement-editor-inspector" aria-label="Sticker values">
-            <div className="sticker-placement-editor-value-mode" role="group" aria-label="Value mode">
-              <button type="button" aria-pressed={shownMode === 'simple'} onClick={() => setValueMode('simple')}>Simple</button>
-              <button type="button" aria-pressed={shownMode === 'proto'} onClick={() => setValueMode('proto')}>Proto</button>
-              {variantsPanel ? (
-                <button type="button" aria-pressed={shownMode === 'variants'} onClick={() => setValueMode('variants')}>
-                  Variants
-                  {(variantCount ?? 0) > 1 ? <span className="sticker-placement-editor-value-mode-count">{variantCount}</span> : null}
-                </button>
-              ) : null}
-            </div>
+          <aside className="scrollbar-slim flex w-52 flex-none flex-col gap-2 overflow-auto border-r border-border pr-3 max-[620px]:border-t max-[620px]:border-r-0 max-[620px]:pt-2.5 max-[620px]:pr-0" aria-label="Sticker values">
+            <ToggleGroup<'simple' | 'proto' | 'variants'>
+              size="tool"
+              label="Value mode"
+              value={shownMode}
+              options={[
+                { value: 'simple', label: 'Simple' },
+                { value: 'proto', label: 'Proto' },
+                ...(variantsPanel ? [{
+                  value: 'variants' as const,
+                  label: <>Variants{(variantCount ?? 0) > 1 ? <span className="ml-1 font-semibold text-dim tabular-nums">{variantCount}</span> : null}</>,
+                }] : []),
+              ]}
+              onChange={setValueMode}
+            />
             {shownMode === 'variants' ? variantsPanel : shownMode === 'simple' ? (
-              <div className="sticker-placement-editor-values">
+              <div className="grid content-start gap-1.25 max-[620px]:grid-cols-2">
                 {([
               ['x', 'X', 'Horizontal position', 0.01, undefined],
               ['y', 'Y', 'Vertical position', 0.01, undefined],
@@ -798,9 +844,10 @@ export function StickerPlacementEditor({
               // A focused field shows the typed text, so a live commit cannot reformat it under the caret.
               const shown = editingValue?.field === field ? editingValue.text : display;
               return (
-                <label key={field} title={ariaLabel}>
-                  <span>{visibleLabel}</span>
-                  <input
+                <label key={field} className="grid min-w-0 grid-cols-[46px_minmax(0,1fr)] items-center gap-1.5" title={ariaLabel}>
+                  <ControlLabel>{visibleLabel}</ControlLabel>
+                  <Input
+                    className={EDITOR_NUMBER}
                     aria-label={ariaLabel}
                     type="number"
                     step={step}
@@ -835,63 +882,72 @@ export function StickerPlacementEditor({
             })}
               </div>
             ) : (
-              <div className="sticker-placement-editor-corners">
-                <div className="sticker-placement-editor-corner-head" aria-hidden="true">
+              <div className="grid content-start gap-1.25">
+                {/* Column headings carry the axis, so each row only needs its corner. */}
+                <div className={CORNER_ROW} aria-hidden="true">
                   <span />
-                  <span>X</span>
-                  <span>Y</span>
+                  <ControlLabel className="justify-end">X</ControlLabel>
+                  <ControlLabel className="justify-end">Y</ControlLabel>
                   <span />
                 </div>
                 {CORNER_ROWS.map(({ label: rowLabel, short, x: xKey, y: yKey }) => (
-                  <div className="sticker-placement-editor-corner-row" key={rowLabel}>
-                    <abbr title={rowLabel}>{short}</abbr>
-                    <input
+                  <div className={CORNER_ROW} key={rowLabel}>
+                    <ControlLabel><abbr className="cursor-help no-underline" title={rowLabel}>{short}</abbr></ControlLabel>
+                    <Input
+                      className={CORNER_INPUT}
                       aria-label={`${rowLabel} X`}
                       inputMode="decimal"
                       value={cornerDraft[xKey]}
                       disabled={unavailable}
                       onChange={(event) => editCorner(xKey, event.target.value)}
                     />
-                    <input
+                    <Input
+                      className={CORNER_INPUT}
                       aria-label={`${rowLabel} Y`}
                       inputMode="decimal"
                       value={cornerDraft[yKey]}
                       disabled={unavailable}
                       onChange={(event) => editCorner(yKey, event.target.value)}
                     />
-                    <button
-                      type="button"
+                    <Button
+                      size="icon"
                       aria-label={`Copy ${rowLabel}`}
                       title={`Copy ${rowLabel}`}
                       disabled={unavailable}
                       onClick={() => void copyText(`${cornerDraft[xKey]} ${cornerDraft[yKey]}`, `${rowLabel} copied`)}
                     >
                       <Copy size={12} aria-hidden="true" />
-                    </button>
+                    </Button>
                   </div>
                 ))}
-                {cornerError ? <p className="sticker-placement-editor-corner-error" role="alert">{cornerError}</p> : null}
-                <div className="sticker-placement-editor-corner-actions">
-                  <button
-                    type="button"
+                <div className="mt-px grid gap-1.25 border-t border-border pt-2">
+                  <Button
+                    size="compact"
+                    className={cn(EDITOR_BUTTON, 'w-full')}
                     title="Copy all three corners as JSON"
                     disabled={unavailable}
                     onClick={copySnippet}
                   >
                     <Braces size={13} aria-hidden="true" />
                     Copy JSON
-                  </button>
-                  {copyNotice ? <span role="status">{copyNotice}</span> : null}
+                  </Button>
+                  {copyNotice ? <span className="text-center text-10 text-dim" role="status">{copyNotice}</span> : null}
                 </div>
+                {/* Below the action, so that Copy JSON does not move when the message comes and goes. */}
+                {cornerError ? (
+                  <InlineNotice tone="error" role="alert">{cornerError}</InlineNotice>
+                ) : null}
               </div>
             )}
           </aside>
         ) : null}
 
-        <div className="sticker-placement-editor-stage">
+        <div className="relative grid min-h-0 min-w-0 flex-1 place-items-center">
         <div
           ref={surfaceRef}
-          className="sticker-placement-editor-surface"
+          // Fills the pane, capped by the texture's aspect ratio. Pointer-to-UV maths reads this box.
+          className="group/surface checker-cells relative aspect-(--sticker-texture-aspect) h-full max-w-full min-w-0 min-h-0 cursor-default touch-none overflow-hidden rounded-sm border border-strong bg-checker focus-ring focus-visible:border-accent"
+          data-slot="sticker-surface"
           style={{
             '--sticker-texture-aspect': String(surfaceAspect),
             '--sticker-grid-step': `${safeSnapStep * 100}%`,
@@ -910,7 +966,7 @@ export function StickerPlacementEditor({
           onContextMenu={(event) => event.preventDefault()}
         >
           <div
-            className="sticker-placement-editor-canvas"
+            className="absolute inset-0 size-full origin-top-left overflow-visible will-change-transform"
             style={{ transform: `translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.zoom})` }}
           >
             <WeaponUvSurface
@@ -921,11 +977,11 @@ export function StickerPlacementEditor({
                 height: event.currentTarget.naturalHeight,
               })}
             />
-            <span className="sticker-placement-editor-grid" aria-hidden="true" />
+            <span className="sticker-grid pointer-events-none absolute inset-0 z-3 hidden group-data-snap/surface:block" aria-hidden="true" />
             {/* Other stickers are already composed into the surface texture. */}
             {stickerSrc || groupPreview ? (
               <div
-                className="sticker-placement-editor-item"
+                className="absolute z-4 box-border touch-none border border-accent shadow-[0_1px_4px_rgb(0_0_0/38%)] ring-1 ring-accent/45 select-none group-data-[tool=move]/surface:cursor-grab group-data-[tool=move]/surface:active:cursor-grabbing forced-colors:border-[Highlight]"
                 style={{
                   ...placementStyle(placementValue, 4 + selectionTargets.length),
                   '--sticker-control-scale': Math.min(1.25, 1 / viewport.zoom),
@@ -934,26 +990,26 @@ export function StickerPlacementEditor({
               >
                 {groupPreview && quadValue
                   ? <GroupStickerUvPreview sources={groupPreview} quad={quadValue} />
-                  : (renderStickerArtwork && stickerSrc ? <img src={stickerSrc} alt="" draggable={false} /> : null)}
+                  : (renderStickerArtwork && stickerSrc ? <img className="pointer-events-none block size-full select-none" src={stickerSrc} alt="" draggable={false} /> : null)}
                 {tool === 'scale' && CORNERS.map((corner) => (
-                  <button key={corner} type="button" className={`sticker-placement-editor-handle sticker-placement-editor-handle-${corner}`}
+                  <button key={corner} type="button" className={cn(HANDLE, CORNER_HANDLE[corner])}
                     aria-label={`Resize from ${corner.replace('-', ' ')}`} disabled={unavailable}
                     onPointerDown={(event) => beginResize(event, corner)} />
                 ))}
                 {tool === 'scale' && EDGES.map((edge) => (
-                  <button key={edge} type="button" className={`sticker-placement-editor-axis-handle sticker-placement-editor-axis-handle-${edge}`}
+                  <button key={edge} type="button" className={cn(HANDLE, 'before:rounded-xs', EDGE_HANDLE[edge])}
                     aria-label={`Resize ${edge === 'left' || edge === 'right' ? 'width' : 'height'} from ${edge}`}
                     disabled={unavailable} onPointerDown={(event) => beginAxisResize(event, edge)} />
                 ))}
-                {tool === 'turn' && <button type="button" className="sticker-placement-editor-rotate" aria-label="Turn sticker" disabled={unavailable} onPointerDown={beginRotate} />}
+                {tool === 'turn' && <button type="button" className={cn(HANDLE, TURN_HANDLE)} aria-label="Turn sticker" disabled={unavailable} onPointerDown={beginRotate} />}
               </div>
             ) : null}
           </div>
           {unavailable && (
-            <div className="sticker-placement-editor-unavailable">
+            <div className="absolute inset-0 z-3 flex flex-col items-center justify-center gap-2.25 bg-panel/82 p-3.5 text-center text-10 text-dim">
               <span role="status">{notice ?? 'Sticker artwork unavailable.'}</span>
               {onCreatePlacement ? (
-                <button type="button" onClick={onCreatePlacement}>Create centered placement</button>
+                <Button variant="primary" size="compact" className={EDITOR_BUTTON} onClick={onCreatePlacement}>Create centered placement</Button>
               ) : null}
             </div>
           )}

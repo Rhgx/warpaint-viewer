@@ -1,6 +1,9 @@
+import { Download, Move, Palette } from 'lucide-react';
 import { memo } from 'react';
 
-import { SelectField, SliderField, SwitchField } from '../common/controls';
+import { SelectField } from '../common/controls';
+import { Slider } from '../primitives/Slider';
+import { Switch } from '../primitives/Switch';
 import type { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
 import { LightPad, Row, Section, Segmented, SliderRow } from './ShowcaseControls';
 import {
@@ -13,9 +16,9 @@ type SettingsSectionProps = { settings: ShowcaseSettings; onChange: (patch: Part
 
 export const PlacementSection = memo(function PlacementSection({ settings, onChange: set }: SettingsSectionProps) {
   return (
-    <Section title="Placement" canReset={settingsChanged(settings, PLACEMENT_KEYS)} onReset={() => set(defaultsFor(PLACEMENT_KEYS))}>
+    <Section title="Placement" icon={Move} canReset={settingsChanged(settings, PLACEMENT_KEYS)} onReset={() => set(defaultsFor(PLACEMENT_KEYS))}>
       <Row label="Snap to grid">
-        <SwitchField checked={settings.snapToGrid} onChange={(snapToGrid) => set({ snapToGrid })} ariaLabel="Snap to grid" />
+        <Switch checked={settings.snapToGrid} onChange={(snapToGrid) => set({ snapToGrid })} ariaLabel="Snap to grid" />
       </Row>
       {settings.snapToGrid && (
         <SliderRow label="Grid size" value={null}>
@@ -24,22 +27,22 @@ export const PlacementSection = memo(function PlacementSection({ settings, onCha
         </SliderRow>
       )}
       <Row label="Keep weapons apart">
-        <SwitchField checked={settings.keepApart} onChange={(keepApart) => set({ keepApart })} ariaLabel="Keep weapons apart" />
+        <Switch checked={settings.keepApart} onChange={(keepApart) => set({ keepApart })} ariaLabel="Keep weapons apart" />
       </Row>
       {settings.keepApart && (
         <SliderRow label="Spacing" value={`${settings.spacing} ${settings.spacing === 1 ? 'cell' : 'cells'}`}>
-          <SliderField value={settings.spacing} min={0} max={4} step={1} ariaLabel="Spacing" onChange={(spacing) => set({ spacing })} />
+          <Slider value={settings.spacing} min={0} max={4} step={1} ariaLabel="Spacing" onChange={(spacing) => set({ spacing })} />
         </SliderRow>
       )}
       <Row label="Keep inside the board">
-        <SwitchField checked={settings.keepInside} onChange={(keepInside) => set({ keepInside })} ariaLabel="Keep inside the board" />
+        <Switch checked={settings.keepInside} onChange={(keepInside) => set({ keepInside })} ariaLabel="Keep inside the board" />
       </Row>
       <SliderRow label="Rotation snap" value={null}>
         <Segmented label="Rotation snap" value={settings.rotationSnap} onChange={(rotationSnap) => set({ rotationSnap })}
           options={ROTATION_SNAPS.map((degrees) => ({ value: degrees, label: degrees ? `${degrees}°` : 'Free' }))} />
       </SliderRow>
       <Row label="Show footprints">
-        <SwitchField checked={settings.showFootprints} onChange={(showFootprints) => set({ showFootprints })} ariaLabel="Show footprints" />
+        <Switch checked={settings.showFootprints} onChange={(showFootprints) => set({ showFootprints })} ariaLabel="Show footprints" />
       </Row>
     </Section>
   );
@@ -47,17 +50,17 @@ export const PlacementSection = memo(function PlacementSection({ settings, onCha
 
 export const LookSection = memo(function LookSection({ settings, onChange: set }: SettingsSectionProps) {
   return (
-    <Section title="Look" canReset={settingsChanged(settings, LOOK_KEYS)} onReset={() => set(defaultsFor(LOOK_KEYS))}>
+    <Section title="Look" icon={Palette} canReset={settingsChanged(settings, LOOK_KEYS)} onReset={() => set(defaultsFor(LOOK_KEYS))}>
       <Row label="Light">
         <LightPad azimuth={settings.lightAzimuth} elevation={settings.lightElevation}
           onChange={(lightAzimuth, lightElevation) => set({ lightAzimuth, lightElevation })} />
       </Row>
       <Row label="Shadows">
-        <SwitchField checked={settings.shadows} onChange={(shadows) => set({ shadows })} ariaLabel="Shadows" />
+        <Switch checked={settings.shadows} onChange={(shadows) => set({ shadows })} ariaLabel="Shadows" />
       </Row>
       {settings.shadows && (
         <SliderRow label="Shadow strength" value={`${settings.shadow}%`}>
-          <SliderField value={settings.shadow} min={0} max={100} step={5} ariaLabel="Shadow strength" onChange={(shadow) => set({ shadow })} />
+          <Slider value={settings.shadow} min={0} max={100} step={5} ariaLabel="Shadow strength" onChange={(shadow) => set({ shadow })} />
         </SliderRow>
       )}
       <SliderRow label="Background" value={null}>
@@ -76,7 +79,7 @@ export const ExportSection = memo(function ExportSection({ board, settings, onCh
   board: ShowcaseBoard | null;
 }) {
   return (
-    <Section title="Export" canReset={settingsChanged(settings, EXPORT_KEYS)} onReset={() => set(defaultsFor(EXPORT_KEYS))}>
+    <Section title="Export" icon={Download} canReset={settingsChanged(settings, EXPORT_KEYS)} onReset={() => set(defaultsFor(EXPORT_KEYS))}>
       <Row label="Resolution">
         <SelectField value={String(settings.outputWidth)} onChange={(value) => set({ outputWidth: Number(value) })}
           options={OUTPUT_WIDTHS.map((width) => {
@@ -86,7 +89,7 @@ export const ExportSection = memo(function ExportSection({ board, settings, onCh
       </Row>
       {settings.background !== 'transparent' && (
         <Row label="Include backdrop">
-          <SwitchField checked={settings.exportBackdrop} onChange={(exportBackdrop) => set({ exportBackdrop })} ariaLabel="Include backdrop" />
+          <Switch checked={settings.exportBackdrop} onChange={(exportBackdrop) => set({ exportBackdrop })} ariaLabel="Include backdrop" />
         </Row>
       )}
     </Section>

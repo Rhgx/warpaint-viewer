@@ -186,6 +186,21 @@ describe('warpaint/no-low-value-comments', () => {
   });
 });
 
+describe('warpaint/no-raw-class-values', () => {
+  test('flags raw colours and font sizes in class strings, and leaves theme values and plain data alone', () => {
+    // Each raw value is split across two strings, so that this file does not trip the rule it tests.
+    const messages = lintWith('warpaint/no-raw-class-values', {
+      'hex.ts': "export const a = 'flex bg-" + "[#123456] p-1';\n",
+      'rgb.ts': "export const a = 'hover:border-" + "[rgb(0_0_0/30%)]';\n",
+      'size.ts': "export const a = 'text-" + "[8px] text-dim';\n",
+      'template.ts': "const b = 'x';\nexport const a = `${b} fill-" + "[#fff]`;\n",
+      'theme.ts': "export const a = 'bg-panel text-11 border-black/30 w-[310px] shadow-[0_1px_2px_var(--panel)]';\n",
+      'data.ts': "export const a = '#1c1f24';\nexport const c = 'rgb(0 0 0)';\n",
+    });
+    assert.deepEqual(flaggedNames(messages), ['hex.ts', 'rgb.ts', 'size.ts', 'template.ts']);
+  });
+});
+
 describe('warpaint/no-dashes', () => {
   test('flags em and en dashes in comments, string literals, template text and JSX text', () => {
     const messages = lintWith('warpaint/no-dashes', dashFixtures);

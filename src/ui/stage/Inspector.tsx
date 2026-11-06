@@ -1,12 +1,11 @@
-import { Fragment, memo, useState } from 'react';
+import { Fragment, memo, useId, useState } from 'react';
 import type { ReactNode } from 'react';
-import {
-  Camera, ChevronDown, Crosshair, Dices, Droplets, Flame, Hash, Sparkles, Sun, Undo2, Users,
-} from 'lucide-react';
+import { Aperture, Box, Camera, Paintbrush } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 import type { PreloadIntent } from '../../hooks/useIntentPreload';
 import {
-  Control, IconSelectField, SelectField, SliderField, SwatchSelectField, TeamToggle, ToggleGroup, WearSliderField,
+  Control, CONTROL, ControlLabel, IconSelectField, SeedInput, SelectField, SwatchSelectField, TeamToggle, WearSliderField,
 } from '../common/controls';
 import type { IconOption, SwatchOption } from '../common/controls';
 import { LIGHTING_PRESET_OPTIONS } from '../../viewer/lighting/lightingPresetIds';
@@ -18,6 +17,12 @@ import { CUSTOM_LIGHTING_ID } from '../../viewer/lighting/customLightingModel';
 import { LightingRigSummary } from '../lighting/LightingRigSummary';
 import { TURNTABLE_FORMATS, turntablePlaybackFps } from '../../export/turntableFormats';
 import { matchesMobileLayout, TOUCH_ONLY_DEVICE } from '../../device';
+import { cn } from '../primitives/cn';
+import { Input } from '../primitives/Input';
+import { InlineNotice } from '../primitives/Notice';
+import { PanelSection, PanelSectionHeader } from '../primitives/PanelSection';
+import { Slider } from '../primitives/Slider';
+import { ToggleGroup } from '../primitives/ToggleGroup';
 
 const rgbCss = ([r, g, b]: [number, number, number]) =>
   `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
@@ -47,26 +52,20 @@ const TURNTABLE_FORMAT_DESCRIPTIONS: Record<TurntableFormat, string> = {
 };
 
 // A collapsible group. Expanded unless defaultOpen says otherwise; state is local and not persisted.
-export function InspectorSection({ title, children, className = '', defaultOpen = true }: {
+export function InspectorSection({ title, icon, children, defaultOpen = true }: {
   title: string;
+  icon: LucideIcon;
   children: ReactNode;
-  className?: string;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={`inspector-section ${className}`}>
-      <button
-        type="button"
-        className="inspector-section-header"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
+    <PanelSection>
+      <PanelSectionHeader open={open} icon={icon} onClick={() => setOpen((o) => !o)}>
         <span>{title}</span>
-        <ChevronDown size={14} className="inspector-section-chevron" data-collapsed={!open || undefined} />
-      </button>
-      {open && <div className="inspector-section-body">{children}</div>}
-    </div>
+      </PanelSectionHeader>
+      {open && <div className="flex flex-col gap-2.5 px-0.5 pt-2 pb-2.5">{children}</div>}
+    </PanelSection>
   );
 }
 
@@ -100,50 +99,29 @@ function SeedField({
   };
 
   return (
-    <div className="seed-field">
-      <input
-        className="ui-num-input seed-input"
-        inputMode="numeric"
-        aria-label="Paint seed"
-        value={focused ? draft : seed}
-        onFocus={() => {
-          setDraft(seed);
-          setFocused(true);
-        }}
-        onChange={(event) => setDraft(event.currentTarget.value.replace(/\D/g, '').slice(0, 20))}
-        onBlur={() => {
+    <SeedInput
+      aria-label="Paint seed"
+      randomizeLabel="Randomize seed"
+      onRandomize={onRandomize}
+      onUndo={onUndo}
+      canUndo={canUndo}
+      value={focused ? draft : seed}
+      onFocus={() => {
+        setDraft(seed);
+        setFocused(true);
+      }}
+      onChange={(event) => setDraft(event.currentTarget.value.replace(/\D/g, '').slice(0, 20))}
+      onBlur={() => {
+        commit();
+        setFocused(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
           commit();
-          setFocused(false);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            commit();
-          }
-        }}
-      />
-      <div className="seed-field-actions">
-        <button
-          type="button"
-          className="seed-action-btn"
-          title="Randomize seed"
-          aria-label="Randomize seed"
-          onClick={onRandomize}
-        >
-          <Dices size={15} />
-        </button>
-        <button
-          type="button"
-          className="seed-action-btn"
-          title="Previous seed"
-          aria-label="Previous seed"
-          disabled={!canUndo}
-          onClick={onUndo}
-        >
-          <Undo2 size={15} />
-        </button>
-      </div>
-    </div>
+        }
+      }}
+    />
   );
 }
 
@@ -157,8 +135,8 @@ function TurntableColorHexField({ value, onChange }: { value: string; onChange: 
   }
 
   return (
-    <input
-      className="lighting-readout lighting-color-hex"
+    <Input
+      className="h-6.5 min-h-0 min-w-0 flex-1 px-1.25 py-0 font-mono text-10.5 font-light tabular-nums touch:h-control"
       value={draft}
       maxLength={7}
       spellCheck={false}
@@ -214,11 +192,17 @@ export const Inspector = memo(function Inspector({
 }) {
   // Rarely used sections start collapsed on mobile. Decided once, so resizing never folds them.
   const [compact] = useState(matchesMobileLayout);
+  const teamNoteId = useId();
+  const teamLocked = !hasTeamTextures && state.sheen !== 'team_shine';
   const presetOptions = [
     ...LIGHTING_PRESET_OPTIONS.map((p) => ({ value: p.id, label: p.label })),
     { value: CUSTOM_LIGHTING_ID, label: 'Custom' },
   ];
-  const unusualOptions = UNUSUAL_PRESETS.map((p) => ({ value: p.id, label: p.label }));
+  const unusualOptions: IconOption[] = UNUSUAL_PRESETS.map((p) => ({
+    value: p.id,
+    label: p.label,
+    icon: p.id === 'none' ? null : `${import.meta.env.BASE_URL}data/effects/thumbs/${p.id}.png`,
+  }));
   const viewAngleOptions = VIEW_ANGLES.map((p) => ({ value: p.id, label: p.label }));
 
   const sheenOptions: SwatchOption[] = SHEEN_PRESETS.map((p) => ({
@@ -248,9 +232,9 @@ export const Inspector = memo(function Inspector({
   return (
     <>
       {firstPersonActive && preview}
-      <InspectorSection title="Item">
-        <div className="control" role="group" aria-label="Weapon">
-          <span className="control-label"><Crosshair size={12} /><span>Weapon</span></span>
+      <InspectorSection title="Item" icon={Box}>
+        <div className={CONTROL} data-slot="control" role="group" aria-label="Weapon">
+          <ControlLabel>Weapon</ControlLabel>
           <IconSelectField
             value={state.weaponKey}
             onChange={(v) => onChange({ weaponKey: v })}
@@ -262,7 +246,7 @@ export const Inspector = memo(function Inspector({
           />
         </div>
 
-        <Control group label={<><Droplets size={12} /><span>Wear</span></>}>
+        <Control group label="Wear">
           <WearSliderField
             value={state.wearIndex}
             names={manifest.wearNames}
@@ -270,16 +254,18 @@ export const Inspector = memo(function Inspector({
           />
         </Control>
 
-        <Control group label={<><Users size={12} /><span>Team</span></>}>
+        {/* The note sits in the label row, so that locking moves nothing below it. Spelled out, since touch screens never show the tooltip. */}
+        <Control group label={<><span className="flex-auto">Team</span>{teamLocked && <span id={teamNoteId} className="text-10">No separate BLU textures</span>}</>}>
           <TeamToggle
             team={state.team}
-            disabled={!hasTeamTextures && state.sheen !== 'team_shine'}
+            disabled={teamLocked}
             disabledReason="This war paint has no separate BLU textures."
+            describedBy={teamLocked ? teamNoteId : undefined}
             onChange={(t) => onChange({ team: t })}
           />
         </Control>
 
-        <Control group label={<><Hash size={12} /><span>Seed</span></>}>
+        <Control group label="Seed">
           <SeedField
             seed={state.seed}
             onCommit={(seed) => onChange({ seed })}
@@ -290,8 +276,8 @@ export const Inspector = memo(function Inspector({
         </Control>
       </InspectorSection>
 
-      <InspectorSection title="Finish">
-        <Control label={<><Sun size={12} /><span>Lighting</span></>}>
+      <InspectorSection title="Finish" icon={Paintbrush}>
+        <Control label="Lighting">
           <SelectField
             value={state.preset}
             onChange={(v) => onChange({ preset: v })}
@@ -307,7 +293,7 @@ export const Inspector = memo(function Inspector({
           />
         )}
 
-        <Control label={<><Sparkles size={12} /><span>Sheen</span></>}>
+        <Control label="Sheen">
           <SwatchSelectField
             value={state.sheen}
             onChange={(v) => {
@@ -319,8 +305,8 @@ export const Inspector = memo(function Inspector({
           />
         </Control>
 
-        <Control label={<><Flame size={12} /><span>Effect</span></>}>
-          <SelectField
+        <Control label="Effect">
+          <IconSelectField
             value={state.unusual}
             onChange={(v) => onChange({ unusual: v })}
             options={unusualOptions}
@@ -332,8 +318,8 @@ export const Inspector = memo(function Inspector({
 
       {/* First Person has its own camera, so none of these apply there. */}
       {!firstPersonActive && (
-        <InspectorSection title="Camera" defaultOpen={!compact}>
-          <Control label={<><Camera size={12} /><span>View angle</span></>}>
+        <InspectorSection title="Camera" icon={Camera} defaultOpen={!compact}>
+          <Control label="View angle">
             <SelectField
               value={viewAngle}
               onChange={onViewAngle}
@@ -341,8 +327,8 @@ export const Inspector = memo(function Inspector({
             />
           </Control>
 
-          <Control label={<span>Field of view - {state.fov}</span>}>
-            <SliderField
+          <Control label={<><span className="flex-auto">Field of view</span><span className="text-text tabular-nums">{state.fov}</span></>}>
+            <Slider
               value={state.fov}
               onChange={(fov) => onChange({ fov })}
               min={30}
@@ -368,7 +354,7 @@ export const Inspector = memo(function Inspector({
         </InspectorSection>
       )}
 
-      <InspectorSection title="Capture" defaultOpen={!compact}>
+      <InspectorSection title="Capture" icon={Aperture} defaultOpen={!compact}>
         {/* First Person renders a live view, not the inspect pose an animated turntable needs, so it can only capture images. */}
         {!firstPersonActive && (
           <Control group label={<span>Output</span>}>
@@ -449,9 +435,9 @@ export const Inspector = memo(function Inspector({
 
           {(formatInfo.alpha === null || !state.turntableTransparent) && (
             <Control group label={<span>Background color</span>}>
-              <div className="inspector-color-row">
+              <div className="flex items-center gap-1.5">
                 <input
-                  className="lighting-color-swatch"
+                  className="h-6.5 min-w-0 flex-[0_0_40px] cursor-pointer rounded-sm border border-border bg-panel p-0.5 focus-ring touch:h-control"
                   type="color"
                   value={state.turntableColor}
                   aria-label="Background color picker"
@@ -465,10 +451,10 @@ export const Inspector = memo(function Inspector({
             </Control>
           )}
 
-          <div className={`capture-estimate${turntableOverDiscordLimit ? ' is-over' : ''}`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 rounded-sm border border-border bg-panel-2 px-2 py-1.5 text-11 text-dim tabular-nums" data-slot="capture-estimate">
             <span>{turntableFrames} frames</span>
-            <span className="capture-estimate-size">~{turntableEstimatedMb} MB</span>
-            {turntableOverDiscordLimit && <span className="capture-estimate-note">Likely over Discord's 10 MB upload limit</span>}
+            <span className={cn('font-semibold', turntableOverDiscordLimit ? 'text-warn' : 'text-text')}>~{turntableEstimatedMb} MB</span>
+            {turntableOverDiscordLimit && <InlineNotice className="basis-full">Likely over Discord's 10 MB upload limit</InlineNotice>}
           </div>
         </>}
       </InspectorSection>

@@ -3,6 +3,7 @@
   // Standalone tools not reached through package scripts or application imports.
   "entry": [
     "tools/dev/selftest-driver.mjs",
+    "tools/extract/effect-thumbs.mjs",
     "tools/extract/group-names.mjs",
     "tools/models/check.mjs",
     "tools/models/import-viewmodels.mjs",

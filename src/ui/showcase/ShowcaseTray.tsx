@@ -1,17 +1,19 @@
 import { memo, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { Search, SlidersHorizontal, X } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 
 import { joinData } from '../../data/loader';
 import type { WeaponEntry } from '../../data/types';
 import { isRigged } from '../../showcase/poseRigs';
 import type { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
 import type { ShowcasePaint } from '../../showcase/showcaseTypes';
-import { TextField } from '../common/controls';
+import { SearchField } from '../primitives/Input';
+import { Button } from '../primitives/Button';
 
 // The weapon tray under the board: search, then drag a card onto the board or click to add it.
 
 const TRAY_DRAG_THRESHOLD = 6;
+const TRAY_ICON = 'pointer-events-none h-10 w-16 object-contain';
 
 /** The weapons of the selected paint. */
 export const ShowcaseTray = memo(function ShowcaseTray({ board, paint, weapons, placedCounts }: {
@@ -57,22 +59,11 @@ export const ShowcaseTray = memo(function ShowcaseTray({ board, paint, weapons, 
   };
 
   return (
-    <div className="showcase-tray">
-      <div className="search-field showcase-tray-search">
-        <Search className="search-field-icon" size={14} />
-        <TextField value={query} onChange={setQuery} placeholder="Search weapons"
-          onKeyDown={(event) => {
-            if (event.key === 'Escape' && query) setQuery('');
-          }} />
-        {query.length > 0 && (
-          <button type="button" className="search-clear-btn" title="Clear search" aria-label="Clear search" onClick={() => setQuery('')}>
-            <X size={13} />
-          </button>
-        )}
-      </div>
+    <div className="flex items-stretch gap-2.5 border-t border-border bg-panel px-2.5 py-2">
+      <SearchField data-slot="board-tray-search" className="w-45 flex-none self-center" value={query} onChange={setQuery} placeholder="Filter weapons..." />
       <div
         ref={rowRef}
-        className="showcase-tray-items"
+        className="flex min-w-0 gap-1.5 scrollbar-slim overflow-x-auto"
         onWheel={(event) => {
           if (event.deltaY && rowRef.current) rowRef.current.scrollLeft += event.deltaY;
         }}
@@ -80,18 +71,18 @@ export const ShowcaseTray = memo(function ShowcaseTray({ board, paint, weapons, 
         {shown.map((weapon) => {
           const count = placedCounts[weapon.key] ?? 0;
           return (
-            <button
+            <Button
               key={weapon.key}
-              type="button"
-              className="showcase-tray-item"
+              data-slot="board-tray-item"
+              className="relative h-auto w-21 flex-none cursor-grab touch-none flex-col justify-start gap-0.5 px-1 pt-1 pb-1.25 select-none active:cursor-grabbing"
               title={weapon.name}
               onPointerDown={onCardPointerDown(weapon)}
             >
-              {weapon.icon ? <img src={joinData(weapon.icon)} alt="" draggable={false} /> : <span className="showcase-tray-noicon" />}
-              <span className="showcase-tray-name">{weapon.name}</span>
-              {isRigged(weapon.key) && <SlidersHorizontal size={11} className="showcase-tray-posable" aria-label="Has pose options" />}
-              {count > 0 && <span className="showcase-tray-count">{count}</span>}
-            </button>
+              {weapon.icon ? <img className={TRAY_ICON} src={joinData(weapon.icon)} alt="" draggable={false} /> : <span className={TRAY_ICON} />}
+              <span className="line-clamp-2 h-[2lh] max-w-full text-11 leading-tight">{weapon.name}</span>
+              {isRigged(weapon.key) && <SlidersHorizontal size={11} className="absolute top-1 left-1 text-accent" aria-label="Has pose options" />}
+              {count > 0 && <span className="absolute top-0.75 right-0.75 min-w-4 rounded-sm bg-accent px-1 text-center text-10 leading-4 font-bold text-accent-text">{count}</span>}
+            </Button>
           );
         })}
       </div>

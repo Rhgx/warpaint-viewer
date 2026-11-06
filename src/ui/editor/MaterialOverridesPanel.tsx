@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
-import { AlertTriangle, Check, ImageOff, RotateCcw, Search, X } from 'lucide-react';
-import './MaterialOverridesPanel.css';
+import { Check, ImageOff, RotateCcw } from 'lucide-react';
+
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { COMPACT_INPUTS, SearchField } from '../primitives/Input';
+import { InlineNotice } from '../primitives/Notice';
+import { PATH_TEXT } from '../primitives/textStyles';
+import { Select, SelectItem, SelectItemText, SelectPopup, SelectTrigger, SelectValue } from '../primitives/Select';
+import { EDITOR_BUTTON, EDITOR_CHECKBOX, EDITOR_HEAD, EDITOR_TITLE } from './editorStyles';
+
+const FLAG_OK = 'inline-flex items-center gap-1 rounded-sm bg-pass/12 px-1.75 py-px text-10 font-semibold whitespace-nowrap text-pass forced-colors:border forced-colors:border-[CanvasText]';
+
 
 export interface MaterialWeaponRow {
   readonly key: string;
@@ -100,67 +110,69 @@ export function MaterialOverridesPanel({
   };
 
   return (
-    <div className="material-overrides-panel">
-      <div className="material-overrides-panel-head">
-        <span className="material-overrides-panel-title">
+    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', COMPACT_INPUTS)} data-slot="material-overrides">
+      <div className={EDITOR_HEAD}>
+        <span className={EDITOR_TITLE}>
           Material overrides
-          <small>written per weapon entry</small>
         </span>
-        <span className="material-overrides-panel-head-spacer" />
-        <select
-          className="material-overrides-panel-preset-select"
-          aria-label="Material preset"
+        <span className="flex-1" />
+        <Select
           value={activePresetId}
           disabled={disabled || presets.length === 0}
-          onChange={(event) => onActivePresetChange(event.target.value)}
+          onValueChange={(next) => {
+            if (next !== null) onActivePresetChange(next);
+          }}
         >
-          {presets.map((preset) => (
-            <option key={preset.id} value={preset.id}>{preset.label}</option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="material-overrides-panel-apply"
+          <SelectTrigger className="w-auto min-w-0 py-0" aria-label="Material preset">
+            <SelectValue>{() => presets.find((preset) => preset.id === activePresetId)?.label ?? ''}</SelectValue>
+          </SelectTrigger>
+          <SelectPopup className="text-11">
+            {presets.map((preset) => (
+              <SelectItem key={preset.id} value={preset.id}><SelectItemText>{preset.label}</SelectItemText></SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+        <Button
+          variant="primary"
+          size="compact"
+          className="whitespace-nowrap"
           disabled={disabled || presets.length === 0}
           onClick={onApplyPreset}
         >
           Apply to {presetTargetCount} {presetTargetCount === 1 ? 'weapon' : 'weapons'}
-        </button>
+        </Button>
       </div>
 
-      <div className="material-overrides-panel-tools">
-        <label className="material-overrides-panel-search">
-          <Search size={13} aria-hidden="true" />
-          <input
-            type="search"
-            value={query}
-            disabled={disabled}
-            placeholder="Search weapons"
-            aria-label="Search material override weapons"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {query ? (
-            <button type="button" aria-label="Clear weapon search" onClick={() => setQuery('')}>
-              <X size={12} aria-hidden="true" />
-            </button>
-          ) : null}
-        </label>
-        <span className="material-overrides-panel-visible-count">
+      <div className="flex min-h-9 flex-none items-center gap-2 border-b border-border px-3 py-1.25">
+        <SearchField
+          className="w-[min(260px,45%)] min-w-37.5 max-[900px]:w-[min(220px,60%)]"
+          value={query}
+          onChange={setQuery}
+          placeholder="Filter weapons..."
+          label="Filter material override weapons"
+          disabled={disabled}
+          // SearchField clears on Escape. Marked handled, so that the same key does not also close the drawer.
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && query) event.preventDefault();
+          }}
+        />
+        <span className="text-11 whitespace-nowrap text-dim">
           {visibleWeapons.length} {visibleWeapons.length === 1 ? 'weapon' : 'weapons'}
         </span>
       </div>
 
       <div
-        className="material-overrides-panel-list"
+        className="scrollbar-slim flex-1 overflow-auto"
         role="group"
         aria-label="Weapon material overrides"
         title="Drag across rows to select or deselect multiple weapons"
         data-dragging={dragPreview ? '' : undefined}
       >
-        <label className="material-overrides-panel-select-all-row">
+        <label className="sticky top-0 z-2 grid min-h-9 cursor-pointer grid-cols-[18px_28px_minmax(0,1fr)_auto] items-center gap-2.5 border-b border-border bg-panel-2 px-3 py-1 select-none has-disabled:cursor-default has-disabled:opacity-45">
           <input
             ref={selectAllRef}
             type="checkbox"
+            className={EDITOR_CHECKBOX}
             checked={allVisibleEnabled}
             disabled={disabled || visibleWeapons.length === 0}
             aria-label={query ? 'Select all matching weapons' : 'Select all weapons'}
@@ -169,14 +181,12 @@ export function MaterialOverridesPanel({
               event.target.checked,
             )}
           />
-          <span className="material-overrides-panel-select-all-mark" aria-hidden="true">
-            <Check size={12} />
-          </span>
-          <span className="material-overrides-panel-select-all-label">
+          <span aria-hidden="true" />
+          <span className="text-11.5 font-[650] text-text">
             {query ? 'Select all matches' : 'Select all weapons'}
           </span>
-          <span className="material-overrides-panel-select-all-count">
-            {visibleEnabledCount} / {visibleWeapons.length}
+          <span className="text-11 text-dim tabular-nums">
+            {visibleEnabledCount} of {visibleWeapons.length}
           </span>
         </label>
         {visibleWeapons.map((weapon) => {
@@ -187,25 +197,21 @@ export function MaterialOverridesPanel({
           if (enabled && weapon.missing !== undefined) {
             flag = weapon.missing
               ? (
-                <span className="material-overrides-panel-flag" data-kind="warn">
-                  <AlertTriangle size={11} aria-hidden="true" /> not in the mounted archive
-                </span>
+                <InlineNotice className="whitespace-nowrap">not in the mounted archive</InlineNotice>
               )
               : (
-                <span className="material-overrides-panel-flag" data-kind="ok">
+                <span className={FLAG_OK}>
                   <Check size={11} aria-hidden="true" /> found
                 </span>
               );
           } else if (weapon.warning) {
             flag = (
-              <span className="material-overrides-panel-flag" data-kind="warn">
-                <AlertTriangle size={11} aria-hidden="true" /> {weapon.warning}
-              </span>
+              <InlineNotice className="whitespace-nowrap">{weapon.warning}</InlineNotice>
             );
           }
           return (
             <div
-              className="material-overrides-panel-row"
+              className="grid min-h-9.5 cursor-pointer grid-cols-[18px_28px_minmax(120px,190px)_minmax(0,1fr)_auto] items-center gap-2.5 border-b border-border/60 px-3 py-1 select-none hover:bg-panel-2 data-drag-preview:bg-[color-mix(in_srgb,var(--accent)_10%,var(--panel-2))] max-[900px]:grid-cols-[18px_28px_minmax(0,1fr)_auto]"
               key={weapon.key}
               data-drag-preview={dragPreview?.keys.has(weapon.key) ? '' : undefined}
               onPointerDown={(event) => beginDrag(event, weapon)}
@@ -213,41 +219,41 @@ export function MaterialOverridesPanel({
             >
               <input
                 type="checkbox"
+                className={cn(EDITOR_CHECKBOX, 'pointer-events-none')}
                 aria-label={`Override ${weapon.name}`}
                 checked={enabled}
                 disabled={disabled}
                 onChange={(event) => onToggleWeapon(weapon.key, event.target.checked)}
               />
-              <span className="material-overrides-panel-thumb" aria-hidden="true">
-                {weapon.thumbnail ? <img src={weapon.thumbnail} alt="" draggable={false} /> : <ImageOff size={13} aria-hidden="true" />}
+              <span className="grid size-7 place-items-center overflow-hidden rounded-sm border border-border bg-panel-2 text-dim" aria-hidden="true">
+                {weapon.thumbnail ? <img className="size-full object-cover" src={weapon.thumbnail} alt="" draggable={false} /> : <ImageOff size={13} aria-hidden="true" />}
               </span>
-              <span className="material-overrides-panel-name">{weapon.name}</span>
-              <span className="material-overrides-panel-path" data-empty={pathEmpty ? '' : undefined}>{pathText}</span>
+              <span className="truncate text-11.5 text-text">{weapon.name}</span>
+              <span className={cn('truncate text-dim max-[900px]:hidden', pathEmpty ? 'text-11 italic' : PATH_TEXT)}>{pathText}</span>
               {flag}
             </div>
           );
         })}
         {visibleWeapons.length === 0 ? (
-          <div className="material-overrides-panel-empty">No weapons match “{query.trim()}”.</div>
+          <div className="grid min-h-22 place-items-center p-4 text-11 text-dim">No weapons match “{query.trim()}”.</div>
         ) : null}
       </div>
 
-      <div className="material-overrides-panel-foot">
+      <div className="flex flex-none flex-wrap items-center gap-2.5 border-t border-border px-3 py-2.25 text-11 text-dim">
         <span>{overriddenCount} of {weapons.length} weapons overridden</span>
         {missingCount > 0 ? (
-          <span className="material-overrides-panel-flag" data-kind="warn">
-            <AlertTriangle size={11} aria-hidden="true" /> {missingCount} material{missingCount === 1 ? '' : 's'} missing from the export
-          </span>
+          <InlineNotice>{missingCount} material{missingCount === 1 ? '' : 's'} missing from the export</InlineNotice>
         ) : null}
-        <span className="material-overrides-panel-foot-spacer" />
-        <button
-          type="button"
-          className="material-overrides-panel-clear"
+        <span className="flex-1" />
+        <Button
+          variant="danger"
+          size="compact"
+          className={EDITOR_BUTTON}
           disabled={disabled || overriddenCount === 0}
           onClick={onClearAll}
         >
           <RotateCcw size={12} aria-hidden="true" /> Clear all overrides
-        </button>
+        </Button>
       </div>
     </div>
   );

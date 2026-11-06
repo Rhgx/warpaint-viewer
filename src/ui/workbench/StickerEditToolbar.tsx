@@ -1,10 +1,12 @@
 import { ArrowDown, ArrowUp, ImageUp, Plus, Trash2 } from 'lucide-react';
+import { Button } from '../primitives/Button';
 import { TEXTURE_FILE_ACCEPT } from './workbenchLabels';
 import type { WorkbenchSticker } from './workbenchTypes';
 
 export function StickerEditToolbar({
   sticker,
   stickerFileRef,
+  addButtonRef,
   pickerOpen,
   pickerPurpose,
   onTogglePicker,
@@ -12,6 +14,7 @@ export function StickerEditToolbar({
 }: {
   sticker: WorkbenchSticker;
   stickerFileRef: { current: HTMLInputElement | null };
+  addButtonRef: { current: HTMLButtonElement | null };
   pickerOpen: boolean;
   pickerPurpose: 'sticker' | 'variant';
   onTogglePicker: (purpose: 'sticker' | 'variant') => void;
@@ -19,22 +22,28 @@ export function StickerEditToolbar({
 }) {
   const active = sticker.targets.find((target) => target.id === sticker.activeTargetId);
   return (
-    <div className="custom-workbench-edit-sticker-actions" role="toolbar" aria-label="Sticker actions">
-      <button
-        type="button"
+    <div
+      className="flex gap-0.75 border-t border-border px-2.5 py-1.5 [grid-area:tools] @max-[900px]:justify-self-start @max-[900px]:border-t-0 @max-[900px]:pr-0"
+      role="toolbar"
+      aria-label="Sticker actions"
+    >
+      <Button
+        ref={addButtonRef}
+        size="icon"
+        className="aria-expanded:border-accent aria-expanded:bg-accent aria-expanded:text-accent-text"
         title="Add sticker"
         aria-label="Add sticker"
         aria-expanded={pickerOpen && pickerPurpose === 'sticker'}
         onClick={() => onTogglePicker('sticker')}
       >
         <Plus size={13} />
-      </button>
-      <button type="button" title="Remove sticker" aria-label="Remove sticker" onClick={sticker.onRemoveTarget}>
+      </Button>
+      <Button variant="danger" size="icon" title="Remove sticker" aria-label="Remove sticker" onClick={sticker.onRemoveTarget}>
         <Trash2 size={13} />
-      </button>
+      </Button>
       {sticker.onSetTargetTexture && (
-        <button
-          type="button"
+        <Button
+          size="icon"
           title={(active?.sharedWith ?? 0) > 0
             ? `Replace this sticker's image. The other ${active?.sharedWith} sticker${active?.sharedWith === 1 ? '' : 's'} using it keep theirs.`
             : "Replace this sticker's image"}
@@ -43,7 +52,7 @@ export function StickerEditToolbar({
           onClick={() => stickerFileRef.current?.click()}
         >
           <ImageUp size={13} />
-        </button>
+        </Button>
       )}
       <input
         ref={stickerFileRef}
@@ -56,13 +65,13 @@ export function StickerEditToolbar({
           if (file) onReplaceImage(file);
         }}
       />
-      <span />
-      <button type="button" title="Move sticker earlier" aria-label="Move sticker earlier" disabled={!active?.canMoveEarlier} onClick={() => sticker.onMoveTarget(-1)}>
+      <span className="flex-1" />
+      <Button size="icon" title="Move sticker earlier" aria-label="Move sticker earlier" disabled={!active?.canMoveEarlier} onClick={() => sticker.onMoveTarget(-1)}>
         <ArrowUp size={13} />
-      </button>
-      <button type="button" title="Move sticker later" aria-label="Move sticker later" disabled={!active?.canMoveLater} onClick={() => sticker.onMoveTarget(1)}>
+      </Button>
+      <Button size="icon" title="Move sticker later" aria-label="Move sticker later" disabled={!active?.canMoveLater} onClick={() => sticker.onMoveTarget(1)}>
         <ArrowDown size={13} />
-      </button>
+      </Button>
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
+import { Copy, Eye, EyeOff, Lightbulb, Plus, Redo2, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
+
 import type { LightingStore } from '../../viewer/lighting/lightingStore';
-import { Copy, Eye, EyeOff, Plus, Redo2, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
 import {
   CUSTOM_DIRECTION_LIMIT,
   CUSTOM_LIGHT_POSITION_LIMIT,
@@ -15,7 +16,11 @@ import {
   type CustomLightType,
 } from '../../viewer/lighting/customLightingModel';
 import { SelectField } from '../common/controls';
-import { ColorRow, LightIcon, LightTypeBadge, ScalarRow, VectorRow } from './lightingFields';
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { Input } from '../primitives/Input';
+import { Slider } from '../primitives/Slider';
+import { ColorRow, FieldRow, LightDot, LightIcon, LightTypeBadge, ScalarRow, VectorRow } from './lightingFields';
 import {
   DEFAULT_FINITE_RANGE,
   ROLE_TEMPLATES,
@@ -27,10 +32,16 @@ import {
   uniqueLightName,
   type LightTemplate,
 } from './lightingRig';
-import './Lighting.css';
+import { SECTION_TITLE } from '../primitives/textStyles';
 
 const INTENSITY_MAX = 10;
 const RESET_ARM_MS = 3000;
+
+const HEAD_BUTTON = 'size-5.5 flex-none touch:size-9';
+const ADD_GROUP = 'text-10 text-dim not-first:mt-0.75';
+const ADD_OPTION = 'h-5.5 min-h-0 min-w-0 gap-0.75 bg-panel px-1 text-10 text-text touch:h-9';
+const ACTION_BUTTON = 'flex-1 gap-1 bg-panel text-10 not-disabled:hover:bg-panel-2 touch:min-h-9';
+const RANGE_TOGGLE = 'h-5 w-5.5 flex-none bg-panel text-12 leading-none text-dim touch:size-9';
 
 interface LightingPanelProps {
   store: LightingStore;
@@ -52,8 +63,8 @@ function NameInput({ light, onCommit }: { light: CustomLight; onCommit: (name: s
   };
 
   return (
-    <input
-      className="lighting-name-input"
+    <Input
+      className="h-5.5 min-h-0 min-w-0 px-1.5 py-0 [font-family:inherit] text-11 font-semibold text-text focus:border-accent touch:h-8"
       value={draft}
       maxLength={64}
       aria-label="Light name"
@@ -141,100 +152,116 @@ export function LightingPanel({ store }: LightingPanelProps) {
   };
 
   return (
-    <section className="lighting-panel" data-open={open || undefined} aria-label="Custom lights">
-      <header className="lighting-panel-head">
-        <h2 className="lighting-panel-title">Lights</h2>
-        <span className="lighting-panel-count">{rig.lights.length}/{MAX_CUSTOM_LIGHTS}</span>
-        <button
-          type="button"
-          className="lighting-head-button"
+    // Docked under the stage toolbar: its top offset is the button height plus padding, border and an 8px gap. Inset past the panel edge handle, which is 20px wide, so that it never covers the handle.
+    // On a phone in portrait it docks along the bottom of the canvas instead, clear of the tab strip.
+    <section
+      className="absolute top-[calc(28px+var(--stage-toolbar-btn))] right-6.5 z-4 hidden max-h-[calc(100%-76px)] w-[min(248px,calc(100vw-16px))] flex-col rounded-md border border-strong bg-panel/92 text-11 text-text shadow-pop backdrop-blur-[8px] data-open:flex touch:w-[min(300px,calc(100vw-16px))] docked:right-2.5 mobile:top-[calc(26px+var(--stage-toolbar-btn)+env(safe-area-inset-top))] mobile:right-[calc(8px+env(safe-area-inset-right))] mobile:max-h-[calc(100%-34px-var(--stage-toolbar-btn)-env(safe-area-inset-top))] phone-portrait:top-auto phone-portrait:right-2 phone-portrait:bottom-2 phone-portrait:left-2 phone-portrait:max-h-[45%] phone-portrait:w-auto"
+      data-slot="lighting-panel"
+      data-open={open || undefined}
+      aria-label="Custom lights"
+    >
+      <header className="flex flex-none items-center gap-1.5 border-b border-border py-1 pr-1 pl-2.25">
+        <Lightbulb size={14} className="flex-none text-dim" aria-hidden="true" />
+        <h2 className={cn('m-0', SECTION_TITLE)}>Lights</h2>
+        <span className="mr-auto text-10 text-dim tabular-nums">{rig.lights.length} of {MAX_CUSTOM_LIGHTS}</span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={HEAD_BUTTON}
           title="Undo lighting change (Ctrl+Z)"
           aria-label="Undo lighting change"
           disabled={!canUndo}
           onClick={onUndo}
         >
           <Undo2 size={13} />
-        </button>
-        <button
-          type="button"
-          className="lighting-head-button"
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={HEAD_BUTTON}
           title="Redo lighting change (Ctrl+Y)"
           aria-label="Redo lighting change"
           disabled={!canRedo}
           onClick={onRedo}
         >
           <Redo2 size={13} />
-        </button>
-        <button
-          type="button"
-          className="lighting-head-button"
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={cn(HEAD_BUTTON, 'data-armed:bg-panel-2 data-armed:text-fail not-disabled:data-armed:hover:text-fail')}
           data-armed={resetArmed || undefined}
           title={resetArmed ? 'Click again to reset the rig' : 'Reset to the default rig'}
           aria-label={resetArmed ? 'Confirm reset to the default rig' : 'Reset to the default rig'}
           onClick={resetRig}
         >
           <RotateCcw size={13} />
-        </button>
-        <button
-          type="button"
-          className="lighting-head-button"
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={HEAD_BUTTON}
           title="Close lights panel"
           aria-label="Close lights panel"
           onClick={() => setOpen(false)}
         >
           <X size={14} />
-        </button>
+        </Button>
       </header>
 
-      <div className="lighting-panel-body">
-        <ul className="lighting-list">
+      <div className="scrollbar-slim flex flex-col gap-1.5 overflow-y-auto p-1.75 mobile:overscroll-contain" data-slot="lighting-panel-body">
+        <ul className="m-0 flex list-none flex-col gap-px p-0">
           {rig.lights.map((light) => (
-            <li key={light.id} className="lighting-list-row" data-selected={light.id === selectedLightId || undefined}>
+            <li
+              key={light.id}
+              className="flex items-center pr-px transition-fast data-selected:bg-accent-soft data-selected:shadow-[inset_2px_0_0_var(--accent)]"
+              data-slot="lighting-row"
+              data-selected={light.id === selectedLightId || undefined}
+            >
               <button
                 type="button"
-                className="lighting-list-select"
+                className="flex h-6.5 min-w-0 flex-1 cursor-pointer items-center gap-1.5 border-0 bg-transparent pr-1 pl-1.75 text-left text-11 text-text focus-ring focus-visible:-outline-offset-2 data-off:text-dim touch:h-10.5"
+                data-slot="lighting-row-select"
                 aria-pressed={light.id === selectedLightId}
                 data-off={!light.enabled || undefined}
                 onClick={() => onSelectedLightIdChange(light.id)}
               >
-                <span
-                  className="lighting-dot"
-                  style={{ backgroundColor: light.color }}
-                  data-off={!light.enabled || undefined}
-                  aria-hidden="true"
-                />
-                <span className="lighting-list-name">{light.name}</span>
+                <LightDot color={light.color} off={!light.enabled} />
+                <span className="min-w-0 flex-1 truncate in-data-selected:font-semibold">{light.name}</span>
                 <LightTypeBadge type={light.type} />
               </button>
-              <button
-                type="button"
-                className="lighting-icon-button"
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="flex-none touch:size-9"
+                data-slot="lighting-row-visibility"
                 title={light.enabled ? 'Turn off' : 'Turn on'}
                 aria-label={light.enabled ? `Turn off ${light.name}` : `Turn on ${light.name}`}
                 onClick={() => updateLight(light.id, (current) => ({ ...current, enabled: !current.enabled }))}
               >
                 {light.enabled ? <Eye size={13} /> : <EyeOff size={13} />}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
 
         {rig.lights.length === 0 && (
-          <p className="lighting-empty">No lights. The model is lit by ambient only.</p>
+          <p className="m-0 px-1.5 py-2 text-center text-10.5 text-dim">No lights. The model is lit by ambient only.</p>
         )}
 
         <div
-          className="lighting-add"
+          className="flex flex-col gap-1.25"
           onKeyDown={(event) => {
             if (event.key !== 'Escape' || !addOpen) return;
             setAddOpen(false);
             addButtonRef.current?.focus();
           }}
         >
-          <button
+          <Button
             ref={addButtonRef}
-            type="button"
-            className="lighting-add-button"
+            size="sm"
+            className="border-dashed border-strong bg-transparent px-2 text-10.5 not-disabled:hover:border-solid not-disabled:hover:bg-panel-2 aria-expanded:border-solid aria-expanded:border-accent aria-expanded:text-text touch:min-h-9"
+            data-slot="lighting-add"
             aria-expanded={addOpen}
             disabled={full}
             title={full ? `Limit is ${MAX_CUSTOM_LIGHTS} lights` : undefined}
@@ -242,34 +269,36 @@ export function LightingPanel({ store }: LightingPanelProps) {
           >
             <Plus size={13} />
             <span>Add light</span>
-          </button>
+          </Button>
           {addOpen && !full && (
-            <div className="lighting-add-menu">
-              <span className="lighting-add-group">Roles</span>
-              <div className="lighting-add-grid">
+            <div className="flex flex-col gap-0.75 rounded-sm border border-border bg-panel-2 p-1.5">
+              <span className={ADD_GROUP}>Roles</span>
+              <div className="grid grid-cols-3 gap-1">
                 {ROLE_TEMPLATES.map((option) => (
-                  <button
+                  <Button
                     key={option.value}
-                    type="button"
-                    className="lighting-add-option"
+                    size="sm"
+                    className={ADD_OPTION}
+                    data-slot="lighting-add-option"
                     onClick={() => addLight(option.value)}
                   >
                     {option.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
-              <span className="lighting-add-group">Blank</span>
-              <div className="lighting-add-grid">
+              <span className={ADD_GROUP}>Blank</span>
+              <div className="grid grid-cols-3 gap-1">
                 {TYPE_TEMPLATES.map((option) => (
-                  <button
+                  <Button
                     key={option.value}
-                    type="button"
-                    className="lighting-add-option"
+                    size="sm"
+                    className={ADD_OPTION}
+                    data-slot="lighting-add-option"
                     onClick={() => addLight(option.value)}
                   >
                     <LightIcon type={option.type} size={11} />
                     <span>{option.label}</span>
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -277,21 +306,21 @@ export function LightingPanel({ store }: LightingPanelProps) {
         </div>
 
         {selected && (
-          <div className="lighting-props">
+          <div className="flex flex-col gap-1.25 border-t border-border pt-1.5">
             <NameInput
               key={selected.id}
               light={selected}
               onCommit={(name) => updateSelected((light) => ({ ...light, name }))}
             />
 
-            <div className="lighting-row">
-              <span className="lighting-scalar-label">Type</span>
+            <FieldRow label="Type">
               <SelectField
+                className="min-h-5.5 min-w-0 flex-1 px-1.75 py-0.5 text-11 touch:min-h-control"
                 value={selected.type}
                 options={TYPE_OPTIONS}
                 onChange={(value) => updateSelected((light) => changeLightType(light, value as CustomLightType))}
               />
-            </div>
+            </FieldRow>
 
             <ColorRow
               value={selected.color}
@@ -345,20 +374,25 @@ export function LightingPanel({ store }: LightingPanelProps) {
 
             {'range' in selected && (
               selected.range === null ? (
-                <div className="lighting-scalar">
-                  <span className="lighting-scalar-label" title="Distance cutoff">Range</span>
-                  <span className="lighting-scalar-note">Reaches everything</span>
-                  <button
-                    type="button"
-                    className="lighting-range-toggle"
-                    aria-pressed
-                    title="Give this light a distance cutoff"
-                    onClick={() => updateSelected((light) => (
-                      'range' in light ? { ...light, range: DEFAULT_FINITE_RANGE } : light
-                    ))}
-                  >
-                    &#8734;
-                  </button>
+                <div className="flex flex-col gap-0.5">
+                  <FieldRow label="Range" title="Distance cutoff">
+                    <span className="min-w-0 flex-1 truncate text-right text-10 text-dim">Reaches everything</span>
+                    <Button
+                      variant="toggle"
+                      size="icon-sm"
+                      className={RANGE_TOGGLE}
+                      data-slot="lighting-range-toggle"
+                      aria-pressed
+                      title="Give this light a distance cutoff"
+                      onClick={() => updateSelected((light) => (
+                        'range' in light ? { ...light, range: DEFAULT_FINITE_RANGE } : light
+                      ))}
+                    >
+                      &#8734;
+                    </Button>
+                  </FieldRow>
+                  {/* Stays in place so that turning the cutoff on moves nothing below it. */}
+                  <Slider disabled value={CUSTOM_LIGHT_RANGE_LIMIT} min={0} max={CUSTOM_LIGHT_RANGE_LIMIT} step={0.1} ariaLabel="Distance cutoff" onChange={() => undefined} />
                 </div>
               ) : (
                 <ScalarRow
@@ -373,15 +407,17 @@ export function LightingPanel({ store }: LightingPanelProps) {
                   ))}
                   onChange={(range) => updateSelected((light) => ('range' in light ? { ...light, range } : light))}
                   trailing={(
-                    <button
-                      type="button"
-                      className="lighting-range-toggle"
+                    <Button
+                      variant="toggle"
+                      size="icon-sm"
+                      className={RANGE_TOGGLE}
+                      data-slot="lighting-range-toggle"
                       aria-pressed={false}
                       title="Remove the distance cutoff"
                       onClick={() => updateSelected((light) => ('range' in light ? { ...light, range: null } : light))}
                     >
                       &#8734;
-                    </button>
+                    </Button>
                   )}
                 />
               )
@@ -419,31 +455,27 @@ export function LightingPanel({ store }: LightingPanelProps) {
               />
             )}
 
-            <p className="lighting-hint">
-              {selected.type === 'directional'
-                ? 'Drag the aim dot to swing the sun. Drag the background to orbit the rig.'
-                : 'Drag the arrows to move this light, the aim dot to point it. Drag the background to orbit the rig.'}
-            </p>
-
-            <div className="lighting-props-actions">
-              <button
-                type="button"
-                className="lighting-action-button"
+            <div className="flex gap-1.25 pt-0.5">
+              <Button
+                size="sm"
+                className={ACTION_BUTTON}
                 disabled={full}
                 title={full ? `Limit is ${MAX_CUSTOM_LIGHTS} lights` : undefined}
                 onClick={duplicateSelected}
               >
                 <Copy size={12} />
                 <span>Duplicate</span>
-              </button>
-              <button
-                type="button"
-                className="lighting-action-button lighting-delete-button"
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                className={ACTION_BUTTON}
+                data-slot="lighting-delete"
                 onClick={deleteSelected}
               >
                 <Trash2 size={12} />
                 <span>Delete</span>
-              </button>
+              </Button>
             </div>
           </div>
         )}

@@ -26,6 +26,9 @@
     "verify:vpk": "npm run verify:vpk-interop",
     "verify:vpk-interop": "vitest run tools/verify/source/vpk-interop.test.mjs",
     "verify:vtf": "vitest run tools/verify/export/vtf-export.test.ts",
+    "verify:e2e": "node tools/verify/e2e/showcase-boards.mjs",
+    "verify:ui:capture": "node tools/verify/ui/capture.mjs",
+    "verify:ui:compare": "node tools/verify/ui/compare.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "knip": "knip"
@@ -34,16 +37,19 @@
     "@base-ui/react": "^1.6.0",
     "@xyflow/react": "^12.11.3",
     "@zip.js/zip.js": "^2.22.0",
+    "class-variance-authority": "^0.7.1",
     "jsonc-parser": "^3.3.1",
     "lucide-react": "^1.24.0",
     "mediabunny": "^1.60.0",
     "protobufjs": "^8.7.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "tailwind-merge": "^3.7.0",
     "three": "^0.186.1",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.4",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
@@ -52,6 +58,7 @@
     "knip": "^6.34.0",
     "oxlint": "^1.71.0",
     "sharp": "^0.35.3",
+    "tailwindcss": "^4.3.4",
     "typescript": "~7.0.2",
     "vite": "^8.1.1",
     "vitest": "^5.0.3"

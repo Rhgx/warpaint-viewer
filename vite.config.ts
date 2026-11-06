@@ -1,5 +1,6 @@
 import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 // GitHub Pages project sites live beneath the repository name. The deploy
 // workflow supplies this path while local development continues at `/`.
@@ -33,7 +34,7 @@ const bootHints = {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), bootHints],
+  plugins: [tailwindcss(), react(), bootHints],
   optimizeDeps: {
     // Workers start through new URL(...), which the dependency scan does not
     // follow, and the workbench loads lazily. Without these, their libraries
@@ -53,8 +54,8 @@ export default defineConfig({
   },
   base,
   build: {
-    // Floor for the 2009-era Windows 7 browsers this app must still start in.
-    // Vite's default baseline-widely-available is chrome111/firefox114.
-    target: ['chrome109', 'edge109', 'firefox115', 'safari16'],
+    // The supported browser floor. Firefox sits above Vite's default because copying an
+    // image needs ClipboardItem (Firefox 127+).
+    target: ['chrome111', 'edge111', 'firefox128', 'safari16.4'],
   },
 })

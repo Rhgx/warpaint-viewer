@@ -1,5 +1,7 @@
 import type { ReactEventHandler } from 'react';
-import './WeaponUvSurface.css';
+import { cn } from '../primitives/cn';
+
+const IMAGE = 'absolute inset-0 block size-full object-contain select-none';
 
 interface WeaponUvSurfaceProps {
   readonly textureSrc?: string | null;
@@ -17,13 +19,13 @@ export function WeaponUvSurface({
 }: WeaponUvSurfaceProps) {
   return (
     <div
-      className="weapon-uv-surface"
+      className="pointer-events-none absolute inset-0 overflow-hidden"
       aria-hidden={!textureAlt || undefined}
     >
-      <span className="weapon-uv-surface-underlay" aria-hidden="true" />
+      <span className="checker-cells absolute inset-0 z-0 bg-uv-backing" aria-hidden="true" />
       {textureSrc ? (
         <img
-          className="weapon-uv-surface-texture"
+          className={cn(IMAGE, 'z-1 bg-uv-backing')}
           src={textureSrc}
           alt={textureAlt}
           draggable={false}
@@ -32,7 +34,7 @@ export function WeaponUvSurface({
       ) : null}
       {textureSrc && isolationOverlaySrc ? (
         <img
-          className="weapon-uv-surface-isolation-overlay"
+          className={cn(IMAGE, 'z-2 brightness-46 contrast-82 grayscale mask-contain mask-center mask-no-repeat')}
           src={textureSrc}
           alt=""
           draggable={false}

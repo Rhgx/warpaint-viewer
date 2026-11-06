@@ -7,6 +7,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   applyNodeChanges,
+  getViewportForBounds,
   useReactFlow,
   useUpdateNodeInternals,
   type Connection,
@@ -14,7 +15,7 @@ import {
   type XYPosition,
 } from '@xyflow/react';
 import {
-  AlertTriangle,
+  AlertCircle,
   ArrowDown,
   ArrowUp,
   ChevronDown,
@@ -44,7 +45,6 @@ import {
   canonicalDimension,
   connectionIsValid,
   flowConnectionFromReactFlow,
-  operationNodeClass,
   portTypeClass,
   portTypeLabel,
   sameFlowNodeData,
@@ -71,7 +71,12 @@ import {
   type FlowNodeData,
   type OperationGraphEditorProps,
 } from './operationGraphTypes';
-import './OperationGraphEditor.css';
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { Input } from '../primitives/Input';
+import { ToggleGroup } from '../primitives/ToggleGroup';
+import { EDITOR_BUTTON, EDITOR_HEAD, EDITOR_NOTE, EDITOR_TITLE } from './editorStyles';
+import './operationGraph.css';
 
 export type {
   OperationGraphEditorChange,
@@ -82,6 +87,16 @@ export type {
 const NODE_TYPES = Object.freeze({ operation: OperationFlowNode });
 
 const EDGE_TYPES = Object.freeze({ operation: OperationFlowEdge });
+
+const SEARCH_BUTTON = 'size-5 flex-none';
+const TOOLBAR_GROUP = 'flex items-center gap-1 border-l border-border pl-2 first:border-l-0 first:pl-0';
+// Narrow, the icons alone carry the toolbar. Their titles still name them.
+const TOOLBAR_LABEL = '@max-[600px]:hidden';
+// In the drawer these give up their labels first, so that the toolbar keeps to one row and the canvas its height.
+const TOOLBAR_LABEL_SECONDARY = '@max-[800px]:hidden';
+const FOCUS_AFTER_SELECT_MS = 120;
+const FOCUS_MAX_ZOOM = 1.3;
+const GRAPH_MIN_ZOOM = 0.08;
 
 function graphNodeForId(nodes: readonly FlowNode[], nodeId: string | undefined): FlowNode | undefined {
   return nodeId ? nodes.find((node) => node.id === nodeId) : undefined;
@@ -113,7 +128,7 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
     onSelectKit,
     readOnly = false,
   } = props;
-  const { fitView, screenToFlowPosition } = useReactFlow<FlowNode, FlowEdge>();
+  const { fitView, screenToFlowPosition, setViewport } = useReactFlow<FlowNode, FlowEdge>();
   const updateNodeInternals = useUpdateNodeInternals();
   const [localSelectedNodeId, setLocalSelectedNodeId] = useState<string | undefined>(selectedNodeId);
   const [positions, setPositions] = useState<Record<string, XYPosition>>({});
@@ -196,6 +211,7 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
     }).map((node) => node.id);
   }, [graph.nodes, normalizedQuery]);
   const searchMatches = useMemo(() => new Set(searchMatchIds), [searchMatchIds]);
+  const searchCurrentId = normalizedQuery ? searchMatchIds[searchMatchIndex] : undefined;
 
   const [searchSync, setSearchSync] = useState({ query: normalizedQuery, ids: searchMatchIds, activeNodeId });
   if (searchSync.query !== normalizedQuery || searchSync.ids !== searchMatchIds || searchSync.activeNodeId !== activeNodeId) {
@@ -289,9 +305,17 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
     if (!nodeId) return;
     const node = graphNodeForId(flowNodesRef.current, nodeId);
     if (!node) return;
-    void fitView({ nodes: [node], padding: 0.55, duration: 220 });
     selectNode(nodeId);
-  }, [fitView, selectNode]);
+    // Selecting opens the stage's fields. React Flow's own measure can lag behind that, so the card itself is read, once it has rendered.
+    window.setTimeout(() => {
+      const card = canvasRef.current?.querySelector<HTMLElement>(`.react-flow__node[data-id="${CSS.escape(nodeId)}"]`);
+      const current = graphNodeForId(flowNodesRef.current, nodeId);
+      const canvas = flowWrapperRef.current;
+      if (!card || !current || !canvas) return;
+      // Centred and capped, as a card's menus scale with the zoom. A card too tall for the cap fits at less.
+      void setViewport(getViewportForBounds({ ...current.position, width: card.offsetWidth, height: card.offsetHeight }, canvas.clientWidth, canvas.clientHeight, GRAPH_MIN_ZOOM, FOCUS_MAX_ZOOM, 0.55), { duration: 220 });
+    }, FOCUS_AFTER_SELECT_MS);
+  }, [selectNode, setViewport]);
 
   const focusSearchMatch = useCallback((index: number): void => {
     if (searchMatchIds.length === 0) return;
@@ -446,7 +470,7 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
   const handleCanvasKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const target = event.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.tagName === 'BUTTON' || target.isContentEditable) {
-      if (event.key === 'Enter' && target.classList.contains('operation-graph-search-input') && searchMatchIds.length > 0) {
+      if (event.key === 'Enter' && target.dataset.slot === 'graph-search-input' && searchMatchIds.length > 0) {
         event.preventDefault();
         const selectedMatchIndex = activeNodeId ? searchMatchIds.indexOf(activeNodeId) : -1;
         focusSearchMatch(selectedMatchIndex >= 0 ? selectedMatchIndex + 1 : searchMatchIndex);
@@ -498,9 +522,10 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
       paintNames,
       onSelectKit,
       emphasis,
-      searchMatch: !normalizedQuery || searchMatches.has(node.id),
+      searchMatch: normalizedQuery ? searchMatches.has(node.id) : undefined,
+      searchCurrent: node.id === searchCurrentId,
     };
-  }), [activeNodeId, connectedEdgesByTarget, diagnosticsByNode, graph.nodes, nodesById, normalizedQuery, onExportNode, onGraphChange, onOpenSelectEditor, onOpenStickerEditor, onOpenTextureEditor, onPreviewNode, onReorderInput, onSelectKit, onUpdateParameter, paintNames, readOnly, relatedNodes, searchMatches, selectNode, textureOptions, variables]);
+  }), [activeNodeId, connectedEdgesByTarget, diagnosticsByNode, graph.nodes, nodesById, normalizedQuery, searchCurrentId, onExportNode, onGraphChange, onOpenSelectEditor, onOpenStickerEditor, onOpenTextureEditor, onPreviewNode, onReorderInput, onSelectKit, onUpdateParameter, paintNames, readOnly, relatedNodes, searchMatches, selectNode, textureOptions, variables]);
   const [stableNodeData, setStableNodeData] = useState<{ raw: FlowNodeData[]; stable: FlowNodeData[] }>(
     () => ({ raw: [], stable: [] }),
   );
@@ -523,7 +548,6 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
       position: positions[node.id] ?? { x: defaultPosition.x, y: defaultPosition.y },
       ...(measurements[node.id] ? { measured: measurements[node.id] } : {}),
       data,
-      className: `${operationNodeClass(node)} operation-graph-emphasis-${data.emphasis}`,
       selected: isActive,
       // Selected cards open editors and dropdowns, which must draw over their neighbours.
       ...(isActive ? { zIndex: SELECTED_NODE_Z_INDEX } : {}),
@@ -552,13 +576,13 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
       ariaLabel: `${sourceLabel} to ${targetLabel}, ${portTypeLabel(edge.type)} connection`,
       className: [
         portTypeClass(edge.type),
-        relatedNodes.size <= 1 || onPath ? 'operation-graph-edge-highlighted' : 'operation-graph-edge-dimmed',
-        traced ? 'operation-graph-edge-traced' : '',
-        direct ? 'operation-graph-edge-direct' : '',
+        (relatedNodes.size <= 1 || onPath) && (!normalizedQuery || (searchMatches.has(edge.source) && searchMatches.has(edge.target))) ? '' : 'opacity-14',
+        traced ? 'graph-edge-traced' : '',
+        direct ? 'graph-edge-direct' : '',
       ].filter(Boolean).join(' '),
       animated: false,
     };
-  }), [activeNodeId, disconnectEdgeById, graph.edges, nodesById, readOnly, relatedNodes, selectedEdgeId]);
+  }), [activeNodeId, disconnectEdgeById, graph.edges, nodesById, normalizedQuery, readOnly, relatedNodes, searchMatches, selectedEdgeId]);
 
   useLayoutEffect(() => {
     flowNodesRef.current = flowNodes;
@@ -569,74 +593,83 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
   const errorCount = validation.diagnostics.filter((diagnostic) => diagnostic.severity === 'error').length;
 
   return (
-    <div ref={canvasRef} className="operation-graph-editor" tabIndex={0} onKeyDown={handleCanvasKeyDown}>
-      <div className="operation-graph-toolbar">
-        <div className="operation-graph-toolbar-title">
-          <strong>Operation graph</strong>
-          <span className="operation-graph-count">{stageCount} stage{stageCount === 1 ? '' : 's'}</span>
+    <div ref={canvasRef} className="@container flex h-full min-h-0 min-w-0 flex-1 flex-col bg-panel text-11 text-text outline-none" data-slot="graph-editor" tabIndex={0} onKeyDown={handleCanvasKeyDown}>
+      <div className={cn(EDITOR_HEAD, 'bg-panel')} data-slot="graph-toolbar">
+        <div className="flex min-w-max items-baseline gap-1.75 @max-[600px]:hidden">
+          <strong className={EDITOR_TITLE}>Operation graph</strong>
+          <span className={cn(EDITOR_NOTE, 'font-normal tabular-nums @max-[800px]:hidden')}>{stageCount} stage{stageCount === 1 ? '' : 's'}</span>
           {errorCount > 0 && (
-            <span className="operation-graph-invalid-count" title="This draft is not serializable yet">
-              <AlertTriangle size={12} /> {errorCount}
+            <span className="inline-flex items-center gap-0.75 self-center text-10 text-fail tabular-nums" title="This draft is not serializable yet">
+              <AlertCircle size={12} /> {errorCount}
             </span>
           )}
         </div>
-        <div className="operation-graph-search" role="search" title="Search nodes by name, type, or source path">
-          <Search size={13} />
-          <input
-            className="operation-graph-search-input"
+        <div className="flex min-h-control max-w-75 min-w-30 flex-[1_1_100px] items-center gap-1.5 rounded-sm border border-border bg-panel pr-1 pl-2 text-dim transition-fast hover:border-strong has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-accent" role="search" title="Search stages by name, type, or source path">
+          <Search className="flex-none" size={14} />
+          <Input
+            className="h-6.5 min-h-0 min-w-0 flex-1 border-0 bg-transparent p-0 [font-family:inherit] text-11 text-text placeholder:text-dim focus-visible:outline-none [&::-webkit-search-cancel-button]:hidden"
+            data-slot="graph-search-input"
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find nodes"
-            aria-label="Find nodes"
+            placeholder="Find stages..."
+            aria-label="Find stages"
           />
           {normalizedQuery && (
             <>
-              <span className="operation-graph-match-count">
-                {searchMatchIds.length > 0 ? searchMatchIndex + 1 : 0}/{searchMatchIds.length}
+              <span className="flex-none text-10 text-dim tabular-nums">
+                {searchMatchIds.length > 0 ? searchMatchIndex + 1 : 0} of {searchMatchIds.length}
               </span>
-              <button type="button" className="operation-graph-search-step" title="Previous match" aria-label="Previous search match" onClick={() => stepSearchMatch(-1)} disabled={searchMatchIds.length === 0}><ChevronUp size={12} /></button>
-              <button type="button" className="operation-graph-search-step" title="Next match (Enter)" aria-label="Next search match" onClick={() => stepSearchMatch(1)} disabled={searchMatchIds.length === 0}><ChevronDown size={12} /></button>
+              <Button variant="ghost" size="icon-sm" className={SEARCH_BUTTON} title="Previous match" aria-label="Previous search match" onClick={() => stepSearchMatch(-1)} disabled={searchMatchIds.length === 0}><ChevronUp size={12} /></Button>
+              <Button variant="ghost" size="icon-sm" className={SEARCH_BUTTON} title="Next match (Enter)" aria-label="Next search match" onClick={() => stepSearchMatch(1)} disabled={searchMatchIds.length === 0}><ChevronDown size={12} /></Button>
             </>
           )}
-          {query && <button type="button" className="operation-graph-search-clear" title="Clear search" aria-label="Clear search" onClick={() => setQuery('')}><X size={12} /></button>}
+          {query && <Button variant="ghost" size="icon-sm" className={SEARCH_BUTTON} title="Clear search" aria-label="Clear search" onClick={() => setQuery('')}><X size={12} /></Button>}
         </div>
-        <div className="operation-graph-toolbar-actions">
-          <div className="operation-graph-toolbar-group">
-            <button type="button" className="operation-graph-toolbar-button" title="Focus selected stage (F)" onClick={() => focusNode(activeNodeId)} disabled={!activeNodeId}><Focus size={14} /><span>Focus</span></button>
-            <div className="operation-graph-trace" role="group" aria-label="Trace direction">
-              {TRACE_OPTIONS.map((option) => (
-                <button
-                  key={option.mode}
-                  type="button"
-                  title={option.title}
-                  aria-label={option.title}
-                  aria-pressed={traceMode === option.mode}
-                  data-active={traceMode === option.mode ? 'true' : undefined}
-                  disabled={!activeNodeId}
-                  onClick={() => setTraceMode(option.mode)}
-                >
-                  {option.mode === 'both' ? <Waypoints size={13} aria-hidden /> : null}
-                  {option.mode === 'upstream' ? <ArrowUp size={13} aria-hidden /> : null}
-                  {option.mode === 'downstream' ? <ArrowDown size={13} aria-hidden /> : null}
-                  <span>{option.label}</span>
-                </button>
-              ))}
-            </div>
-            <button type="button" className="operation-graph-toolbar-button" title="Arrange stages automatically" onClick={arrange}><LayoutDashboard size={14} /><span>Arrange</span></button>
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 @max-[620px]:ml-0 @max-[620px]:w-full">
+          <div className={TOOLBAR_GROUP}>
+            <Button size="compact" className={EDITOR_BUTTON} title="Focus selected stage (F)" onClick={() => focusNode(activeNodeId)} disabled={!activeNodeId}><Focus size={14} /><span className={TOOLBAR_LABEL_SECONDARY}>Focus</span></Button>
+            <ToggleGroup
+              size="inline"
+              label="Trace direction"
+              value={traceMode}
+              onChange={setTraceMode}
+              options={TRACE_OPTIONS.map((option) => ({
+                value: option.mode,
+                title: option.title,
+                ariaLabel: option.title,
+                disabled: !activeNodeId,
+                label: (
+                  <>
+                    {option.mode === 'both' ? <Waypoints size={13} aria-hidden /> : null}
+                    {option.mode === 'upstream' ? <ArrowUp size={13} aria-hidden /> : null}
+                    {option.mode === 'downstream' ? <ArrowDown size={13} aria-hidden /> : null}
+                    <span className={TOOLBAR_LABEL}>{option.label}</span>
+                  </>
+                ),
+              }))}
+            />
+            <Button size="compact" className={EDITOR_BUTTON} title="Arrange stages automatically" onClick={arrange}><LayoutDashboard size={14} /><span className={TOOLBAR_LABEL_SECONDARY}>Arrange</span></Button>
           </div>
           {!readOnly && (
-            <div className="operation-graph-toolbar-group">
-              <button type="button" className="operation-graph-toolbar-button" title="Duplicate selected stage (Ctrl+D)" onClick={handleDuplicate} disabled={!activeNodeId}><Copy size={14} /><span>Duplicate</span></button>
-              <button type="button" className="operation-graph-toolbar-button" title="Delete the selected stage or connection (Delete)" onClick={handleDelete} disabled={!activeNodeId && !selectedEdge}><Trash2 size={14} /><span>Delete</span></button>
-              <div className="operation-graph-add-menu" ref={addMenuRef}>
-                <button type="button" className="operation-graph-toolbar-button operation-graph-add-button" aria-haspopup="menu" aria-expanded={addMenuOpen} onClick={() => setAddMenuOpen((open) => !open)}><Plus size={14} /> <span>Add stage</span><ChevronDown size={12} /></button>
+            <div className={TOOLBAR_GROUP}>
+              <Button size="compact" className={EDITOR_BUTTON} title="Duplicate selected stage (Ctrl+D)" onClick={handleDuplicate} disabled={!activeNodeId}><Copy size={14} /><span className={TOOLBAR_LABEL_SECONDARY}>Duplicate</span></Button>
+              <Button variant="danger" size="compact" className={EDITOR_BUTTON} title="Delete the selected stage or connection (Delete)" onClick={handleDelete} disabled={!activeNodeId && !selectedEdge}><Trash2 size={14} /><span className={TOOLBAR_LABEL_SECONDARY}>Delete</span></Button>
+              <div className="relative" ref={addMenuRef}>
+                <Button variant="accent" size="compact" className={cn(EDITOR_BUTTON, 'aria-expanded:bg-accent aria-expanded:text-accent-text')} data-slot="graph-add-stage" aria-haspopup="menu" aria-expanded={addMenuOpen} onClick={() => setAddMenuOpen((open) => !open)}><Plus size={14} /> <span>Add stage</span><ChevronDown size={12} /></Button>
                 {addMenuOpen && (
-                  <div className="operation-graph-add-popover" role="menu">
+                  <div className="absolute top-[calc(100%+5px)] right-0 z-1100 grid w-58 rounded-md border border-strong bg-panel p-1 shadow-pop" role="menu">
                     {STAGE_OPTIONS.map((option) => (
-                      <button type="button" key={option.kind} role="menuitem" className={`operation-graph-node-${option.kind.replaceAll('_', '-')}`} onClick={() => handleAddNode(option.kind)}>
-                        <span className="operation-graph-add-glyph"><NodeKindIcon kind={option.kind} /></span>
-                        <span>{option.label}<small>{option.description}</small></span>
+                      <button
+                        type="button"
+                        key={option.kind}
+                        role="menuitem"
+                        className="group flex cursor-pointer items-center gap-2 rounded-sm border-0 bg-transparent px-1.75 py-1.5 text-left text-text focus-ring hover:bg-accent hover:text-accent-text focus-visible:-outline-offset-2"
+                        data-graph-kind={option.kind.replaceAll('_', '-')}
+                        onClick={() => handleAddNode(option.kind)}
+                      >
+                        <span className="grid size-5 flex-none place-items-center rounded-sm border border-(--graph-kind)/45 bg-(--graph-kind)/12 text-(--graph-kind) group-hover:bg-panel"><NodeKindIcon kind={option.kind} /></span>
+                        <span className="grid gap-px">{option.label}<small className="text-9 text-dim group-hover:text-inherit group-hover:opacity-72">{option.description}</small></span>
                       </button>
                     ))}
                   </div>
@@ -648,7 +681,8 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
       </div>
       <div
         ref={flowWrapperRef}
-        className="operation-graph-canvas"
+        className="group/canvas relative min-h-0 flex-auto bg-panel-2/40"
+        data-slot="graph-canvas"
         role="application"
         aria-label="Warpaint operation graph"
         data-connecting={isConnecting ? 'true' : 'false'}
@@ -684,17 +718,17 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
           deleteKeyCode={null}
           fitView
           fitViewOptions={FIT_VIEW_OPTIONS}
-          minZoom={0.08}
+          minZoom={GRAPH_MIN_ZOOM}
           maxZoom={2.5}
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
           proOptions={PRO_OPTIONS}
         >
           <Background gap={24} size={1} />
           <Controls showInteractive={false} position="bottom-left" />
-          <MiniMap position="bottom-right" pannable zoomable />
+          <MiniMap position="bottom-right" pannable zoomable maskStrokeWidth={1} />
         </ReactFlow>
       </div>
-      <footer className="operation-graph-footer">
+      <footer className="flex min-h-6 flex-none items-center gap-3 border-t border-border px-3 text-10.5 text-dim">
         <span>
           {readOnly
             ? 'Read-only graph'
@@ -704,7 +738,7 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
                 ? 'Connection selected. Delete removes it, or drag either end to move it.'
                 : activeNodeId
                   ? 'Traced connections animate toward where this stage feeds. Drag from a port to connect.'
-                  : 'Select a node to edit its values and trace its path. Drag from a port to connect.'}
+                  : 'Select a stage to edit its values and trace its path. Drag from a port to connect.'}
         </span>
       </footer>
     </div>

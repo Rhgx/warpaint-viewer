@@ -1,4 +1,7 @@
 import { ImageUp, Plus, Trash2 } from 'lucide-react';
+import { EDITOR_BUTTON, STICKER_THUMB } from '../editor/editorStyles';
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
 import { referenceLabel, TEXTURE_FILE_ACCEPT } from './workbenchLabels';
 import { StickerVariantWeightInput } from './StickerVariantWeightInput';
 import type { WorkbenchSticker, WorkbenchStickerVariant } from './workbenchTypes';
@@ -8,6 +11,7 @@ export function StickerVariantList({
   variants,
   variantFileRef,
   variantReplaceIndexRef,
+  actionsRef,
   pickerOpen,
   pickerPurpose,
   onTogglePicker,
@@ -17,6 +21,7 @@ export function StickerVariantList({
   variants: readonly WorkbenchStickerVariant[];
   variantFileRef: { current: HTMLInputElement | null };
   variantReplaceIndexRef: { current: number | null };
+  actionsRef: { current: HTMLDivElement | null };
   pickerOpen: boolean;
   pickerPurpose: 'sticker' | 'variant';
   onTogglePicker: (purpose: 'sticker' | 'variant') => void;
@@ -25,7 +30,7 @@ export function StickerVariantList({
   const total = variants.reduce((sum, variant) => sum + variant.weight, 0);
   const weightsEqual = variants.every((variant) => variant.weight === variants[0]?.weight);
   return (
-    <div className="sticker-placement-editor-variants" role="listbox" aria-label="Sticker variants">
+    <div className="grid content-start gap-0.5" data-slot="sticker-variants" role="listbox" aria-label="Sticker variants">
       {variants.map((variant) => {
         const label = variant.baseReference ? referenceLabel(variant.baseReference) : 'No texture';
         const percent = total > 0 ? Math.round((variant.weight / total) * 100) : 0;
@@ -34,7 +39,7 @@ export function StickerVariantList({
         return (
           <div
             key={`${variant.index}:${variant.baseReference ?? ''}`}
-            className="sticker-placement-editor-variant"
+            className="grid grid-cols-[26px_minmax(0,1fr)_52px_var(--spacing-control)_var(--spacing-control)] grid-rows-[auto_auto] items-center gap-x-1 gap-y-0.5 rounded-sm py-0.75 transition-fast outline-accent not-aria-selected:hover:bg-panel-2 focus-visible:outline-2 focus-visible:-outline-offset-2 aria-selected:bg-accent-soft aria-selected:shadow-[inset_2px_0_0_var(--color-accent)] @max-[900px]:aria-selected:shadow-[inset_0_-2px_0_var(--color-accent)]"
             role="option"
             tabIndex={0}
             aria-selected={variant.previewing}
@@ -50,23 +55,18 @@ export function StickerVariantList({
               togglePreview();
             }}
           >
-            <span className="custom-workbench-edit-sticker-thumb" aria-hidden="true">
+            <span className={cn(STICKER_THUMB, 'row-span-2')} aria-hidden="true">
               {variant.thumbnail ? <img src={variant.thumbnail} alt="" draggable={false} /> : null}
             </span>
-            <span className="sticker-placement-editor-variant-name" title={variant.baseReference}>{label}</span>
-            <button
-              type="button"
-              className="sticker-placement-editor-variant-remove"
-              title={onlyVariant ? 'A sticker needs at least one variant.' : 'Remove variant'}
-              aria-label="Remove variant"
-              disabled={onlyVariant}
-              onClick={() => sticker.onRemoveVariant?.(variant.index)}
-            >
-              <Trash2 size={12} />
-            </button>
-            <button
-              type="button"
-              className="sticker-placement-editor-variant-replace"
+            <span className="col-span-4 flex min-w-0 items-baseline justify-between gap-1.5">
+              <span className="min-w-0 truncate text-11 font-semibold text-text" title={variant.baseReference}>{label}</span>
+              {variant.previewing
+                ? <span className="flex-none text-10 font-[650] text-accent" title="Shown in the sticker editor">Previewing</span>
+                : variant.picked && <span className="flex-none text-10 font-[650] text-accent" title="Drawn for the current seed">Picked</span>}
+            </span>
+            <Button
+              size="icon"
+              className="col-start-4 row-start-2"
               title="Replace this variant's image"
               aria-label="Replace this variant's image"
               disabled={!variant.baseReference}
@@ -76,14 +76,11 @@ export function StickerVariantList({
               }}
             >
               <ImageUp size={12} />
-            </button>
+            </Button>
             <span
-              className="sticker-placement-editor-variant-chance"
+              className="col-start-2 row-start-2 min-w-0 truncate text-10 text-dim tabular-nums"
               title={`Weight ${variant.weight} of ${total} total`}
             >
-              {variant.previewing
-                ? <span title="Shown in the sticker editor">Previewing · </span>
-                : variant.picked && <span title="Drawn for the current seed">Picked · </span>}
               {percent}%
             </span>
             <StickerVariantWeightInput
@@ -91,6 +88,17 @@ export function StickerVariantList({
               weight={variant.weight}
               onCommit={(weight) => sticker.onSetVariantWeight?.(variant.index, weight)}
             />
+            <Button
+              variant="danger"
+              size="icon"
+              className="col-start-5 row-start-2"
+              title={onlyVariant ? 'A sticker needs at least one variant.' : 'Remove variant'}
+              aria-label="Remove variant"
+              disabled={onlyVariant}
+              onClick={() => sticker.onRemoveVariant?.(variant.index)}
+            >
+              <Trash2 size={12} />
+            </Button>
           </div>
         );
       })}
@@ -106,23 +114,26 @@ export function StickerVariantList({
           if (file && index !== null) onReplaceVariantImage(index, file);
         }}
       />
-      <div className="sticker-placement-editor-corner-actions">
-        <button
-          type="button"
+      {/* Add variant and Equal weights share one row, so each gets half the inspector. The picker opens beside this row, so that it clears the list. */}
+      <div ref={actionsRef} className="mt-1 grid grid-cols-2 gap-1.25 border-t border-border pt-2">
+        <Button
+          size="compact"
+          className={cn(EDITOR_BUTTON, 'w-full px-1.5 aria-expanded:border-accent aria-expanded:bg-accent aria-expanded:text-accent-text')}
           aria-expanded={pickerOpen && pickerPurpose === 'variant'}
           onClick={() => onTogglePicker('variant')}
         >
           <Plus size={13} aria-hidden="true" />
           Add variant
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          size="compact"
+          className={cn(EDITOR_BUTTON, 'w-full px-1.5')}
           title={weightsEqual ? 'Every variant already has the same weight.' : 'Give every variant the same weight'}
           disabled={weightsEqual}
           onClick={() => sticker.onEqualizeVariantWeights?.()}
         >
           Equal weights
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -32,6 +32,8 @@ export interface BoardUndo {
 export interface SlotNote {
   message: string;
   isProgress?: boolean;
+  /** For what the slot's own row already says: announced, but not shown a second time. */
+  visuallyHidden?: boolean;
   action?: { label: string; ariaLabel: string; restores: boolean; run: () => void };
   board: readonly ShowcaseItem[] | null;
   /** Makes an identical message a new one, so that it is announced and seen again. */
@@ -150,7 +152,7 @@ export function useSavedLayouts({ board, items, settings, featured, pairs, isKno
     messageTick.current += 1;
     return messageTick.current;
   };
-  const setNote = (message: string | null, extra: Pick<SlotNote, 'isProgress' | 'action'> = {}) => setNoteState(message === null ? null : { message, ...extra, board: board?.getSnapshot().items ?? null, tick: nextTick() });
+  const setNote = (message: string | null, extra: Pick<SlotNote, 'isProgress' | 'visuallyHidden' | 'action'> = {}) => setNoteState(message === null ? null : { message, ...extra, board: board?.getSnapshot().items ?? null, tick: nextTick() });
   const setAlert = (message: string | null, kind: SlotAlert['kind'] = 'error') => setAlertState(message === null ? null : { message, kind, tick: nextTick() });
   const focusOn = (target: SlotFocus['target'], index: number) => setFocus((current) => ({ target, index, tick: (current?.tick ?? 0) + 1 }));
   const active = activeSlot === null ? null : slots[activeSlot] ?? null;
@@ -171,7 +173,7 @@ export function useSavedLayouts({ board, items, settings, featured, pairs, isKno
 
   /** A failure only costs the way back after a reload, so it is said out loud instead of refusing a change that may be freeing up storage. */
   const keepBackup = (index: number, slot: LayoutSlot | null) => {
-    if (!writeSlotBackup(index, slot)) setAlert('Could not keep the previous save past this session: this browser\'s storage is full or blocked.', 'warning');
+    if (!writeSlotBackup(index, slot)) setAlert('Previous save kept for this session only: storage is full or blocked.', 'warning');
     setBackups((current) => atIndex(current, index, slot));
   };
 
@@ -221,11 +223,11 @@ export function useSavedLayouts({ board, items, settings, featured, pairs, isKno
     setBoardUndo(null);
     const replaced = items.some((item) => !item.image && hasReplacedTextures(item.paint.kitId)) ? ' Replaced textures are not kept.' : '';
     if (previous) {
-      setNote(`${updating ? `Updated "${name}".` : `Replaced "${previous.name}".`}${replaced}`, {
+      setNote(`${updating ? 'Updated.' : 'Replaced.'}${replaced}`, {
         action: { label: 'Undo', ariaLabel: `Undo, restoring the previous save of ${previous.name}`, restores: true, run: () => restore(index, previous, slot) },
       });
     } else {
-      setNote(`Saved as "${name}" in this browser.${replaced}`, deleted ? {
+      setNote(`Saved in this browser.${replaced}`, deleted ? {
         action: { label: 'Restore deleted', ariaLabel: `Restore the deleted save ${deleted.name}`, restores: true, run: () => restore(index, deleted, slot) },
       } : {});
     }
@@ -237,7 +239,7 @@ export function useSavedLayouts({ board, items, settings, featured, pairs, isKno
     if (!previous || !write(index, null, CHANGE_FAILED)) return;
     keepBackup(index, previous);
     if (activeSlot === index) setActiveSlot(null);
-    setNote(`Deleted "${previous.name}".`);
+    setNote(`Deleted "${previous.name}".`, { visuallyHidden: true });
     focusOn('restore', index);
   };
 
@@ -319,7 +321,7 @@ export function useSavedLayouts({ board, items, settings, featured, pairs, isKno
       const dropped = Math.max(0, slot.items.length - board.getSnapshot().items.length);
       setNote(null);
       if (dropped) setAlert(`${plural(dropped, 'item')} could not be restored.`, 'warning');
-      offerBoardUndo(`Loaded "${slot.name}".`, `Undo loading ${slot.name}`);
+      offerBoardUndo('Loaded.', `Undo loading ${slot.name}`);
       focusOn('slot', index);
     } finally {
       setBusy(false);

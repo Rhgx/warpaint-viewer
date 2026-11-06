@@ -7,8 +7,12 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('profile')) 
   void import('./dev/profile');
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+// index.html removes #root on a browser below the floor and shows its message instead.
+const root = document.getElementById('root')
+if (root) {
+  createRoot(root).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}

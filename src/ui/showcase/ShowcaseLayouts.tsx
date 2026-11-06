@@ -1,8 +1,9 @@
 import { memo, useState } from 'react';
-import { Tooltip } from '@base-ui/react/tooltip';
-import { X } from 'lucide-react';
+import { LayoutGrid, X } from 'lucide-react';
 
 import { IconSelectField, type IconOption } from '../common/controls';
+import { Button } from '../primitives/Button';
+import { Tooltip, TooltipPopup, TooltipTrigger } from '../primitives/Tooltip';
 import type { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
 import { TEAM_PAIR_LIMIT, type BoardLayout, type LayoutRows } from '../../showcase/layouts';
 import { Section, SliderRow, ValueSlider } from './ShowcaseControls';
@@ -10,6 +11,8 @@ import { WEAPON_SIZE } from './showcaseSettings';
 import { useBusy } from './useBusy';
 
 // Ready-made board layouts, and the pickers for the weapons they feature.
+
+const SKETCH_PICTURE = 'block h-auto w-full rounded-xs bg-panel-2';
 
 /** Ready-made arrangements of the current paint, each drawn as a small sketch. */
 export const LayoutsSection = memo(function LayoutsSection({ board, layouts, featureOptions, onFeature, onApply, weaponSize, onWeaponSizeChange, pickerReset }: {
@@ -45,24 +48,20 @@ export const LayoutsSection = memo(function LayoutsSection({ board, layouts, fea
     await board.applyLayout(layout.rows, layout.pack, layout.inward, layout.upright, layout.logoSpace);
   });
   return (
-    <Section title="Layouts">
-      <div className="showcase-layouts">
+    <Section title="Layouts" icon={LayoutGrid}>
+      <div className="grid grid-cols-3 gap-1.5">
         {layouts.map((layout) => (
-          <Tooltip.Root key={layout.id}>
-            <Tooltip.Trigger delay={200} render={(
-              <button type="button" className="showcase-layout" disabled={busy}
+          <Tooltip key={layout.id}>
+            <TooltipTrigger delay={200} render={(
+              <Button data-slot="board-layout" className="h-auto flex-col items-stretch justify-start gap-1 bg-panel px-1.25 pt-1.25 pb-1 text-11 disabled:cursor-progress disabled:opacity-60" disabled={busy}
                 onPointerEnter={() => board.preload(layout.rows)} onFocus={() => board.preload(layout.rows)}
                 onClick={apply(layout)} />
             )}>
               {layout.pack === 'composed' ? <ComposedSketch logoSpace={layout.logoSpace} /> : <LayoutSketch rows={layout.rows} />}
               <span>{layout.label}</span>
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Positioner side="top" sideOffset={6} collisionPadding={10} className="showcase-hint-positioner">
-                <Tooltip.Popup className="showcase-hint-popup">Replaces the weapons on the board</Tooltip.Popup>
-              </Tooltip.Positioner>
-            </Tooltip.Portal>
-          </Tooltip.Root>
+            </TooltipTrigger>
+            <TooltipPopup>Replaces the weapons on the board</TooltipPopup>
+          </Tooltip>
         ))}
       </div>
       {/* Not called a size: each weapon's own Size slider is its true size, which a layout sets below 100%. */}
@@ -101,16 +100,17 @@ function PairPicker({ picked, options, onChange }: {
   const choices = (current: string | null) => options.filter((option) => option.value === current || !picked.includes(option.value));
   return (
     <SliderRow label="Weapons for RED and BLU" value={`${picked.length} of ${TEAM_PAIR_LIMIT}`}>
-      <div className="showcase-pairs">
+      <div className="flex flex-col gap-1">
         {picked.map((weaponKey, index) => (
-          <div key={weaponKey} className="showcase-pair">
+          // The field's own minimum width would push the remove button out.
+          <div key={weaponKey} className="flex gap-1 [&>:first-child]:min-w-0 [&>:first-child]:flex-auto">
             <IconSelectField value={weaponKey} options={choices(weaponKey)} ariaLabel={`RED and BLU weapon ${index + 1}`} searchPlaceholder="Filter weapons..."
               onChange={(next) => onChange(picked.map((key, at) => (at === index ? next : key)))} />
             {picked.length > 1 && (
-              <button type="button" className="showcase-btn" title="Remove" aria-label={`Remove ${options.find((option) => option.value === weaponKey)?.label ?? 'weapon'}`}
+              <Button className="h-auto self-stretch" title="Remove" aria-label={`Remove ${options.find((option) => option.value === weaponKey)?.label ?? 'weapon'}`}
                 onClick={() => onChange(picked.filter((_, at) => at !== index))}>
                 <X size={13} />
-              </button>
+              </Button>
             )}
           </div>
         ))}
@@ -136,12 +136,12 @@ const LOGO_CENTER_BARS = [[26, 4, 12, 2], [26, 30, 12, 2]];
 
 function ComposedSketch({ logoSpace }: { logoSpace?: boolean }) {
   return (
-    <svg viewBox={`0 0 ${SKETCH.width} ${SKETCH.height}`} aria-hidden="true">
+    <svg className={SKETCH_PICTURE} viewBox={`0 0 ${SKETCH.width} ${SKETCH.height}`} aria-hidden="true">
       {[...COMPOSED_BARS, ...(logoSpace ? LOGO_CENTER_BARS : CENTER_BARS)].map(([x, y, width, height]) => (
-        <rect key={`${x}-${y}`} x={x} y={y} width={width} height={height} rx={1} />
+        <rect className="fill-dim" key={`${x}-${y}`} x={x} y={y} width={width} height={height} rx={1} />
       ))}
       {logoSpace && (
-        <rect className="showcase-layout-logo" x={(SKETCH.width - SKETCH_LOGO.width) / 2} y={(SKETCH.height - SKETCH_LOGO.height) / 2} width={SKETCH_LOGO.width} height={SKETCH_LOGO.height} rx={1} />
+        <rect className="fill-none stroke-dim stroke-1 [stroke-dasharray:2_2]" x={(SKETCH.width - SKETCH_LOGO.width) / 2} y={(SKETCH.height - SKETCH_LOGO.height) / 2} width={SKETCH_LOGO.width} height={SKETCH_LOGO.height} rx={1} />
       )}
     </svg>
   );
@@ -150,7 +150,7 @@ function ComposedSketch({ logoSpace }: { logoSpace?: boolean }) {
 function LayoutSketch({ rows }: { rows: LayoutRows }) {
   const mixedTeams = rows.some((row) => row.some((entry) => entry.paint.team !== rows[0][0]?.paint.team));
   return (
-    <svg viewBox={`0 0 ${SKETCH.width} ${SKETCH.height}`} aria-hidden="true">
+    <svg className={SKETCH_PICTURE} viewBox={`0 0 ${SKETCH.width} ${SKETCH.height}`} aria-hidden="true">
       {rows.flatMap((row, rowIndex) => {
         const y = (SKETCH.height * (rowIndex + 1)) / (rows.length + 1);
         const pitch = SKETCH.width / row.length;
@@ -160,7 +160,7 @@ function LayoutSketch({ rows }: { rows: LayoutRows }) {
           const x = pitch * (index + 0.5);
           const team = mixedTeams ? slot.paint.team : null;
           return (
-            <rect key={`${rowIndex}-${index}`} x={x - length / 2} y={y - thickness / 2} width={length} height={thickness} rx={1}
+            <rect className="fill-dim data-[team=blu]:fill-blu data-[team=red]:fill-red" key={`${rowIndex}-${index}`} x={x - length / 2} y={y - thickness / 2} width={length} height={thickness} rx={1}
               data-team={team ?? undefined} />
           );
         });

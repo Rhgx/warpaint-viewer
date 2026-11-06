@@ -1,0 +1,162 @@
+/* What utilities cannot do: the colours of stage kinds and port types, and React Flow's own elements, whose unlayered stylesheet beats every utility. */
+
+/* Stage identity, so a stage stays recognisable when zoomed too far out to read its name. */
+[data-graph-kind='texture-lookup'] { --graph-kind: #5aa7de; }
+[data-graph-kind='select'] { --graph-kind: #b18ad4; }
+[data-graph-kind='combine-add'] { --graph-kind: #d99553; }
+[data-graph-kind='combine-multiply'] { --graph-kind: #cc9152; }
+[data-graph-kind='combine-lerp'] { --graph-kind: #4fbf9d; }
+[data-graph-kind='apply-sticker'] { --graph-kind: #dd8098; }
+[data-graph-kind='operation-template'] { --graph-kind: #97a1ac; }
+[data-graph-kind='invalid'] { --graph-kind: var(--fail); }
+[data-graph-kind='output'] { --graph-kind: var(--accent); }
+
+.graph-port-texture { --graph-port: var(--graph-type-texture); }
+.graph-port-mask { --graph-port: var(--graph-type-mask); }
+.graph-port-unknown,
+.graph-port-none { --graph-port: var(--graph-type-unknown); }
+
+[data-slot='graph-canvas'] .react-flow {
+  --xy-background-color: transparent;
+  --xy-node-border-radius: var(--radius-md);
+  --xy-node-boxshadow-default: none;
+  --xy-edge-stroke-default: var(--graph-type-unknown);
+  --xy-edge-stroke-width-default: 1.5;
+  background: transparent;
+}
+
+[data-slot='graph-canvas'] .react-flow__pane:focus { outline: none; }
+[data-slot='graph-canvas'] .react-flow__node { outline: none; }
+[data-slot='graph-canvas'] .react-flow__node.selected { z-index: 900 !important; }
+[data-slot='graph-canvas'] .react-flow__attribution { display: none; }
+
+[data-slot='graph-canvas'] .react-flow__controls {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+}
+
+[data-slot='graph-canvas'] .react-flow__controls-button {
+  width: 25px;
+  height: 25px;
+  border-bottom-color: var(--border);
+  color: var(--text-dim);
+  background: var(--panel);
+  fill: currentcolor;
+}
+
+[data-slot='graph-canvas'] .react-flow__controls-button:hover { color: var(--text); background: var(--panel-2); }
+
+[data-slot='graph-canvas'] .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+}
+
+[data-slot='graph-canvas'] .react-flow__minimap-mask { fill: color-mix(in srgb, var(--bg) 35%, transparent); stroke: var(--text-dim); }
+[data-slot='graph-canvas'] .react-flow__minimap-node { fill: color-mix(in srgb, var(--text) 78%, var(--panel)); stroke: none; }
+
+/* In the drawer the canvas is short, and a full-size minimap would be as large as the graph. */
+@container (max-width: 1100px) {
+  [data-slot='graph-canvas'] .react-flow__minimap svg {
+    width: 120px;
+    height: 90px;
+  }
+}
+
+/* Draggable cards show a grab cursor; the output stage and read-only graphs keep the arrow. */
+[data-slot='graph-canvas'] .react-flow__node.draggable [data-slot='graph-node'] { cursor: grab; }
+[data-slot='graph-canvas'] .react-flow__node.dragging [data-slot='graph-node'] { cursor: grabbing; }
+[data-slot='graph-canvas'] .react-flow__node.selectable:not(.draggable) [data-slot='graph-node'] { cursor: pointer; }
+
+/* Wiring is a different gesture from panning, so the cursor changes while a connection is in the air. */
+[data-slot='graph-canvas'][data-connecting='true'] .react-flow__pane,
+[data-slot='graph-canvas'][data-connecting='true'] .react-flow__node.draggable [data-slot='graph-node'],
+[data-slot='graph-canvas'][data-connecting='true'] .react-flow__node [data-slot='graph-node'] { cursor: crosshair; }
+[data-slot='graph-canvas'][data-connecting='true'] .react-flow__handle-connecting:not(.react-flow__handle-valid) { cursor: not-allowed; }
+
+[data-slot='graph-port-row'] .react-flow__handle {
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  width: 9px;
+  height: 9px;
+  flex: none;
+  transform: none;
+  border: 2px solid var(--graph-port);
+  border-radius: 50%;
+  background: var(--panel);
+  transition: transform 90ms ease, box-shadow 90ms ease;
+}
+
+/* An oversized transparent ring makes the 9px dot easy to grab without making the row taller. */
+[data-slot='graph-port-row'] .react-flow__handle::after,
+[data-slot='graph-node'] > .react-flow__handle::after {
+  position: absolute;
+  content: '';
+  inset: -7px;
+  border-radius: 50%;
+}
+
+/* Empty required inputs are the most common reason a graph will not serialize. */
+[data-slot='graph-port-row'][data-state='required'] .react-flow__handle { border-color: var(--warn); }
+[data-slot='graph-port-row'][data-state='connected'] .react-flow__handle { background: var(--graph-port); }
+
+[data-slot='graph-node'] > .react-flow__handle {
+  position: absolute;
+  top: 14px;
+  right: -6px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--graph-port);
+  border-radius: 50%;
+  background: var(--graph-port);
+  transform: none;
+}
+
+/* While dragging a connection, React Flow marks every handle it accepts; make those loud. */
+[data-slot='graph-canvas'][data-connecting='true'] .react-flow__handle { opacity: .35; }
+[data-slot='graph-canvas'][data-connecting='true'] .react-flow__handle-connecting,
+[data-slot='graph-canvas'][data-connecting='true'] .react-flow__handle-valid {
+  opacity: 1;
+  transform: scale(1.5);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+[data-slot='graph-canvas'][data-connecting='true'] .react-flow__handle-connecting:not(.react-flow__handle-valid) {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--fail) 28%, transparent);
+}
+[data-slot='graph-port-row'] .react-flow__handle:hover { transform: scale(1.35); }
+
+/* A constant screen width, or the wires of a large graph all but vanish at its fitted zoom. */
+[data-slot='graph-canvas'] .react-flow__edge-path {
+  transition: stroke-width 90ms ease;
+  vector-effect: non-scaling-stroke;
+}
+[data-slot='graph-canvas'] .react-flow__edge:not(.selected) .react-flow__edge-path { stroke: var(--graph-port); }
+[data-slot='graph-canvas'] .react-flow__edge:hover .react-flow__edge-path { stroke-width: 3; }
+
+/* A traced connection fades its own line so the travelling dashes carry the eye. */
+[data-slot='graph-canvas'] .react-flow__edge.graph-edge-traced .react-flow__edge-path {
+  stroke-width: 2;
+  opacity: .5;
+}
+
+[data-slot='graph-canvas'] .react-flow__edge.graph-edge-direct .react-flow__edge-path { stroke-width: 2.6; }
+
+[data-slot='graph-canvas'] .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='graph-port-row'] .react-flow__handle,
+  [data-slot='graph-canvas'] .react-flow__edge-path { transition: none; }
+
+  /* Without motion, the traced path becomes a solid highlight instead of travelling dashes. */
+  [data-slot='graph-canvas'] .react-flow__edge.graph-edge-traced .react-flow__edge-path { opacity: 1; }
+}

@@ -7,6 +7,7 @@
     "react/only-export-components": ["warn", { "allowConstantExport": true }],
     "warpaint/no-low-value-comments": "error",
     "warpaint/no-dashes": "error",
+    "warpaint/no-raw-class-values": "error",
     "warpaint/newline-after-imports": "error",
     "warpaint/import-groups": "error"
   }

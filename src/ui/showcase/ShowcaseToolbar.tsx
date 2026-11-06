@@ -1,9 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
-import { Copy, HelpCircle, ImageDown, ImagePlus, Redo2, Trash2, Undo2, X } from 'lucide-react';
+import { Copy, Download, HelpCircle, ImagePlus, Redo2, Trash2, Undo2, X } from 'lucide-react';
 
-import { canCopyImages } from '../../device';
 import { IMAGE_FILE_TYPES } from '../../showcase/boardImages';
 import type { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
+import { Toolbar, ToolbarButton, ToolbarDivider } from '../primitives/Toolbar';
 import { ControlsHelpModal } from '../stage/ControlsHelpModal';
 import { useBusy } from './useBusy';
 
@@ -26,19 +26,19 @@ export function ShowcaseToolbar({ board, onClose, hasItems, canUndo, canRedo, on
   const closeHelp = useCallback(() => setHelpOpen(false), []);
   return (
     <>
-      <div className="stage-toolbar">
-        <button type="button" className="stage-toolbar-btn" title="Undo (Ctrl+Z)" aria-label="Undo" disabled={!canUndo}
+      <Toolbar>
+        <ToolbarButton title="Undo (Ctrl+Z)" aria-label="Undo" disabled={!canUndo}
           onClick={() => board?.undo()}>
           <Undo2 size={15} />
-        </button>
-        <button type="button" className="stage-toolbar-btn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled={!canRedo}
+        </ToolbarButton>
+        <ToolbarButton title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled={!canRedo}
           onClick={() => board?.redo()}>
           <Redo2 size={15} />
-        </button>
-        <span className="stage-toolbar-divider" aria-hidden="true" />
-        <button type="button" className="stage-toolbar-btn" title="Add image" aria-label="Add image" disabled={!board || busy} onClick={() => fileInputRef.current?.click()}>
+        </ToolbarButton>
+        <ToolbarDivider />
+        <ToolbarButton title="Add image" aria-label="Add image" disabled={!board || busy} onClick={() => fileInputRef.current?.click()}>
           <ImagePlus size={15} />
-        </button>
+        </ToolbarButton>
         <input ref={fileInputRef} type="file" accept={IMAGE_FILE_TYPES} hidden
           onChange={(event) => {
             const file = event.currentTarget.files?.[0];
@@ -46,28 +46,26 @@ export function ShowcaseToolbar({ board, onClose, hasItems, canUndo, canRedo, on
             event.currentTarget.value = '';
             if (file) void run(() => onAddImage(file))();
           }} />
-        <button type="button" className="stage-toolbar-btn" title="Save PNG" aria-label="Save PNG" disabled={busy || !hasItems} onClick={run(onSave)}>
-          <ImageDown size={15} />
-        </button>
-        {canCopyImages() && (
-          <button type="button" className="stage-toolbar-btn" title="Copy image" aria-label="Copy image" disabled={busy || !hasItems} onClick={run(onCopy)}>
-            <Copy size={15} />
-          </button>
-        )}
-        <span className="stage-toolbar-divider" aria-hidden="true" />
-        <button type="button" className="stage-toolbar-btn" title="Clear board" aria-label="Clear board" disabled={!hasItems}
+        <ToolbarButton title="Save PNG" aria-label="Save PNG" disabled={busy || !hasItems} onClick={run(onSave)}>
+          <Download size={15} />
+        </ToolbarButton>
+        <ToolbarButton title="Copy image" aria-label="Copy image" disabled={busy || !hasItems} onClick={run(onCopy)}>
+          <Copy size={15} />
+        </ToolbarButton>
+        <ToolbarDivider />
+        <ToolbarButton title="Clear board" aria-label="Clear board" disabled={!hasItems}
           onClick={() => board?.clear()}>
           <Trash2 size={15} />
-        </button>
-        <span className="stage-toolbar-divider" aria-hidden="true" />
-        <button ref={helpTriggerRef} type="button" className="stage-toolbar-btn stage-toolbar-help" title="Controls" aria-label="Open controls reference"
+        </ToolbarButton>
+        <ToolbarDivider />
+        <ToolbarButton ref={helpTriggerRef} title="Controls" aria-label="Open controls reference"
           aria-haspopup="dialog" aria-expanded={helpOpen} onClick={() => setHelpOpen(true)}>
           <HelpCircle size={15} />
-        </button>
-        <button type="button" className="stage-toolbar-btn" title="Back to the viewer" aria-label="Close showcase board" onClick={onClose}>
+        </ToolbarButton>
+        <ToolbarButton title="Back to the viewer" aria-label="Close showcase board" onClick={onClose}>
           <X size={15} />
-        </button>
-      </div>
+        </ToolbarButton>
+      </Toolbar>
       <ControlsHelpModal open={helpOpen} editingMode="showcase" onClose={closeHelp} returnFocusRef={helpTriggerRef} />
     </>
   );

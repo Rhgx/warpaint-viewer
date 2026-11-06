@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle,
   Download,
   Eye,
   EyeOff,
@@ -14,10 +13,20 @@ import {
   Sticker,
   X,
 } from 'lucide-react';
+
 import type { TextureMetadata } from '../../data/types';
 import type { AssetSlot, SlotGroup } from '../../workbench/assetSlots';
 import type { WarpaintAssetState } from '../../workbench/types';
-import { TextField } from '../common/controls';
+import { Button, FileButton } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { SearchField } from '../primitives/Input';
+import { InlineNotice } from '../primitives/Notice';
+import { PATH_TEXT, SECTION_TITLE } from '../primitives/textStyles';
+
+const EMPTY = 'flex h-full items-center justify-center gap-2 text-11 text-dim';
+const FILE_LINE = 'flex min-w-0 items-center gap-0.75 truncate';
+const FILE_REMOVE = 'grid size-3.25 cursor-pointer place-items-center rounded-xs border-0 bg-transparent p-0 text-inherit focus-ring hover:bg-border hover:text-text';
+const TEXTURE_ACCEPT = '.png,.jpg,.jpeg,.webp,.tga,.vtf';
 
 const KIND_LABEL: Record<AssetSlot['kind'], string> = {
   texture: 'Texture',
@@ -101,8 +110,9 @@ function TexturePreview({
       cancelled = true;
     };
   }, [nearViewport, refPath, fallbackUrl, resolvePackageTexture, packageGeneration]);
-  return <img ref={elementRef} src={nearViewport ? src : undefined} loading="lazy" alt="" />;
+  return <img className="size-full object-contain" ref={elementRef} src={nearViewport ? src : undefined} loading="lazy" alt="" />;
 }
+
 
 export function AssetFilesPanel({
   slots,
@@ -162,68 +172,63 @@ export function AssetFilesPanel({
   const replacedCount = Object.keys(assets).length;
 
   return (
-    <div className="custom-workbench-panel">
-      <div className="custom-workbench-toolbar">
-        <div className="custom-workbench-search">
-          <Search className="custom-workbench-search-icon" size={13} />
-          <TextField
-            value={filter}
-            onChange={setFilter}
-            placeholder="Filter inputs..."
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && filter) {
-                event.preventDefault();
-                setFilter('');
-              }
-            }}
-          />
-        </div>
-        <div className="custom-workbench-summary">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-10 flex-none items-center gap-2 border-b border-border px-3 py-1.75">
+        <SearchField
+          className="max-w-60 flex-auto [&_input]:text-11"
+          value={filter}
+          onChange={setFilter}
+          placeholder="Filter inputs..."
+          // SearchField clears on Escape. Marked handled, so that the same key does not also close the drawer.
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && filter) event.preventDefault();
+          }}
+        />
+        <div className="ml-auto flex items-center gap-2 text-11 whitespace-nowrap text-dim">
           <span>
             {replacedCount
               ? `${replacedCount} replacement${replacedCount === 1 ? '' : 's'}`
               : `${slots.length} inputs`}
           </span>
           {replacedCount > 0 && (
-            <button type="button" className="custom-workbench-reset-all" onClick={onExport}>
+            <Button variant="outline" size="compact" onClick={onExport}>
               <Download size={12} />
               Export
-            </button>
+            </Button>
           )}
           {(replacedCount > 0 || sourceMounted) && (
-            <button
-              type="button"
-              className="custom-workbench-reset-all"
-              data-confirm={confirmReset ? '' : undefined}
+            <Button
+              variant={confirmReset ? 'armed' : 'outline'}
+              size="compact"
               onClick={confirmReset ? onResetAll : onConfirmReset}
             >
               <RotateCcw size={12} />
               {confirmReset ? 'Discard all?' : 'Reset all'}
-            </button>
+            </Button>
           )}
         </div>
       </div>
-      <div className="custom-workbench-body">
+      <div className="scrollbar-slim min-h-0 flex-1 overflow-auto px-3 pt-2.5 pb-3">
         {loading ? (
-          <div className="custom-workbench-empty">
-            <LoaderCircle className="custom-workbench-spinner" size={20} /> Reading recipe inputs...
+          <div className={EMPTY}>
+            <LoaderCircle className="animate-spin motion-reduce:animate-none" size={20} /> Reading recipe inputs...
           </div>
         ) : slots.length === 0 ? (
-          <div className="custom-workbench-empty">
+          <div className={EMPTY}>
             <FileImage size={22} /> Select a warpaint to use as the editable recipe template.
           </div>
         ) : groups.length === 0 ? (
-          <div className="custom-workbench-empty">
+          <div className={EMPTY}>
             <Search size={18} /> No inputs match “{filter}”.
           </div>
         ) : (
           groups.map(({ group, items }) => (
-            <div className="custom-asset-group" key={group}>
-              <div className="custom-asset-group-label">
+            <div className="not-first:mt-3" key={group}>
+              <div className={cn('mb-1.5 flex items-center gap-1.5 after:h-px after:flex-1 after:bg-border', SECTION_TITLE)}>
                 {GROUP_LABEL[group]}
-                <span>{items.length}</span>
+                <span className="rounded-sm bg-panel-2 px-1 font-normal text-dim tabular-nums">{items.length}</span>
               </div>
-              <div className="custom-asset-grid">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-2">
                 {items.map((slot) => {
                   const specularRef = slot.specularRef;
                   const asset = assets[slot.ref];
@@ -239,19 +244,24 @@ export function AssetFilesPanel({
                     (asset.size.width !== original.width ||
                       asset.size.height !== original.height);
                   return (
-                    <article className="custom-asset-card" key={slot.ref} data-replaced={asset || specularAsset ? '' : undefined}>
-                      <div className="custom-asset-preview">
+                    <article
+                      className="relative grid min-w-0 grid-cols-[82px_minmax(0,1fr)] overflow-hidden rounded-sm border border-border bg-panel-2 transition-fast data-replaced:border-accent-edge"
+                      data-slot="asset-card"
+                      key={slot.ref}
+                      data-replaced={asset || specularAsset ? '' : undefined}
+                    >
+                      <div className="relative min-h-29 texture-checkerboard">
                         <TexturePreview
                           refPath={previewOutput ?? slot.ref}
                           fallbackUrl={previewOutput ?? resolveTexture(slot.ref)}
                           resolvePackageTexture={resolvePackageTexture}
                           packageGeneration={packageGeneration}
                         />
-                        <span className="custom-asset-kind">{KIND_LABEL[slot.kind]}</span>
+                        <span className="absolute inset-x-1 bottom-1 truncate rounded-xs bg-black/70 px-1 py-0.5 text-center text-8 text-text">{KIND_LABEL[slot.kind]}</span>
                         {asset?.output && (
                           <button
                             type="button"
-                            className="custom-asset-compare"
+                            className="absolute top-1 right-1 grid size-5 cursor-pointer place-items-center rounded-sm border-0 bg-black/70 p-0 text-text focus-ring hover:text-white aria-pressed:bg-accent aria-pressed:text-accent-text"
                             title={showOriginal ? 'Show imported file' : 'Show original file'}
                             aria-label={showOriginal ? 'Show imported file' : 'Show original file'}
                             aria-pressed={Boolean(showOriginal)}
@@ -264,30 +274,30 @@ export function AssetFilesPanel({
                           </button>
                         )}
                         {(busy[slot.ref] || (specularRef && busy[specularRef])) && (
-                          <div className="custom-asset-busy">
-                            <LoaderCircle className="custom-workbench-spinner" size={18} />
+                          <div className="absolute inset-0 grid place-items-center bg-black/50 text-text">
+                            <LoaderCircle className="animate-spin motion-reduce:animate-none" size={18} />
                           </div>
                         )}
                       </div>
-                      <div className="custom-asset-info">
-                        <div className="custom-asset-name">
+                      <div className="flex min-w-0 flex-col p-2">
+                        <div className="flex items-center gap-1 text-11 font-[650] capitalize">
                           {slot.kind.startsWith('sticker') && <Sticker size={12} />}
-                          <span>{shortName(slot.ref)}</span>
+                          <span className="truncate">{shortName(slot.ref)}</span>
                         </div>
-                        <div className="custom-asset-path" title={slot.ref}>{slot.ref}</div>
-                        <div className="custom-asset-files">
+                        <div className={cn('mt-0.5 truncate text-dim', PATH_TEXT)} title={slot.ref}>{slot.ref}</div>
+                        <div className="mt-1.5 flex flex-col gap-0.5 text-11 text-dim">
                           {asset?.color ? (
                             <>
-                              <span className="custom-asset-file" title={asset.color.fileName}>
+                              <span className={FILE_LINE} title={asset.color.fileName}>
                                 {asset.color.fileName}
                                 {asset.color.hasEmbeddedAlpha ? ' (embedded alpha)' : ''}
                               </span>
                               {asset.alpha && (
-                                <span className="custom-asset-file" title={asset.alpha.fileName}>
+                                <span className={FILE_LINE} title={asset.alpha.fileName}>
                                   Alpha: {asset.alpha.fileName}
                                   <button
                                     type="button"
-                                    className="custom-asset-file-remove"
+                                    className={FILE_REMOVE}
                                     title="Remove the alpha mask"
                                     aria-label="Remove the alpha mask"
                                     onClick={() => onRemoveAlpha(slot.ref)}
@@ -297,26 +307,24 @@ export function AssetFilesPanel({
                                 </span>
                               )}
                               {asset.size && (
-                                <span className={mismatch ? 'custom-asset-warn' : undefined}>
-                                  {mismatch && <AlertTriangle size={10} />}
-                                  {asset.size.width} x {asset.size.height}
-                                  {mismatch && original ? ` (original ${original.width} x ${original.height})` : ''}
-                                </span>
+                                mismatch && original
+                                  ? <InlineNotice>{asset.size.width} x {asset.size.height} (original {original.width} x {original.height})</InlineNotice>
+                                  : <span>{asset.size.width} x {asset.size.height}</span>
                               )}
                             </>
                           ) : (
-                            <span className="custom-asset-hint">
+                            <span>
                               {original ? `Original ${original.width} x ${original.height}` : 'Original file'}
                             </span>
                           )}
-                          {errors[slot.ref] && <span className="custom-asset-error" role="alert">{errors[slot.ref]}</span>}
+                          {errors[slot.ref] && <InlineNotice tone="error" role="alert">{errors[slot.ref]}</InlineNotice>}
                           {specularRef && (
                             specularAsset?.color ? (
-                              <span className="custom-asset-file" title={specularAsset.color.fileName}>
+                              <span className={FILE_LINE} title={specularAsset.color.fileName}>
                                 Specular: {specularAsset.color.fileName}
                                 <button
                                   type="button"
-                                  className="custom-asset-file-remove"
+                                  className={FILE_REMOVE}
                                   title="Remove the specular map"
                                   aria-label={`Remove the specular map for ${shortName(slot.ref)}`}
                                   onClick={() => onResetSlot(specularRef)}
@@ -325,72 +333,64 @@ export function AssetFilesPanel({
                                 </button>
                               </span>
                             ) : specularInPackage ? (
-                              <span className="custom-asset-file" title={specularRef}>
+                              <span className={FILE_LINE} title={specularRef}>
                                 <Sparkles size={10} /> Specular detected in archive
                               </span>
                             ) : specularOriginal ? (
-                              <span className="custom-asset-hint">
+                              <span>
                                 Specular: Original {specularOriginal.width} x {specularOriginal.height}
                               </span>
                             ) : (
-                              <span className="custom-asset-hint">No specular map</span>
+                              <span>No specular map</span>
                             )
                           )}
                           {specularRef && errors[specularRef] && (
-                            <span className="custom-asset-error" role="alert">{errors[specularRef]}</span>
+                            <InlineNotice tone="error" role="alert">{errors[specularRef]}</InlineNotice>
                           )}
                         </div>
-                        <div className="custom-asset-actions">
-                          <label className="custom-file-button" title="Import a PNG, JPG, WebP, TGA or VTF texture">
-                            <ImagePlus size={13} />
-                            <span>{asset?.color ? 'Replace' : 'Texture'}</span>
-                            <input
-                              type="file"
-                              accept=".png,.jpg,.jpeg,.webp,.tga,.vtf"
-                              aria-label={`Import a texture for ${shortName(slot.ref)}`}
-                              onChange={(event) => {
-                                const file = event.target.files?.[0];
-                                event.target.value = '';
-                                onUpdateFile(slot.ref, file, false);
-                              }}
-                            />
-                          </label>
+                        {/* Pinned to the bottom of every card, so buttons align across the grid. */}
+                        <div className="mt-auto flex items-center gap-1.25 pt-2.25">
+                          <FileButton
+                            variant="primary"
+                            className="min-w-0 flex-1"
+                            title="Import a PNG, JPG, WebP, TGA or VTF texture"
+                            label={`Import a texture for ${shortName(slot.ref)}`}
+                            accept={TEXTURE_ACCEPT}
+                            onFiles={([file]) => onUpdateFile(slot.ref, file, false)}
+                          >
+                            <ImagePlus className="flex-none" size={13} />
+                            <span className="truncate">{asset?.color ? 'Replace' : 'Texture'}</span>
+                          </FileButton>
                           {!asset?.color?.hasEmbeddedAlpha && (
-                            <label className="custom-file-button custom-file-button-secondary" title="Import a separate greyscale or transparent image to use as this texture's alpha channel">
-                              <Layers size={12} />
-                              <span>Alpha</span>
-                              <input
-                                type="file"
-                                accept=".png,.jpg,.jpeg,.webp"
-                                aria-label={`Import an alpha mask for ${shortName(slot.ref)}`}
-                                onChange={(event) => {
-                                  const file = event.target.files?.[0];
-                                  event.target.value = '';
-                                  onUpdateFile(slot.ref, file, true);
-                                }}
-                              />
-                            </label>
+                            <FileButton
+                              variant="outline"
+                              className="min-w-0 flex-1"
+                              title="Import a separate greyscale or transparent image to use as this texture's alpha channel"
+                              label={`Import an alpha mask for ${shortName(slot.ref)}`}
+                              accept=".png,.jpg,.jpeg,.webp"
+                              onFiles={([file]) => onUpdateFile(slot.ref, file, true)}
+                            >
+                              <Layers className="flex-none" size={12} />
+                              <span className="truncate">Alpha</span>
+                            </FileButton>
                           )}
                           {specularRef && (
-                            <label className="custom-file-button custom-file-button-secondary" title="Import this sticker's phong/specular mask">
-                              <Sparkles size={12} />
-                              <span>{specularAsset?.color ? 'Replace spec' : 'Specular'}</span>
-                              <input
-                                type="file"
-                                accept=".png,.jpg,.jpeg,.webp,.tga,.vtf"
-                                aria-label={`Import a specular map for ${shortName(slot.ref)}`}
-                                onChange={(event) => {
-                                  const file = event.target.files?.[0];
-                                  event.target.value = '';
-                                  onUpdateFile(specularRef, file, false);
-                                }}
-                              />
-                            </label>
+                            <FileButton
+                              variant="outline"
+                              className="min-w-0 flex-1"
+                              title="Import this sticker's phong/specular mask"
+                              label={`Import a specular map for ${shortName(slot.ref)}`}
+                              accept={TEXTURE_ACCEPT}
+                              onFiles={([file]) => onUpdateFile(specularRef, file, false)}
+                            >
+                              <Sparkles className="flex-none" size={12} />
+                              <span className="truncate">{specularAsset?.color ? 'Replace spec' : 'Specular'}</span>
+                            </FileButton>
                           )}
                           {asset && (
-                            <button type="button" className="custom-asset-reset" title="Restore the original file" aria-label={`Restore the original ${shortName(slot.ref)}`} onClick={() => onResetSlot(slot.ref)}>
+                            <Button variant="outline" size="icon" className="flex-none" title="Restore the original file" aria-label={`Restore the original ${shortName(slot.ref)}`} onClick={() => onResetSlot(slot.ref)}>
                               <RotateCcw size={12} />
-                            </button>
+                            </Button>
                           )}
                         </div>
                       </div>

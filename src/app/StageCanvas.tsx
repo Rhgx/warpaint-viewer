@@ -103,8 +103,7 @@ export function StageCanvas({
 }: StageCanvasProps) {
   return (
     <div
-      className="canvas-wrap"
-      data-first-person={firstPersonActive ? '' : undefined}
+      className="stage-backplate relative min-h-0 flex-1 overflow-hidden bg-stage"
       data-prompt={promptedCandidate ? '' : undefined}
       data-editor-selecting={editorInteractionActive && editorSelectionHeld ? '' : undefined}
       data-model-part-picking={stickerPartPickingActive ? '' : undefined}
@@ -112,8 +111,8 @@ export function StageCanvas({
       onPointerDown={() => setHintDismissed(true)}
       onWheel={() => setHintDismissed(true)}
     >
-      <canvas ref={canvasRef} className="viewer-canvas" />
-      {firstPersonActive && <div className="first-person-input-shield" aria-hidden="true" />}
+      <canvas ref={canvasRef} className="relative z-1 block size-full in-data-editor-selecting:cursor-crosshair in-data-model-part-picking:cursor-crosshair" />
+      {firstPersonActive && <div className="absolute inset-0 z-2" aria-hidden="true" />}
       <StageOverlay
         selectedKit={selectedKit}
         showStageHeader={showStageHeader}
@@ -143,15 +142,17 @@ export function StageCanvas({
       {state.preset === CUSTOM_LIGHTING_ID && (
         <LightingPanel store={lightingStore} />
       )}
-      <CanvasHint
-        dismissed={hintDismissed}
-        editorInteractionActive={editorInteractionActive}
-        stickerEditorPreparing={stickerEditorPreparing}
-        stickerPartPickingActive={stickerPartPickingActive}
-        stickerPlacementActive={stickerPlacementActive}
-        stickerTransformTool={stickerTransformTool}
-        groupAssignActive={groupAssignActive}
-      />
+      {!firstPersonActive && (
+        <CanvasHint
+          dismissed={hintDismissed}
+          editorInteractionActive={editorInteractionActive}
+          stickerEditorPreparing={stickerEditorPreparing}
+          stickerPartPickingActive={stickerPartPickingActive}
+          stickerPlacementActive={stickerPlacementActive}
+          stickerTransformTool={stickerTransformTool}
+          groupAssignActive={groupAssignActive}
+        />
+      )}
       {!editingMode && <SupportLink />}
       {promptedCandidate && (
         <DefinitionsPrompt

@@ -38,8 +38,16 @@ import {
   RESET_CONFIRM_MS,
   TEXTURE_FILE_ACCEPT,
 } from './workbenchLabels';
+import { EDITOR_BUTTON, EDITOR_HEAD } from '../editor/editorStyles';
+import { Button, FileButton } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { BlockNotice } from '../primitives/Notice';
+import { ToggleGroup } from '../primitives/ToggleGroup';
 import type { CustomWarpaintWorkbenchProps } from './workbenchTypes';
-import './CustomWarpaintWorkbench.css';
+
+const DROP_OVERLAY = 'pointer-events-none absolute inset-0 z-2 flex items-center justify-center gap-2 text-center text-12 font-[650] outline-2 -outline-offset-2 outline-dashed';
+// Each tab panel fills the height the header leaves.
+const PANEL = 'flex min-h-0 flex-1 flex-col outline-none';
 
 // Secondary panels load lazily so the Files controls show first. Tabs.Panel
 // mounts children only when active, so each keeps its state once visited.
@@ -70,7 +78,7 @@ const OperationGraphEditor = lazy(() =>
 
 function WorkbenchPanelFallback() {
   return (
-    <div className="custom-workbench-empty" aria-busy="true">
+    <div className="flex h-full items-center justify-center gap-2 text-11 text-dim" aria-busy="true">
       Loading workbench panel...
     </div>
   );
@@ -92,8 +100,6 @@ export function CustomWarpaintWorkbench({
   onResetAll,
   onClearWorkspace,
   onResize,
-  resizing,
-  onResizingChange,
   onClose,
   tab,
   onTabChange,
@@ -117,6 +123,7 @@ export function CustomWarpaintWorkbench({
   // Materials is not a `mode` value: the app owns `mode`, which only holds paint or sticker.
   const [materialsActive, setMaterialsActive] = useState(false);
   const [editorDownloadFormat, setEditorDownloadFormat] = useState<EditorDownloadFormat>('zip');
+  const [resizing, setResizing] = useState(false);
   const [dropping, setDropping] = useState(false);
   const [dropHint, setDropHint] = useState(false);
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
@@ -197,12 +204,14 @@ export function CustomWarpaintWorkbench({
   };
 
   const stickerFileRef = useRef<HTMLInputElement | null>(null);
+  const addStickerRef = useRef<HTMLButtonElement | null>(null);
+  const variantActionsRef = useRef<HTMLDivElement | null>(null);
   // One file input serves every variant row; the row that asked for it is remembered here.
   const variantFileRef = useRef<HTMLInputElement | null>(null);
   const variantReplaceIndexRef = useRef<number | null>(null);
 
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) =>
-    startWorkbenchResize(event, { sectionRef, onResize, setResizing: onResizingChange });
+    startWorkbenchResize(event, { sectionRef, onResize, setResizing });
 
   // Package files can be dropped anywhere on the workbench, not just the short bar.
   // Extensions decide the destination, so dropping and picking behave the same.
@@ -279,16 +288,20 @@ export function CustomWarpaintWorkbench({
 
   return (
     <section
-      className="custom-workbench"
+      // Hides below its slot until open, and is not moved at all when expanded. The narrow-width rules inside query this drawer, not the viewport.
+      className="relative @container flex h-full min-h-0 flex-col border-t border-strong bg-panel text-text opacity-0 [transition:opacity_150ms_ease,translate_210ms_ease] not-data-expanded:translate-y-3 motion-reduce:transition-none data-expanded:border-t-0 data-open:opacity-100 not-data-expanded:data-open:translate-y-0 [&_[data-slot=select-trigger]]:min-h-control [&_[data-slot=select-trigger]]:text-11"
       aria-label="War paint workbench"
+      data-slot="workbench"
       data-tab={tab}
+      data-open={open ? '' : undefined}
       data-expanded={expanded ? '' : undefined}
       ref={sectionRef}
-      data-dropping={dropping ? '' : undefined}
       {...dropHandlers}
     >
       <div
-        className="custom-workbench-resizer"
+        // The bar lies over the drawer's top edge. The slot clips everything above that edge, so it starts there.
+        className={cn('absolute inset-x-0 -top-0.75 z-1 h-1.75 cursor-ns-resize touch-none outline-none after:absolute after:inset-x-0 after:top-0.75 after:h-0.5 after:bg-accent after:opacity-0 after:transition-opacity after:duration-140 after:ease-[ease] hover:after:opacity-100 focus-visible:after:opacity-100 motion-reduce:after:transition-none data-resizing:after:opacity-100', expanded && 'hidden')}
+        data-slot="workbench-resizer"
         role="separator"
         aria-label="Resize war paint workbench"
         aria-orientation="horizontal"
@@ -312,7 +325,7 @@ export function CustomWarpaintWorkbench({
         }}
       />
       <Tabs.Root
-        className="custom-workbench-tabs-root"
+        className="flex min-h-0 flex-1 flex-col"
         value={tab}
         onValueChange={(value) => onTabChange(value as WorkbenchTab)}
       >
@@ -331,20 +344,21 @@ export function CustomWarpaintWorkbench({
           onClose={onClose}
         />
 
+        {/* The whole workbench accepts package files, so there is no small well to hunt for. */}
         {dropping && (
-          <div className="source-package-dropzone">
+          <div className={cn(DROP_OVERLAY, 'bg-[color-mix(in_srgb,var(--panel)_86%,var(--accent))] text-text outline-accent')} data-slot="workbench-dropzone">
             <PackageOpen size={18} />
             Drop a .zip/.vpk to mount a package, or a .vpd/.json to add definitions
           </div>
         )}
         {dropHint && (
-          <div className="source-package-dropzone" data-variant="hint">
+          <div className={cn(DROP_OVERLAY, 'bg-[color-mix(in_srgb,var(--panel)_84%,var(--fail))] text-fail-text outline-fail-text')} data-slot="workbench-dropzone" data-variant="hint">
             <AlertTriangle size={18} />
             That isn&apos;t a package or definitions file (.zip, .vpk, .vpd, .json)
           </div>
         )}
 
-        <Tabs.Panel value="files" className="custom-workbench-panel">
+        <Tabs.Panel value="files" className={PANEL}>
           <AssetFilesPanel
             slots={slots}
             assets={assets}
@@ -368,40 +382,30 @@ export function CustomWarpaintWorkbench({
             onResetSlot={resetSlot}
           />
         </Tabs.Panel>
-        <Tabs.Panel value="editor" className="custom-workbench-panel custom-workbench-editor-panel">
+        <Tabs.Panel value="editor" className={cn(PANEL, '@container overflow-hidden')} data-slot="workbench-editor-panel">
           <Suspense fallback={<WorkbenchPanelFallback />}>
           {editor ? (
             <>
             <EditorDraftBanner draft={editor.draft} onDownloadRecovery={editor.onDownloadRecovery} />
-            <div className="custom-workbench-edit-body" inert={editor.draft.recovery ? true : undefined}>
-              <div className="custom-workbench-edit-context">
+            <div className="relative grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] @max-[900px]:grid-cols-none @max-[900px]:grid-rows-[auto_minmax(0,1fr)]" inert={editor.draft.recovery ? true : undefined}>
+              {/* A fixed column beside the content. Narrow, it becomes tools on top and the list below at full width, and when too narrow for one line the footer takes its own. */}
+              <div className="flex min-h-0 flex-col overflow-hidden border-r border-border bg-panel pt-1.5 pb-2 @max-[900px]:grid @max-[900px]:grid-cols-[auto_minmax(0,1fr)_auto] @max-[900px]:items-center @max-[900px]:border-r-0 @max-[900px]:border-b @max-[900px]:p-0 @max-[900px]:[grid-template-areas:'mode_tools_footer'_'list_list_list'] @max-[620px]:grid-cols-[auto_minmax(0,1fr)] @max-[620px]:[grid-template-areas:'mode_tools'_'footer_footer'_'list_list']" data-slot="editor-context">
                 {(editor.sticker || editor.materials) && (
-                  <div className="custom-workbench-edit-mode" role="group" aria-label="Edit tool">
-                    <button
-                      type="button"
-                      aria-pressed={!materialsActive && editor.mode === 'paint'}
-                      onClick={() => { setMaterialsActive(false); editor.onModeChange('paint'); }}
-                    >
-                      Paint
-                    </button>
-                    {editor.sticker && (
-                      <button
-                        type="button"
-                        aria-pressed={!materialsActive && editor.mode === 'sticker'}
-                        onClick={() => { setMaterialsActive(false); editor.onModeChange('sticker'); }}
-                      >
-                        Stickers
-                      </button>
-                    )}
-                    {editor.materials && (
-                      <button
-                        type="button"
-                        aria-pressed={materialsActive}
-                        onClick={() => setMaterialsActive(true)}
-                      >
-                        Materials
-                      </button>
-                    )}
+                  <div className="mx-2.5 mb-2 flex flex-none [grid-area:mode] @max-[900px]:my-1.5 @max-[900px]:mr-0 @max-[900px]:ml-2">
+                    <ToggleGroup<'paint' | 'sticker' | 'materials'>
+                      size="tool"
+                      label="Edit tool"
+                      value={materialsActive ? 'materials' : editor.mode}
+                      options={[
+                        { value: 'paint', label: 'Paint' },
+                        ...(editor.sticker ? [{ value: 'sticker' as const, label: 'Stickers' }] : []),
+                        ...(editor.materials ? [{ value: 'materials' as const, label: 'Materials' }] : []),
+                      ]}
+                      onChange={(value) => {
+                        setMaterialsActive(value === 'materials');
+                        if (value !== 'materials') editor.onModeChange(value);
+                      }}
+                    />
                   </div>
                 )}
                 <EditorLayerList editor={editor} materialsActive={materialsActive} />
@@ -409,6 +413,7 @@ export function CustomWarpaintWorkbench({
                   <StickerEditToolbar
                     sticker={editor.sticker}
                     stickerFileRef={stickerFileRef}
+                    addButtonRef={addStickerRef}
                     pickerOpen={stickerPickerOpen}
                     pickerPurpose={stickerPickerPurpose}
                     onTogglePicker={toggleStickerPicker}
@@ -419,6 +424,7 @@ export function CustomWarpaintWorkbench({
                   <StickerTexturePicker
                     sticker={editor.sticker}
                     purpose={stickerPickerPurpose}
+                    anchorRef={stickerPickerPurpose === 'variant' ? variantActionsRef : addStickerRef}
                     search={stickerSearch}
                     showAll={showAllStickerTextures}
                     onOpenChange={setStickerPickerOpen}
@@ -426,50 +432,51 @@ export function CustomWarpaintWorkbench({
                     onShowAllChange={setShowAllStickerTextures}
                   />
                 )}
-                <div className="custom-workbench-edit-footer">
-                  <div className="custom-workbench-history-actions">
-                    <button
-                      type="button"
-                      className="custom-workbench-edit-icon-btn"
+                <div className="mt-2 flex flex-none flex-wrap items-center gap-1 border-t border-border px-2.5 pt-2 [grid-area:footer] @max-[900px]:m-0 @max-[900px]:flex-nowrap @max-[900px]:border-t-0 @max-[900px]:px-2 @max-[900px]:py-1.5 @max-[620px]:pt-0">
+                  <div className="inline-flex flex-none gap-1">
+                    <Button
+                      size="icon"
                       title="Undo"
                       aria-label="Undo"
                       disabled={!editor.canUndo}
                       onClick={editor.onUndo}
                     >
                       <Undo2 size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className="custom-workbench-edit-icon-btn"
+                    </Button>
+                    <Button
+                      size="icon"
                       title="Redo"
                       aria-label="Redo"
                       disabled={!editor.canRedo}
                       onClick={editor.onRedo}
                     >
                       <Redo2 size={14} />
-                    </button>
+                    </Button>
                   </div>
                   <span
-                    className="custom-workbench-draft-status"
+                    // Armed, Revert needs this room to stay on the row. A narrow row never wraps, and hiding this there would pull the armed button out from under the pointer.
+                    className="inline-flex w-21.5 min-w-21.5 items-center gap-1 overflow-hidden text-10 text-ellipsis whitespace-nowrap text-dim data-[state=error]:text-fail data-[state=saved]:text-pass @min-[900px]:data-armed:hidden"
+                    data-slot="draft-status"
                     data-state={editor.draft.status}
+                    data-armed={confirmRevert ? '' : undefined}
                     title={editor.draft.status === 'saved' ? 'Saved locally' : undefined}
                     role="status"
                     aria-live="polite"
                   >
                     {draftStatusLabel(editor.draft.status) && (<>
                       {editor.draft.status === 'pending' || editor.draft.status === 'saving'
-                        ? <LoaderCircle size={12} aria-hidden="true" />
+                        ? <LoaderCircle className="flex-none animate-spin motion-reduce:animate-none" size={12} aria-hidden="true" />
                         : editor.draft.status === 'saved'
-                          ? <Check size={12} aria-hidden="true" />
-                          : <AlertTriangle size={12} aria-hidden="true" />}
+                          ? <Check className="flex-none" size={12} aria-hidden="true" />
+                          : <AlertTriangle className="flex-none" size={12} aria-hidden="true" />}
                       {draftStatusLabel(editor.draft.status)}
                     </>)}
                   </span>
-                  <button
-                    type="button"
-                    className="custom-workbench-edit-revert"
+                  <Button
+                    variant={confirmRevert ? 'armed' : 'danger'}
+                    size="compact"
+                    className={cn(EDITOR_BUTTON, 'ml-auto @max-[900px]:ml-0')}
                     disabled={!editor.dirty}
-                    data-confirm={confirmRevert ? '' : undefined}
                     aria-label={confirmRevert ? 'Confirm reverting all edits' : 'Revert all edits'}
                     onClick={() => {
                       if (!confirmRevert) {
@@ -481,11 +488,13 @@ export function CustomWarpaintWorkbench({
                     }}
                   >
                     <RotateCcw size={13} /> {confirmRevert ? 'Revert all?' : 'Revert'}
-                  </button>
-                  <div className="custom-workbench-edit-download-group">
-                    <button
-                      type="button"
-                      className="custom-workbench-edit-download"
+                  </Button>
+                  <div className="relative inline-flex min-w-0 flex-[1_0_100%] @max-[900px]:flex-none @max-[620px]:ml-auto">
+                    <Button
+                      variant="primary"
+                      size="compact"
+                      className={cn(EDITOR_BUTTON, 'flex-1 rounded-r-none')}
+                      data-slot="editor-download"
                       disabled={!editor.canDownload}
                       aria-busy={editor.exporting}
                       onClick={() => editor.onDownloadPackage(editorDownloadFormat)}
@@ -494,19 +503,22 @@ export function CustomWarpaintWorkbench({
                       <Download size={13} /> {editor.exporting
                         ? 'Preparing...'
                         : `Download ${editorDownloadFormat.toUpperCase()}`}
-                    </button>
-                    <details className="custom-workbench-edit-download-options">
-                      <summary
-                        className="custom-workbench-edit-download-toggle"
+                    </Button>
+                    <details className="group contents">
+                      <Button
+                        variant="primary"
+                        size="icon"
+                        className="w-6.75 min-w-6.75 list-none rounded-l-none border-l-accent-text/28 aria-disabled:pointer-events-none aria-disabled:opacity-45 [&::-webkit-details-marker]:hidden"
+                        render={<summary />}
                         aria-label="Choose download format"
                         aria-disabled={!editor.canDownload || editor.exporting}
                         onClick={(event) => {
                           if (!editor.canDownload || editor.exporting) event.preventDefault();
                         }}
                       >
-                        <ChevronDown size={13} aria-hidden="true" />
-                      </summary>
-                      <div className="custom-workbench-edit-download-menu" role="menu">
+                        <ChevronDown className="group-open:rotate-180" size={13} aria-hidden="true" />
+                      </Button>
+                      <div className="absolute right-0 bottom-[calc(100%+6px)] z-8 w-full min-w-56 overflow-hidden rounded-sm border border-border bg-panel p-1 shadow-[0_10px_30px_rgb(0_0_0/32%)]" role="menu">
                         {([
                           ['zip', 'ZIP', 'Edited source package'],
                           ['json', 'JSON', 'Portable operation and definition'],
@@ -515,6 +527,7 @@ export function CustomWarpaintWorkbench({
                           <button
                             key={format}
                             type="button"
+                            className="grid w-full cursor-pointer gap-0.5 rounded-[3px] border-0 bg-transparent px-2 py-1.75 text-left text-text hover:bg-accent-soft aria-checked:bg-accent-soft"
                             role="menuitemradio"
                             aria-checked={editorDownloadFormat === format}
                             onClick={(event) => {
@@ -522,8 +535,8 @@ export function CustomWarpaintWorkbench({
                               event.currentTarget.closest('details')?.removeAttribute('open');
                             }}
                           >
-                            <span>{label}</span>
-                            <small>{description}</small>
+                            <span className="text-11 font-bold">{label}</span>
+                            <small className="text-9.5 text-dim">{description}</small>
                           </button>
                         ))}
                       </div>
@@ -531,9 +544,14 @@ export function CustomWarpaintWorkbench({
                   </div>
                 </div>
               </div>
-              <div className="custom-workbench-edit-content">
-                {editor.error && <div className="visual-warpaint-editor-error" role="alert">{editor.error}</div>}
-                {editImportError && <div className="visual-warpaint-editor-error" role="alert">{editImportError}</div>}
+              <div className="relative flex min-h-0 min-w-0 flex-col overflow-hidden">
+                {/* Floats over the view, so that a message appearing does not push the tabs and tools down. */}
+                {(editor.error || editImportError) && (
+                  <div className="pointer-events-none absolute bottom-8 left-1/2 z-20 flex w-max max-w-[min(560px,calc(100%-24px))] -translate-x-1/2 flex-col gap-1">
+                    {editor.error && <BlockNotice tone="error" className="text-fail shadow-pop" role="alert">{editor.error}</BlockNotice>}
+                    {editImportError && <BlockNotice tone="error" className="text-fail shadow-pop" role="alert">{editImportError}</BlockNotice>}
+                  </div>
+                )}
                 {materialsActive && editor.materials ? (
                   <MaterialOverridesPanel {...editor.materials} />
                 ) : editor.mode === 'sticker' && editor.sticker
@@ -547,6 +565,7 @@ export function CustomWarpaintWorkbench({
                         variants={variants}
                         variantFileRef={variantFileRef}
                         variantReplaceIndexRef={variantReplaceIndexRef}
+                        actionsRef={variantActionsRef}
                         pickerOpen={stickerPickerOpen}
                         pickerPurpose={stickerPickerPurpose}
                         onTogglePicker={toggleStickerPicker}
@@ -567,40 +586,39 @@ export function CustomWarpaintWorkbench({
                     // One switch instance serves both sub-views, so the control never moves.
                     const subView = editor.paintSubView ?? 'parts';
                     const subViewSwitch = (editor.transform || editor.graph) ? (
-                      <div className="custom-workbench-paint-subview" role="group" aria-label="Layer view">
-                        <button
-                          type="button"
-                          aria-pressed={subView === 'parts'}
-                          onClick={() => editor.onPaintSubViewChange?.('parts')}
-                        >
-                          Parts
-                        </button>
-                        {editor.transform && (
-                          <button
-                            type="button"
-                            aria-pressed={subView === 'transform'}
-                            onClick={() => editor.onPaintSubViewChange?.('transform')}
-                          >
-                            Transform
-                          </button>
-                        )}
-                        {editor.graph && (
-                          <button
-                            type="button"
-                            aria-pressed={subView === 'graph'}
-                            onClick={() => editor.onPaintSubViewChange?.('graph')}
-                          >
-                            Graph
-                          </button>
-                        )}
-                      </div>
+                      <ToggleGroup<'parts' | 'transform' | 'graph'>
+                        size="tab"
+                        label="Layer view"
+                        value={subView}
+                        options={[
+                          { value: 'parts', label: 'Parts' },
+                          ...(editor.transform ? [{ value: 'transform' as const, label: 'Transform' }] : []),
+                          ...(editor.graph ? [{ value: 'graph' as const, label: 'Graph' }] : []),
+                        ]}
+                        onChange={(value) => editor.onPaintSubViewChange?.(value)}
+                      />
                     ) : undefined;
                     const team = editor.teamColors;
                     const teamName = team?.team === 'blu' ? 'BLU' : 'RED';
+                    // Replace leads, so that the toggle stays under the pointer when it appears.
                     const teamActions = team && (<>
-                      <button
-                        type="button"
-                        className="custom-workbench-team-btn"
+                      {team.enabled && team[team.team] && (
+                        <FileButton
+                          className={EDITOR_BUTTON}
+                          label={`Replace the ${teamName} texture`}
+                          accept={TEXTURE_FILE_ACCEPT}
+                          title={`Replace the ${teamName} texture (${referenceLabel(team[team.team] ?? '')}). Switch the Team toggle to edit the other side.`}
+                          onFiles={([file]) => replaceTeamTexture(team.team, file)}
+                        >
+                          <ImageUp size={13} aria-hidden="true" />
+                          Replace <strong className={team.team === 'blu' ? 'text-blu' : 'text-red'}>{teamName}</strong>
+                        </FileButton>
+                      )}
+                      <Button
+                        variant="toggle"
+                        size="compact"
+                        className={cn(EDITOR_BUTTON, 'not-aria-pressed:text-dim')}
+                        data-slot="editor-team-colors"
                         aria-pressed={team.enabled}
                         title={team.enabled
                           ? 'Use one texture for both teams again (keeps the RED one)'
@@ -609,35 +627,15 @@ export function CustomWarpaintWorkbench({
                       >
                         <Users size={13} aria-hidden="true" />
                         Team colors
-                      </button>
-                      {team.enabled && team[team.team] && (
-                        <label
-                          className="custom-workbench-team-btn"
-                          data-team={team.team}
-                          title={`Replace the ${teamName} texture (${referenceLabel(team[team.team] ?? '')}). Switch the Team toggle to edit the other side.`}
-                        >
-                          <ImageUp size={13} aria-hidden="true" />
-                          Replace <strong>{teamName}</strong>
-                          <input
-                            type="file"
-                            accept={TEXTURE_FILE_ACCEPT}
-                            hidden
-                            aria-label={`Replace the ${teamName} texture`}
-                            onChange={(event) => {
-                              const file = event.currentTarget.files?.[0];
-                              event.currentTarget.value = '';
-                              if (file) replaceTeamTexture(team.team, file);
-                            }}
-                          />
-                        </label>
-                      )}
+                      </Button>
                     </>);
                     // A per-wear scope with no parts still shows the switch; a top-level paint hides it.
                     const partsHeaderSlot = editor.enabled || editor.perWearScope ? subViewSwitch : undefined;
                     return editor.graph && subView === 'graph'
                       ? (
-                        <div className="custom-workbench-graph-view">
-                          <div className="custom-workbench-graph-switch">{subViewSwitch}</div>
+                        <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-slot="editor-graph-view">
+                          {/* The same head as Parts and Transform, with a control's height, so that the switch does not move between them. */}
+                          <div className={cn(EDITOR_HEAD, 'bg-panel')}><div className="flex min-h-control items-center">{subViewSwitch}</div></div>
                           <Suspense fallback={<WorkbenchPanelFallback />}><OperationGraphEditor {...editor.graph} /></Suspense>
                         </div>
                       )
@@ -661,7 +659,7 @@ export function CustomWarpaintWorkbench({
         </Tabs.Panel>
         {/* Not Tabs.Panel: base-ui needs a trigger in Tabs.List, and these open from header chips. */}
         {tab === 'package' && (
-          <div className="custom-workbench-panel" role="region" aria-label="Mounted archive">
+          <div className={PANEL} role="region" aria-label="Mounted archive">
             <Suspense fallback={<WorkbenchPanelFallback />}>
               <SourcePackagePanel state={sourcePackage} />
             </Suspense>
@@ -669,14 +667,14 @@ export function CustomWarpaintWorkbench({
         )}
 
         {tab === 'definitions' && (
-          <div className="custom-workbench-panel" role="region" aria-label="Imported definitions">
+          <div className={PANEL} role="region" aria-label="Imported definitions">
             <Suspense fallback={<WorkbenchPanelFallback />}>
               <DefinitionsPanel state={definitions} />
             </Suspense>
           </div>
         )}
 
-        <Tabs.Panel value="export" className="custom-workbench-panel">
+        <Tabs.Panel value="export" className={PANEL}>
           <Suspense fallback={<WorkbenchPanelFallback />}>
             <ExportPanel
               items={exportItems}

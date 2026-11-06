@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react';
 import {
-  AlertTriangle,
   Download,
   FileDown,
   Info,
   LoaderCircle,
   PackageCheck,
-  Search,
 } from 'lucide-react';
 
 import type { TextureMetadata } from '../../data/types';
@@ -17,9 +15,15 @@ import type {
   ExportDefinitionsContext,
   ExportItem,
 } from '../../workbench/exportTypes';
-import { TextField } from '../common/controls';
-import './ExportPanel.css';
+import { ControlLabel, TextField } from '../common/controls';
 import { formatSize } from '../common/formatSize';
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { EmptyState } from '../primitives/EmptyState';
+import { COMPACT_INPUTS, SearchField } from '../primitives/Input';
+import { InlineNotice } from '../primitives/Notice';
+import { PATH_TEXT, SECTION_TITLE } from '../primitives/textStyles';
+import { ToggleGroup } from '../primitives/ToggleGroup';
 
 interface ExportPanelProps {
   items: ExportItem[];
@@ -51,40 +55,16 @@ const DEFINITIONS_OPTIONS: { value: 'overwrite' | 'append'; label: string }[] = 
   { value: 'append', label: 'Add as a new war paint' },
 ];
 
+// The stage narrows as drawers open, so these query the panel rather than the window.
+const COL = 'flex min-w-0 flex-col gap-2 border-r border-border px-3 py-2 last:border-r-0 @max-[560px]:border-r-0 @max-[560px]:border-b @max-[560px]:last:border-b-0';
+const COL_TITLE = cn('m-0', SECTION_TITLE);
+const FIELD = cn('flex min-w-0 flex-col gap-1.5', COMPACT_INPUTS);
+const INLINE_LINK = 'text-accent underline';
+const BASE_ACTION = 'relative flex-none cursor-pointer border-0 bg-transparent p-0 text-11 text-text underline underline-offset-2 focus-ring hover:text-accent';
+
 const DEFINITIONS_PLUGIN_URL = 'https://github.com/ficool2/custom_items_games/releases/latest';
 const WARPAINT_SERVER_PLUGIN_URL = 'https://github.com/Mince1844/tf2warpaints';
 const PAINT_PICKER_INITIAL_RESULTS = 40;
-
-/** Two options read better as a visible pair than as a dropdown that hides the alternative. */
-function Segmented<T extends string>({
-  value,
-  onChange,
-  options,
-  label,
-}: {
-  value: T;
-  onChange: (value: T) => void;
-  options: { value: T; label: string }[];
-  label: string;
-}) {
-  return (
-    <div className="export-segmented" role="radiogroup" aria-label={label}>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          role="radio"
-          aria-checked={value === option.value}
-          className="export-segment"
-          data-active={value === option.value ? '' : undefined}
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /** Picking a war paint to take over is a search, not a dropdown: nobody scrolls an alphabetical list for one they own. */
 function PaintPicker({
@@ -117,18 +97,20 @@ function PaintPicker({
   const hasMoreMatches = visibleMatches.length < matches.length;
 
   return (
-    <div className="export-picker">
-      <div className="export-picker-search">
-        <Search size={12} />
-        <TextField
-          value={query}
-          onChange={setQuery}
-          placeholder={selected ? selected.name : 'Search war paints'}
-        />
-      </div>
-      <div className="export-picker-list" role="listbox" aria-label="War paint to replace">
+    <div className="flex min-h-0 flex-col gap-1.25">
+      <SearchField
+        value={query}
+        onChange={setQuery}
+        placeholder={selected ? selected.name : 'Filter war paints...'}
+        // SearchField clears on Escape. Marked handled, so that the same key does not also close the drawer.
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && query) event.preventDefault();
+        }}
+      />
+      {/* Four rows at control height, so the list does not take the column over. */}
+      <div className="scrollbar-slim flex max-h-30.5 flex-col gap-px overflow-y-auto rounded-sm border border-border bg-panel-2 p-0.5" role="listbox" aria-label="War paint to replace">
         {matches.length === 0 ? (
-          <p className="export-picker-empty">No war paint matches “{query.trim()}”.</p>
+          <p className="m-0 px-1.75 py-1.5 text-11 text-dim">No war paint matches “{query.trim()}”.</p>
         ) : (
           visibleMatches.map((kit) => (
             <button
@@ -136,7 +118,7 @@ function PaintPicker({
               type="button"
               role="option"
               aria-selected={String(kit.defindex) === value}
-              className="export-picker-option"
+              className="min-h-control flex-none cursor-pointer rounded-sm border-0 bg-transparent px-1.75 py-1 text-left text-11 text-dim focus-ring focus-visible:-outline-offset-2 hover:bg-accent/14 hover:text-text data-selected:bg-accent-soft data-selected:font-semibold data-selected:text-text"
               data-selected={String(kit.defindex) === value ? '' : undefined}
               onClick={() => onChange(String(kit.defindex))}
             >
@@ -145,7 +127,7 @@ function PaintPicker({
           ))
         )}
         {hasMoreMatches && (
-          <p className="export-picker-hint">
+          <p className="mx-1.25 mt-0.5 mb-1 text-center text-11 text-dim">
             Showing {visibleMatches.length} of {matches.length}. Search to find another paint.
           </p>
         )}
@@ -291,48 +273,77 @@ export function ExportPanel({
 
   if (items.length === 0 && !definitions?.isImported && !definitions?.packageFileCount) {
     return (
-      <div className="export-panel" data-status="empty">
-        <div className="definitions-empty">
-          <FileDown size={22} />
-          <strong>Nothing to export yet</strong>
-          <span>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center" data-slot="export-panel" data-status="empty">
+        <EmptyState icon={<FileDown size={22} />} title="Nothing to export yet">
+          <span className="text-11 leading-normal">
             This tab packs whatever the viewer is showing into a mod for TF2. Give
             it something to work with:
           </span>
-          <span className="export-empty-routes">
-            <button type="button" onClick={() => onGoToTab?.('files')}>Replace a texture</button>
-            <button type="button" onClick={() => onGoToTab?.('package')}>Mount an archive</button>
+          <span className="mt-0.5 flex flex-wrap justify-center gap-1.5">
+            <Button variant="outline" size="compact" onClick={() => onGoToTab?.('files')}>Replace a texture</Button>
+            <Button variant="outline" size="compact" onClick={() => onGoToTab?.('package')}>Mount an archive</Button>
           </span>
-        </div>
+        </EmptyState>
       </div>
     );
   }
 
-  // Pack always shows, so exactly one optional column leaves two columns in the grid.
-  const hasInGameColumn = Boolean(writesDefinitions && definitions);
-  const hasFilesColumn = plan.files.length > 0;
+  const columnCount = 1 + Number(writesDefinitions) + Number(plan.files.length > 0);
+  const hasNotes = plan.warnings.length > 0 || buildNotes.length > 0;
+  const notes = (
+    <div className="flex flex-col gap-1">
+      {/* Cautions before exporting, then results from the last export. */}
+      {plan.warnings.map((warning) => (
+        <InlineNotice key={warning}>{warning}</InlineNotice>
+      ))}
+      {buildNotes.map((note) => (
+        <p className="m-0 flex items-start gap-1 text-11 leading-[1.4] text-dim" key={note}>
+          <Info className="mt-0.5 flex-none text-accent" size={12} />
+          <span>{note}</span>
+        </p>
+      ))}
+    </div>
+  );
 
   return (
-    <div className="export-panel">
-      <div className="export-grid" data-two-col={hasInGameColumn !== hasFilesColumn ? '' : undefined}>
-        <section className="export-col" aria-label="Pack">
-          <h3 className="export-col-title">Pack</h3>
-          <label className="export-field">
-            <span>Name</span>
+    // Decisions read across in columns, as the drawer is wide and short. The action bar never scrolls away.
+    <div className="@container flex min-h-0 flex-1 flex-col" data-slot="export-panel">
+      <div
+        className={cn(
+          'scrollbar-slim grid min-h-0 flex-auto items-start overflow-y-auto @max-[560px]:grid-cols-1',
+          // A narrow stage cannot hold three columns: drop to two, then to one.
+          columnCount === 2
+            ? 'grid-cols-[minmax(180px,1fr)_minmax(210px,1fr)]'
+            : 'grid-cols-[minmax(180px,1fr)_minmax(240px,1.4fr)_minmax(210px,1fr)] @max-[900px]:grid-cols-2',
+        )}
+        data-slot="export-grid"
+      >
+        {/* Beside the choices when there is a column to share, as the drawer is too short to stack them. */}
+        {hasNotes && plan.files.length === 0 && (
+          <div className="col-span-full border-b border-border px-3 py-2.5">{notes}</div>
+        )}
+        <section className={COL} aria-label="Pack">
+          <h3 className={COL_TITLE}>Pack</h3>
+          <label className={FIELD}>
+            <ControlLabel>Name</ControlLabel>
             <TextField value={packName} onChange={setPackName} placeholder="my warpaint" />
           </label>
-          <div className="export-field">
-            <span>Deliver as</span>
-            <Segmented
+          <div className={FIELD}>
+            <ControlLabel>Deliver as</ControlLabel>
+            <ToggleGroup
+              radio
+              size="compact"
               value={container}
               onChange={setContainer}
               options={CONTAINER_OPTIONS}
               label="Delivery format"
             />
           </div>
-          <div className="export-field">
-            <span>Textures</span>
-            <Segmented
+          <div className={FIELD}>
+            <ControlLabel>Textures</ControlLabel>
+            <ToggleGroup
+              radio
+              size="compact"
               value={compression}
               onChange={setCompression}
               options={COMPRESSION_OPTIONS}
@@ -342,11 +353,13 @@ export function ExportPanel({
         </section>
 
         {writesDefinitions && definitions && (
-          <section className="export-col" aria-label="In game">
-            <h3 className="export-col-title">In game</h3>
-            <div className="export-field">
-              <span>Install this paint by</span>
-              <Segmented
+          <section className={COL} aria-label="In game">
+            <h3 className={COL_TITLE}>In game</h3>
+            <div className={FIELD}>
+              <ControlLabel>Install this paint by</ControlLabel>
+              <ToggleGroup
+                radio
+                size="compact"
                 value={definitionsMode}
                 onChange={setDefinitionsMode}
                 options={DEFINITIONS_OPTIONS}
@@ -354,36 +367,36 @@ export function ExportPanel({
               />
             </div>
             {definitionsMode === 'overwrite' ? (
-              <div className="export-field">
-                <span>Paint to replace</span>
+              <div className={FIELD}>
+                <ControlLabel>Paint to replace</ControlLabel>
                 <PaintPicker
                   kits={definitions.builtInKits}
                   value={targetDefindex}
                   onChange={setTargetDefindex}
                 />
-                {blocker && <em className="export-field-hint">{blocker}</em>}
+                {blocker && <InlineNotice>{blocker}</InlineNotice>}
               </div>
             ) : (
-              <p className="export-note">
+              <p className="m-0 text-11 leading-normal text-dim">
                 Nothing in the game owns a new paint, so equipping it needs the{' '}
-                <a href={WARPAINT_SERVER_PLUGIN_URL} target="_blank" rel="noreferrer">
+                <a className={INLINE_LINK} href={WARPAINT_SERVER_PLUGIN_URL} target="_blank" rel="noreferrer">
                   tf2warpaints plugin
                 </a>{' '}
                 or similar tooling.
               </p>
             )}
-            <label className="export-field">
-              <span>Name in game</span>
+            <label className={FIELD}>
+              <ControlLabel>Name in game</ControlLabel>
               <TextField
                 value={inGameName}
                 onChange={setInGameName}
                 placeholder={humanizePaintName(paintName) || 'War paint'}
               />
             </label>
-            <div className="export-base">
-              <span className="export-base-label">Built on</span>
+            <div className="flex items-baseline gap-1.5 text-11">
+              <ControlLabel className="flex-none">Built on</ControlLabel>
               <span
-                className="export-base-value"
+                className="min-w-0 flex-auto truncate text-text"
                 title={baseContainer ? baseContainer.name : (gameBuild ? `TF2 build ${gameBuild}` : undefined)}
               >
                 {baseContainer
@@ -391,13 +404,14 @@ export function ExportPanel({
                   : snapshotLabel}
               </span>
               {baseContainer ? (
-                <button type="button" className="export-base-action" onClick={() => { setBaseContainer(null); setBaseError(''); }}>
+                <button type="button" className={BASE_ACTION} onClick={() => { setBaseContainer(null); setBaseError(''); }}>
                   Use ours
                 </button>
               ) : (
-                <label className="export-base-action">
+                <label className={cn(BASE_ACTION, 'has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent')}>
                   Use my own
                   <input
+                    className="sr-only"
                     type="file"
                     accept=".vpd,.bin"
                     aria-label="Use my own proto_defs.vpd as the base definitions"
@@ -410,15 +424,15 @@ export function ExportPanel({
                 </label>
               )}
             </div>
-            {baseError && <em className="export-field-hint">{baseError}</em>}
-            <p className="export-callout">
-              <Info size={11} />
+            {baseError && <InlineNotice tone="error">{baseError}</InlineNotice>}
+            <p className="m-0 mt-auto flex items-start gap-1.5 rounded-sm border border-border bg-panel-2 px-2 py-1.75 text-11 leading-normal text-dim">
+              <Info className="mt-0.5 flex-none text-accent" size={12} />
               <span>
                 Shipping definitions needs the{' '}
-                <a href={DEFINITIONS_PLUGIN_URL} target="_blank" rel="noreferrer">
+                <a className={INLINE_LINK} href={DEFINITIONS_PLUGIN_URL} target="_blank" rel="noreferrer">
                   custom_items_games plugin
                 </a>{' '}
-                and TF2 launched with <code>-insecure</code>. Without both, TF2
+                and TF2 launched with <code className={cn('rounded-[3px] bg-text/12 px-0.75', PATH_TEXT)}>-insecure</code>. Without both, TF2
                 rejects the unsigned definitions file at startup.
               </span>
             </p>
@@ -426,21 +440,22 @@ export function ExportPanel({
         )}
 
         {plan.files.length > 0 && (
-          <section className="export-col export-col-files" aria-label="Files">
-            <h3 className="export-col-title">
+          <section className={cn(COL, 'min-h-0 @max-[900px]:col-span-full @max-[900px]:border-t @max-[900px]:border-r-0 @max-[560px]:border-t-0')} aria-label="Files">
+            <h3 className={COL_TITLE}>
               {plan.files.length} file{plan.files.length === 1 ? '' : 's'}
               {plan.total > 0 ? ` · ~${formatSize(plan.total)}` : ''}
             </h3>
-            <div className="export-list">
+            {hasNotes && notes}
+            <div className="scrollbar-slim flex min-h-0 flex-col gap-0.5 overflow-y-auto">
               {plan.files.map((file) => (
-                <div className="export-row" key={file.ref}>
-                  <span className="export-row-path" title={file.path}>{file.path}</span>
-                  <span className="export-row-meta">
+                <div className="flex items-baseline gap-2 rounded-sm bg-panel-2 px-1.5 py-1" key={file.ref}>
+                  <span className={cn('min-w-0 flex-auto truncate text-text', PATH_TEXT)} title={file.path}>{file.path}</span>
+                  <span className="flex-none text-11 text-dim">
                     {file.size ? `${file.size.width} x ${file.size.height}` : 'unknown size'}
                     {' · '}
                     {file.lossless ? 'lossless' : 'DXT'}
                   </span>
-                  <span className="export-row-size">{file.bytes ? `~${formatSize(file.bytes)}` : ''}</span>
+                  <span className="flex-none text-11 text-dim">{file.bytes ? `~${formatSize(file.bytes)}` : ''}</span>
                 </div>
               ))}
             </div>
@@ -448,46 +463,32 @@ export function ExportPanel({
         )}
       </div>
 
-      {(plan.warnings.length > 0 || buildNotes.length > 0) && (
-        <div className="export-messages">
-          {/* Cautions before exporting, then results from the last export. */}
-          {plan.warnings.map((warning) => (
-            <p className="export-message" data-kind="caution" key={warning}>
-              <AlertTriangle size={11} />
-              <span>{warning}</span>
-            </p>
-          ))}
-          {buildNotes.map((note) => (
-            <p className="export-message" data-kind="result" key={note}>
-              <Info size={11} />
-              <span>{note}</span>
-            </p>
-          ))}
-        </div>
-      )}
-
-      <div className="export-footer">
-        <span className="export-total">
+      <div className="flex flex-none items-center gap-2.5 border-t border-border px-3.5 py-2.25">
+        <span className="min-w-0 flex-auto truncate text-11 text-dim">
           {container === 'vpk'
             ? `Extract the download, then drop ${sanitizePackName(packName)}.vpk into tf/custom/ and restart TF2.`
             : `Extract ${sanitizePackName(packName)} into tf/custom/, then restart TF2.`}
         </span>
-        {error && <span className="export-error" role="alert">{error}</span>}
+        {error && (
+          <InlineNotice tone="error" className="max-w-[40%] flex-none" role="alert">
+            <span className="block truncate">{error}</span>
+          </InlineNotice>
+        )}
         {done && !error && (
-          <span className="export-done">
+          <span className="flex flex-none items-center gap-1.25 text-11 text-dim">
             <PackageCheck size={12} /> Exported {done}
           </span>
         )}
-        <button
-          type="button"
-          className="definitions-btn definitions-btn-primary export-action"
+        <Button
+          variant="primary"
+          size="compact"
           disabled={busy || loading || Boolean(blocker)}
           title={blocker || undefined}
           onClick={() => void runExport()}
         >
-          {busy ? <LoaderCircle className="custom-workbench-spinner" size={12} /> : <Download size={12} />}
+          {busy ? <LoaderCircle className="animate-spin motion-reduce:animate-none" size={12} /> : <Download size={12} />}
           <span>{busy ? 'Building…' : loading ? 'Resolving assets…' : blocker || 'Export pack'}</span>
-        </button>
+        </Button>
       </div>
     </div>
   );

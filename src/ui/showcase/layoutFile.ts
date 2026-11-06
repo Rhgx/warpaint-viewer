@@ -417,7 +417,7 @@ export const pictureIndex = (assetId: string) => Number(assetId.slice('file-pict
 export async function readLayoutFile(file: Blob): Promise<{ layout: SharedLayout; pictures: Blob[] }> {
   if (file.size > MAX_FILE_BYTES) throw new LayoutFileError('This file is too large to be a .pegboard file.');
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (bytes.length < MAGIC.length + 1 || MAGIC.some((byte, index) => bytes[index] !== byte)) throw new LayoutFileError('This is not a .pegboard file. Choose one made with Share file on the Showcase Board.');
+  if (bytes.length < MAGIC.length + 1 || MAGIC.some((byte, index) => bytes[index] !== byte)) throw new LayoutFileError('Not a .pegboard file.');
   if (bytes[MAGIC.length] > FORMAT_VERSION) throw new LayoutFileError('This board was saved by a newer version. Refresh the page and try again.');
   const reader = new Reader(bytes, MAGIC.length + 1);
   const compressed = reader.bytes(reader.varint());

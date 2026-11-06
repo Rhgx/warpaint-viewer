@@ -1,18 +1,19 @@
 import { preloadIntent, type PreloadIntent } from '../../hooks/useIntentPreload';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
-import { Check, Copy, Film, HelpCircle, ImageDown, LayoutGrid, PackagePlus, Rotate3d, RotateCcw, X } from 'lucide-react';
+import { Check, Copy, Download, Film, HelpCircle, LayoutGrid, PackagePlus, Rotate3d, RotateCcw, X } from 'lucide-react';
 import { ControlsHelpModal, type ControlsEditingMode } from './ControlsHelpModal';
 import { SettingsDialog } from './SettingsDialog';
-import { canCopyImages, TOUCH_ONLY_DEVICE, WORKSHOP_ENABLED } from '../../device';
+import { TOUCH_ONLY_DEVICE, WORKSHOP_ENABLED } from '../../device';
 import { useSettings } from '../../settings';
+import { Toolbar, ToolbarButton, ToolbarDivider } from '../primitives/Toolbar';
 
 type Feedback = 'idle' | 'success' | 'error';
 
 const FEEDBACK_MS = 1500;
 
 // One icon button that swaps its icon for Check/X after `onAction` settles. Feedback is local to each button.
-function ToolbarButton({
+function ActionButton({
   label,
   icon: Icon,
   onAction,
@@ -43,9 +44,7 @@ function ToolbarButton({
   const ShownIcon = feedback === 'success' ? Check : feedback === 'error' ? X : Icon;
 
   return (
-    <button
-      type="button"
-      className="stage-toolbar-btn"
+    <ToolbarButton
       title={label}
       aria-label={label}
       disabled={disabled}
@@ -53,7 +52,7 @@ function ToolbarButton({
       onClick={handleClick}
     >
       <ShownIcon size={15} />
-    </button>
+    </ToolbarButton>
   );
 }
 
@@ -107,12 +106,10 @@ export function StageToolbar({
 
   return (
     <>
-      <div className="stage-toolbar">
+      <Toolbar>
         {WORKSHOP_ENABLED && (
           <>
-            <button
-              type="button"
-              className="stage-toolbar-btn custom-workbench-trigger"
+            <ToolbarButton
               title={workbenchOpen ? 'Close custom warpaint files' : 'Open custom warpaint files'}
               aria-label={workbenchOpen ? 'Close custom warpaint files' : 'Open custom warpaint files'}
               aria-pressed={workbenchOpen}
@@ -120,56 +117,50 @@ export function StageToolbar({
               onClick={onToggleWorkbench}
             >
               <PackagePlus size={15} />
-            </button>
-            <span className="stage-toolbar-divider" aria-hidden="true" />
+            </ToolbarButton>
+            <ToolbarDivider />
           </>
         )}
         {showcaseEnabled && (
           <>
-            <button
-              type="button"
-              className="stage-toolbar-btn"
+            <ToolbarButton
               title="Showcase board"
               aria-label="Open showcase board"
               aria-pressed={showcaseOpen}
               onClick={onToggleShowcase}
             >
               <LayoutGrid size={15} />
-            </button>
-            <span className="stage-toolbar-divider" aria-hidden="true" />
+            </ToolbarButton>
+            <ToolbarDivider />
           </>
         )}
-        <ToolbarButton
+        <ActionButton
           label={saveLabel}
-          icon={captureFormat === 'animated' ? Film : ImageDown}
+          icon={captureFormat === 'animated' ? Film : Download}
           disabled={capturing}
           onAction={withCapture(onSave)}
         />
         {/* iOS drops the user gesture across the capture await, so the
             clipboard write fails on touch-only devices; Save still works. */}
-        {captureFormat === 'image' && !TOUCH_ONLY_DEVICE && canCopyImages() && (
-          <ToolbarButton label="Copy image" icon={Copy} disabled={capturing} onAction={withCapture(onCopyImage)} />
+        {captureFormat === 'image' && !TOUCH_ONLY_DEVICE && (
+          <ActionButton label="Copy image" icon={Copy} disabled={capturing} onAction={withCapture(onCopyImage)} />
         )}
-        <span className="stage-toolbar-divider" aria-hidden="true" />
+        <ToolbarDivider />
         {showAutoSpin && (
-          <button
-            type="button"
-            className="stage-toolbar-btn"
+          <ToolbarButton
             title="Auto spin"
             aria-label="Auto spin"
             aria-pressed={autoSpin}
             onClick={onToggleAutoSpin}
           >
             <Rotate3d size={15} />
-          </button>
+          </ToolbarButton>
         )}
-        <ToolbarButton label="Reset view" icon={RotateCcw} onAction={onResetView} />
-        <span className="stage-toolbar-divider" aria-hidden="true" />
+        <ActionButton label="Reset view" icon={RotateCcw} onAction={onResetView} />
+        <ToolbarDivider />
         <SettingsDialog />
-        <button
+        <ToolbarButton
           ref={controlsHelpTriggerRef}
-          type="button"
-          className="stage-toolbar-btn stage-toolbar-help"
           title="Controls"
           aria-label="Open controls reference"
           aria-haspopup="dialog"
@@ -177,8 +168,8 @@ export function StageToolbar({
           onClick={() => setControlsHelpOpen(true)}
         >
           <HelpCircle size={15} />
-        </button>
-      </div>
+        </ToolbarButton>
+      </Toolbar>
       <ControlsHelpModal
         open={controlsHelpOpen}
         editingMode={editingMode}

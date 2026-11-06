@@ -1,6 +1,7 @@
 import { Autocomplete } from '@base-ui/react/autocomplete';
 import { useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Image as ImageIcon, Link2, Link2Off, Search, Variable, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, Image as ImageIcon, Link2, Link2Off, Search, Variable, X } from 'lucide-react';
+
 import {
   operationGraphVarFieldScalarKey,
   type OperationGraphParameterValue,
@@ -17,9 +18,22 @@ import {
   type GraphFieldKind,
   type GraphVariableOption,
 } from './operationGraphFieldValues';
-import './OperationGraphFields.css';
+import { ControlLabel } from '../common/controls';
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { Input } from '../primitives/Input';
+import { Kbd } from '../primitives/Kbd';
+import { EDITOR_NUMBER } from './editorStyles';
 
 const MAX_VISIBLE_OPTIONS = 80;
+
+// Node fields stay at their dense height: react-flow lays nodes out from their measured size.
+const NODE_INPUT = 'h-6 min-h-0 min-w-0 px-1.25 py-0 [font-family:inherit] text-10.5 text-text tabular-nums disabled:cursor-default disabled:opacity-45 disabled:hover:border-border';
+const RANGE = 'flex min-w-0 flex-1 items-center gap-1';
+const AXIS = 'w-2 flex-none text-9 font-[650] text-dim';
+const POPUP_DETAIL = 'text-dim group-data-highlighted:text-inherit';
+const COMBOBOX_KEY = 'min-w-3.25 border-border bg-panel px-0.75 py-0 text-8.5';
+const SEGMENT = 'h-5.5 min-w-8.5 cursor-pointer border-0 border-border bg-panel px-1.75 text-9.5 font-[650] text-dim transition-fast focus-ring not-last:border-r not-disabled:not-data-active:hover:bg-panel-2 not-disabled:not-data-active:hover:text-text focus-visible:-outline-offset-2 disabled:cursor-default disabled:opacity-45 data-active:bg-accent data-active:text-accent-text disabled:data-active:bg-panel-2 disabled:data-active:text-text';
 
 interface GraphComboboxProps {
   readonly value: string;
@@ -82,9 +96,7 @@ function GraphCombobox({
   return (
     <div
       ref={rootRef}
-      className="graph-combobox nodrag nowheel"
-      data-open={open ? 'true' : undefined}
-      data-disabled={disabled ? 'true' : undefined}
+      className="relative min-w-0 flex-1 nodrag nowheel"
     >
       <Autocomplete.Root<GraphComboboxOption>
         value={inputValue}
@@ -117,11 +129,17 @@ function GraphCombobox({
           }
         }}
       >
-        <Autocomplete.InputGroup className="graph-combobox-control" onClick={() => setOpen(true)}>
-          {leadingIcon === 'texture' && <ImageIcon className="graph-combobox-leading" size={12} aria-hidden />}
-          {leadingIcon === 'variable' && <Variable className="graph-combobox-leading" size={12} aria-hidden />}
+        <Autocomplete.InputGroup
+          className={cn(
+            'flex h-6 min-w-0 items-center gap-1 rounded-sm border border-border bg-panel pr-0.5 pl-1.25 transition-fast has-focus-visible:outline-2 has-focus-visible:outline-offset-0 has-focus-visible:outline-accent',
+            disabled ? 'opacity-45' : 'hover:border-strong',
+          )}
+          onClick={() => setOpen(true)}
+        >
+          {leadingIcon === 'texture' && <ImageIcon className="flex-none text-dim" size={12} aria-hidden />}
+          {leadingIcon === 'variable' && <Variable className="flex-none text-dim" size={12} aria-hidden />}
           <Autocomplete.Input
-            className="graph-combobox-input"
+            className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 [font-family:inherit] text-10.5 text-ellipsis text-text outline-none placeholder:text-dim"
             placeholder={placeholder}
             spellCheck={false}
             aria-label={ariaLabel}
@@ -136,7 +154,7 @@ function GraphCombobox({
             }}
           />
           <Autocomplete.Trigger
-            className="graph-combobox-toggle"
+            className="inline-flex h-5 w-4.5 flex-none cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-dim not-disabled:hover:bg-panel-2 not-disabled:hover:text-text disabled:cursor-default"
             tabIndex={-1}
             aria-label={`${ariaLabel} options`}
           >
@@ -145,16 +163,21 @@ function GraphCombobox({
         </Autocomplete.InputGroup>
         <Autocomplete.Portal>
           <Autocomplete.Positioner
-            className="graph-combobox-positioner nowheel"
+            // The list takes the room it needs; matching the field width would squeeze the path and hints.
+            className="z-1100 w-[max(var(--anchor-width),320px)] max-w-(--available-width) nowheel"
             sideOffset={4}
             align="start"
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
           >
-            <Autocomplete.Popup className="graph-combobox-popover">
-              <Autocomplete.List className="graph-combobox-list" aria-label={ariaLabel}>
-                <Autocomplete.Empty className="graph-combobox-message">
+            <Autocomplete.Popup className="flex w-full flex-col overflow-hidden rounded-md border border-strong bg-panel shadow-pop">
+              <Autocomplete.List
+                // The scroll padding keeps a scrolled-to row clear of the sticky group heading.
+                className="scrollbar-slim max-h-[min(254px,var(--available-height,254px))] scroll-pt-5.5 overflow-y-auto overscroll-contain"
+                aria-label={ariaLabel}
+              >
+                <Autocomplete.Empty className="px-2.25 py-2 text-10 leading-[1.4] text-dim empty:p-0">
                   {allowCustom ? 'No match. Press Enter to use what you typed.' : 'No match.'}
                 </Autocomplete.Empty>
                 {shown.map((option, index) => {
@@ -162,16 +185,17 @@ function GraphCombobox({
                   const { name, directory } = splitGraphOptionLabel(option.label);
                   return (
                     <div key={`${option.group ?? ''}/${option.value}`}>
-                      {heading && <div className="graph-combobox-group">{heading}</div>}
+                      {/* Sticky headings keep the list's place visible while scrolling hundreds of paths. */}
+                      {heading && <div className="sticky top-0 z-1 border-b border-border/60 bg-panel-2 px-2.25 pt-1.25 pb-0.75 text-9 font-semibold text-dim">{heading}</div>}
                       <Autocomplete.Item
                         value={option}
                         index={index}
-                        className="graph-combobox-option"
+                        className="group flex min-h-7.5 cursor-pointer items-center gap-1.75 px-2.25 py-0.75 text-text outline-none data-highlighted:bg-accent data-highlighted:text-accent-text"
                         title={option.label}
                       >
                         {option.thumbnailUrl && (
                           <img
-                            className="graph-combobox-thumb"
+                            className="size-5.5 flex-none rounded-xs border border-border bg-panel-2 object-cover"
                             src={option.thumbnailUrl}
                             alt=""
                             loading="lazy"
@@ -179,24 +203,25 @@ function GraphCombobox({
                             onError={(event) => { event.currentTarget.hidden = true; }}
                           />
                         )}
-                        <span className="graph-combobox-option-text">
-                          <span className="graph-combobox-name">{name}</span>
-                          {directory && <span className="graph-combobox-path">{directory}</span>}
+                        <span className="grid min-w-0 flex-1 gap-px">
+                          <span className="truncate text-11">{name}</span>
+                          {directory && <span className={cn('truncate text-left text-9 [direction:rtl]', POPUP_DETAIL)}>{directory}</span>}
                         </span>
-                        {option.detail && <span className="graph-combobox-detail">{option.detail}</span>}
-                        {option.value === value && <Check className="graph-combobox-check" size={12} aria-hidden />}
+                        {option.detail && <span className={cn('max-w-[40%] flex-none truncate text-9.5 tabular-nums', POPUP_DETAIL)}>{option.detail}</span>}
+                        {option.value === value && <Check className="flex-none text-accent group-data-highlighted:text-inherit" size={12} aria-hidden />}
                       </Autocomplete.Item>
                     </div>
                   );
                 })}
               </Autocomplete.List>
-              <div className="graph-combobox-footer">
-                <span className="graph-combobox-status">
+              <div className="flex min-h-5.5 flex-none items-center justify-between gap-2.5 border-t border-border bg-panel-2/55 px-2 py-0.75 text-9 whitespace-nowrap text-dim">
+                {/* The count yields first when space is tight; the key hints are the part nobody can guess. */}
+                <span className="inline-flex min-w-0 items-center gap-0.75 truncate">
                   {query ? <Search size={10} aria-hidden /> : null}
                   {status}
                 </span>
-                <span className="graph-combobox-keys" aria-hidden>
-                  <kbd>↑</kbd><kbd>↓</kbd> move <kbd>↵</kbd> pick <kbd>esc</kbd> cancel
+                <span className="inline-flex flex-none items-center gap-0.75" aria-hidden>
+                  <Kbd className={COMBOBOX_KEY}>↑</Kbd><Kbd className={COMBOBOX_KEY}>↓</Kbd> move <Kbd className={COMBOBOX_KEY}>↵</Kbd> pick <Kbd className={COMBOBOX_KEY}>esc</Kbd> cancel
                 </span>
               </div>
             </Autocomplete.Popup>
@@ -219,9 +244,9 @@ interface NumberEntryProps {
 function NumberEntry({ value, ariaLabel, step, disabled, onCommit }: NumberEntryProps): React.JSX.Element {
   const [draft, setDraft] = useState<string | null>(null);
   return (
-    <input
+    <Input
       type="number"
-      className="graph-number"
+      className={cn(NODE_INPUT, EDITOR_NUMBER, 'flex-1')}
       step={step}
       value={draft ?? formatGraphNumber(value)}
       disabled={disabled}
@@ -258,7 +283,7 @@ function GraphRangeInput({ numbers, ariaLabel, step, disabled, canVary, onCommit
   const max = numbers.length > 1 ? numbers[1] : min;
   const varies = numbers.length > 1 && min !== max;
   return (
-    <div className="graph-range" data-varies={varies ? 'true' : undefined}>
+    <div className={RANGE}>
       <NumberEntry
         value={min}
         step={step}
@@ -268,7 +293,7 @@ function GraphRangeInput({ numbers, ariaLabel, step, disabled, canVary, onCommit
       />
       {varies && (
         <>
-          <span className="graph-range-separator" aria-hidden>…</span>
+          <span className="flex-none text-9 text-dim" aria-hidden>…</span>
           <NumberEntry
             value={max}
             step={step}
@@ -279,9 +304,11 @@ function GraphRangeInput({ numbers, ariaLabel, step, disabled, canVary, onCommit
         </>
       )}
       {canVary && (
-        <button
-          type="button"
-          className="graph-range-mode"
+        <Button
+          variant={varies ? 'primary' : 'default'}
+          size="sm"
+          // One width, so that the field beside it stays put between Fixed and Varies.
+          className={cn('min-h-6 w-10 min-w-0 flex-none px-0 text-9 font-[650]', varies && 'disabled:border-border disabled:bg-panel-2 disabled:text-text')}
           disabled={disabled}
           title={varies ? 'Use one fixed value for every seed' : 'Let this value vary between seeds'}
           onPointerDown={(event) => event.stopPropagation()}
@@ -291,7 +318,7 @@ function GraphRangeInput({ numbers, ariaLabel, step, disabled, canVary, onCommit
           }}
         >
           {varies ? 'Varies' : 'Fixed'}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -309,10 +336,10 @@ function GraphVectorInput({ numbers, ariaLabel, step, disabled, onCommit }: Grap
   const u = numbers[0] ?? 0;
   const v = numbers[1] ?? 0;
   return (
-    <div className="graph-range">
-      <span className="graph-axis" aria-hidden>U</span>
+    <div className={RANGE}>
+      <span className={AXIS} aria-hidden>U</span>
       <NumberEntry value={u} step={step} disabled={disabled} ariaLabel={`${ariaLabel} U`} onCommit={(next) => onCommit([next, v])} />
-      <span className="graph-axis" aria-hidden>V</span>
+      <span className={AXIS} aria-hidden>V</span>
       <NumberEntry value={v} step={step} disabled={disabled} ariaLabel={`${ariaLabel} V`} onCommit={(next) => onCommit([u, next])} />
     </div>
   );
@@ -327,9 +354,10 @@ interface GraphToggleProps {
 
 function GraphToggle({ on, ariaLabel, disabled, onCommit }: GraphToggleProps): React.JSX.Element {
   return (
-    <div className="graph-segmented" role="group" aria-label={ariaLabel}>
+    <div className="inline-flex overflow-hidden rounded-sm border border-border" role="group" aria-label={ariaLabel}>
       <button
         type="button"
+        className={SEGMENT}
         data-active={!on ? 'true' : undefined}
         disabled={disabled}
         onPointerDown={(event) => event.stopPropagation()}
@@ -339,6 +367,7 @@ function GraphToggle({ on, ariaLabel, disabled, onCommit }: GraphToggleProps): R
       </button>
       <button
         type="button"
+        className={SEGMENT}
         data-active={on ? 'true' : undefined}
         disabled={disabled}
         onPointerDown={(event) => event.stopPropagation()}
@@ -460,9 +489,9 @@ export function GraphValueField({
         );
       default:
         return (
-          <input
+          <Input
             type="text"
-            className="graph-text-input"
+            className={cn(NODE_INPUT, 'flex-1')}
             value={effectiveText}
             disabled={controlsDisabled}
             aria-label={ariaLabel}
@@ -475,13 +504,14 @@ export function GraphValueField({
   })();
 
   return (
-    <div className="graph-value-field nodrag" data-primary={primary ? 'true' : undefined}>
-      <div className="graph-value-head">
-        <span className="graph-value-label">{label}</span>
-        <button
-          type="button"
-          className="graph-value-bind"
-          data-active={bindingMode ? 'true' : undefined}
+    <div className="grid gap-0.75 border-t border-border/70 px-2 py-1.5 nodrag first:border-t-0 data-primary:bg-accent/5" data-primary={primary ? 'true' : undefined}>
+      <div className="flex min-h-4 items-center gap-1.5">
+        <ControlLabel className="block min-w-0 flex-1 truncate">{label}</ControlLabel>
+        <Button
+          variant="toggle"
+          size="icon-sm"
+          // The transparent ring gives the small button a larger target without growing the row.
+          className="relative size-5.5 not-aria-pressed:text-dim before:absolute before:-inset-1.25"
           disabled={readOnly || (!bindingMode && variables.length === 0)}
           title={bindingActionLabel}
           aria-label={bindingActionLabel}
@@ -495,14 +525,14 @@ export function GraphValueField({
           }}
         >
           {boundVariable
-            ? <Link2Off size={13} strokeWidth={2.25} aria-hidden />
+            ? <Link2 size={13} strokeWidth={2.25} aria-hidden />
             : pendingBinding
               ? <X size={13} strokeWidth={2.25} aria-hidden />
-              : <Link2 size={13} strokeWidth={2.25} aria-hidden />}
-        </button>
+              : <Link2Off size={13} strokeWidth={2.25} aria-hidden />}
+        </Button>
       </div>
       {bindingMode && (
-        <div className="graph-value-binding">
+        <div>
           <GraphCombobox
             value={boundVariable ?? ''}
             options={variableOptions}
@@ -515,10 +545,10 @@ export function GraphValueField({
         </div>
       )}
       {(!bindingMode || boundVariable) && (
-        <div className="graph-value-control">
+        <div className="flex min-w-0 items-center gap-1.25">
           {boundVariable && (
             <span
-              className="graph-value-scope"
+              className="flex-none rounded-sm border border-border bg-panel-2 px-1 py-px text-8.5 font-[650] tracking-[.03em] text-dim uppercase"
               data-locked={declarationLocked ? 'true' : undefined}
               title={declarationLocked
                 ? `${boundVariable} is declared by ${declaration?.scope ?? 'another definition'} and is read-only here`
@@ -531,7 +561,10 @@ export function GraphValueField({
         </div>
       )}
       {boundVariable && declaration === undefined && variables.length > 0 && (
-        <p className="graph-value-warning">“{boundVariable}” is not declared by this paint kit.</p>
+        <p className="m-0 flex items-start gap-1 text-9 leading-[1.35] text-warn">
+          <AlertTriangle className="mt-px flex-none" size={10} aria-hidden />
+          “{boundVariable}” is not declared by this paint kit.
+        </p>
       )}
     </div>
   );

@@ -5,15 +5,21 @@ import {
   Upload,
 } from 'lucide-react';
 import { useArmedConfirm } from '../../hooks/useArmedConfirm';
+import { Button, FileButton } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { InlineNotice } from '../primitives/Notice';
+import { PATH_TEXT } from '../primitives/textStyles';
 import { DiagnosticsList } from './DiagnosticItem';
 import type {
   SourcePackageFormat,
   SourcePackageState,
   SourcePackageSummary,
 } from '../../source/contracts';
-import './SourcePackagePanel.css';
 
 const SOURCE_PACKAGE_ACCEPT = '.zip,.vpk';
+
+const PACKAGE_NAME = 'min-w-0 truncate text-11 font-[650] text-text';
+const CHIP = cn('flex items-center gap-1 rounded-sm bg-panel-2 px-1.5 py-px', PATH_TEXT);
 
 const FORMAT_LABEL: Record<SourcePackageFormat, string> = {
   zip: 'ZIP',
@@ -33,32 +39,24 @@ function plural(count: number, noun: string): string {
 
 function ImportPicker({
   state,
-  className,
   label,
 }: {
   state: SourcePackageState;
-  className: string;
   label: string;
 }) {
-  const busy = state.status === 'importing';
   return (
-    <label className={className} data-busy={busy ? '' : undefined}>
+    <FileButton
+      variant="primary"
+      label="Import a Source asset package"
+      accept={SOURCE_PACKAGE_ACCEPT}
+      // Multipart VPKs need the _dir.vpk and every numbered segment together.
+      multiple
+      busy={state.status === 'importing'}
+      onFiles={state.onImport}
+    >
       <Upload size={12} />
       <span>{label}</span>
-      <input
-        type="file"
-        accept={SOURCE_PACKAGE_ACCEPT}
-        // Multipart VPKs need the _dir.vpk and every numbered segment together.
-        multiple
-        disabled={busy}
-        aria-label="Import a Source asset package"
-        onChange={(event) => {
-          const files = [...(event.target.files ?? [])];
-          event.target.value = '';
-          if (files.length) state.onImport(files);
-        }}
-      />
-    </label>
+    </FileButton>
   );
 }
 
@@ -66,44 +64,45 @@ function ImportPicker({
 export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
   const { status, summary, diagnostics, onRemove } = state;
   const [confirmRemove, armRemove] = useArmedConfirm();
-  // Same filter as DiagnosticsList, which renders nothing for info-only diagnostics.
   const hasProblems = diagnostics.some((diagnostic) => diagnostic.level !== 'info');
 
   return (
-    <div className="source-package" data-status={status} data-problems={hasProblems ? '' : undefined}>
+    <div
+      className="scrollbar-slim flex min-h-0 flex-1 flex-col overflow-auto px-3 py-2.5 text-11 text-dim"
+      data-slot="source-package"
+      data-status={status}
+    >
       {status === 'empty' && (
-        <div className="source-package-empty">
-          <PackageOpen size={22} />
+        // A failed import takes priority over the pitch, so the pitch shrinks to leave room for its diagnostics.
+        <div className={cn('mx-auto flex max-w-80 flex-[1_0_auto] flex-col items-center justify-center gap-2.5 px-4 py-5 text-center text-11 leading-normal', hasProblems && 'flex-none gap-1.75 pt-1.5 pb-0.5')}>
+          <PackageOpen className="opacity-80" size={22} />
           <span>
-            A Source package supplies the textures a recipe asks for, in place
-            of the viewer's built-ins.
+            An archive supplies the textures a recipe asks for, in place of the
+            viewer's built-ins.
           </span>
-          <ImportPicker
-            state={state}
-            className="source-package-btn source-package-btn-primary"
-            label="Source package"
-          />
+          <ImportPicker state={state} label="Mount an archive" />
         </div>
       )}
 
       {status === 'importing' && (
-        <div className="source-package-row">
-          <LoaderCircle className="custom-workbench-spinner" size={13} />
-          <span className="source-package-name">
+        <div className="flex min-h-6.25 items-center gap-1.75">
+          <LoaderCircle className="animate-spin motion-reduce:animate-none" size={13} />
+          <span className={PACKAGE_NAME}>
             Reading {summary?.name ?? 'package'}...
           </span>
         </div>
       )}
 
       {status === 'mounted' && summary && (
-        <div className="source-package-row">
-          <span className="source-package-format" data-format={summary.format}>
+        <div className="flex min-h-6.25 items-center gap-1.75">
+          <span className="flex-none rounded-[3px] bg-accent px-1.25 py-0.5 text-10 font-bold tracking-[0.5px] text-accent-text" data-format={summary.format}>
             {FORMAT_LABEL[summary.format]}
           </span>
-          <span className="source-package-name" title={summary.name}>
+          <span className={PACKAGE_NAME} title={summary.name}>
             {summary.name}
           </span>
-          <span className="source-package-stats">
+          {/* Separator dots, not badges, so the counts read as one sentence about the package. */}
+          <span className="flex min-w-0 flex-auto items-center gap-1.25 overflow-hidden whitespace-nowrap tabular-nums [&>[data-emphasis]]:font-semibold [&>[data-emphasis]]:text-text [&>span+span]:before:mr-1.25 [&>span+span]:before:opacity-55 [&>span+span]:before:content-['·']">
             <span>{plural(summary.entryCount, 'file')}</span>
             <span>{plural(countMaterials(summary), 'material')}</span>
             <span data-emphasis="">
@@ -132,52 +131,45 @@ export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
               </span>
             )}
             {summary.ambiguousNameCount > 0 && (
-              <span
-                data-warn=""
-                title="Several files in this package share these names, so the viewer did not guess which one to use and kept its built-in texture"
-              >
+              <InlineNotice title="Several files in this package share these names, so the viewer did not guess which one to use and kept its built-in texture">
                 {summary.ambiguousNameCount.toLocaleString()} ambiguous
-              </span>
+              </InlineNotice>
             )}
           </span>
-          <ImportPicker
-            state={state}
-            className="source-package-btn"
-            label="Replace"
-          />
-          <button
-            type="button"
-            className="source-package-btn source-package-remove"
-            data-confirm={confirmRemove ? '' : undefined}
+          <ImportPicker state={state} label="Replace" />
+          <Button
+            variant={confirmRemove ? 'armed' : 'outline'}
+            size="compact"
+            data-slot="package-remove"
             onClick={() =>
               confirmRemove ? onRemove() : armRemove()
             }
           >
             <Trash2 size={12} />
             {confirmRemove ? 'Remove it?' : 'Remove'}
-          </button>
+          </Button>
         </div>
       )}
 
       {status === 'mounted' && summary && (
-        <div className="source-package-details">
-          <span className="source-package-details-label">materials/</span>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1 border-t border-border/70 pt-1.5">
+          <span className={cn('mr-0.5', PATH_TEXT)}>materials/</span>
           {summary.materialsByExtension.length === 0 ? (
-            <span className="source-package-chip" data-empty="">
+            <span className={cn(CHIP, 'italic opacity-70')}>
               no textures indexed
             </span>
           ) : (
             summary.materialsByExtension.map((entry) => (
-              <span className="source-package-chip" key={entry.extension}>
+              <span className={CHIP} key={entry.extension}>
                 .{entry.extension}
-                <b>{entry.count.toLocaleString()}</b>
+                <span className="text-text tabular-nums">{entry.count.toLocaleString()}</span>
               </span>
             ))
           )}
         </div>
       )}
 
-      <DiagnosticsList diagnostics={diagnostics} />
+      <DiagnosticsList className="flex-none" diagnostics={diagnostics} />
     </div>
   );
 }

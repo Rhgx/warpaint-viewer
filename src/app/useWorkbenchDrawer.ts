@@ -8,8 +8,6 @@ export function useWorkbenchDrawer() {
   const [workbenchExpanded, setWorkbenchExpanded] = useState(false);
   // 0 keeps the CSS default drawer height; anything else is a user drag.
   const [workbenchHeight, setWorkbenchHeight] = useState(0);
-  // Set while the resize handle is dragged; the slot drops its height transition then.
-  const [workbenchResizing, setWorkbenchResizing] = useState(false);
   // The drawer is keyed to remount per paint/weapon, so its tab lives out here.
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>('files');
 
@@ -39,8 +37,6 @@ export function useWorkbenchDrawer() {
     setWorkbenchExpanded,
     workbenchHeight,
     setWorkbenchHeight,
-    workbenchResizing,
-    setWorkbenchResizing,
     workbenchTab,
     setWorkbenchTab,
     toggleWorkbench,

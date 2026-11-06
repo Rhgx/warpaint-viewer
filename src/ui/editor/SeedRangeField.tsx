@@ -1,7 +1,13 @@
+import { Popover } from '@base-ui/react/popover';
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { Flag, RotateCcw } from 'lucide-react';
-import './SeedRangeField.css';
+import { AlertTriangle, RotateCcw } from 'lucide-react';
+
+import { ControlLabel } from '../common/controls';
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { Input } from '../primitives/Input';
+import { Select, SelectItem, SelectItemText, SelectPopup, SelectTrigger, SelectValue } from '../primitives/Select';
 
 type SeedRangeMode = 'fixed' | 'varies';
 
@@ -47,6 +53,8 @@ const LIVE_PREVIEW_MIN_INTERVAL_MS = 1000 / 10;
 const CLOSE_THUMBS_PX = 10;
 const DIRECTION_LOCK_PX = 2;
 const STEP_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']);
+const RANGE_INPUT = 'range-handle absolute inset-0 m-0 h-7 w-full';
+const NUMBER_INPUT = 'w-15.5 px-1.75 py-0 text-right tabular-nums [appearance:textfield] disabled:cursor-default [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 
 function clamp(value: number, bounds: readonly [number, number]): number {
   return Math.min(bounds[1], Math.max(bounds[0], value));
@@ -107,8 +115,6 @@ export function SeedRangeField({
   const lastPreviewAtRef = useRef(0);
   const pendingPreviewRef = useRef<SeedRangeValue | null>(null);
   const emittedPreviewRef = useRef<SeedRangeValue | null>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const divergeButtonRef = useRef<HTMLButtonElement>(null);
   const cancelNumberBlurRef = useRef(false);
   const dragBoundRef = useRef<DragBound | null>(null);
   const dragValueRef = useRef<SeedRangeValue | null>(null);
@@ -146,23 +152,14 @@ export function SeedRangeField({
 
   useEffect(() => {
     if (!popoverOpen) return;
+    // Marked handled in the capture phase, so that the same key does not also close the drawer.
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
       setPopoverOpen(false);
     };
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (target instanceof Node
-        && (popoverRef.current?.contains(target) || divergeButtonRef.current?.contains(target))) return;
-      setPopoverOpen(false);
-    };
     window.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('pointerdown', onPointerDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-      document.removeEventListener('pointerdown', onPointerDown, true);
-    };
+    return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [popoverOpen]);
 
   const format = (raw: number) => raw.toFixed(decimals);
@@ -378,103 +375,111 @@ export function SeedRangeField({
   const isVaries = displayValue.mode === 'varies';
   const lo = Math.min(displayValue.min, displayValue.max);
   const hi = Math.max(displayValue.min, displayValue.max);
+  // A shared value cannot be edited from this scope, but it is still a real value and stays readable. Only a disabled panel holds none.
+  const numberInput = cn(NUMBER_INPUT, disabled && 'disabled:opacity-65');
   const span = bounds[1] - bounds[0] || 1;
   const pct = (raw: number) => ((clamp(raw, bounds) - bounds[0]) / span) * 100;
 
   return (
-    <div
-      className="seed-range-field"
-      data-mode={displayValue.mode}
-    >
-      <div className="seed-range-field-head">
-        <span className="seed-range-field-expand">
-          <span className="seed-range-field-name">{label}</span>
-        </span>
+    <div className="bg-panel px-2.5 pt-1.75 pb-2">
+      <div className="flex min-h-control items-center gap-1.5">
+        <ControlLabel>{label}</ControlLabel>
         {divergence ? (
-          <div className="seed-range-field-diverge-wrap">
-            <button
-              ref={divergeButtonRef}
-              type="button"
-              className="seed-range-field-diverge"
-              aria-haspopup="dialog"
-              aria-expanded={popoverOpen}
+          <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
+            <Popover.Trigger
+              className="inline-flex min-h-6 min-w-6.75 cursor-pointer items-center justify-center gap-1 rounded-sm border-0 bg-transparent px-1 text-11 text-warn transition-fast focus-ring not-disabled:hover:bg-panel-2 disabled:cursor-default disabled:opacity-45"
+              data-slot="seed-range-diverge"
               disabled={disabled}
-              onClick={() => setPopoverOpen((open) => !open)}
             >
-              <Flag size={11} aria-hidden="true" />
+              <AlertTriangle className="flex-none" size={12} aria-hidden="true" />
               {divergence.count}
-            </button>
-            {popoverOpen ? (
-              <div
-                className="seed-range-field-popover"
-                ref={popoverRef}
-                role="dialog"
-                aria-label={`${label} divergence`}
-              >
-                <h4>{label} differs on {divergence.count} {divergence.count === 1 ? 'weapon' : 'weapons'}</h4>
-                <ul>
-                  {divergence.weapons.map((weapon) => <li key={weapon}>{weapon}</li>)}
-                </ul>
-                <button
-                  type="button"
-                  disabled={disabled || !onPushToAll}
-                  onClick={() => { onPushToAll?.(); setPopoverOpen(false); }}
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Positioner className="z-1100" align="start" sideOffset={5} collisionPadding={8}>
+                <Popover.Popup
+                  className="w-60 rounded-md border border-strong bg-panel p-2.5 text-text shadow-pop outline-none forced-colors:border-[CanvasText]"
+                  data-slot="seed-range-popover"
+                  aria-label={`${label} divergence`}
                 >
-                  Push this value to all weapons
-                </button>
-              </div>
-            ) : null}
-          </div>
+                  <h4 className="m-0 mb-1.75 text-11.5">{label} differs on {divergence.count} {divergence.count === 1 ? 'weapon' : 'weapons'}</h4>
+                  <ul className="scrollbar-slim m-0 mb-2 max-h-27.5 list-disc overflow-auto pl-4.5 text-10.5 text-dim">
+                    {divergence.weapons.map((weapon) => <li key={weapon}>{weapon}</li>)}
+                  </ul>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="min-h-6.5 px-2 text-10.5"
+                    disabled={disabled || !onPushToAll}
+                    onClick={() => { onPushToAll?.(); setPopoverOpen(false); }}
+                  >
+                    Push this value to all weapons
+                  </Button>
+                </Popover.Popup>
+              </Popover.Positioner>
+            </Popover.Portal>
+          </Popover.Root>
         ) : null}
-        <span className="seed-range-field-head-spacer" />
-        <select
-          className="seed-range-field-mode"
-          aria-label={`${label} variation`}
+        <span className="flex-1" />
+        <Select
           value={displayValue.mode}
           disabled={valueLocked}
-          onChange={(event) => setMode(event.target.value as SeedRangeMode)}
+          onValueChange={(next) => {
+            if (next === 'fixed' || next === 'varies') setMode(next);
+          }}
         >
-          <option value="fixed">Fixed</option>
-          <option value="varies">Varies</option>
-        </select>
+          <SelectTrigger
+            className={cn('w-19 min-w-0 gap-1.5 py-0', disabled ? 'disabled:opacity-65' : 'disabled:opacity-100', isVaries ? 'text-text' : 'text-dim', isVaries && !valueLocked && 'border-accent-edge bg-accent-soft')}
+            aria-label={`${label} variation`}
+          >
+            <SelectValue>{() => (isVaries ? 'Varies' : 'Fixed')}</SelectValue>
+          </SelectTrigger>
+          <SelectPopup className="text-11">
+            <SelectItem value="fixed"><SelectItemText>Fixed</SelectItemText></SelectItem>
+            <SelectItem value="varies"><SelectItemText>Varies</SelectItemText></SelectItem>
+          </SelectPopup>
+        </Select>
         {isDirty ? (
-          <button
-            type="button"
-            className="seed-range-field-revert"
+          <Button
+            size="icon"
+            className="flex-none"
             title={`Reset ${label} to its original value`}
             aria-label={`Reset ${label} to its original value`}
             disabled={valueLocked}
             onClick={revertToOriginal}
           >
             <RotateCcw size={12} aria-hidden="true" />
-          </button>
+          </Button>
         ) : null}
       </div>
 
-      <div className="seed-range-field-body">
-        <div className="seed-range-field-track-wrap">
+      <div className="flex min-w-0 items-center gap-2.5 pt-0.75 pb-px max-[900px]:flex-wrap">
+        <div className="min-w-30 flex-1 max-[900px]:min-w-45">
           <div
-            className="seed-range-field-track"
+            className="relative h-7 cursor-pointer touch-none"
+            data-slot="seed-range-track"
             onPointerDown={beginSliderDrag}
             onPointerMove={moveSliderDrag}
             onPointerUp={finishSliderDrag}
             onPointerCancel={finishSliderDrag}
           >
-            <span className="seed-range-field-rail" />
+            <span className="pointer-events-none absolute inset-x-0 top-3.25 h-0.75 rounded-full bg-strong" />
             <span
-              className="seed-range-field-fill"
-              style={{ left: `${pct(lo)}%`, width: `${Math.max(pct(hi) - pct(lo), 0)}%` }}
+              className={cn('pointer-events-none absolute top-3.25 h-0.75 rounded-full', valueLocked ? 'bg-dim/50' : 'bg-accent')}
+              // A range fills between its two handles. A fixed value fills from the start, as every other slider does.
+              style={isVaries ? { left: `${pct(lo)}%`, width: `${Math.max(pct(hi) - pct(lo), 0)}%` } : { left: 0, width: `${pct(hi)}%` }}
             />
-            {displayValue.mode === 'varies' && currentSeedValue !== undefined && Number.isFinite(currentSeedValue) ? (
+            {isVaries && currentSeedValue !== undefined && Number.isFinite(currentSeedValue) ? (
               <span
-                className="seed-range-field-current-seed"
-                style={{ left: `${pct(currentSeedValue)}%` }}
+                className="pointer-events-none absolute top-2 z-2 h-3 w-0.75 -translate-x-1/2 rounded-[1px] border border-[color-mix(in_srgb,var(--text)_48%,var(--border))] bg-[color-mix(in_srgb,var(--text-dim)_72%,var(--panel))] shadow-[0_0_0_1px_color-mix(in_srgb,var(--panel)_75%,transparent)]"
+                // The handle travels inset by half its 14px width, so the marker uses the same range to line up with it.
+                style={{ left: `calc(7px + (100% - 14px) * ${pct(currentSeedValue) / 100})` }}
                 title={`Current seed: ${format(currentSeedValue)}${unit ?? ''}`}
                 aria-hidden="true"
               />
             ) : null}
             <input
               type="range"
+              className={RANGE_INPUT}
               aria-label={`${label} minimum`}
               min={bounds[0]}
               max={bounds[1]}
@@ -487,6 +492,7 @@ export function SeedRangeField({
             {isVaries ? (
               <input
                 type="range"
+                className={RANGE_INPUT}
                 aria-label={`${label} maximum`}
                 min={bounds[0]}
                 max={bounds[1]}
@@ -500,9 +506,9 @@ export function SeedRangeField({
           </div>
         </div>
 
-        <div className="seed-range-field-nums">
-          <input
-            className="seed-range-field-num"
+        <div className="flex flex-none items-center gap-1 max-[900px]:ml-auto">
+          <Input
+            className={numberInput}
             type="number"
             aria-label={`${label} minimum value`}
             min={bounds[0]}
@@ -517,9 +523,9 @@ export function SeedRangeField({
           />
           {isVaries ? (
             <>
-              <span className="seed-range-field-sep">…</span>
-              <input
-                className="seed-range-field-num"
+              <span className="text-10 text-dim">…</span>
+              <Input
+                className={numberInput}
                 type="number"
                 aria-label={`${label} maximum value`}
                 min={bounds[0]}
@@ -534,7 +540,8 @@ export function SeedRangeField({
               />
             </>
           ) : null}
-          {unit ? <span className="seed-range-field-unit">{unit}</span> : null}
+          {/* Held open when empty, so that the number fields of every row line up. */}
+          <span className="w-3 text-10.5 text-dim">{unit}</span>
         </div>
       </div>
     </div>

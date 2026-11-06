@@ -1,16 +1,18 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Layers } from 'lucide-react';
 
 import type { Grade, Manifest } from '../../data/types';
 import { joinData } from '../../data/loader';
 import type { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
 import type { FitProblem, ShowcaseItem } from '../../showcase/showcaseTypes';
+import { Button } from '../primitives/Button';
 import { EYE_ICON, EYE_OFF_ICON, Section } from './ShowcaseControls';
 
 // The layer list: stacking order, visibility, and dragging rows to reorder.
 
 const LAYER_ROW_HEIGHT = 36;
+const LAYER_ICON = 'h-6.5 w-10 flex-none object-contain';
 
 /** Placed weapons, front first like an image editor's layers. Handles reorder only when weapons may overlap; otherwise the list is for picking and hiding. */
 function LayerList({ board, manifest, items, selectedIds, problems, reorderable, grades }: {
@@ -77,7 +79,7 @@ function LayerList({ board, manifest, items, selectedIds, problems, reorderable,
 
   if (!layers.length) return null;
   return (
-    <ol className="showcase-layers" style={{ '--layer-h': `${LAYER_ROW_HEIGHT}px` } as CSSProperties}>
+    <ol className="m-0 flex list-none flex-col overflow-hidden rounded-sm border border-border p-0" style={{ '--layer-h': `${LAYER_ROW_HEIGHT}px` } as CSSProperties}>
       {layers.map((item, index) => {
         const offset = drag?.id === item.id
           ? (drag.to - drag.from) * LAYER_ROW_HEIGHT
@@ -113,7 +115,7 @@ const LayerRow = memo(function LayerRow({ board, item, index, icon, grade, selec
 }) {
   return (
     <li
-      className="showcase-layer"
+      className="group relative flex h-(--layer-h) cursor-pointer items-center gap-1.5 border-border bg-panel pr-1 pl-0.5 select-none [transition:transform_120ms_ease,background-color_120ms_ease] not-first:border-t hover:bg-panel-2 data-dragging:z-1 data-dragging:bg-panel-2 data-dragging:shadow-pop data-dragging:transition-none data-selected:not-data-dragging:bg-accent-soft data-selected:not-data-dragging:shadow-[inset_2px_0_0_var(--accent)]"
       data-selected={selected || undefined}
       data-hidden={item.hidden || undefined}
       data-dragging={dragging || undefined}
@@ -122,23 +124,24 @@ const LayerRow = memo(function LayerRow({ board, item, index, icon, grade, selec
       onClick={(event) => !item.hidden && onRowClick(item.id, event)}
     >
       {reorderable && (
-        <span className="showcase-layer-handle" title="Drag to change the order" onPointerDown={(event) => onHandleDown(item.id, index, event)}>
+        <span className="flex cursor-grab touch-none items-center self-stretch px-px text-dim" title="Drag to change the order" onPointerDown={(event) => onHandleDown(item.id, index, event)}>
           {GRIP_ICON}
         </span>
       )}
-      {icon ? <img src={icon} alt="" draggable={false} /> : <span className="showcase-layer-noicon" />}
-      <span className="showcase-layer-text">
-        <span className="showcase-layer-name">{item.weaponName}</span>
-        <span className="showcase-layer-paint showcase-paint-name" data-grade={grade}>{item.paint.kitName}</span>
+      {icon ? <img className={`${LAYER_ICON} group-data-hidden:opacity-40`} src={icon} alt="" draggable={false} /> : <span className={LAYER_ICON} />}
+      <span className="flex min-w-0 flex-1 flex-col leading-[1.2] group-data-hidden:opacity-40">
+        <span className="truncate text-12 text-text group-data-problem:text-fail">{item.weaponName}</span>
+        {/* Takes its grade colour, blended toward the text like the catalog list. */}
+        <span className="truncate text-10 text-dim" style={grade ? { color: `color-mix(in srgb, var(--grade-${grade}) var(--grade-tint-strength), var(--text))` } : undefined}>{item.paint.kitName}</span>
       </span>
-      <button type="button" className="showcase-layer-eye" title={item.hidden ? 'Show' : 'Hide'}
+      <Button variant="ghost" size="icon-sm" className="flex-none" title={item.hidden ? 'Show' : 'Hide'}
         aria-label={item.hidden ? `Show ${item.weaponName}` : `Hide ${item.weaponName}`}
         onClick={(event) => {
           event.stopPropagation();
           board?.setHidden(item.id, !item.hidden);
         }}>
         {item.hidden ? EYE_OFF_ICON : EYE_ICON}
-      </button>
+      </Button>
     </li>
   );
 });
@@ -155,7 +158,7 @@ export const LayersSection = memo(function LayersSection({ board, manifest, item
   onOpenChange: (open: boolean) => void;
 }) {
   return (
-    <Section title={reorderable ? 'Layers' : 'Weapons'} aside={<span className="showcase-section-count">{items.length}</span>}
+    <Section title={reorderable ? 'Layers' : 'Weapons'} icon={Layers} aside={<span className="font-normal text-dim tabular-nums">{items.length}</span>}
       open={open} onOpenChange={onOpenChange}>
       <LayerList board={board} manifest={manifest} items={items} selectedIds={selectedIds} problems={problems} reorderable={reorderable} grades={grades} />
     </Section>

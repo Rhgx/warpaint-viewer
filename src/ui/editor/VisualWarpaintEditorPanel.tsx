@@ -1,13 +1,23 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Select } from '@base-ui/react/select';
-import { Check, ChevronDown, Eye, Trash2 } from 'lucide-react';
+import { Eye, PencilRuler, Trash2 } from 'lucide-react';
+
 import { formatGroupNameForDisplay, type CompatibleGroupTexture } from '../../editor/layers/groupNames';
 import { rawGroupIdForBucket } from '../../editor/layers/groupSampling';
 import { useArmedConfirm } from '../../hooks/useArmedConfirm';
-import './VisualWarpaintEditorPanel.css';
+import { ControlLabel } from '../common/controls';
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { EmptyState } from '../primitives/EmptyState';
+import { Select, SelectItem, SelectItemText, SelectPopup, SelectTrigger, SelectValue } from '../primitives/Select';
+import { EDITOR_BUTTON, EDITOR_HEAD, EDITOR_NOTE, EDITOR_TITLE } from './editorStyles';
 
 const CLEAR_CONFIRM_MS = 3000;
+const PANEL = 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden';
+const LAYOUT_OPTION = 'flex min-w-0 items-baseline gap-1.25 whitespace-nowrap';
+const LAYOUT_OPTION_FILE = 'min-w-0 overflow-hidden text-9.5 text-ellipsis text-dim group-data-highlighted:text-inherit group-data-highlighted:opacity-72';
+// A label too long for any row wraps rather than truncates.
+const PART_CHIP = 'h-auto min-h-control max-w-full justify-start gap-1.75 bg-transparent py-1 pr-2.75 pl-2.25 text-left text-11.5 text-dim not-aria-pressed:hover:text-text/75';
 
 export interface VisualWarpaintEditorPanelProps {
   readonly enabled: boolean;
@@ -137,6 +147,10 @@ export function VisualWarpaintEditorPanel({
     };
   }, [confirmClear, disarmClear]);
 
+  const emptyState = (message: string) => (
+    <EmptyState icon={<PencilRuler size={22} />} title={message} role="status" />
+  );
+
   const clearAreas = () => {
     if (!confirmClear) {
       armClear();
@@ -149,82 +163,77 @@ export function VisualWarpaintEditorPanel({
 
   if (!enabled) {
     return (
-      <section className="visual-warpaint-editor-panel" aria-label="Paint areas">
-        {headerSlot && <div className="visual-warpaint-editor-head">{headerSlot}</div>}
-        <p className="visual-warpaint-editor-unavailable" role="status">
-          {unavailableReason ?? 'Nothing to edit yet.'}
-        </p>
+      <section className={PANEL} aria-label="Paint areas">
+        {headerSlot && <div className={EDITOR_HEAD}>{headerSlot}</div>}
+        {emptyState(unavailableReason ?? 'Nothing to edit yet.')}
       </section>
     );
   }
 
   return (
-    <section className="visual-warpaint-editor-panel" aria-label="Paint areas">
-      <div className="visual-warpaint-editor-head">
-        <span className="visual-warpaint-editor-head-title">Parts in {layerLabel}</span>
-        <span className="visual-warpaint-editor-head-count">{areaCount} of {availableParts.length}</span>
+    <section className={PANEL} aria-label="Paint areas">
+      <div className={EDITOR_HEAD}>
         {headerSlot}
-        <div className="visual-warpaint-editor-head-spacer" />
+        <span className={EDITOR_TITLE}>Parts in {layerLabel}</span>
+        <span className={cn(EDITOR_NOTE, 'font-normal tabular-nums')}>{areaCount} of {availableParts.length}</span>
+        <div className="flex-1" />
         {headerActions}
         {(groupTextureChoices?.length ?? 0) > 1 && (
-          <div className="visual-warpaint-editor-layout">
-            <span>Group layout</span>
-            <Select.Root
+          <div className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+            <ControlLabel>Group layout</ControlLabel>
+            <Select
               value={activeGroupTextureRef}
               onValueChange={(value) => onGroupTextureChange?.(value as string)}
             >
-              <Select.Trigger
-                className="ui-select-trigger visual-warpaint-editor-layout-trigger"
+              <SelectTrigger
+                className="w-56.25 min-w-0 py-0"
                 aria-label="Weapon group layout"
                 title={activeGroupTextureRef}
                 disabled={!onGroupTextureChange}
               >
-                <Select.Value>
+                <SelectValue>
                   {() => selectedGroupTexture ? (
-                    <span className="visual-warpaint-editor-layout-option">
-                      <span>{selectedGroupTexture.label}</span>
-                      <span>( {groupTextureName(selectedGroupTexture.ref)} )</span>
+                    <span className={LAYOUT_OPTION}>
+                      <span className="flex-none">{selectedGroupTexture.label}</span>
+                      <span className={LAYOUT_OPTION_FILE}>({groupTextureName(selectedGroupTexture.ref)})</span>
                     </span>
                   ) : 'Select layout'}
-                </Select.Value>
-                <Select.Icon className="ui-select-icon"><ChevronDown size={12} /></Select.Icon>
-              </Select.Trigger>
-              <Select.Portal>
-                <Select.Positioner className="ui-select-positioner" sideOffset={4} alignItemWithTrigger={false}>
-                  <Select.Popup className="ui-select-popup visual-warpaint-editor-layout-popup">
-                    {groupTextureChoices?.map((choice) => (
-                      <Select.Item key={choice.ref} value={choice.ref} className="ui-select-item">
-                        <Select.ItemText>
-                          <span className="visual-warpaint-editor-layout-option">
-                            <span>{choice.label}</span>
-                            <span>( {groupTextureName(choice.ref)} )</span>
-                          </span>
-                        </Select.ItemText>
-                        <Select.ItemIndicator className="ui-select-indicator"><Check size={12} /></Select.ItemIndicator>
-                      </Select.Item>
-                    ))}
-                  </Select.Popup>
-                </Select.Positioner>
-              </Select.Portal>
-            </Select.Root>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup className="w-[min(250px,var(--available-width))] min-w-0 text-11">
+                {groupTextureChoices?.map((choice) => (
+                  <SelectItem key={choice.ref} value={choice.ref}>
+                    <SelectItemText>
+                      <span className={LAYOUT_OPTION}>
+                        <span className="flex-none">{choice.label}</span>
+                        <span className={LAYOUT_OPTION_FILE}>({groupTextureName(choice.ref)})</span>
+                      </span>
+                    </SelectItemText>
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           </div>
         )}
-        <button
-          type="button"
-          className="visual-warpaint-editor-layer-map-toggle"
+        <Button
+          variant="toggle"
+          size="compact"
+          className={cn(EDITOR_BUTTON, 'not-aria-pressed:text-dim')}
+          data-slot="editor-layer-map"
           aria-pressed={showLayerMap ?? false}
           disabled={!onShowLayerMapChange}
           onClick={() => onShowLayerMapChange?.(!(showLayerMap ?? false))}
         >
           <Eye size={13} aria-hidden="true" />
           Layer map
-        </button>
-        <button
+        </Button>
+        <Button
           ref={clearButtonRef}
-          type="button"
-          className="visual-warpaint-editor-clear"
+          variant={confirmClear ? 'armed' : 'danger'}
+          size="compact"
+          className={EDITOR_BUTTON}
+          data-slot="editor-clear-parts"
           disabled={areaCount === 0 || clearSelectionDisabled}
-          data-confirm={confirmClear ? '' : undefined}
           onClick={clearAreas}
           onBlur={() => disarmClear()}
           aria-label={confirmClear
@@ -234,11 +243,12 @@ export function VisualWarpaintEditorPanel({
         >
           <Trash2 size={12} aria-hidden="true" />
           {confirmClear ? 'Clear all?' : 'Clear'}
-        </button>
+        </Button>
       </div>
 
+      {/* Always mounted as a live region. It takes room only while it has a message. */}
       <div
-        className="visual-warpaint-editor-notice"
+        className="h-0 flex-none overflow-hidden px-3 text-10 text-dim opacity-0 transition-fast data-visible:h-auto data-visible:pt-1.75 data-visible:opacity-100"
         role="status"
         aria-live="polite"
         data-visible={notice ? '' : undefined}
@@ -247,16 +257,16 @@ export function VisualWarpaintEditorPanel({
       </div>
 
       {boardParts.length > 0 ? (
-        <div className="visual-warpaint-editor-board" role="group" aria-label="Weapon parts">
+        <div className="scrollbar-slim flex min-h-0 flex-1 flex-wrap content-start gap-1.5 overflow-auto px-3 pt-2.5 pb-3" role="group" aria-label="Weapon parts">
           {boardParts.map((part) => (
-            <button
-              type="button"
+            <Button
               key={part.groupId}
-              className="visual-warpaint-editor-chip"
+              variant="toggle"
+              className={PART_CHIP}
+              data-slot="editor-part-chip"
               aria-pressed={part.inActiveLayer}
               aria-label={part.fullName}
               title={part.fullName}
-              data-elsewhere={part.inOtherLayer ? '' : undefined}
               onClick={() => onToggleGroup(part.groupId)}
               onMouseEnter={() => onPreviewGroup?.(part.groupId)}
               onMouseLeave={() => onPreviewGroup?.(null)}
@@ -264,19 +274,15 @@ export function VisualWarpaintEditorPanel({
               onBlur={() => onPreviewGroup?.(null)}
             >
               <span
-                className="visual-warpaint-editor-chip-swatch"
+                className={cn('size-2.25 flex-none rounded-[3px] bg-current', part.inActiveLayer ? 'opacity-100 ring-1 ring-panel' : part.inOtherLayer ? 'opacity-85' : 'opacity-35')}
                 style={part.swatchColor ? { background: part.swatchColor } : undefined}
                 aria-hidden="true"
               />
-              <span>{part.displayName}</span>
-            </button>
+              <span className="min-w-0">{part.displayName}</span>
+            </Button>
           ))}
         </div>
-      ) : (
-        <p className="visual-warpaint-editor-unavailable" role="status">
-          This paint has no assignable parts.
-        </p>
-      )}
+      ) : emptyState('This paint has no assignable parts.')}
     </section>
   );
 }

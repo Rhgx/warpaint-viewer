@@ -90,8 +90,8 @@ test('a board that came from no ready-made layout has none in its file', async (
 });
 
 test('other files are turned down with a reason', async () => {
-  await assert.rejects(readLayoutFile(new Blob(['not a layout at all'])), /not a \.pegboard file/);
-  await assert.rejects(readLayoutFile(new Blob([])), /not a \.pegboard file/);
+  await assert.rejects(readLayoutFile(new Blob(['not a layout at all'])), /Not a \.pegboard file\./);
+  await assert.rejects(readLayoutFile(new Blob([])), /Not a \.pegboard file\./);
   await assert.rejects(readLayoutFile(new Blob([new Uint8Array([0x57, 0x50, 0x4c, 0x59, 2, 0])])), /newer version\. Refresh/);
 });
 

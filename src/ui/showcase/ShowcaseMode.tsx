@@ -9,6 +9,7 @@ import type { AppliedLayout, BoardEditSideEffect, ShowcaseItem, ShowcasePaint, S
 import { readSavedBoard, writeSavedBoard } from '../../showcase/boardStorage';
 import { boardLayouts } from '../../showcase/layouts';
 import { downloadBlob } from '../common/download';
+import { DropHint } from '../primitives/DropHint';
 import { ShowcaseGizmo, ShowcasePoseHandles } from './ShowcaseGizmo';
 import { readLayoutSlots, readSlotBackups, slotImages } from './layoutSlots';
 import { describeProblem, exportsBackdrop, loadSettings, SETTINGS_STORAGE_KEY, type ShowcaseSettings } from './showcaseSettings';
@@ -20,7 +21,6 @@ import { ShowcaseToolbar } from './ShowcaseToolbar';
 import { ShowcaseTray } from './ShowcaseTray';
 import { ImageSection, MultiSection, WeaponSection } from './ShowcaseWeaponSection';
 import { useSavedLayouts } from './useSavedLayouts';
-import './Showcase.css';
 
 const EMPTY_SNAPSHOT: ShowcaseSnapshot = {
   items: [], selectedId: null, selectedIds: [], problems: {}, pending: null, dragging: false, canUndo: false, canRedo: false,
@@ -349,20 +349,21 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
   }, [board, droppedBoardFile, inspectorEl, onDroppedBoardFileTaken]);
 
   return (
-    <div className="showcase" inert={restoring}>
-      <div className="showcase-stage">
-        <canvas ref={canvasRef} className="showcase-canvas" />
+    <div data-slot="board" className="absolute inset-0 z-4 flex flex-col bg-stage" inert={restoring}>
+      {/* Strict containment: gizmo and warning updates every frame never reach layout outside the stage. */}
+      <div data-slot="board-stage" className="board-checkerboard relative min-h-0 flex-1 [contain:strict]">
+        <canvas ref={canvasRef} className="block size-full touch-none" />
         {board && selected && !snapshot.dragging && (
           <>
             <ShowcaseGizmo board={board} item={selected} snap={settings.rotationSnap} />
             {settings.poseHandles && <ShowcasePoseHandles board={board} item={selected} />}
           </>
         )}
-        {warning && <div className="showcase-warning" role="status">{warning}</div>}
+        {warning && <div data-slot="board-warning" className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 rounded-md border border-[color-mix(in_srgb,var(--fail)_60%,var(--border-strong))] bg-panel/90 px-2.5 py-1.25 text-12 font-semibold text-fail" role="status">{warning}</div>}
         {dropping && (
-          <div className="showcase-drop-hint" aria-hidden="true">
+          <DropHint data-slot="board-drop-hint" className="absolute inset-0 z-5" aria-hidden="true">
             {dropping === 'image' ? 'Drop to add this picture to the board.' : 'Drop a .pegboard file to open it. Replaces the board.'}
-          </div>
+          </DropHint>
         )}
         <ShowcaseToolbar board={board} onClose={onClose} hasItems={snapshot.items.length > 0}
           canUndo={snapshot.canUndo} canRedo={snapshot.canRedo} onSave={exportPng} onCopy={copyPng} onAddImage={addImage} />
@@ -457,7 +458,7 @@ function ShowcasePanel({ board, manifest, paintkits, kit, paint, hasReplacedText
     return weapon && key !== 'paintkit_tool' ? [{ value: key, label: weapon.name, icon: weapon.icon ? joinData(weapon.icon) : null }] : [];
   }), [kit, manifest]);
   return (
-    <div className="showcase-panel" inert={restoring}>
+    <div data-slot="board-panel" className="contents" inert={restoring}>
       <LayersSection board={board} manifest={manifest} items={snapshot.items} selectedIds={snapshot.selectedIds}
         problems={snapshot.problems} reorderable={!settings.keepApart} grades={grades} open={layersOpen} onOpenChange={setLayersOpen} />
       {selected?.image && board && (

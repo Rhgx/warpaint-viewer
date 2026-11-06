@@ -280,7 +280,7 @@ export function useCustomDefinitions({
       if (!provider.package) {
         notes.push(diagnostic(
           'info',
-          'Mount a Source package on the Package tab to supply the textures these definitions ask for.',
+          'Mount an archive to supply the textures these definitions ask for.',
         ));
       }
       setDiagnostics(notes);

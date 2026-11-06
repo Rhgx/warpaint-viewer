@@ -38,6 +38,7 @@ function turntableToast(status: TurntableStatus | null, since: { at: number; don
         title: `${TURNTABLE_FORMATS[status.format].label} saved`,
         description: `${status.width} x ${status.height}, ${formatSize(status.bytes)}`,
         dismissible: true,
+        tone: 'success' as const,
         timeout: 5_000,
       };
     case 'stopped':

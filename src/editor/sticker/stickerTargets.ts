@@ -315,6 +315,8 @@ const UNINFORMATIVE_STICKER_TOKENS = new Set([
   'null', 'none', 'empty', 'default', 'placeholder', 'black', 'white', 'grey', 'gray',
 ]);
 
+const WORKSHOP_ID = /^\d{6,}$/;
+
 export function stickerTargetLabel(baseRef: string | undefined, index: number): string {
   const ordinal = `Sticker ${index + 1}`;
   const source = baseRef?.split(/[\\/]/).pop()?.replace(/\.[a-z0-9]+$/i, '') ?? '';
@@ -326,6 +328,8 @@ export function stickerTargetLabel(baseRef: string | undefined, index: number): 
       words.push('TF2');
       continue;
     }
+    // Workshop ids say nothing about the art and would crowd out the name.
+    if (WORKSHOP_ID.test(raw)) continue;
     // Trailing digits are a variant counter, not part of the name.
     const [, stem, digits] = /^(.*?)(\d*)$/.exec(raw) ?? [];
     const token = (stem || raw).toLowerCase();
@@ -347,5 +351,7 @@ export function isStickerArtworkReference(reference: string): boolean {
 
 export function textureChoiceLabel(reference: string): string {
   const name = reference.split('/').at(-1) ?? reference;
-  return name.replace(/\.[^.]+$/, '').replaceAll('_', ' ');
+  const words = name.replace(/\.[^.]+$/, '').split('_');
+  const named = words.filter((word) => !WORKSHOP_ID.test(word));
+  return (named.length > 0 ? named : words).join(' ');
 }

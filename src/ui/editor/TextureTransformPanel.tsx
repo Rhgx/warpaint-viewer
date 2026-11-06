@@ -1,8 +1,14 @@
 import type { ReactNode } from 'react';
-import { Check, Eye, RotateCcw } from 'lucide-react';
+import { Eye, RotateCcw } from 'lucide-react';
+
+import { ControlLabel } from '../common/controls';
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { COMPACT_INPUTS } from '../primitives/Input';
+import { Select, SelectItem, SelectItemText, SelectPopup, SelectTrigger, SelectValue } from '../primitives/Select';
+import { EDITOR_CHECK_LABEL, EDITOR_CHECKBOX, EDITOR_HEAD, EDITOR_TITLE } from './editorStyles';
 import { SeedRangeField, type SeedRangeDivergence, type SeedRangeValue } from './SeedRangeField';
 import { WeaponUvSurface } from './WeaponUvSurface';
-import './TextureTransformPanel.css';
 
 export interface TextureTransformFields {
   readonly rotation: SeedRangeValue;
@@ -17,8 +23,6 @@ const SHARED_FIELD_NOTE = 'Shared by all weapons. Switch to All weapons to edit.
 
 export interface TextureTransformPanelProps {
   readonly layerLabel: string;
-  readonly layerIndex: number;
-  readonly layerCount: number;
   readonly fields: TextureTransformFields;
   readonly currentSeedValues?: Partial<Record<keyof TextureTransformFields, number>>;
   readonly originalValues: TextureTransformFields;
@@ -82,8 +86,6 @@ function authoredBounds(
 /** The transform sub-view of a paint layer: per-field ranges and mirroring. */
 export function TextureTransformPanel({
   layerLabel,
-  layerIndex,
-  layerCount,
   fields,
   currentSeedValues,
   originalValues,
@@ -110,42 +112,48 @@ export function TextureTransformPanel({
   onInteractionStart,
   onInteractionEnd,
 }: TextureTransformPanelProps) {
+  const uvAspect = Number.isFinite(previewAspect) && previewAspect > 0 ? previewAspect : 1;
+  const weaponScopeLabel = scopeWeaponLabel ? `This weapon only (${scopeWeaponLabel})` : 'This weapon only';
   return (
-    <div className="texture-transform-panel">
-      <div className="texture-transform-panel-head">
-        <span className="texture-transform-panel-title">
-          {layerLabel}
-          <small>paint layer {layerIndex + 1} of {layerCount}</small>
-        </span>
+    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', COMPACT_INPUTS)} data-slot="texture-transform">
+      <div className={EDITOR_HEAD}>
         {headerSlot}
-        <span className="texture-transform-panel-head-spacer" />
+        <span className={EDITOR_TITLE}>{layerLabel}</span>
+        <span className="flex-1" />
         {headerActions}
-        <select
-          className="texture-transform-panel-scope-select"
-          aria-label="Transform scope"
-          title="Choose whether transform edits apply to every weapon or only the current weapon"
+        {/* Wraps as one, so that the two icons are not left alone on a second row. */}
+        <div className="flex min-w-0 items-center gap-2">
+        <Select
           value={scope}
           disabled={disabled}
-          onChange={(event) => onScopeChange(event.target.value as 'all' | 'weapon')}
+          onValueChange={(next) => {
+            if (next === 'all' || next === 'weapon') onScopeChange(next);
+          }}
         >
-          <option value="all">All weapons</option>
-          <option value="weapon">
-            {scopeWeaponLabel ? `This weapon only (${scopeWeaponLabel})` : 'This weapon only'}
-          </option>
-        </select>
-        <button
-          type="button"
-          className="texture-transform-panel-action"
+          <SelectTrigger
+            className="w-auto max-w-55 min-w-0 py-0 max-[900px]:max-w-38.75"
+            aria-label="Transform scope"
+            title="Choose whether transform edits apply to every weapon or only the current weapon"
+          >
+            <SelectValue className="truncate">{() => (scope === 'all' ? 'All weapons' : weaponScopeLabel)}</SelectValue>
+          </SelectTrigger>
+          <SelectPopup className="text-11">
+            <SelectItem value="all"><SelectItemText>All weapons</SelectItemText></SelectItem>
+            <SelectItem value="weapon"><SelectItemText>{weaponScopeLabel}</SelectItemText></SelectItem>
+          </SelectPopup>
+        </Select>
+        <Button
+          size="icon"
           title="Reset all transforms to their original values"
           aria-label="Reset all transforms to their original values"
           disabled={disabled}
           onClick={onResetAll}
         >
           <RotateCcw size={14} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="texture-transform-panel-action"
+        </Button>
+        <Button
+          variant="toggle"
+          size="icon"
           title={isolateLayer ? 'Stop isolating selected layer' : 'Isolate selected layer'}
           aria-label={isolateLayer ? 'Stop isolating selected layer' : 'Isolate selected layer'}
           aria-pressed={isolateLayer}
@@ -153,16 +161,19 @@ export function TextureTransformPanel({
           onClick={() => onIsolateLayerChange(!isolateLayer)}
         >
           <Eye size={15} aria-hidden="true" />
-        </button>
+        </Button>
+        </div>
       </div>
 
-      <div className="texture-transform-panel-body">
-        <div className="texture-transform-panel-preview-pane">
-          <span className="texture-transform-panel-preview-title">Weapon UV</span>
-          <div className="texture-transform-panel-preview-frame">
+      {/* The first column caps the UV surface at a square footprint, larger when the editor fills the screen. Extra width goes to the controls. */}
+      <div className="scrollbar-slim grid min-h-0 flex-1 grid-cols-[minmax(300px,460px)_minmax(320px,1fr)] overflow-auto @min-[1400px]:grid-cols-[minmax(300px,720px)_minmax(320px,1fr)] bg-panel @max-[760px]:grid-cols-1">
+        <div className="flex min-h-0 min-w-0 flex-col border-r border-border bg-panel-2 px-3 pt-2.5 pb-3 @max-[760px]:min-h-60 @max-[760px]:border-r-0 @max-[760px]:border-b">
+          <span className="mb-2 flex-none text-11.5 font-[650] text-text">Weapon UV</span>
+          <div className="flex min-h-0 min-w-0 flex-1 @container-size items-start justify-center">
             <div
-              className="texture-transform-panel-preview"
-              style={{ aspectRatio: Number.isFinite(previewAspect) && previewAspect > 0 ? previewAspect : 1 }}
+              className="relative flex-none overflow-hidden border border-strong bg-panel"
+              // As large as the room allows at the texture's own shape, so that the frame hugs the image.
+              style={{ aspectRatio: uvAspect, width: `min(100cqw, calc(100cqh * ${uvAspect}))` }}
               aria-label="Complete composed weapon texture in UV space"
             >
               <WeaponUvSurface
@@ -170,7 +181,7 @@ export function TextureTransformPanel({
                 isolationOverlaySrc={uvIsolationOverlaySrc}
               />
               {!uvTextureSrc ? (
-                <span className="texture-transform-panel-preview-status" role="status">
+                <span className="absolute inset-0 z-3 grid place-items-center p-4 text-center text-10.5 text-dim" role="status">
                   {uvSurfaceLoading ? 'Preparing weapon surface…' : 'Weapon texture unavailable.'}
                 </span>
               ) : null}
@@ -178,7 +189,7 @@ export function TextureTransformPanel({
           </div>
         </div>
 
-        <div className="texture-transform-panel-fields">
+        <div className="flex min-h-0 min-w-0 flex-col" data-slot="transform-fields">
           {FIELD_ORDER.map((config) => {
           const fieldValue = fields[config.key];
           const originalValue = originalValues[config.key];
@@ -186,7 +197,7 @@ export function TextureTransformPanel({
           const bounds = authoredBounds(config.bounds, fieldValue, originalValue, currentSeedValue);
           const shared = sharedFields?.includes(config.key) ?? false;
           return (
-          <div className="texture-transform-panel-field" key={config.key} title={shared ? SHARED_FIELD_NOTE : undefined}>
+          <div className="flex flex-none flex-col" key={config.key} title={shared ? SHARED_FIELD_NOTE : undefined}>
             <SeedRangeField
               label={config.label}
               unit={config.unit}
@@ -208,32 +219,32 @@ export function TextureTransformPanel({
           );
           })}
 
-          <div className="texture-transform-panel-mirror-row">
-            <span>Mirroring</span>
+          <div className="flex min-h-10 flex-none items-center gap-3.5 border-t border-border/66 px-2.5 py-1.5">
+            <ControlLabel className="mr-auto">Mirroring</ControlLabel>
             <label
-              className="texture-transform-panel-check"
+              className={EDITOR_CHECK_LABEL}
               title={sharedFields?.includes('flipU') ? SHARED_FIELD_NOTE : undefined}
             >
               <input
                 type="checkbox"
+                className={EDITOR_CHECKBOX}
                 checked={flipU}
                 disabled={disabled || (sharedFields?.includes('flipU') ?? false)}
                 onChange={(event) => onFlipChange('u', event.target.checked)}
               />
-              <span className="texture-transform-panel-check-box" aria-hidden="true"><Check size={10} /></span>
               <span>Flip U</span>
             </label>
             <label
-              className="texture-transform-panel-check"
+              className={EDITOR_CHECK_LABEL}
               title={sharedFields?.includes('flipV') ? SHARED_FIELD_NOTE : undefined}
             >
               <input
                 type="checkbox"
+                className={EDITOR_CHECKBOX}
                 checked={flipV}
                 disabled={disabled || (sharedFields?.includes('flipV') ?? false)}
                 onChange={(event) => onFlipChange('v', event.target.checked)}
               />
-              <span className="texture-transform-panel-check-box" aria-hidden="true"><Check size={10} /></span>
               <span>Flip V</span>
             </label>
           </div>

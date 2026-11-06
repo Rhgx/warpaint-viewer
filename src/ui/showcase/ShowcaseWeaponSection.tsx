@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CopyPlus, Dices, FlipHorizontal2, PackageOpen, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
+import { Boxes, CopyPlus, Crosshair, FlipHorizontal2, Image, PackageOpen, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
 
 import type { PaintkitEntry } from '../../data/types';
 import { TILT_LIMIT, type ShowcaseBoard } from '../../showcase/ShowcaseBoard';
@@ -7,7 +7,13 @@ import type { FitProblem, ShowcaseItem, ShowcasePaint } from '../../showcase/sho
 import { restingRoll, shownSideFlip } from '../../showcase/weaponGeometry';
 import { POSE_RIGS, WEAPON_PARTS, defaultPose, snapMarks, snapPose, type PoseControl } from '../../showcase/poseRigs';
 import { randomSeed } from '../../hooks/useBootData';
-import { SliderField, SwitchField, TeamToggle, WearSliderField } from '../common/controls';
+import { Control, SeedInput, TeamToggle, WearSliderField } from '../common/controls';
+import { Slider } from '../primitives/Slider';
+import { Switch } from '../primitives/Switch';
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
+import { InlineNotice } from '../primitives/Notice';
+import { SECTION_TITLE } from '../primitives/textStyles';
 import { EYE_ICON, EYE_OFF_ICON, PercentInput, Row, Section, SliderRow, ValueSlider } from './ShowcaseControls';
 import { describeProblem } from './showcaseSettings';
 
@@ -26,6 +32,11 @@ const ROTATE_CW_ICON = <RotateCw size={13} />;
 const FLIP_ICON = <FlipHorizontal2 size={13} />;
 const DUPLICATE_ICON = <CopyPlus size={13} />;
 const REMOVE_ICON = <Trash2 size={13} />;
+// The same icons as these fields have in the inspector.
+
+const SUBHEADING = cn('mt-1 border-t border-border pt-2', SECTION_TITLE);
+
+const ACTIONS = 'flex gap-1 pt-0.5';
 
 export const WeaponSection = memo(function WeaponSection({ board, item, problem, rotationSnap, rotationStep, poseHandles, onPoseHandlesChange, kit, wearNames }: {
   board: ShowcaseBoard;
@@ -62,6 +73,7 @@ export const WeaponSection = memo(function WeaponSection({ board, item, problem,
     || JSON.stringify(item.pose) !== JSON.stringify(restPose);
   return (
     <Section
+      icon={Crosshair}
       // The header keeps the name in view when the layer list is collapsed or scrolled away.
       title={item.weaponName}
       onClose={() => board.select(null)}
@@ -71,9 +83,9 @@ export const WeaponSection = memo(function WeaponSection({ board, item, problem,
         board.settle(id);
       }}
     >
-      {problem && <span className="showcase-fit">{describeProblem(problem)}</span>}
+      {problem && <InlineNotice tone="error">{describeProblem(problem)}</InlineNotice>}
       <PaintRows board={board} id={id} paint={item.paint} kit={kit} wearNames={wearNames} />
-      <div className="showcase-subheading">Transform</div>
+      <div className={SUBHEADING}>Transform</div>
       <ValueSlider label="Roll" display={`${item.roll}°`} value={item.roll} min={-180} max={180} step={rotationSnap || 1}
         markers={ZERO_MARK} onChange={setRoll} onCommit={settle} />
       <ValueSlider label="Tilt" display={`${item.tilt}°`} value={item.tilt} min={-TILT_LIMIT} max={TILT_LIMIT} step={1}
@@ -83,51 +95,51 @@ export const WeaponSection = memo(function WeaponSection({ board, item, problem,
       <SizeSlider size={size} onChange={setSize} onCommit={settle} onType={typeSize} />
       {rig && (
         <>
-          <div className="showcase-subheading">Pose</div>
+          <div className={SUBHEADING}>Pose</div>
           {rig.controls.map((control) => (
             <PoseSlider key={control.id} control={control} value={item.pose[control.id] ?? control.defaultValue} onPose={setPose} onCommit={settle} />
           ))}
           {rig.controls.some((control) => control.handle) && (
             <Row label="Handles on the weapon">
-              <SwitchField checked={poseHandles} onChange={onPoseHandlesChange} ariaLabel="Handles on the weapon" />
+              <Switch checked={poseHandles} onChange={onPoseHandlesChange} ariaLabel="Handles on the weapon" />
             </Row>
           )}
         </>
       )}
       {parts.length > 0 && (
         <>
-          <div className="showcase-subheading">Parts</div>
+          <div className={SUBHEADING}>Parts</div>
           {parts.map((part) => {
             const shown = !part.loose && !item.hiddenParts.includes(part.id);
             return (
-              <div key={part.id} className="showcase-part">
-                <span className="showcase-part-name">{part.label}</span>
+              <div key={part.id} className="flex min-h-control items-center gap-1.5">
+                <span className="min-w-0 flex-1 text-12 text-dim">{part.label}</span>
                 {!part.loose && (
-                  <button type="button" className="showcase-layer-eye" aria-pressed={shown}
+                  <Button variant="ghost" size="icon-sm" className="flex-none" aria-pressed={shown}
                     title={shown ? `Leave the ${part.label.toLowerCase()} out` : `Put the ${part.label.toLowerCase()} back`}
                     onClick={() => board.setPartShown(id, part.id, !shown)}>
                     {shown ? EYE_ICON : EYE_OFF_ICON}
-                  </button>
+                  </Button>
                 )}
-                <button type="button" className="showcase-btn" title={`Place the ${part.label.toLowerCase()} on the board by itself`}
+                <Button title={`Place the ${part.label.toLowerCase()} on the board by itself`}
                   onClick={() => void board.pullOutPart(id, part.id)}>
                   <PackageOpen size={13} /> Take out
-                </button>
+                </Button>
               </div>
             );
           })}
         </>
       )}
-      <div className="showcase-actions">
-        <button type="button" className="showcase-btn" title={`Rotate ${rotationStep}° counterclockwise (Q)`}
-          onClick={() => board.rotateBy(id, rotationStep)}>{ROTATE_CCW_ICON}</button>
-        <button type="button" className="showcase-btn" title={`Rotate ${rotationStep}° clockwise (E)`}
-          onClick={() => board.rotateBy(id, -rotationStep)}>{ROTATE_CW_ICON}</button>
-        <button type="button" className="showcase-btn" title="Show the other side (F)"
-          onClick={() => { board.update(id, { flipped: !item.flipped }); board.settle(id); }}>{FLIP_ICON}</button>
-        <button type="button" className="showcase-btn" title="Duplicate" onClick={() => void board.duplicate(id)}>{DUPLICATE_ICON}</button>
-        <span className="showcase-actions-spacer" />
-        <button type="button" className="showcase-btn showcase-btn-danger" title="Remove (Delete)" onClick={() => board.remove(id)}>{REMOVE_ICON}</button>
+      <div className={ACTIONS}>
+        <Button title={`Rotate ${rotationStep}° counterclockwise (Q)`}
+          onClick={() => board.rotateBy(id, rotationStep)}>{ROTATE_CCW_ICON}</Button>
+        <Button title={`Rotate ${rotationStep}° clockwise (E)`}
+          onClick={() => board.rotateBy(id, -rotationStep)}>{ROTATE_CW_ICON}</Button>
+        <Button title="Show the other side (F)"
+          onClick={() => { board.update(id, { flipped: !item.flipped }); board.settle(id); }}>{FLIP_ICON}</Button>
+        <Button title="Duplicate" onClick={() => void board.duplicate(id)}>{DUPLICATE_ICON}</Button>
+        <span className="flex-1" />
+        <Button variant="danger" title="Remove (Delete)" onClick={() => board.remove(id)}>{REMOVE_ICON}</Button>
       </div>
     </Section>
   );
@@ -148,6 +160,7 @@ export const ImageSection = memo(function ImageSection({ board, item, problem, r
   const typeSize = useCallback((value: number) => { board.update(id, { scale: value / 100 }); board.settle(id); }, [board, id]);
   return (
     <Section
+      icon={Image}
       title={item.weaponName}
       onClose={() => board.select(null)}
       canReset={item.roll !== 0 || item.flipped || item.scale !== 1}
@@ -156,20 +169,20 @@ export const ImageSection = memo(function ImageSection({ board, item, problem, r
         board.settle(id);
       }}
     >
-      {problem && <span className="showcase-fit">{describeProblem(problem)}</span>}
+      {problem && <InlineNotice tone="error">{describeProblem(problem)}</InlineNotice>}
       <ValueSlider label="Roll" display={`${item.roll}°`} value={item.roll} min={-180} max={180} step={rotationSnap || 1}
         markers={ZERO_MARK} onChange={setRoll} onCommit={settle} />
       <SizeSlider size={Math.round(item.scale * 100)} onChange={setSize} onCommit={settle} onType={typeSize} />
-      <div className="showcase-actions">
-        <button type="button" className="showcase-btn" title={`Rotate ${rotationStep}° counterclockwise (Q)`}
-          onClick={() => board.rotateBy(id, rotationStep)}>{ROTATE_CCW_ICON}</button>
-        <button type="button" className="showcase-btn" title={`Rotate ${rotationStep}° clockwise (E)`}
-          onClick={() => board.rotateBy(id, -rotationStep)}>{ROTATE_CW_ICON}</button>
-        <button type="button" className="showcase-btn" title="Mirror (F)"
-          onClick={() => { board.update(id, { flipped: !item.flipped }); board.settle(id); }}>{FLIP_ICON}</button>
-        <button type="button" className="showcase-btn" title="Duplicate" onClick={() => void board.duplicate(id)}>{DUPLICATE_ICON}</button>
-        <span className="showcase-actions-spacer" />
-        <button type="button" className="showcase-btn showcase-btn-danger" title="Remove (Delete)" onClick={() => board.remove(id)}>{REMOVE_ICON}</button>
+      <div className={ACTIONS}>
+        <Button title={`Rotate ${rotationStep}° counterclockwise (Q)`}
+          onClick={() => board.rotateBy(id, rotationStep)}>{ROTATE_CCW_ICON}</Button>
+        <Button title={`Rotate ${rotationStep}° clockwise (E)`}
+          onClick={() => board.rotateBy(id, -rotationStep)}>{ROTATE_CW_ICON}</Button>
+        <Button title="Mirror (F)"
+          onClick={() => { board.update(id, { flipped: !item.flipped }); board.settle(id); }}>{FLIP_ICON}</Button>
+        <Button title="Duplicate" onClick={() => void board.duplicate(id)}>{DUPLICATE_ICON}</Button>
+        <span className="flex-1" />
+        <Button variant="danger" title="Remove (Delete)" onClick={() => board.remove(id)}>{REMOVE_ICON}</Button>
       </div>
     </Section>
   );
@@ -216,8 +229,7 @@ export const MultiSection = memo(function MultiSection({ board, items, paintkits
     if (/^\d+$/.test(typed) && BigInt(typed) < 2n ** 64n) board.setPaintMany(weaponIds, { seed: BigInt(typed).toString() });
   };
   return (
-    <Section title={weapons.length === items.length ? `${items.length} weapons` : `${items.length} selected`} onClose={() => board.select(null)}>
-      {weapons.length > 0 && <p className="showcase-section-note">Pick a war paint in the catalog to repaint the ones it covers.</p>}
+    <Section icon={Boxes} title={weapons.length === items.length ? `${items.length} weapons` : `${items.length} selected`} onClose={() => board.select(null)}>
       {byWear.length > 0 && (
         <SliderRow label="Wear" value={wear === null ? 'Mixed' : wearNames[wear]}>
           <WearSliderField value={wear ?? byWear[0].paint.wearIndex} names={wearNames}
@@ -229,32 +241,26 @@ export const MultiSection = memo(function MultiSection({ board, items, paintkits
           <TeamToggle team={team ?? byTeam[0].paint.team} onChange={(next) => board.setPaintMany(byTeam.map((item) => item.id), { team: next })} />
         </SliderRow>
       )}
-      {weapons.length > 0 && <Row label="Seed">
-        <span className="showcase-seed">
-          <input
-            className="ui-input showcase-seed-input"
-            inputMode="numeric"
-            aria-label="Pattern seed for all selected"
-            placeholder="Mixed"
-            value={seedDraft ?? seed ?? ''}
-            onFocus={(event) => event.currentTarget.select()}
-            onChange={(event) => setSeedDraft(event.currentTarget.value.replace(/\D/g, ''))}
-            onBlur={commitSeed}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur();
-              if (event.key === 'Escape') {
-                seedCancelled.current = true;
-                event.currentTarget.blur();
-              }
-            }}
-          />
-          <button type="button" className="showcase-btn" title="A random seed for each" aria-label="A random seed for each"
-            onClick={() => board.setPaintMany(weaponIds, () => ({ seed: randomSeed() }))}>
-            <Dices size={13} />
-          </button>
-        </span>
-      </Row>}
-      <div className="showcase-subheading">Transform</div>
+      {weapons.length > 0 && <Control group label="Seed">
+        <SeedInput
+          aria-label="Pattern seed for all selected"
+          placeholder="Mixed"
+          randomizeLabel="A random seed for each"
+          onRandomize={() => board.setPaintMany(weaponIds, () => ({ seed: randomSeed() }))}
+          value={seedDraft ?? seed ?? ''}
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => setSeedDraft(event.currentTarget.value.replace(/\D/g, ''))}
+          onBlur={commitSeed}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+            if (event.key === 'Escape') {
+              seedCancelled.current = true;
+              event.currentTarget.blur();
+            }
+          }}
+        />
+      </Control>}
+      <div className={SUBHEADING}>Transform</div>
       <ValueSlider label="Roll" display={roll === null ? 'Mixed' : `${roll}°`} value={roll ?? items[0].roll} min={-180} max={180} step={rotationSnap || 1}
         markers={ZERO_MARK} onChange={(value) => board.updateMany(ids, { roll: value })} onCommit={settle} />
       {weapons.length > 0 && (
@@ -268,15 +274,15 @@ export const MultiSection = memo(function MultiSection({ board, items, paintkits
       <ValueSlider label="Size" display={size === null ? 'Mixed' : `${size}%`}
         value={Math.min(SIZE_SLIDER.max, Math.max(SIZE_SLIDER.min, size ?? Math.round(items[0].scale * 100)))} min={SIZE_SLIDER.min} max={SIZE_SLIDER.max} step={5}
         markers={HUNDRED_MARK} onChange={(value) => board.updateMany(ids, { scale: value / 100 })} onCommit={settle} />
-      <div className="showcase-actions">
-        <button type="button" className="showcase-btn" title={`Rotate each ${rotationStep}° counterclockwise (Q)`}
-          onClick={() => board.rotateMany(ids, rotationStep)}>{ROTATE_CCW_ICON}</button>
-        <button type="button" className="showcase-btn" title={`Rotate each ${rotationStep}° clockwise (E)`}
-          onClick={() => board.rotateMany(ids, -rotationStep)}>{ROTATE_CW_ICON}</button>
-        <button type="button" className="showcase-btn" title="Show the other side of each (F)" onClick={() => board.flipMany(ids)}>{FLIP_ICON}</button>
-        <button type="button" className="showcase-btn" title="Hide them" onClick={() => board.setHiddenMany(ids, true)}>{EYE_OFF_ICON}</button>
-        <span className="showcase-actions-spacer" />
-        <button type="button" className="showcase-btn showcase-btn-danger" title="Remove them (Delete)" onClick={() => board.removeMany(ids)}>{REMOVE_ICON}</button>
+      <div className={ACTIONS}>
+        <Button title={`Rotate each ${rotationStep}° counterclockwise (Q)`}
+          onClick={() => board.rotateMany(ids, rotationStep)}>{ROTATE_CCW_ICON}</Button>
+        <Button title={`Rotate each ${rotationStep}° clockwise (E)`}
+          onClick={() => board.rotateMany(ids, -rotationStep)}>{ROTATE_CW_ICON}</Button>
+        <Button title="Show the other side of each (F)" onClick={() => board.flipMany(ids)}>{FLIP_ICON}</Button>
+        <Button title="Hide them" onClick={() => board.setHiddenMany(ids, true)}>{EYE_OFF_ICON}</Button>
+        <span className="flex-1" />
+        <Button variant="danger" title="Remove them (Delete)" onClick={() => board.removeMany(ids)}>{REMOVE_ICON}</Button>
       </div>
     </Section>
   );
@@ -310,30 +316,24 @@ const PaintRows = memo(function PaintRows({ board, id, paint, kit, wearNames }: 
           <TeamToggle team={paint.team} onChange={(team) => { if (team !== paint.team) board.setPaint(id, { team }); }} />
         </SliderRow>
       )}
-      <Row label="Seed">
-        <span className="showcase-seed">
-          <input
-            className="ui-input showcase-seed-input"
-            inputMode="numeric"
-            aria-label="Pattern seed"
-            value={seedDraft ?? paint.seed}
-            onFocus={(event) => event.currentTarget.select()}
-            onChange={(event) => setSeedDraft(event.currentTarget.value.replace(/\D/g, ''))}
-            onBlur={commitSeed}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur();
-              if (event.key === 'Escape') {
-                setSeedDraft(null);
-                event.currentTarget.blur();
-              }
-            }}
-          />
-          <button type="button" className="showcase-btn" title="Random seed" aria-label="Random seed"
-            onClick={() => board.setPaint(id, { seed: randomSeed() })}>
-            <Dices size={13} />
-          </button>
-        </span>
-      </Row>
+      <Control group label="Seed">
+        <SeedInput
+          aria-label="Pattern seed"
+          randomizeLabel="Random seed"
+          onRandomize={() => board.setPaint(id, { seed: randomSeed() })}
+          value={seedDraft ?? paint.seed}
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => setSeedDraft(event.currentTarget.value.replace(/\D/g, ''))}
+          onBlur={commitSeed}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+            if (event.key === 'Escape') {
+              setSeedDraft(null);
+              event.currentTarget.blur();
+            }
+          }}
+        />
+      </Control>
     </>
   );
 });
@@ -346,7 +346,7 @@ const SizeSlider = memo(function SizeSlider({ size, onChange, onCommit, onType }
 }) {
   return (
     <SliderRow label="Size" value={<PercentInput value={size} min={SIZE_TYPED.min} max={SIZE_TYPED.max} label="Size in percent" onCommit={onType} />}>
-      <SliderField value={Math.min(SIZE_SLIDER.max, Math.max(SIZE_SLIDER.min, size))} min={SIZE_SLIDER.min} max={SIZE_SLIDER.max}
+      <Slider value={Math.min(SIZE_SLIDER.max, Math.max(SIZE_SLIDER.min, size))} min={SIZE_SLIDER.min} max={SIZE_SLIDER.max}
         step={5} ariaLabel="Size" markers={HUNDRED_MARK} onChange={onChange} onCommit={onCommit} />
     </SliderRow>
   );

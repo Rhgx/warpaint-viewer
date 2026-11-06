@@ -1,9 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { ScrollArea } from '@base-ui/react/scroll-area';
-import { ArrowDownNarrowWide, ArrowUpNarrowWide, LayoutGrid, List, Search, X } from 'lucide-react';
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, Check, LayoutGrid, List } from 'lucide-react';
 
-import { AssetIcon, SelectField, TextField } from '../common/controls';
+import { AssetIcon, SelectField } from '../common/controls';
+import { Button } from '../primitives/Button';
+import { SearchField } from '../primitives/Input';
+import { ToggleGroup } from '../primitives/ToggleGroup';
 import { preloadIntent, type PreloadIntent } from '../../hooks/useIntentPreload';
 import type { Grade, PaintkitEntry, TextureDirectory, TextureDirectoryEntry } from '../../data/types';
 import { isCustomKitId, paintkitDefindex } from '../../protodefs/types';
@@ -13,6 +15,8 @@ import { PaintkitDetailsButton } from './PaintkitDetailsButton';
 import { operationFilterKits } from './operationFilter';
 import { useSettings } from '../../settings';
 import { matchesMobileLayout } from '../../device';
+import { cn } from '../primitives/cn';
+import { SECTION_TITLE } from '../primitives/textStyles';
 
 interface CollectionRow {
   name: string;
@@ -51,6 +55,12 @@ function byGradeThenName(a: PaintkitEntry, b: PaintkitEntry): number {
   return rankDiff !== 0 ? rankDiff : a.name.localeCompare(b.name);
 }
 
+// Fixed strings: selection and grade come from data attributes, so a row computes no classes.
+const ROW = 'grade-tint my-px mr-1.25 scroll-mt-9 flex w-[calc(100%-5px)] cursor-pointer items-center gap-2.5 border-0 bg-transparent py-1.25 pl-3.75 text-left transition-fast focus-ring hover:bg-panel-2 focus-visible:-outline-offset-2 data-selected:bg-accent-soft data-selected:font-semibold data-selected:shadow-[inset_2px_0_0_var(--accent)]';
+// Leaves room for the details button over the row's right end.
+const ROW_WITH_DETAILS = `${ROW} pr-9.5`;
+const ROW_PLAIN = `${ROW} pr-2.5`;
+
 const PaintTile = memo(function PaintTile({
   kit,
   selected,
@@ -73,7 +83,9 @@ const PaintTile = memo(function PaintTile({
     <button
       type="button"
       data-kit-id={kit.id}
-      className={`warpaint-tile${selected ? ' selected' : ''}`}
+      data-slot="catalog-tile"
+      data-selected={selected || undefined}
+      className="grade-tint relative flex aspect-square cursor-pointer items-center justify-center rounded-sm border-2 border-(--item-grade-border) bg-panel-2 p-1 [transition:var(--transition-fast),outline-color_140ms_ease] focus-ring scroll-mt-9 hover:border-strong data-selected:bg-accent-soft data-selected:shadow-[inset_0_0_0_1px_var(--accent)]"
       {...preloadIntent(`kit:${kit.id}`, onPreload)}
       onClick={select}
       data-grade={kit.grade}
@@ -86,6 +98,12 @@ const PaintTile = memo(function PaintTile({
         loading={prioritizeIcon ? 'eager' : 'lazy'}
         fetchPriority={prioritizeIcon ? 'high' : 'auto'}
       />
+      {/* A corner mark, since the border belongs to the rarity and blue rarities would hide an accent outline. */}
+      {selected && (
+        <span className="absolute top-0 right-0 grid size-4 place-items-center rounded-bl-sm bg-accent text-accent-text" data-slot="catalog-tile-selected" aria-hidden="true">
+          <Check size={12} strokeWidth={3} />
+        </span>
+      )}
     </button>
   );
 });
@@ -122,12 +140,14 @@ const PaintListItem = memo(function PaintListItem({
     <button
       type="button"
       data-kit-id={kit.id}
-      className={`warpaint-item${selected ? ' selected' : ''}`}
+      data-slot="catalog-row"
+      data-selected={selected || undefined}
+      className={showDetails ? ROW_WITH_DETAILS : ROW_PLAIN}
       {...preloadIntent(`kit:${kit.id}`, onPreload)}
       onClick={select}
       data-grade={kit.grade}
     >
-      <span className="warpaint-item-icon">
+      <span className="flex size-10.5 flex-none items-center justify-center overflow-hidden rounded-sm bg-panel-2">
         <AssetIcon
           src={icon}
           size={42}
@@ -135,7 +155,7 @@ const PaintListItem = memo(function PaintListItem({
           fetchPriority={prioritizeIcon ? 'high' : 'auto'}
         />
       </span>
-      <span className="warpaint-item-name">{kit.name}</span>
+      <span className="truncate text-(--item-grade-text) in-data-selected:text-text">{kit.name}</span>
     </button>
   );
   if (!showDetails) return row;
@@ -143,7 +163,7 @@ const PaintListItem = memo(function PaintListItem({
   // or hovered row, since a popover on every row made remounting about four times slower.
   // It stays while its card is open, since the card sits outside the row.
   return (
-    <div className="warpaint-item-row" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
+    <div className="relative" data-slot="catalog-row-wrap" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
       {row}
       {(selected || hovered || detailsOpen) && (
         <PaintkitDetailsButton
@@ -154,7 +174,7 @@ const PaintListItem = memo(function PaintListItem({
           paintkits={paintkits}
           onSelectKit={onSelect}
           side="right"
-          className="warpaint-item-info"
+          className="absolute top-1/2 right-3.25 -translate-y-1/2"
           onOpenChange={setDetailsOpen}
           stockKit={!isCustomKitId(kit.id)}
         />
@@ -167,7 +187,7 @@ const PaintListItem = memo(function PaintListItem({
 // Falls back to 1 when the DOM does not cooperate.
 function countGridColumns(group: Element | null): number {
   if (!group) return 1;
-  const tiles = group.querySelectorAll<HTMLElement>('.warpaint-tile');
+  const tiles = group.querySelectorAll<HTMLElement>('[data-slot="catalog-tile"]');
   if (tiles.length === 0) return 1;
   const firstTop = tiles[0].offsetTop;
   let count = 0;
@@ -213,6 +233,7 @@ export const WarpaintList = memo(function WarpaintList({
   const showDetails = useSettings((s) => s.showPaintkitDetails);
   const directory = useTextureDirectory();
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
 
   // Saved only on an explicit toggle, so the layout-dependent default is never stored.
   const chooseView = (next: CatalogView) => {
@@ -306,7 +327,7 @@ export const WarpaintList = memo(function WarpaintList({
       return;
     }
     const container = containerRef.current;
-    const viewport = container?.querySelector<HTMLElement>('.ui-scroll-viewport');
+    const viewport = scrollerRef.current;
     if (!container || !viewport || typeof IntersectionObserver === 'undefined') {
       // Without IntersectionObserver, every tracked kit counts as visible.
       onVisibleKitIdsChange(visibilityTrackedKitIds);
@@ -353,7 +374,7 @@ export const WarpaintList = memo(function WarpaintList({
   useEffect(() => {
     if (selectedId === null) return;
     containerRef.current?.querySelector<HTMLElement>(`[data-kit-id="${selectedId}"]`)?.scrollIntoView({ block: 'nearest' });
-  }, [selectedId]);
+  }, [selectedId, view]);
 
   const moveSelection = (nextIndex: number) => {
     const kit = flatKits[nextIndex];
@@ -363,7 +384,7 @@ export const WarpaintList = memo(function WarpaintList({
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     // Leave typing in the search field and the collection select alone.
     const target = event.target as HTMLElement;
-    if (target.closest('input, .ui-select-trigger, .ui-select-popup')) return;
+    if (target.closest('input, [data-slot="select-trigger"], [data-slot="select-popup"]')) return;
     if (flatKits.length === 0) return;
 
     const navKeys = view === 'grid'
@@ -390,7 +411,7 @@ export const WarpaintList = memo(function WarpaintList({
       return;
     }
 
-    const columns = countGridColumns(containerRef.current?.querySelector('.warpaint-group') ?? null);
+    const columns = countGridColumns(containerRef.current?.querySelector('[data-slot="catalog-group"]') ?? null);
     if (event.key === 'ArrowRight') moveSelection(currentIndex < 0 ? 0 : Math.min(currentIndex + 1, last));
     else if (event.key === 'ArrowLeft') moveSelection(currentIndex < 0 ? 0 : Math.max(currentIndex - 1, 0));
     else if (event.key === 'ArrowDown') moveSelection(currentIndex < 0 ? 0 : Math.min(currentIndex + columns, last));
@@ -398,61 +419,42 @@ export const WarpaintList = memo(function WarpaintList({
   };
 
   return (
-    <div className="warpaint-list" ref={containerRef} onKeyDown={handleKeyDown}>
-      <div className="warpaint-list-header">
-        <div className="warpaint-list-title">
-          <h2>Warpaints</h2>
-          <div className="warpaint-list-title-actions">
-            <div className="view-toggle" role="group" aria-label="Catalog view">
-              <button
-                type="button"
-                className="view-toggle-btn"
-                title="List view"
-                aria-label="List view"
-                aria-pressed={view === 'list'}
-                onClick={() => chooseView('list')}
-              >
-                <List size={14} />
-              </button>
-              <button
-                type="button"
-                className="view-toggle-btn"
-                title="Grid view"
-                aria-label="Grid view"
-                aria-pressed={view === 'grid'}
-                onClick={() => chooseView('grid')}
-              >
-                <LayoutGrid size={14} />
-              </button>
-            </div>
-            <button
-              type="button"
-              className="btn order-toggle"
+    <div className="flex min-h-0 w-full min-w-85 flex-col mobile:min-w-0" data-slot="catalog" ref={containerRef} onKeyDown={handleKeyDown}>
+      <div className="border-b border-border px-3 pt-3 pb-2.5">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="m-0 text-14">Warpaints</h2>
+          <div className="flex items-center gap-2">
+            <ToggleGroup
+              label="Catalog view"
+              size="icon"
+              value={view}
+              onChange={chooseView}
+              options={[
+                { value: 'list', label: <List size={14} />, title: 'List view', ariaLabel: 'List view' },
+                { value: 'grid', label: <LayoutGrid size={14} />, title: 'Grid view', ariaLabel: 'Grid view' },
+              ]}
+            />
+            <Button
+              data-slot="catalog-order"
+              className="text-11 active:bg-border"
               title={reversed ? 'Newest first (click for oldest first)' : 'Oldest first (click for newest first)'}
               onClick={() => setReversed((r) => !r)}
             >
               {reversed ? <ArrowUpNarrowWide size={14} /> : <ArrowDownNarrowWide size={14} />}
-              <span>{reversed ? 'Newest' : 'Oldest'}</span>
-            </button>
+              {/* Both words share one cell, so that the button keeps the wider one's width. */}
+              <span className="inline-grid text-left [&>*]:[grid-area:1/1]">
+                <span className={reversed ? undefined : 'invisible'}>Newest</span>
+                <span className={reversed ? 'invisible' : undefined}>Oldest</span>
+              </span>
+            </Button>
           </div>
         </div>
-        <div className="search-field">
-          <Search className="search-field-icon" size={14} />
-          <TextField
-            value={filter}
-            onChange={setFilter}
-            placeholder={advancedSearch ? 'Filter by name, collection, ID, or op:name...' : 'Filter by name or collection...'}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && filter) setFilter('');
-            }}
-          />
-          {filter.length > 0 && (
-            <button type="button" className="search-clear-btn" title="Clear search" aria-label="Clear search" onClick={() => setFilter('')}>
-              <X size={13} />
-            </button>
-          )}
-        </div>
-        <div className="collection-filter">
+        <SearchField
+          value={filter}
+          onChange={setFilter}
+          placeholder={advancedSearch ? 'Filter by name, collection, ID, or op:name...' : 'Filter by name or collection...'}
+        />
+        <div className="mt-2" data-slot="catalog-collection-filter">
           <SelectField
             value={activeCollection ?? ''}
             onChange={(v) => setActiveCollection(v === '' ? null : v)}
@@ -461,65 +463,64 @@ export const WarpaintList = memo(function WarpaintList({
         </div>
       </div>
 
-      <ScrollArea.Root className="ui-scroll-root paint-list-scroll">
-        <ScrollArea.Viewport className="ui-scroll-viewport">
-          <ScrollArea.Content>
-            {groups.length === 0 && (
-              <div className="warpaint-empty">
-                <p>No matches</p>
-                <button type="button" className="btn clear-filters-btn" onClick={clearFilters}>
-                  Clear filters
-                </button>
+      {/* The gutter stays reserved, so rows and sticky headers stay clear of the scrollbar. */}
+      <div
+        ref={scrollerRef}
+        data-slot="catalog-scroller"
+        className="scrollbar-slim min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable] focus-ring focus-visible:-outline-offset-2 mobile:overscroll-contain"
+        tabIndex={0}
+      >
+        {groups.length === 0 && (
+          <div className="flex flex-col items-center gap-2.5 px-3 py-6 text-center text-dim">
+            <p className="m-0">No matches</p>
+            <Button className="px-2.5 active:bg-border" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          </div>
+        )}
+        {groups.map(([collection, kits]) => (
+          <div className="py-1.5" data-slot="catalog-group" key={collection}>
+            {showGroupHeaders && (
+              <div className="sticky top-0 z-1 flex w-full items-center gap-2 border-b border-border bg-panel py-1.75 pr-3 pl-2 text-10 text-dim">
+                <AssetIcon src={collectionIcons[collection]} size={24} />
+                <span className={cn('truncate', SECTION_TITLE)}>{collection}</span>
+                <span className="ml-auto flex-none tabular-nums opacity-80">{kits.length}</span>
               </div>
             )}
-            {groups.map(([collection, kits]) => (
-              <div className="warpaint-group" key={collection}>
-                {showGroupHeaders && (
-                  <div className="warpaint-group-label">
-                    <AssetIcon src={collectionIcons[collection]} size={24} />
-                    <span className="warpaint-group-label-name">{collection}</span>
-                    <span className="warpaint-group-label-count">{kits.length}</span>
-                  </div>
-                )}
-                {view === 'grid' ? (
-                  <div className="warpaint-tile-grid">
-                    {kits.map((kit) => (
-                      <PaintTile
-                        key={kit.id}
-                        kit={kit}
-                        selected={kit.id === selectedId}
-                        icon={paintIcons[kit.id]}
-                        prioritizeIcon={prioritizePaintIcons}
-                        onSelect={onSelect}
-                        onPreload={onPreload}
-                        showDetails={showDetails}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  kits.map((kit) => (
-                    <PaintListItem
-                      key={kit.id}
-                      kit={kit}
-                      selected={kit.id === selectedId}
-                      icon={paintIcons[kit.id]}
-                      prioritizeIcon={prioritizePaintIcons}
-                      onSelect={onSelect}
-                      onPreload={onPreload}
-                      showDetails={showDetails}
-                      directory={directory}
-                      paintkits={paintkits}
-                    />
-                  ))
-                )}
+            {view === 'grid' ? (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(56px,1fr))] gap-1.5 pt-1.5 pr-3 pb-2 pl-2 touch:grid-cols-[repeat(auto-fill,minmax(72px,1fr))]" data-slot="catalog-tile-grid">
+                {kits.map((kit) => (
+                  <PaintTile
+                    key={kit.id}
+                    kit={kit}
+                    selected={kit.id === selectedId}
+                    icon={paintIcons[kit.id]}
+                    prioritizeIcon={prioritizePaintIcons}
+                    onSelect={onSelect}
+                    onPreload={onPreload}
+                    showDetails={showDetails}
+                  />
+                ))}
               </div>
-            ))}
-          </ScrollArea.Content>
-        </ScrollArea.Viewport>
-        <ScrollArea.Scrollbar className="ui-scrollbar" orientation="vertical">
-          <ScrollArea.Thumb className="ui-scrollbar-thumb" />
-        </ScrollArea.Scrollbar>
-      </ScrollArea.Root>
+            ) : (
+              kits.map((kit) => (
+                <PaintListItem
+                  key={kit.id}
+                  kit={kit}
+                  selected={kit.id === selectedId}
+                  icon={paintIcons[kit.id]}
+                  prioritizeIcon={prioritizePaintIcons}
+                  onSelect={onSelect}
+                  onPreload={onPreload}
+                  showDetails={showDetails}
+                  directory={directory}
+                  paintkits={paintkits}
+                />
+              ))
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 });

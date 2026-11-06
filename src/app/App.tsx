@@ -1,11 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 
-import '../ui/catalog/WarpaintList.css';
-import '../ui/stage/StageToolbar.css';
-import '../ui/stage/Inspector.css';
-import '../styles/stage.css';
-import '../styles/layout.css';
 import type { Viewer } from '../viewer/Viewer';
 import { isStockMaterialCubemap, stockMaterialCubemapUrls } from '../viewer/stockCubemapUrls';
 import type { Compositor } from '../compositor/compositor';
@@ -56,6 +51,8 @@ import { useEditorViewport } from '../editor/useEditorViewport';
 import { useOperationGraphEditor } from '../editor/graph/useOperationGraphEditor';
 import { ClearWorkspaceDialog } from '../ui/common/ClearWorkspaceDialog';
 import { AppToasts } from '../ui/common/AppToasts';
+import { cn } from '../ui/primitives/cn';
+import { DropHint } from '../ui/primitives/DropHint';
 import { matchesMobileLayout, WORKSHOP_ENABLED } from '../device';
 import { useSettings } from '../settings';
 import { LAYOUT_FILE_EXTENSION } from '../showcase/boardFileName';
@@ -69,6 +66,39 @@ const CustomWarpaintWorkbench = lazy(loadWorkbench);
 const ShowcaseMode = lazy(() => import('../ui/showcase/ShowcaseMode'));
 
 const EMPTY_OVERRIDES: WarpaintAssetOverrides = { revision: 0, assets: {} };
+
+const PAGE = '[--catalog-width:340px] [--controls-width:260px] grid h-full grid-cols-[var(--catalog-width)_minmax(0,1fr)_var(--controls-width)] overflow-hidden [transition:grid-template-columns_190ms_ease] motion-reduce:transition-none data-catalog-hidden:[--catalog-width:0px] data-controls-hidden:[--controls-width:0px] docked:grid-cols-[var(--catalog-width)_minmax(0,1fr)] docked:grid-rows-[1fr_auto] mobile:[--mobile-tabstrip-bottom:calc(var(--mobile-tabstrip-h)+env(safe-area-inset-bottom))] mobile:grid-cols-[1fr] mobile:grid-rows-[1fr] mobile-landscape:[--mobile-tabstrip-h:44px]';
+// data-hidden applies on desktop only. On mobile a panel overlays the stage and is closed unless its tab opened it, so one hidden on desktop still opens from its tab.
+const SIDE_PANEL = cn(
+  'min-h-0 translate-x-0 bg-panel motion-reduce:transition-none!',
+  'desktop:data-hidden:pointer-events-none desktop:data-hidden:invisible desktop:data-hidden:opacity-0 desktop:data-hidden:[transition:opacity_150ms_ease,translate_190ms_ease,visibility_0s_linear_190ms]',
+  'mobile:fixed mobile:bottom-(--mobile-tabstrip-bottom) mobile:z-40 mobile:shadow-pop mobile:[transition:translate_220ms_ease,visibility_0s_linear_220ms] mobile:not-data-open:invisible mobile:data-open:translate-none mobile:data-open:[transition:translate_220ms_ease,visibility_0s]',
+  'mobile-landscape:top-0 mobile-landscape:h-auto mobile-landscape:w-[min(60vw,360px)]',
+  // Bottom sheets. A closed one drops below the tab strip, so its shadow never shows.
+  'phone-portrait:inset-x-0 phone-portrait:w-auto phone-portrait:rounded-t-lg phone-portrait:border-0 phone-portrait:border-t phone-portrait:border-strong phone-portrait:not-data-open:translate-y-[calc(100%+var(--mobile-tabstrip-bottom))]',
+);
+const CATALOG_PANEL = cn(
+  SIDE_PANEL,
+  'col-1 flex min-w-0 overflow-hidden border-r border-border [transition:opacity_150ms_ease,translate_190ms_ease,visibility_0s]',
+  'docked:row-span-2 desktop:data-hidden:-translate-x-2.5',
+  'mobile:left-0 mobile-landscape:pl-[env(safe-area-inset-left)] mobile-landscape:not-data-open:-translate-x-full phone-portrait:h-[85dvh]',
+);
+// The right padding is mostly a reserved rail, so a scrollbar appearing moves nothing. What is left keeps focus rings and the wear thumb from being clipped. Touch scrollbars overlay and take no room.
+const CONTROLS_PANEL = cn(
+  SIDE_PANEL,
+  'col-3 flex h-full scrollbar-slim flex-col gap-1 overflow-x-hidden overflow-y-auto border-l border-border p-2.5 pr-2 select-none [scrollbar-gutter:stable] [transition:opacity_150ms_ease,translate_190ms_ease,max-height_190ms_ease,padding_190ms_ease,visibility_0s] touch:pr-2.5 touch:[scrollbar-gutter:auto] [&_input]:select-text',
+  'desktop:data-hidden:translate-x-2.5',
+  'desktop:docked:col-2 desktop:docked:row-2 desktop:docked:max-h-[42dvh] desktop:docked:border-t desktop:docked:border-l-0 desktop:docked:data-hidden:max-h-0 desktop:docked:data-hidden:translate-x-0 desktop:docked:data-hidden:translate-y-2.5 desktop:docked:data-hidden:border-t-transparent desktop:docked:data-hidden:py-0',
+  'mobile:right-0 mobile:overscroll-contain mobile-landscape:pr-[calc(10px+env(safe-area-inset-right))] mobile-landscape:not-data-open:translate-x-full',
+  // First Person frames the viewmodel above this sheet; FP_PORTRAIT_FRAME_CENTER depends on its height.
+  'phone-portrait:h-[55dvh] phone-portrait:data-first-person:h-[45dvh]',
+);
+// A collapsed flex item until it opens. Edit opens taller by default; dragging the handle still wins, as it sets --workbench-h, and that drag turns the easing off so that the drawer does not lag the cursor.
+const WORKBENCH_SLOT = cn(
+  'pointer-events-none invisible min-h-0 flex-[0_0_0] overflow-hidden [transition:flex-basis_210ms_ease,visibility_0s_linear_210ms] has-data-resizing:transition-none! motion-reduce:transition-none!',
+  'data-open:pointer-events-auto data-open:visible data-open:basis-[var(--workbench-h,clamp(250px,29vh,340px))] data-open:[transition:flex-basis_210ms_ease,visibility_0s] data-open:has-[[data-slot=workbench][data-tab=editor]]:basis-[var(--workbench-h,clamp(320px,46vh,560px))] mobile:data-open:basis-[min(52vh,440px)]',
+  'data-expanded:fixed data-expanded:inset-0 data-expanded:z-1000 data-expanded:basis-auto data-expanded:overflow-visible data-expanded:bg-panel',
+);
 
 export default function App() {
   const params = new URLSearchParams(window.location.search);
@@ -107,8 +137,6 @@ function MainApp() {
     setWorkbenchExpanded,
     workbenchHeight,
     setWorkbenchHeight,
-    workbenchResizing,
-    setWorkbenchResizing,
     workbenchTab,
     setWorkbenchTab,
     toggleWorkbench,
@@ -701,13 +729,17 @@ function MainApp() {
 
   return (
     <div
-      className="app"
+      className={PAGE}
       data-mobile-panel={mobilePanel}
       data-catalog-hidden={!catalogVisible ? '' : undefined}
       data-controls-hidden={!controlsVisible ? '' : undefined}
-      data-first-person={firstPersonActive ? '' : undefined}
     >
-      <aside className="sidebar" id="warpaint-catalog-panel">
+      <aside
+        className={CATALOG_PANEL}
+        id="warpaint-catalog-panel"
+        data-hidden={!catalogVisible ? '' : undefined}
+        data-open={mobilePanel === 'catalog' ? '' : undefined}
+      >
         <WarpaintList
           paintkits={paintkits}
           selectedId={selectedKitId}
@@ -719,63 +751,68 @@ function MainApp() {
           onVisibleKitIdsChange={reportVisibleCatalogKitIds}
         />
       </aside>
-      <main className="stage">
-        {boardDrop.dragging && <div className="viewer-drop-hint">Drop a {LAYOUT_FILE_EXTENSION} file to open it on the Showcase Board.</div>}
-        <PanelEdgeToggle
-          side="left"
-          open={catalogVisible}
-          label={catalogVisible ? 'Hide warpaint catalog' : 'Show warpaint catalog'}
-          controls="warpaint-catalog-panel"
-          onToggle={() => setCatalogVisible((visible) => !visible)}
-        />
-        <PanelEdgeToggle
-          side="right"
-          open={controlsVisible}
-          label={controlsVisible ? 'Hide controls' : 'Show controls'}
-          controls="viewer-controls-panel"
-          onToggle={() => setControlsVisible((visible) => !visible)}
-        />
-        <StageCanvas
-          canvasHandlers={canvasHandlers}
-          canvasRef={canvasRef}
-          viewerRef={viewerRef}
-          promptedCandidate={promptedCandidate}
-          candidateKey={candidateKey}
-          setAnsweredCandidateKey={setAnsweredCandidateKey}
-          setWorkbenchTab={setWorkbenchTab}
-          hintDismissed={hintDismissed}
-          setHintDismissed={setHintDismissed}
-          firstPersonActive={firstPersonActive}
-          selectedKit={selectedKit}
-          showStageHeader={showStageHeader}
-          weaponName={weaponName}
-          manualTextureOverrides={manualTextureOverrides}
-          composing={composing}
-          cameraMode={cameraMode}
-          paintkits={paintkits}
-          onSelectKit={onSelectKit}
-          workbenchOpen={workbenchOpen}
-          editingMode={editingMode}
-          preloadWorkbench={preloadWorkbench}
-          toggleWorkbench={toggleWorkbench}
-          captureFormat={captureFormat}
-          state={state}
-          startTurntableCapture={startTurntableCapture}
-          onScreenshot={onScreenshot}
-          onCopyImage={onCopyImage}
-          autoSpin={autoSpin}
-          setAutoSpin={setAutoSpin}
-          showcaseOpen={showcaseOpen}
-          setShowcaseOpen={setShowcaseOpen}
-          lightingStore={lightingStore}
-          editorInteractionActive={editorInteractionActive}
-          editorSelectionHeld={editorSelectionHeld}
-          stickerPartPickingActive={stickerPartPickingActive}
-          stickerEditorPreparing={stickerEditorPreparing}
-          stickerPlacementActive={stickerPlacementActive}
-          stickerTransformTool={stickerTransformTool}
-          groupAssignActive={groupAssignActive}
-        />
+      <main className="relative col-2 flex min-h-0 min-w-0 flex-col mobile:col-1 mobile:pb-(--mobile-tabstrip-bottom)">
+        {boardDrop.dragging && (
+          <DropHint data-slot="viewer-drop-hint" className="fixed inset-0 z-50">Drop a {LAYOUT_FILE_EXTENSION} file to open it on the Showcase Board.</DropHint>
+        )}
+        {/* The handles centre on this box rather than on main, which also holds the drawer. */}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <PanelEdgeToggle
+            side="left"
+            open={catalogVisible}
+            label={catalogVisible ? 'Hide warpaint catalog' : 'Show warpaint catalog'}
+            controls="warpaint-catalog-panel"
+            onToggle={() => setCatalogVisible((visible) => !visible)}
+          />
+          <PanelEdgeToggle
+            side="right"
+            open={controlsVisible}
+            label={controlsVisible ? 'Hide controls' : 'Show controls'}
+            controls="viewer-controls-panel"
+            onToggle={() => setControlsVisible((visible) => !visible)}
+          />
+          <StageCanvas
+            canvasHandlers={canvasHandlers}
+            canvasRef={canvasRef}
+            viewerRef={viewerRef}
+            promptedCandidate={promptedCandidate}
+            candidateKey={candidateKey}
+            setAnsweredCandidateKey={setAnsweredCandidateKey}
+            setWorkbenchTab={setWorkbenchTab}
+            hintDismissed={hintDismissed}
+            setHintDismissed={setHintDismissed}
+            firstPersonActive={firstPersonActive}
+            selectedKit={selectedKit}
+            showStageHeader={showStageHeader}
+            weaponName={weaponName}
+            manualTextureOverrides={manualTextureOverrides}
+            composing={composing}
+            cameraMode={cameraMode}
+            paintkits={paintkits}
+            onSelectKit={onSelectKit}
+            workbenchOpen={workbenchOpen}
+            editingMode={editingMode}
+            preloadWorkbench={preloadWorkbench}
+            toggleWorkbench={toggleWorkbench}
+            captureFormat={captureFormat}
+            state={state}
+            startTurntableCapture={startTurntableCapture}
+            onScreenshot={onScreenshot}
+            onCopyImage={onCopyImage}
+            autoSpin={autoSpin}
+            setAutoSpin={setAutoSpin}
+            showcaseOpen={showcaseOpen}
+            setShowcaseOpen={setShowcaseOpen}
+            lightingStore={lightingStore}
+            editorInteractionActive={editorInteractionActive}
+            editorSelectionHeld={editorSelectionHeld}
+            stickerPartPickingActive={stickerPartPickingActive}
+            stickerEditorPreparing={stickerEditorPreparing}
+            stickerPlacementActive={stickerPlacementActive}
+            stickerTransformTool={stickerTransformTool}
+            groupAssignActive={groupAssignActive}
+          />
+        </div>
         {showcaseActive && (
           <Suspense fallback={null}>
             <ShowcaseMode
@@ -799,16 +836,14 @@ function MainApp() {
           </Suspense>
         )}
         <div
-          className="custom-workbench-slot"
+          className={WORKBENCH_SLOT}
           data-open={workbenchOpen ? '' : undefined}
           data-expanded={workbenchExpanded ? '' : undefined}
-          data-editor-tab={workbenchMounted && workbenchTab === 'editor' ? '' : undefined}
-          data-resizing={workbenchResizing ? '' : undefined}
           inert={!workbenchOpen}
           style={workbenchHeight ? ({ '--workbench-h': `${workbenchHeight}px` } as CSSProperties) : undefined}
         >
           {workbenchMounted && (
-            <Suspense fallback={<div className="custom-workbench-loading">Loading custom files…</div>}>
+            <Suspense fallback={<div className="grid h-full place-items-center text-12 text-dim" data-slot="workbench-loading">Loading custom files…</div>}>
               <CustomWarpaintWorkbench
                 key={`${selectedKitId ?? 'empty'}|${state.weaponKey}`}
                 recipes={workbenchTab === 'package' || workbenchTab === 'definitions' ? [] : editorRecipes}
@@ -879,15 +914,21 @@ function MainApp() {
                 onClearWorkspace={hasWorkspace ? openClearWorkspace : undefined}
                 // Height 0 restores the default clamp, which a resize-handle double-click asks for.
                 onResize={setWorkbenchHeight}
-                resizing={workbenchResizing}
-                onResizingChange={setWorkbenchResizing}
                 onClose={closeWorkbench}
               />
             </Suspense>
           )}
         </div>
       </main>
-      <aside className="inspector" id="viewer-controls-panel" ref={attachInspector}>
+      <aside
+        className={CONTROLS_PANEL}
+        id="viewer-controls-panel"
+        ref={attachInspector}
+        data-slot="inspector"
+        data-hidden={!controlsVisible ? '' : undefined}
+        data-open={mobilePanel === 'controls' ? '' : undefined}
+        data-first-person={firstPersonActive ? '' : undefined}
+      >
         {!showcaseActive && <Inspector
           firstPersonActive={firstPersonActive}
           previewControls={previewControls}

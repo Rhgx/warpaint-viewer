@@ -1,6 +1,9 @@
 import { memo, useState } from 'react';
 import { EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@xyflow/react';
 import { X } from 'lucide-react';
+
+import { Button } from '../primitives/Button';
+import { cn } from '../primitives/cn';
 import { EDGE_CORNER_RADIUS, EDGE_INTERACTION_WIDTH, type FlowEdge } from './operationGraphTypes';
 
 /** A typed connection that can be removed where it is, without going to the toolbar. */
@@ -33,10 +36,17 @@ function OperationFlowEdgeComponent({
       <path id={id} className="react-flow__edge-path" d={path} markerEnd={markerEnd} />
       {data?.traced && (
         // Animated dashes show the flow direction without finding the arrowhead.
-        <path className="operation-graph-edge-flow" d={path} fill="none" />
+        <path
+          className={cn(
+            'pointer-events-none animate-graph-flow stroke-(--graph-port) [stroke-dasharray:2_13] [stroke-linecap:round] motion-reduce:animate-none motion-reduce:[stroke-dasharray:none]',
+            data.direct ? 'stroke-[3.6]' : 'stroke-3 motion-reduce:stroke-2',
+          )}
+          d={path}
+          fill="none"
+        />
       )}
       <path
-        className="operation-graph-edge-hit"
+        className="cursor-pointer stroke-transparent group-data-[connecting=true]/canvas:cursor-crosshair"
         d={path}
         fill="none"
         strokeWidth={EDGE_INTERACTION_WIDTH}
@@ -45,9 +55,10 @@ function OperationFlowEdgeComponent({
       />
       {removable && (
         <EdgeLabelRenderer>
-          <button
-            type="button"
-            className="operation-graph-edge-remove nodrag nopan"
+          <Button
+            variant="danger"
+            size="icon-sm"
+            className="nodrag nopan pointer-events-auto absolute size-4.5 border-strong bg-panel shadow-pop"
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
             title={`Disconnect ${data.sourceLabel} from ${data.targetLabel}`}
             aria-label={`Disconnect ${data.sourceLabel} from ${data.targetLabel}`}
@@ -56,7 +67,7 @@ function OperationFlowEdgeComponent({
             onClick={(event) => { event.stopPropagation(); data.onDisconnect(id); }}
           >
             <X size={11} aria-hidden />
-          </button>
+          </Button>
         </EdgeLabelRenderer>
       )}
     </>

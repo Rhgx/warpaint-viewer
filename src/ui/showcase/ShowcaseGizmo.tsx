@@ -12,6 +12,15 @@ const DRAG_DEGREES_PER_PX = 0.35;
 
 const LABELS: Record<Handle, string> = { roll: 'Roll', tilt: 'Tilt', turn: 'Turn' };
 
+// An axis and its readout label draw in the current colour.
+const AXIS_COLOR: Record<Handle, string> = { roll: 'text-accent', tilt: 'text-fail', turn: 'text-pass' };
+const OVERLAY = 'pointer-events-none absolute inset-0 size-full overflow-visible';
+const AXIS_LINE = 'fill-none stroke-current/80 stroke-2 [stroke-linecap:round] [transition:stroke-width_120ms_ease] group-data-state:stroke-current group-data-state:stroke-[3.5]';
+const AXIS_LINE_BACK = 'opacity-55 [stroke-dasharray:3_4]';
+const AXIS_HIT = 'cursor-grab fill-none stroke-transparent stroke-14 [pointer-events:stroke] group-data-[state=active]:cursor-grabbing';
+const READOUT_PLATE = 'fill-panel/92 stroke-strong';
+const READOUT_TEXT = 'fill-text text-11 font-semibold tabular-nums [text-anchor:middle]';
+
 /** Rotate gizmo: the flat ring rolls the weapon; the two ellipses follow its roll and tilt or turn it around its own axes. */
 export function ShowcaseGizmo({ board, item, snap }: { board: ShowcaseBoard; item: ShowcaseItem; snap: number }) {
   const [active, setActive] = useState<Handle | null>(null);
@@ -87,33 +96,33 @@ export function ShowcaseGizmo({ board, item, snap }: { board: ShowcaseBoard; ite
   const turnArcs = halfArc(radius * 0.86, depth, 'bottom');
 
   return (
-    <svg className="showcase-gizmo" aria-hidden="true">
-      <g className="showcase-gizmo-axis" data-axis="roll" data-state={state('roll')}>
-        <circle className="showcase-gizmo-line" cx={x} cy={y} r={radius} />
-        <circle className="showcase-gizmo-hit" cx={x} cy={y} r={radius} {...handleProps('roll')} />
-        <g transform={`translate(${knob.x} ${knob.y}) rotate(${-item.roll})`} {...handleProps('roll')} className="showcase-gizmo-knob">
-          <circle r={9} />
-          <path d="M -3.5 -3 A 4.5 4.5 0 1 1 -4 2.5" />
-          <path className="showcase-gizmo-knob-tip" d="M -6.5 1 L -4 3.8 L -1.4 0.9 Z" />
+    <svg className={OVERLAY} aria-hidden="true">
+      <g className={`group ${AXIS_COLOR.roll}`} data-state={state('roll')}>
+        <circle className={AXIS_LINE} cx={x} cy={y} r={radius} />
+        <circle className={AXIS_HIT} cx={x} cy={y} r={radius} {...handleProps('roll')} />
+        <g transform={`translate(${knob.x} ${knob.y}) rotate(${-item.roll})`} {...handleProps('roll')} className="cursor-grab [pointer-events:all]">
+          <circle className="fill-accent stroke-accent-text stroke-2" r={9} />
+          <path className="fill-none stroke-accent-text stroke-[1.6] [stroke-linecap:round]" d="M -3.5 -3 A 4.5 4.5 0 1 1 -4 2.5" />
+          <path className="fill-accent-text" d="M -6.5 1 L -4 3.8 L -1.4 0.9 Z" />
         </g>
       </g>
       {!item.image && <g transform={`rotate(${-item.roll} ${x} ${y})`}>
-        <g className="showcase-gizmo-axis" data-axis="tilt" data-state={state('tilt')}>
-          <path className="showcase-gizmo-line showcase-gizmo-back" d={tiltArcs.back} />
-          <path className="showcase-gizmo-line" d={tiltArcs.front} />
-          <ellipse className="showcase-gizmo-hit" cx={x} cy={y} rx={depth} ry={radius * 0.86} {...handleProps('tilt')} />
+        <g className={`group ${AXIS_COLOR.tilt}`} data-state={state('tilt')}>
+          <path className={`${AXIS_LINE} ${AXIS_LINE_BACK}`} d={tiltArcs.back} />
+          <path className={AXIS_LINE} d={tiltArcs.front} />
+          <ellipse className={AXIS_HIT} cx={x} cy={y} rx={depth} ry={radius * 0.86} {...handleProps('tilt')} />
         </g>
-        <g className="showcase-gizmo-axis" data-axis="turn" data-state={state('turn')}>
-          <path className="showcase-gizmo-line showcase-gizmo-back" d={turnArcs.back} />
-          <path className="showcase-gizmo-line" d={turnArcs.front} />
-          <ellipse className="showcase-gizmo-hit" cx={x} cy={y} rx={radius * 0.86} ry={depth} {...handleProps('turn')} />
+        <g className={`group ${AXIS_COLOR.turn}`} data-state={state('turn')}>
+          <path className={`${AXIS_LINE} ${AXIS_LINE_BACK}`} d={turnArcs.back} />
+          <path className={AXIS_LINE} d={turnArcs.front} />
+          <ellipse className={AXIS_HIT} cx={x} cy={y} rx={radius * 0.86} ry={depth} {...handleProps('turn')} />
         </g>
       </g>}
       {shown && (
         <g transform={`translate(${x} ${y + radius + 20})`}>
-          <rect className="showcase-gizmo-readout-bg" x={-36} y={-12} width={72} height={24} rx={4} />
-          <text className="showcase-gizmo-readout" y={4}>
-            <tspan className="showcase-gizmo-readout-label" data-axis={shown}>{LABELS[shown]}</tspan>
+          <rect className={READOUT_PLATE} x={-36} y={-12} width={72} height={24} rx={4} />
+          <text className={READOUT_TEXT} y={4}>
+            <tspan className={`fill-current ${AXIS_COLOR[shown]}`}>{LABELS[shown]}</tspan>
             <tspan dx={6}>{value}</tspan>
           </text>
         </g>
@@ -177,9 +186,9 @@ export function ShowcasePoseHandles({ board, item }: { board: ShowcaseBoard; ite
   const shown = rig.controls.find((control) => control.id === (active ?? hover));
   const shownHandle = handles.find((handle) => handle.controlId === shown?.id);
   return (
-    <svg className="showcase-gizmo" aria-hidden="true">
+    <svg className={OVERLAY} aria-hidden="true">
       {handles.map((handle) => (
-        <circle key={handle.controlId} className="showcase-pose-handle" cx={handle.x} cy={handle.y} r={6}
+        <circle key={handle.controlId} className="cursor-grab fill-warn stroke-accent-text stroke-2 [pointer-events:all] data-state:stroke-white data-[state=active]:cursor-grabbing" cx={handle.x} cy={handle.y} r={6}
           data-state={active === handle.controlId ? 'active' : !active && hover === handle.controlId ? 'hover' : undefined}
           onPointerDown={begin(handle.controlId)} onPointerMove={move} onPointerUp={end} onPointerCancel={end}
           onPointerEnter={() => setHover(handle.controlId)}
@@ -187,9 +196,9 @@ export function ShowcasePoseHandles({ board, item }: { board: ShowcaseBoard; ite
       ))}
       {shown && shownHandle && (
         <g transform={`translate(${shownHandle.x} ${shownHandle.y - 20})`}>
-          <rect className="showcase-gizmo-readout-bg" x={-50} y={-12} width={100} height={24} rx={4} />
-          <text className="showcase-gizmo-readout" y={4}>
-            <tspan className="showcase-gizmo-readout-label">{shown.label}</tspan>
+          <rect className={READOUT_PLATE} x={-50} y={-12} width={100} height={24} rx={4} />
+          <text className={READOUT_TEXT} y={4}>
+            <tspan>{shown.label}</tspan>
             <tspan dx={6}>{`${item.pose[shown.id] ?? shown.defaultValue}${shown.unit}`}</tspan>
           </text>
         </g>

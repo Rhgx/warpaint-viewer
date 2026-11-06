@@ -268,5 +268,5 @@ export function GroupStickerUvPreview({
     runtimeRef.current?.draw(quad);
   }, [quad]);
 
-  return <canvas ref={canvasRef} width={1024} height={1024} aria-hidden="true" />;
+  return <canvas ref={canvasRef} className="pointer-events-none block size-full select-none" width={1024} height={1024} aria-hidden="true" />;
 }

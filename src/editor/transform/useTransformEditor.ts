@@ -632,8 +632,6 @@ export function useTransformEditor({
     layerLabel: weaponBaseLayerActive
       ? baseTextureTransform?.label ?? 'Base texture'
       : editorSelectors[activeEditorLayerIndex]?.label ?? 'Paint layer',
-    layerIndex: activeEditorLayerIndex,
-    layerCount: editorSelectors.length + (baseTextureTransform ? 1 : 0),
     fields: transformFields,
     currentSeedValues: activeSeedTransform ? {
       rotation: activeSeedTransform.rotationDeg,

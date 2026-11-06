@@ -51,6 +51,7 @@ export function AppToasts({
         title="Could not open that"
         description={droppedFileProblem ?? ''}
         dismissible
+        tone="error"
         timeout={6000}
         onClose={onDroppedFileProblemClose}
       />
@@ -62,6 +63,7 @@ export function AppToasts({
           ? `The imported archive, definitions, and ${workspaceCleared.drafts} draft${workspaceCleared.drafts === 1 ? '' : 's'} were removed from this browser.`
           : 'The imported files were removed from this browser.'}
         dismissible
+        tone="success"
         timeout={4_500}
         onClose={onWorkspaceClearedClose}
       />

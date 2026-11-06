@@ -55,6 +55,10 @@ const LICENSE_PATTERN = /^!|@license|\bcopyright\b|\bSPDX-License-Identifier\b/i
 const DASH_PATTERN = new RegExp(`[${String.fromCharCode(0x2013, 0x2014)}]`, 'u');
 const DASH_MESSAGE = 'No em or en dashes. Use a comma, colon, semicolon, parentheses or a period.';
 
+// A colour written into a class bypasses the theme, and so does a font size outside its pixel-named scale.
+const RAW_VALUE_PATTERN = /(?:^|[\s:])-?[a-z][a-z-]*-\[(?:#[0-9a-f]{3,8}|(?:rgb|hsl)a?\()|(?:^|[\s:])text-\[[\d.]+px\]/iu;
+const RAW_VALUE_MESSAGE = 'Use a theme colour or text size, not a raw value in a class. Add it to the theme in src/index.css if it is new.';
+
 const stem = (word) => (word.length > 3 ? word.replace(/([^s])s$/u, '$1') : word);
 const words = (text) =>
   (text.toLowerCase().match(/[a-z0-9]+/gu) ?? [])
@@ -160,6 +164,31 @@ const noLowValueComments = {
 };
 
 // Strings and JSX text are copy that users or agents read; comments are checked too.
+const noRawClassValues = {
+  meta: {
+    type: 'suggestion',
+    docs: {
+      description: 'Disallow raw colours and font sizes in Tailwind class strings.',
+    },
+    schema: [],
+  },
+  create(context) {
+    const check = (node, text) => {
+      if (typeof text === 'string' && RAW_VALUE_PATTERN.test(text)) {
+        context.report({ node, message: RAW_VALUE_MESSAGE });
+      }
+    };
+    return {
+      Literal(node) {
+        check(node, node.value);
+      },
+      TemplateElement(node) {
+        check(node, node.value.cooked);
+      },
+    };
+  },
+};
+
 const noDashes = {
   meta: {
     type: 'suggestion',
@@ -289,6 +318,7 @@ export default {
   rules: {
     'no-low-value-comments': noLowValueComments,
     'no-dashes': noDashes,
+    'no-raw-class-values': noRawClassValues,
     'newline-after-imports': newlineAfterImports,
     'import-groups': importGroups,
   },

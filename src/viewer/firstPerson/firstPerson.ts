@@ -40,7 +40,7 @@ export function viewmodelFov(horizontal: number): number {
 }
 
 // Fraction of the canvas, from the top, that the portrait viewmodel frame centers
-// in while the Controls sheet is open. It must match the sheet height in layout.css.
+// in while the Controls sheet is open. It must match the sheet height in App.tsx.
 // With the sheet closed the frame centers in the whole canvas (fraction 1).
 export const FP_PORTRAIT_FRAME_CENTER = 0.55;
 

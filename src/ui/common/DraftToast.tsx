@@ -36,6 +36,7 @@ export function DraftToast({
       title="Draft saved locally"
       description="Your war paint edits will survive a reload."
       dismissible
+      tone="success"
       timeout={3_500}
       onClose={hideSaved}
     />
