@@ -260,56 +260,6 @@ try {
   check('focus returns to the menu button after renaming', await until(`t.focused()?.startsWith('More actions for Bee board')`), await evaluate(`t.focused()`));
   check('renaming can be undone', (await evaluate(`t.status()`))?.startsWith('Renamed to "Bee board"'), await evaluate(`t.status()`));
   check('rename shows', await evaluate(`t.tile(1).querySelector('[data-slot="slot-name"]').textContent`) === 'Bee board');
-  if (process.env.MENU_TRACE) {
-    await evaluate(`(() => {
-      window.menuLog = [];
-      const start = performance.now();
-      const log = (what) => window.menuLog.push(Math.round(performance.now() - start) + 'ms ' + what);
-      window.menuLogNote = log;
-      new MutationObserver((list) => { for (const m of list) { for (const n of m.addedNodes) if (n.nodeType === 1 && (n.matches?.('[role="menu"]') || n.querySelector?.('[role="menu"]'))) log('menu ADDED'); for (const n of m.removedNodes) if (n.nodeType === 1 && (n.matches?.('[role="menu"]') || n.querySelector?.('[role="menu"]'))) log('menu REMOVED'); } }).observe(document.body, { childList: true, subtree: true });
-      for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'focusin', 'focusout']) window.addEventListener(type, (e) => log(type + ' on ' + (e.target.getAttribute?.('aria-label') ?? e.target.getAttribute?.('data-slot') ?? e.target.tagName)), true);
-    })()`);
-    const profileFor = async (label, ms) => {
-      await send('Profiler.enable');
-      await send('Profiler.setSamplingInterval', { interval: 1000 });
-      await send('Profiler.start');
-      const stats = await evaluate(`(async () => {
-        const tasks = []; const observer = new PerformanceObserver((l) => { for (const e of l.getEntries()) tasks.push(Math.round(e.duration)); }); observer.observe({ entryTypes: ['longtask'] });
-        let frames = 0, worst = 0, last = performance.now(), live = true;
-        const f = (now) => { frames += 1; worst = Math.max(worst, now - last); last = now; if (live) requestAnimationFrame(f); }; requestAnimationFrame(f);
-        const timers = []; let prev = performance.now(); const tick = setInterval(() => { const n = performance.now(); timers.push(Math.round(n - prev)); prev = n; }, 50);
-        await new Promise((r) => setTimeout(r, ${ms}));
-        live = false; observer.disconnect(); clearInterval(tick);
-        return { frames, worstFrame: Math.round(worst), longTasks: tasks.length, longest: Math.max(0, ...tasks), blocked: tasks.reduce((a, b) => a + b, 0), worstTimerGap: Math.max(0, ...timers), visibility: document.visibilityState };
-      })()`);
-      const { profile } = await send('Profiler.stop');
-      const interval = profile.timeDeltas.reduce((a, b) => a + b, 0) / profile.samples.length / 1000;
-      const counts = new Map();
-      for (const sample of profile.samples) counts.set(sample, (counts.get(sample) ?? 0) + 1);
-      const rows = profile.nodes.map((node) => ({ name: node.callFrame.functionName || '(anon)', at: `${node.callFrame.url.split('/').pop()}:${node.callFrame.lineNumber}`, ms: Math.round((counts.get(node.id) ?? 0) * interval) }))
-        .filter((row) => row.ms > 0).sort((a, b) => b.ms - a.ms).slice(0, 10);
-      console.log('TRACE PROFILE', label, JSON.stringify(stats));
-      for (const row of rows) console.log(`   ${row.ms}ms ${row.name} ${row.at}`.slice(0, 110));
-    };
-    await profileFor('idle after rename', 2000);
-    const attempt = async (label) => {
-      await evaluate(`window.menuLogNote(${JSON.stringify(`--- ${label}`)})`);
-      await openMenu(1);
-      await sleep(300);
-      console.log('TRACE', label, 'open:', await evaluate(`document.querySelectorAll('[role="menuitem"]').length`), 'focus:', await evaluate(`t.focused()`));
-    };
-    await attempt('first click after rename');
-    await attempt('second click');
-    await key('Escape', 'Escape', 27);
-    await sleep(200);
-    await attempt('click after Escape');
-    await key('Escape', 'Escape', 27);
-    await sleep(200);
-    await evaluate(`document.activeElement?.blur()`);
-    await attempt('click with nothing focused');
-    for (const line of await evaluate(`window.menuLog`)) console.log('  ', line.slice(0, 110));
-    throw new Error('trace done');
-  }
   await openMenu(1);
   await click(`(t.menuItem('Rename'))`);
   await sleep(200);
@@ -332,23 +282,6 @@ try {
   check(`the menu opens every time (${menuOpens} of ${STRESS})`, menuOpens === STRESS);
   console.log('     LATENCY slot menu ms', JSON.stringify(menuLatencies));
 
-  if (process.env.MENU_PROFILE) {
-    await key('Escape', 'Escape', 27);
-    await sleep(800);
-    await send('Profiler.enable');
-    await send('Profiler.setSamplingInterval', { interval: 500 });
-    await send('Profiler.start');
-    await evaluate(`(() => { window.taskLog = []; new PerformanceObserver((l) => { for (const e of l.getEntries()) window.taskLog.push(Math.round(e.duration)); }).observe({ entryTypes: ['longtask'] }); })()`);
-    const opened = await openMenu(1);
-    console.log('PROFILE opened', opened, 'latency', menuLatencies.at(-1), 'long tasks', JSON.stringify(await evaluate(`window.taskLog`)));
-    const { profile } = await send('Profiler.stop');
-    const interval = profile.timeDeltas.reduce((a, b) => a + b, 0) / profile.samples.length / 1000;
-    const counts = new Map();
-    for (const sample of profile.samples) counts.set(sample, (counts.get(sample) ?? 0) + 1);
-    for (const row of profile.nodes.map((node) => ({ name: node.callFrame.functionName || '(anon)', at: `${node.callFrame.url.split('/').pop()}:${node.callFrame.lineNumber}`, ms: Math.round((counts.get(node.id) ?? 0) * interval) })).filter((row) => row.ms > 0).sort((a, b) => b.ms - a.ms).slice(0, 14)) console.log(`PROFILE ${row.ms}ms ${row.name} ${row.at}`.slice(0, 120));
-    await key('Escape', 'Escape', 27);
-    throw new Error('profile done');
-  }
 
   // Delete, then take it back.
   await click('[data-slot="slots"] > :nth-child(2) [data-slot="slot-new"]');

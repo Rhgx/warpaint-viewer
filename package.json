@@ -30,8 +30,6 @@
     "verify:e2e": "node tools/verify/e2e/showcase-boards.mjs",
     "verify:perf": "node tools/verify/perf/measure.mjs",
     "verify:perf:compare": "node tools/verify/perf/compare.mjs",
-    "verify:ui:capture": "node tools/verify/ui/capture.mjs",
-    "verify:ui:compare": "node tools/verify/ui/compare.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "knip": "knip"

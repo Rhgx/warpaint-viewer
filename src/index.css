@@ -40,15 +40,8 @@
   --color-board-light: #ffd970;
   /* Text over the always-dark canvas. */
   --color-on-canvas: #f4f6f8;
-  --color-grade-civilian: var(--grade-civilian);
-  --color-grade-freelance: var(--grade-freelance);
-  --color-grade-mercenary: var(--grade-mercenary);
-  --color-grade-commando: var(--grade-commando);
-  --color-grade-assassin: var(--grade-assassin);
-  --color-grade-elite: var(--grade-elite);
   --color-graph-texture: var(--graph-type-texture);
   --color-graph-mask: var(--graph-type-mask);
-  --color-graph-unknown: var(--graph-type-unknown);
 
   /* The sizes old CSS really uses, named by their pixels. Register a new one in cn.ts too. */
   --text-*: initial;
