@@ -100,8 +100,8 @@ export const WeaponSection = memo(function WeaponSection({ board, item, problem,
             <PoseSlider key={control.id} control={control} value={item.pose[control.id] ?? control.defaultValue} onPose={setPose} onCommit={settle} />
           ))}
           {rig.controls.some((control) => control.handle) && (
-            <Row label="Handles on the weapon">
-              <Switch checked={poseHandles} onChange={onPoseHandlesChange} ariaLabel="Handles on the weapon" />
+            <Row label="Handles on the Weapon">
+              <Switch checked={poseHandles} onChange={onPoseHandlesChange} ariaLabel="Handles on the Weapon" />
             </Row>
           )}
         </>
@@ -123,7 +123,7 @@ export const WeaponSection = memo(function WeaponSection({ board, item, problem,
                 )}
                 <Button title={`Place the ${part.label.toLowerCase()} on the board by itself`}
                   onClick={() => void board.pullOutPart(id, part.id)}>
-                  <PackageOpen size={13} /> Take out
+                  <PackageOpen size={13} /> Take Out
                 </Button>
               </div>
             );
@@ -229,7 +229,7 @@ export const MultiSection = memo(function MultiSection({ board, items, paintkits
     if (/^\d+$/.test(typed) && BigInt(typed) < 2n ** 64n) board.setPaintMany(weaponIds, { seed: BigInt(typed).toString() });
   };
   return (
-    <Section icon={Boxes} title={weapons.length === items.length ? `${items.length} weapons` : `${items.length} selected`} onClose={() => board.select(null)}>
+    <Section icon={Boxes} title={weapons.length === items.length ? `${items.length} Weapons` : `${items.length} Selected`} onClose={() => board.select(null)}>
       {byWear.length > 0 && (
         <SliderRow label="Wear" value={wear === null ? 'Mixed' : wearNames[wear]}>
           <WearSliderField value={wear ?? byWear[0].paint.wearIndex} names={wearNames}

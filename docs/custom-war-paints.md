@@ -28,7 +28,7 @@ provides chat commands for giving players those war paints while testing and
 authoring them. Overwrite mode instead reuses the index of an existing war
 paint.
 
-**New war paint** in the Definitions tab starts a paint from one of the stock
+**New War Paint** in the Definitions tab starts a paint from one of the stock
 operation templates, with the texture layers, stickers, and inner wear that
 template has and the weapons its stock paints use. It is added to the imported
 JSON definitions (or starts a set named New war paints when none are loaded),
@@ -45,7 +45,7 @@ In the editor, a sticker that draws one of several images per seed (as Yeti
 Coated does) lists them under **Variants** beside its placement values. Each
 variant has a relative weight and shows the chance it gets; a variant can be
 added, removed, given its own image, or clicked to preview it regardless of the
-seed, and **Equal weights** resets every weight to 1.
+seed, and **Equal Weights** resets every weight to 1.
 
 Some stock paints (the Warbird and Gentlemanne's collections, the paints the
 Mk.II series is based on, and others) set a separate operation for each weapon
@@ -58,7 +58,7 @@ its extension. Nothing is uploaded anywhere. Imported package and definition
 files, along with definition edits, are saved locally in the browser and
 restored or offered for recovery after a reload.
 
-**Clear workspace** in the panel header removes all of it in one step: the
+**Clear Workspace** in the panel header removes all of it in one step: the
 imported archive, the imported definitions, every draft belonging to them, and
 any replaced texture files. Viewer settings and drafts for built-in war paints
 are kept. It asks for confirmation and names what it will delete first.

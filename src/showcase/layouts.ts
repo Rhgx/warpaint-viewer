@@ -75,7 +75,7 @@ export function boardLayouts(kit: PaintkitEntry, paint: ShowcasePaint, wearCount
   } else {
     // War Paints cover the unlockables too, more than one board can show.
     board('stock', 'Stock', ordered.filter((key) => STOCK.includes(key)));
-    board('unlocks', 'Unlock guns', unlocks.filter((key) => !MELEE.has(key)));
+    board('unlocks', 'Unlock Guns', unlocks.filter((key) => !MELEE.has(key)));
     // Long blades stand in a row like a weapon rack when that fits them larger.
     const melee = ordered.filter((key) => MELEE.has(key));
     if (melee.length > 1) board('melee', 'Melee', melee, 'size', true);
@@ -84,7 +84,7 @@ export function boardLayouts(kit: PaintkitEntry, paint: ShowcasePaint, wearCount
   const stock = ordered.filter((key) => STOCK.includes(key));
   const framed = (stock.length ? stock : ordered).slice(0, BOARD_LIMIT);
   if (framed.length > 1) {
-    layouts.push({ id: 'logo', label: 'With logo', rows: chunk(framed.map((key) => slot(key)), Math.ceil(Math.sqrt(framed.length * 1.5))), pack: 'composed', inward: true, logoSpace: true });
+    layouts.push({ id: 'logo', label: 'With Logo', rows: chunk(framed.map((key) => slot(key)), Math.ceil(Math.sqrt(framed.length * 1.5))), pack: 'composed', inward: true, logoSpace: true });
   }
 
   const wears = COMPARED_WEARS.filter((wearIndex) => wearIndex < wearCount);

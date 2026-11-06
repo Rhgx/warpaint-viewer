@@ -14,7 +14,8 @@ export interface LightingPreset {
   // Source-axis order: +X, -X, +Y, -Y, +Z, -Z. Values are linear RGB.
   ambientCube: AmbientCube;
   ambientBasis?: (camera?: THREE.PerspectiveCamera) => THREE.Matrix3;
-  background: number;
+  /** null: no background of its own, so it sits on the theme's stage colour. */
+  background: number | null;
   backplate?: string;
   environmentMap?: readonly string[];
   exposure?: number;
@@ -197,8 +198,8 @@ function legacyInspectionLights(): THREE.Light[] {
   return [key, spot, point];
 }
 
-function fogBackground(color: readonly number[] | null): number {
-  if (!color) return 0x1c1f24;
+function fogBackground(color: readonly number[] | null): number | null {
+  if (!color) return null;
   return (color[0] << 16) | (color[1] << 8) | color[2];
 }
 
@@ -250,7 +251,7 @@ export const LIGHTING_PRESETS: LightingPreset[] = [
   {
     id: 'inspect',
     label: 'Inspect',
-    background: 0x1c1f24,
+    background: null,
     exposure: 1,
     spotFalloff: 25,
     // CPotteryWheelPanel::CreateDefaultLights uses 0.4 on every cube face.
@@ -260,7 +261,7 @@ export const LIGHTING_PRESETS: LightingPreset[] = [
   {
     id: 'inspect-legacy',
     label: 'Inspect (Legacy)',
-    background: 0x1c1f24,
+    background: null,
     exposure: 1,
     ambientCube: cube([0.4, 0.4, 0.4]),
     build: legacyInspectionLights,
@@ -274,7 +275,7 @@ export const LIGHTING_PRESETS: LightingPreset[] = [
 const paintkitIconLighting: LightingPreset = {
   id: PAINTKIT_ICON_LIGHTING_ID,
   label: 'War Paint Icon',
-  background: 0x1c1f24,
+  background: null,
   exposure: 1,
   spotFalloff: 5,
   // CModelPanel::Paint sets all six studio ambient cube faces to 0.4.

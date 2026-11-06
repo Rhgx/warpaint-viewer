@@ -54,7 +54,7 @@ function DiagnosticItem({ diagnostic }: { diagnostic: ProblemDiagnostic }) {
         <details className="group col-start-2 mt-px" data-slot="diagnostic-technical">
           <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-0.75 rounded-sm py-px pr-1.5 pl-0.75 text-10 font-semibold text-dim focus-ring hover:bg-panel-2 hover:text-text [&::-webkit-details-marker]:hidden">
             <ChevronRight className="flex-none transition-transform duration-[140ms] group-open:rotate-90 motion-reduce:transition-none" size={11} aria-hidden="true" />
-            Technical details
+            Technical Details
           </summary>
           <pre className={cn('scrollbar-slim mx-0 mt-1 mb-0 max-h-40 overflow-auto rounded-sm border border-border bg-panel-2 px-2 py-1.5 leading-normal wrap-anywhere whitespace-pre-wrap text-dim', PATH_TEXT)}>{diagnostic.technicalDetail}</pre>
         </details>

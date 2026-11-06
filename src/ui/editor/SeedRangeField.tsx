@@ -412,7 +412,7 @@ export function SeedRangeField({
                     disabled={disabled || !onPushToAll}
                     onClick={() => { onPushToAll?.(); setPopoverOpen(false); }}
                   >
-                    Push this value to all weapons
+                    Push This Value to All Weapons
                   </Button>
                 </Popover.Popup>
               </Popover.Positioner>

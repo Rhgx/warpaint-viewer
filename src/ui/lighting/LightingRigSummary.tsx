@@ -49,7 +49,7 @@ export function LightingRigSummary({
         onClick={onTogglePanel}
       >
         <SlidersHorizontal size={12} aria-hidden="true" />
-        <span>{panelOpen ? 'Editing lights' : 'Edit lights'}</span>
+        <span>{panelOpen ? 'Editing Lights' : 'Edit Lights'}</span>
       </Button>
 
       <ScalarRow
@@ -72,7 +72,7 @@ export function LightingRigSummary({
       />
       <div className="flex min-h-5.5 items-center justify-between gap-1.5">
         <ControlLabel title="Material-authored highlight that follows the camera">
-          Camera rim
+          Camera Rim
         </ControlLabel>
         <Switch
           checked={rig.cameraRimLight}

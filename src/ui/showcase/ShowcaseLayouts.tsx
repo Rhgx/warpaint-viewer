@@ -115,7 +115,7 @@ function PairPicker({ picked, options, onChange }: {
           </div>
         ))}
         {picked.length < TEAM_PAIR_LIMIT && (
-          <IconSelectField value="" placeholder="Add weapon" options={choices(null)} ariaLabel="Add a RED and BLU weapon" searchPlaceholder="Filter weapons..."
+          <IconSelectField value="" placeholder="Add Weapon" options={choices(null)} ariaLabel="Add a RED and BLU weapon" searchPlaceholder="Filter weapons..."
             onChange={(next) => onChange([...picked, next])} />
         )}
       </div>

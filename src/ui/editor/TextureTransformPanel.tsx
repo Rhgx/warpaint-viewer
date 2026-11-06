@@ -113,7 +113,7 @@ export function TextureTransformPanel({
   onInteractionEnd,
 }: TextureTransformPanelProps) {
   const uvAspect = Number.isFinite(previewAspect) && previewAspect > 0 ? previewAspect : 1;
-  const weaponScopeLabel = scopeWeaponLabel ? `This weapon only (${scopeWeaponLabel})` : 'This weapon only';
+  const weaponScopeLabel = scopeWeaponLabel ? `This Weapon Only (${scopeWeaponLabel})` : 'This Weapon Only';
   return (
     <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', COMPACT_INPUTS)} data-slot="texture-transform">
       <div className={EDITOR_HEAD}>
@@ -135,10 +135,10 @@ export function TextureTransformPanel({
             aria-label="Transform scope"
             title="Choose whether transform edits apply to every weapon or only the current weapon"
           >
-            <SelectValue className="truncate">{() => (scope === 'all' ? 'All weapons' : weaponScopeLabel)}</SelectValue>
+            <SelectValue className="truncate">{() => (scope === 'all' ? 'All Weapons' : weaponScopeLabel)}</SelectValue>
           </SelectTrigger>
           <SelectPopup className="text-11">
-            <SelectItem value="all"><SelectItemText>All weapons</SelectItemText></SelectItem>
+            <SelectItem value="all"><SelectItemText>All Weapons</SelectItemText></SelectItem>
             <SelectItem value="weapon"><SelectItemText>{weaponScopeLabel}</SelectItemText></SelectItem>
           </SelectPopup>
         </Select>

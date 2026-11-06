@@ -126,7 +126,11 @@ const HELPERS = `
     menuItem: (label) => [...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent.includes(label)),
     saved: () => !!localStorage.getItem('warpaint-viewer:showcase-board'),
     colors: async () => {
-      const blob = await window.__showcase.exportPng(800, false);
+      // Only the weapons' own pixels: shadows are too faint to pass the alpha test below.
+      const background = t.settings()?.background ?? 'framed';
+      window.__showcase.setBackground('transparent');
+      const blob = await window.__showcase.exportPng(800);
+      window.__showcase.setBackground(background);
       const bitmap = await createImageBitmap(blob);
       const c = document.createElement('canvas'); c.width = bitmap.width; c.height = bitmap.height;
       const g = c.getContext('2d'); g.drawImage(bitmap, 0, 0);
@@ -153,7 +157,7 @@ try {
   await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: DOWNLOADS });
   await send('Page.navigate', { url: `http://localhost:${APP_PORT}/?kit=102&weapon=c_rocketlauncher` });
   await sleep(1500);
-  await evaluate(`(() => { const k = 'warpaint-viewer:settings'; const v = JSON.parse(localStorage.getItem(k) || '{"state":{},"version":1}'); v.state.showcaseBoard = true; localStorage.setItem(k, JSON.stringify(v)); localStorage.setItem('warpaint-viewer:showcase-settings', JSON.stringify({ weaponSize: 80, background: 'pegboard', lightAzimuth: 40, lightElevation: 30, shadow: 20, outputWidth: 2560, grid: 'coarse', rotationSnap: 15, poseHandles: false, exportBackdrop: false })); })()`);
+  await evaluate(`(() => { const k = 'warpaint-viewer:settings'; const v = JSON.parse(localStorage.getItem(k) || '{"state":{},"version":1}'); v.state.showcaseBoard = true; localStorage.setItem(k, JSON.stringify(v)); localStorage.setItem('warpaint-viewer:showcase-settings', JSON.stringify({ weaponSize: 80, background: 'pegboard', lightAzimuth: 40, lightElevation: 30, shadow: 20, outputWidth: 2560, grid: 'coarse', rotationSnap: 15, poseHandles: false })); })()`);
   await send('Page.reload');
   await sleep(800);
   await openBoard(false);
@@ -162,9 +166,9 @@ try {
 
   // Nothing on the board yet.
   check('three empty slots, none usable yet', await evaluate(`document.querySelectorAll('[data-slot="slot-new"]:disabled').length`) === 3);
-  check('an empty board shows its slots as unavailable', await evaluate(`t.tile(1).textContent === 'Empty slot'`));
-  check('export waits for something to export', await evaluate(`[...document.querySelectorAll('[data-slot="slot-share"] button')].find((b) => b.textContent.includes('Share file')).disabled`));
-  check('import is available on an empty board', await evaluate(`![...document.querySelectorAll('[data-slot="slot-share"] button')].find((b) => b.textContent.includes('Open file')).disabled`));
+  check('an empty board shows its slots as unavailable', await evaluate(`t.tile(1).textContent === 'Empty Slot'`));
+  check('export waits for something to export', await evaluate(`[...document.querySelectorAll('[data-slot="slot-share"] button')].find((b) => b.textContent.includes('Share File')).disabled`));
+  check('import is available on an empty board', await evaluate(`![...document.querySelectorAll('[data-slot="slot-share"] button')].find((b) => b.textContent.includes('Open File')).disabled`));
   await panelShot('01-empty-board');
 
   // A board with every kind of edit.
@@ -232,10 +236,10 @@ try {
   await click(`(document.querySelector('[data-slot="slot-line"] [data-restore]'))`);
   check('Restore brings the old save back, unlinked from what is now on the board', await until(`!t.q('[data-slot="slot-update"]') && !t.tile(1).hasAttribute('data-active')`));
   await openMenu(1);
-  await click(`(t.menuItem('Replace with current board'))`);
+  await click(`(t.menuItem('Replace with Current Board'))`);
   check('the status says it was replaced, and the row and its Undo name what', /^(Replaced|Updated)./.test(await evaluate(`t.status()`)) && await evaluate(`t.tile(1).querySelector('[data-slot="slot-name"]').textContent`) === 'Wrapped Reviver Mk.II' && await evaluate(`document.querySelector('[data-slot="slot-line"] [data-restore]').getAttribute('aria-label')`) === 'Undo, restoring the previous save of Wrapped Reviver Mk.II', await evaluate(`t.status()`));
   await openMenu(1);
-  check('the menu keeps the way back after the status has gone', await evaluate(`!!t.menuItem('Restore previous save')`));
+  check('the menu keeps the way back after the status has gone', await evaluate(`!!t.menuItem('Restore Previous Save')`));
   await key('Escape', 'Escape', 27);
 
   // The menu and renaming, by mouse and keyboard.
@@ -354,15 +358,15 @@ try {
   check('delete says so', (await evaluate(`t.status()`))?.startsWith('Deleted "Wrapped Reviver Mk.II"'));
   check('focus moves to Restore after deleting', await until(`document.activeElement === t.tile(2).querySelector('[data-restore]')`), await evaluate(`t.focused()`));
   await panelShot('07-deleted-with-undo');
-  check('a deleted row shows what it held', await evaluate(`t.tile(2).querySelector('[data-slot="slot-meta"]').textContent === 'Deleted: Wrapped Reviver Mk.II' && t.tile(2).querySelector('[data-slot="slot-name"]').textContent === 'Save board here' && t.tile(2).querySelector('[data-slot="slot-new"]').textContent.startsWith('Deleted: ')`));
+  check('a deleted row shows what it held', await evaluate(`t.tile(2).querySelector('[data-slot="slot-meta"]').textContent === 'Deleted: Wrapped Reviver Mk.II' && t.tile(2).querySelector('[data-slot="slot-name"]').textContent === 'Save Board Here' && t.tile(2).querySelector('[data-slot="slot-new"]').textContent.startsWith('Deleted: ')`));
   // Saving over a deleted row, right beside Restore, must not cost the deleted save; nor may restoring cost what it replaces.
   const deletedAt = (await evaluate(`localStorage.getItem('warpaint-viewer:showcase-slot-2-previous') && JSON.parse(localStorage.getItem('warpaint-viewer:showcase-slot-2-previous')).savedAt`));
   await click('[data-slot="slots"] > :nth-child(2) [data-slot="slot-new"]');
   const overAt = (await evaluate(`t.slot(2)`)).savedAt;
-  check('saving into a deleted row offers the deleted save back', await until(`[...document.querySelectorAll('[data-note-action]')].some((b) => b.textContent === 'Restore deleted')`));
+  check('saving into a deleted row offers the deleted save back', await until(`[...document.querySelectorAll('[data-note-action]')].some((b) => b.textContent === 'Restore Deleted')`));
   await openMenu(2);
-  check('saving into a deleted row keeps the deleted save', await evaluate(`!!t.menuItem('Restore previous save')`));
-  await click(`(t.menuItem('Restore previous save'))`);
+  check('saving into a deleted row keeps the deleted save', await evaluate(`!!t.menuItem('Restore Previous Save')`));
+  await click(`(t.menuItem('Restore Previous Save'))`);
   check('restore brings the deleted save back', (await evaluate(`t.slot(2)`)).savedAt === deletedAt);
   check('restore offers to take it back', await until(`[...document.querySelectorAll('[data-note-action]')].some((b) => b.textContent === 'Undo')`));
   await sleep(11000);
@@ -377,7 +381,7 @@ try {
   await sleep(200);
   const clearButton = `([...t.tile(2).querySelectorAll('[data-slot="slot-deleted-actions"] button')].find((b) => b.textContent.trim() === 'Clear'))`;
   await click(clearButton);
-  check('clearing a deleted row empties it', await until(`!t.tile(2).querySelector('[data-restore]') && t.tile(2).textContent === 'Save board here' && localStorage.getItem('warpaint-viewer:showcase-slot-2-previous') === null`));
+  check('clearing a deleted row empties it', await until(`!t.tile(2).querySelector('[data-restore]') && t.tile(2).textContent === 'Save Board Here' && localStorage.getItem('warpaint-viewer:showcase-slot-2-previous') === null`));
   await click(`([...document.querySelectorAll('[data-note-action]')].find((b) => b.textContent === 'Undo'))`);
   check('clearing can be undone', await until(`document.activeElement === t.tile(2).querySelector('[data-restore]') && !!localStorage.getItem('warpaint-viewer:showcase-slot-2-previous')`), await evaluate(`t.focused()`));
   // Opening another board must not cost the way back for a slot, nor must dismissing an unrelated error.
@@ -428,10 +432,10 @@ try {
   check('redo brings it back', await evaluate(`JSON.stringify(t.plain())`) === JSON.stringify(beforeLoad.plain));
   check('redo brings the settings back', await evaluate(`JSON.stringify(t.settings())`) === JSON.stringify(beforeLoad.settings));
   // A working preference does not make a board look changed.
-  await evaluate(`t.btn('Show footprints').click()`);
+  await evaluate(`t.btn('Show Footprints').click()`);
   await sleep(300);
   check('toggling footprints does not mark the board as changed', await evaluate(`!t.q('[data-slot="slot-update"]') && t.tile(1).hasAttribute('data-active')`));
-  await evaluate(`t.btn('Show footprints').click()`);
+  await evaluate(`t.btn('Show Footprints').click()`);
   // Clearing ends the link to the slot, so the next board cannot overwrite it, and undoing the clear brings it back.
   await clearAndWait();
   check('an empty board offers no update and is not tied to the slot', await until(`!t.q('[data-slot="slot-update"]') && !t.tile(1).hasAttribute('data-active')`));
@@ -471,7 +475,7 @@ try {
 
   // Export for real, then import that very file.
   const shareButton = (label) => `([...document.querySelectorAll('[data-slot="slot-share"] button')].find((b) => b.textContent.includes('${label}')))`;
-  await click(shareButton('Share file'));
+  await click(shareButton('Share File'));
   await evaluate(`t.settle()`);
   check('export says what it made', (await evaluate(`t.status()`) ?? '').includes('Downloaded Bee board.pegboard ('), await evaluate(`t.status()`));
   await panelShot('09-exported');
@@ -487,8 +491,8 @@ try {
 
   const assetBefore = await evaluate(`window.__showcase.getSnapshot().items.find((i) => i.image).image.assetId`);
   await evaluate(`t.segment('Background', 'Transparent')`);
-  await evaluate(`(async () => { t.btn('Show footprints').click(); t.segment('Rotation snap', 'Free'); await t.sleep(200); })()`);
-  const myPrefs = await evaluate(`(() => { const s = t.settings(); return { showFootprints: s.showFootprints, rotationSnap: s.rotationSnap, snapToGrid: s.snapToGrid, poseHandles: s.poseHandles, outputWidth: s.outputWidth, exportBackdrop: s.exportBackdrop }; })()`);
+  await evaluate(`(async () => { t.btn('Show Footprints').click(); t.segment('Rotation Snap', 'Free'); await t.sleep(200); })()`);
+  const myPrefs = await evaluate(`(() => { const s = t.settings(); return { showFootprints: s.showFootprints, rotationSnap: s.rotationSnap, snapToGrid: s.snapToGrid, poseHandles: s.poseHandles, outputWidth: s.outputWidth }; })()`);
   await clearAndWait();
   await importFile(exportedPath);
   await evaluate(`t.settle()`);
@@ -506,7 +510,7 @@ try {
   await click(`(t.undoStatus())`);
   await evaluate(`t.settle()`);
   check('undoing an import restores the board and settings', await evaluate(`window.__showcase.getSnapshot().items.length`) === 0 && await evaluate(`t.settings().background`) === 'transparent');
-  await evaluate(`(async () => { t.segment('Background', 'Pegboard'); t.btn('Show footprints').click(); t.segment('Rotation snap', '15°'); await t.sleep(200); })()`);
+  await evaluate(`(async () => { t.segment('Background', 'Pegboard'); t.btn('Show Footprints').click(); t.segment('Rotation Snap', '15°'); await t.sleep(200); })()`);
 
   // Dropping a file on the board, as you would from a chat window.
   // Anywhere on the page, not only the board: the panel beside it, here.
@@ -575,24 +579,24 @@ try {
   await click('[data-slot="slots"] > :nth-child(3) [data-slot="slot-new"]');
   check('a save that works clears the earlier failure', await until(`!t.q('[data-kind="error"]')`), await evaluate(`t.status()`));
   await openMenu(3);
-  check('a save cannot be replaced with itself', await evaluate(`!t.menuItem('Replace with current board')`));
+  check('a save cannot be replaced with itself', await evaluate(`!t.menuItem('Replace with Current Board')`));
   check('the menu can load the save', await evaluate(`!!t.menuItem('Load') && [...document.querySelectorAll('[role="menuitem"]')].some((b) => b.textContent.trim() === 'Load')`));
   await click(`(t.menuItem('Load'))`);
   await evaluate(`t.settle()`);
   await openMenu(3);
   await key('Escape', 'Escape', 27);
   check('the menu still hands the focus back after loading from it', await until(`document.activeElement === t.tile(3).querySelector('[data-slot="slot-more"]')`), await evaluate(`t.focused()`));
-  await evaluate(`t.btn('Show footprints').click()`);
+  await evaluate(`t.btn('Show Footprints').click()`);
   await sleep(200);
   await openMenu(3);
-  check('a save can take a changed working preference', await evaluate(`!!t.menuItem('Replace with current board')`));
+  check('a save can take a changed working preference', await evaluate(`!!t.menuItem('Replace with Current Board')`));
   await key('Escape', 'Escape', 27);
-  await evaluate(`t.btn('Show footprints').click()`);
+  await evaluate(`t.btn('Show Footprints').click()`);
   await sleep(200);
   await evaluate(`(async () => { const b = window.__showcase; const item = b.getSnapshot().items.find((i) => !i.image && !i.hidden); b.setPaint(item.id, { seed: '4244' }); await t.sleep(300); })()`);
   await openMenu(3);
   await evaluate(`(() => { window.realSetItem = Storage.prototype.setItem; Storage.prototype.setItem = function (key, value) { if (key.endsWith('-previous')) throw new DOMException('full', 'QuotaExceededError'); return window.realSetItem.call(this, key, value); }; })()`);
-  await click(`(t.menuItem('Replace with current board'))`);
+  await click(`(t.menuItem('Replace with Current Board'))`);
   await evaluate(`Storage.prototype.setItem = window.realSetItem`);
   check('a way back that cannot be stored is said out loud', await until(`t.q('[data-kind="warning"]')?.textContent === 'Previous save kept for this session only: storage is full or blocked.'`), await evaluate(`t.status()`));
   await click('[data-slot="slot-dismiss"]');
@@ -812,11 +816,11 @@ try {
   check('a replaced texture shows on the board', magentaOf(replacedColors) > magentaOf(stockColors) + 8, `${magentaOf(stockColors).toFixed(1)} to ${magentaOf(replacedColors).toFixed(1)}`);
   await sleep(300);
   await shot('15-board-with-replacement');
-  await click(`([...document.querySelectorAll('[data-slot="slot-share"] button')].find((b) => b.textContent.includes('Share file')))`);
+  await click(`([...document.querySelectorAll('[data-slot="slot-share"] button')].find((b) => b.textContent.includes('Share File')))`);
   check('sharing a board with replaced textures says they stay behind', await until(`t.q('[data-kind="warning"]')?.textContent.includes('Replaced textures are not included')`), await evaluate(`t.status()`));
   await panelShot('16-shared-with-replacement');
   await openMenu(3);
-  await click(`(t.menuItem('Replace with current board'))`);
+  await click(`(t.menuItem('Replace with Current Board'))`);
   check('saving a board with replaced textures says they are not part of it', await until(`(t.status() ?? '').includes('Replaced textures are not kept')`), await evaluate(`t.status()`));
 
   const realErrors = pageErrors.filter((entry) => !/Failed to load resource/.test(entry));

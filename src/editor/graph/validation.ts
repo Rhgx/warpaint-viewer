@@ -168,17 +168,17 @@ export function validateOperationGraph(graph: OperationGraph): OperationGraphVal
   }
 
   const outputEdges = incoming.get(graph.outputId) ?? [];
-  if (outputEdges.length === 0) add(diagnostics, 'missing-root', 'The operation graph must have at least one root connected to Paint output.');
+  if (outputEdges.length === 0) add(diagnostics, 'missing-root', 'The operation graph must have at least one root connected to Paint Output.');
   const outputIndexes = new Set<number>();
   for (const edge of outputEdges) {
-    if (outputIndexes.has(edge.inputIndex)) add(diagnostics, 'duplicate-input', `Paint output has duplicate input ${edge.inputIndex}.`, output, edge);
+    if (outputIndexes.has(edge.inputIndex)) add(diagnostics, 'duplicate-input', `Paint Output has duplicate input ${edge.inputIndex}.`, output, edge);
     outputIndexes.add(edge.inputIndex);
     const sourceNode = byId.get(edge.source);
     if (sourceNode?.outputType === 'mask') {
       add(
         diagnostics,
         'invalid-root-type',
-        `${sourceNode.label} is labeled as a mask at Paint output; this role is advisory because the compositor accepts RGBA data.`,
+        `${sourceNode.label} is labeled as a mask at Paint Output; this role is advisory because the compositor accepts RGBA data.`,
         sourceNode,
         edge,
         'warning',
@@ -187,7 +187,7 @@ export function validateOperationGraph(graph: OperationGraph): OperationGraphVal
   }
   for (let index = 0; index < outputEdges.length; index += 1) {
     if (!outputIndexes.has(index)) {
-      add(diagnostics, 'invalid-input-index', `Paint output root inputs must be ordered from zero; input ${index} is missing.`, output);
+      add(diagnostics, 'invalid-input-index', `Paint Output root inputs must be ordered from zero; input ${index} is missing.`, output);
     }
   }
 
@@ -198,7 +198,7 @@ export function validateOperationGraph(graph: OperationGraph): OperationGraphVal
     const parentEdges = parents.filter((edge) => edge.target !== graph.outputId);
     if (parentEdges.length > 1) add(diagnostics, 'multiple-parents', `${node.label} is connected to more than one authored parent.`, node);
     if (parents.length > 1) add(diagnostics, 'shared-output', `${node.label} has a shared output; duplicate the subtree before reusing it.`, node);
-    if (parents.length === 0) add(diagnostics, 'orphan-node', `${node.label} is not connected to a parent or Paint output.`, node);
+    if (parents.length === 0) add(diagnostics, 'orphan-node', `${node.label} is not connected to a parent or Paint Output.`, node);
 
     const variants = stageVariantCount(node);
     if (node.kind === 'invalid' || variants === 0) add(diagnostics, 'invalid-stage', `${node.label} does not contain a recognized operation stage.`, node);
@@ -225,7 +225,7 @@ export function validateOperationGraph(graph: OperationGraph): OperationGraphVal
     if (node.kind === 'combine_add' || node.kind === 'combine_multiply') {
       if (children.length < 2) add(diagnostics, 'invalid-arity', `${stageKindLabel(node.kind)} requires at least two ordered inputs.`, node);
     } else if (node.kind === 'combine_lerp') {
-      if (children.length !== 3) add(diagnostics, 'invalid-arity', 'combine-lerp requires Background, Foreground, and Blend mask inputs.', node);
+      if (children.length !== 3) add(diagnostics, 'invalid-arity', 'combine-lerp requires Background, Foreground, and Blend Mask inputs.', node);
     } else if (node.kind === 'apply_sticker' && children.length !== 1) {
       add(diagnostics, 'invalid-arity', 'apply-sticker requires exactly one Surface input.', node);
     }
@@ -267,7 +267,7 @@ export function validateOperationGraph(graph: OperationGraph): OperationGraphVal
   };
   markReachable(graph.outputId);
   for (const node of authoredNodes) {
-    if (!reachable.has(node.id)) add(diagnostics, 'orphan-node', `${node.label} is not on a path to Paint output.`, node);
+    if (!reachable.has(node.id)) add(diagnostics, 'orphan-node', `${node.label} is not on a path to Paint Output.`, node);
   }
 
   // Cycle check follows source to target, skipping edges into the terminal output.

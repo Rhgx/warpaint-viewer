@@ -395,7 +395,7 @@ function walk(
 }
 
 function textureLabel(textureRef: string): string {
-  const base = textureRef.replace(/\\/g, '/').split('/').at(-1)?.replace(/^p_/i, '') ?? 'Base texture';
+  const base = textureRef.replace(/\\/g, '/').split('/').at(-1)?.replace(/^p_/i, '') ?? 'Base Texture';
   const words = base.split(/[_\-\s]+/).filter(Boolean);
   if (words.length > 1 && /^\d{6,}$/.test(words[0])) words.shift();
   return words.map((word) => (

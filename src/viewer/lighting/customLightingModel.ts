@@ -343,18 +343,18 @@ export function createDefaultCustomLightingRig(): CustomLightingRig {
     cameraRimLight: true,
     lights: [
       {
-        id: 'key', name: 'Key light', type: 'directional', enabled: true, color: '#ffffff', intensity: 1,
+        id: 'key', name: 'Key Light', type: 'directional', enabled: true, color: '#ffffff', intensity: 1,
         direction: [0, 1, 0],
       },
       {
-        id: 'spot', name: 'Spot light', type: 'spot', enabled: true, color: '#fff3f3', intensity: 1 / 4.5,
+        id: 'spot', name: 'Spot Light', type: 'spot', enabled: true, color: '#fff3f3', intensity: 1 / 4.5,
         position: [0, 1, 0], target: [0, 0, -2], range: null,
         // Same value as THREE.MathUtils.radToDeg, which is radians * 180 / PI.
         angleDegrees: Math.acos(Math.cos(90)) * (180 / Math.PI),
         softness: 1 - Math.acos(Math.cos(1)) / Math.acos(Math.cos(90)),
       },
       {
-        id: 'point', name: 'Point light', type: 'point', enabled: true, color: '#dae7ff', intensity: 1 / 15,
+        id: 'point', name: 'Point Light', type: 'point', enabled: true, color: '#dae7ff', intensity: 1 / 15,
         position: [0.5, -2, -0.15], range: null,
       },
     ],

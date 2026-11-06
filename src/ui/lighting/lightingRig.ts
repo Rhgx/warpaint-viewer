@@ -63,14 +63,14 @@ export function nextLightId(lights: readonly CustomLight[], base: string): strin
   return uniqueValue(lights, base, 'id', '-');
 }
 
-/** Keep list names distinct: "Key light", then "Key light 2". */
+/** Keep list names distinct: "Key Light", then "Key Light 2". */
 export function uniqueLightName(lights: readonly CustomLight[], base: string): string {
   return uniqueValue(lights, base, 'name', ' ');
 }
 
-/** Duplicating a duplicate reads as "Key light copy 2", not "copy copy". */
+/** Duplicating a duplicate reads as "Key Light Copy 2", not "Copy Copy". */
 function duplicateLightName(lights: readonly CustomLight[], name: string): string {
-  return uniqueLightName(lights, `${name.replace(/ copy( \d+)?$/, '')} copy`);
+  return uniqueLightName(lights, `${name.replace(/ copy( \d+)?$/i, '')} Copy`);
 }
 
 export function deleteLightFromRig(
@@ -112,7 +112,7 @@ export function templateLight(template: LightTemplate, id: string): CustomLight 
   if (template === 'key') {
     return {
       ...base,
-      name: 'Key light',
+      name: 'Key Light',
       type: 'spot',
       color: '#fff1e2',
       intensity: 2.4,
@@ -126,7 +126,7 @@ export function templateLight(template: LightTemplate, id: string): CustomLight 
   if (template === 'fill') {
     return {
       ...base,
-      name: 'Fill light',
+      name: 'Fill Light',
       type: 'point',
       color: '#c6d8ff',
       intensity: 0.9,
@@ -137,7 +137,7 @@ export function templateLight(template: LightTemplate, id: string): CustomLight 
   if (template === 'rim') {
     return {
       ...base,
-      name: 'Rim light',
+      name: 'Rim Light',
       type: 'spot',
       color: '#bcd4ff',
       intensity: 2,
@@ -151,7 +151,7 @@ export function templateLight(template: LightTemplate, id: string): CustomLight 
   if (template === 'spot') {
     return {
       ...base,
-      name: 'Spot light',
+      name: 'Spot Light',
       type: 'spot',
       intensity: 2,
       position: [0, 1.4, 2.2],
@@ -162,9 +162,9 @@ export function templateLight(template: LightTemplate, id: string): CustomLight 
     };
   }
   if (template === 'directional') {
-    return { ...base, name: 'Sun light', type: 'directional', direction: [-0.4, -0.7, -0.6] };
+    return { ...base, name: 'Sun Light', type: 'directional', direction: [-0.4, -0.7, -0.6] };
   }
-  return { ...base, name: 'Point light', type: 'point', position: [0, 1.4, 2.2], range: null };
+  return { ...base, name: 'Point Light', type: 'point', position: [0, 1.4, 2.2], range: null };
 }
 
 export function changeLightType(light: CustomLight, type: CustomLightType): CustomLight {

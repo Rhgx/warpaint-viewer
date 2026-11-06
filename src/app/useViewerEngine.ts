@@ -12,6 +12,7 @@ import type { ControlsState } from '../viewer/controls';
 import { TURNTABLE_SECONDS } from '../viewer/controls';
 import { DEFAULT_VIEWER_FOV, TF2_ITEM_PANEL_FOV, VIEW_ANGLES, weaponIconView } from '../viewer/presets';
 import { canUseWebGL2 } from '../viewer/webgl2';
+import { readStageColor, useSettings } from '../settings';
 
 interface UseViewerEngineOptions {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -92,6 +93,7 @@ export function useViewerEngine({
     let viewer: Viewer | null = null;
     let compositor: Compositor | null = null;
     let unsubscribeCameraMode: (() => void) | null = null;
+    let unsubscribeTheme: (() => void) | null = null;
     (async () => {
       advanceBoot(22, 'Starting renderer…');
       // Check before the lazy import so a missing WebGL 2 reports at once instead of hanging the boot screen.
@@ -106,6 +108,11 @@ export function useViewerEngine({
         ]);
         if (disposed || !canvasRef.current) return;
         viewer = new ViewerCls(canvasRef.current);
+        const liveViewer = viewer;
+        liveViewer.setStageColor(readStageColor());
+        unsubscribeTheme = useSettings.subscribe((state, previous) => {
+          if (state.theme !== previous.theme) liveViewer.setStageColor(readStageColor());
+        });
         compositor = new CompositorCls((ref) => sourceProvider.resolve(ref), {
           renderer: viewer.renderer,
           size: 1024,
@@ -136,6 +143,7 @@ export function useViewerEngine({
       disposeCache();
       compositor?.dispose();
       unsubscribeCameraMode?.();
+      unsubscribeTheme?.();
       viewer?.dispose();
       viewerRef.current = null;
       compositorRef.current = null;

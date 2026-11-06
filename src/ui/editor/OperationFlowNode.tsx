@@ -111,7 +111,7 @@ function OperationFlowNodeComponent({ data, selected }: NodeProps<FlowNode>): Re
   const templateRows = node.kind === 'operation_template' && operationUsage ? [
     ...(templateName ? [{ label: 'Template', value: templateName }] : []),
     {
-      label: 'Used by',
+      label: 'Used By',
       value: templateUsers.length === 0
         ? 'no stock war paints'
         : `${templateUsers.length} stock war paint${templateUsers.length === 1 ? '' : 's'}`,
@@ -258,7 +258,7 @@ function OperationFlowNodeComponent({ data, selected }: NodeProps<FlowNode>): Re
             onClick={(event) => { event.stopPropagation(); setAdvancedOpen((open) => !open); }}
           >
             {advancedOpen ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />}
-            <span className="flex-1">Adjustments and transform</span>
+            <span className="flex-1">Adjustments and Transform</span>
             <small className="rounded-xs bg-panel-2 px-1 text-9 tabular-nums">{advancedParameters.length}</small>
           </Button>
           {advancedOpen && <div className={cn(FIELDS, NODE_RULE)} data-slot="graph-node-fields">{advancedParameters.map(renderField)}</div>}
@@ -307,8 +307,8 @@ function OperationFlowNodeComponent({ data, selected }: NodeProps<FlowNode>): Re
       )}
 
       {selected && canReorder && connectedEdges.length > 1 && (
-        <div className={cn('grid cursor-default gap-0.75 px-2 py-1.5 nodrag', NODE_RULE)} aria-label="Input order" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-          <ControlLabel className="text-9">Input order</ControlLabel>
+        <div className={cn('grid cursor-default gap-0.75 px-2 py-1.5 nodrag', NODE_RULE)} aria-label="Input Order" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+          <ControlLabel className="text-9">Input Order</ControlLabel>
           {connectedEdges.map((edge, index) => (
             <div className="flex min-w-0 items-center justify-between gap-1.75 text-9.5 text-dim" key={edge.id}>
               <span className="truncate">{nodesById.get(edge.source)?.label ?? edge.source}</span>
@@ -343,11 +343,11 @@ function OperationFlowNodeComponent({ data, selected }: NodeProps<FlowNode>): Re
             <div className="absolute right-0 bottom-[calc(100%+3px)] z-1100 grid w-43 rounded-md border border-strong bg-panel p-1 shadow-pop">
               <button type="button" className={EXPORT_ITEM} onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); data.onExportNode?.(node.id, 'png'); }}>
                 <ImageIcon size={13} aria-hidden />
-                <span className="grid gap-px">PNG image<small className={EXPORT_DETAIL}>Easy to preview or share</small></span>
+                <span className="grid gap-px">PNG Image<small className={EXPORT_DETAIL}>Easy to preview or share</small></span>
               </button>
               <button type="button" className={EXPORT_ITEM} onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); data.onExportNode?.(node.id, 'vtf'); }}>
                 <Package size={13} aria-hidden />
-                <span className="grid gap-px">VTF texture<small className={EXPORT_DETAIL}>Ready for Source tools</small></span>
+                <span className="grid gap-px">VTF Texture<small className={EXPORT_DETAIL}>Ready for Source tools</small></span>
               </button>
             </div>
           </details>

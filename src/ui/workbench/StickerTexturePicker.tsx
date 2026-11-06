@@ -53,11 +53,11 @@ export function StickerTexturePicker({
             ref={popupRef}
             className={cn('flex h-[min(290px,var(--available-height))] w-105 max-w-(--available-width) min-w-0 flex-col rounded-sm border border-strong bg-panel text-text shadow-pop outline-none', COMPACT_INPUTS)}
             data-slot="sticker-picker"
-            aria-label={purpose === 'variant' ? 'Add variant' : 'Add sticker'}
+            aria-label={purpose === 'variant' ? 'Add Variant' : 'Add Sticker'}
             initialFocus={() => popupRef.current?.querySelector('input') ?? true}
           >
             <div className="flex min-h-8.5 flex-none items-center justify-between gap-2 border-b border-border pr-2 pl-2.5">
-              <strong className={EDITOR_TITLE}>{purpose === 'variant' ? 'Add variant' : 'Add sticker'}</strong>
+              <strong className={EDITOR_TITLE}>{purpose === 'variant' ? 'Add Variant' : 'Add Sticker'}</strong>
               <Button variant="ghost" size="icon-sm" aria-label="Close sticker picker" onClick={() => onOpenChange(false)}>
                 <X size={13} />
               </Button>
@@ -74,8 +74,8 @@ export function StickerTexturePicker({
                 label="Sticker texture source"
                 value={showAll ? 'all' : 'current'}
                 options={[
-                  { value: 'current', label: 'Current paint' },
-                  { value: 'all', label: 'All available' },
+                  { value: 'current', label: 'Current Paint' },
+                  { value: 'all', label: 'All Available' },
                 ]}
                 onChange={(value) => onShowAllChange(value === 'all')}
               />

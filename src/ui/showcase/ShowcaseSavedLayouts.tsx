@@ -53,7 +53,7 @@ export function SavedLayoutsSection({ saved, hasItems, open, onOpenChange }: {
   }, [focus]);
 
   return (
-    <Section title="Saved boards" icon={Bookmark} open={open} onOpenChange={onOpenChange}>
+    <Section title="Saved Boards" icon={Bookmark} open={open} onOpenChange={onOpenChange}>
       <div ref={root} className="flex flex-col">
         <ul data-slot="slots" className="m-0 flex list-none flex-col gap-1 p-0">
           {slots.map((slot, index) => (
@@ -80,7 +80,7 @@ export function SavedLayoutsSection({ saved, hasItems, open, onOpenChange }: {
                       {/* Outside the disabled dimming: what can be recovered stays readable with nothing to save. */}
                       {backups[index] && <span data-slot="slot-meta" className={cn(TILE_NAME, 'text-dim')} title={backups[index].name}>Deleted: {backups[index].name}</span>}
                       {/* Takes its colour from the row, which is what brightens it on hover. */}
-                      {(hasItems || !backups[index]) && <span data-slot="slot-name" className={cn(backups[index] ? TILE_META : TILE_NAME, 'text-inherit group-disabled:opacity-65')}>{hasItems ? 'Save board here' : 'Empty slot'}</span>}
+                      {(hasItems || !backups[index]) && <span data-slot="slot-name" className={cn(backups[index] ? TILE_META : TILE_NAME, 'text-inherit group-disabled:opacity-65')}>{hasItems ? 'Save Board Here' : 'Empty Slot'}</span>}
                     </span>
                   </button>
                   {backups[index] && (
@@ -101,14 +101,14 @@ export function SavedLayoutsSection({ saved, hasItems, open, onOpenChange }: {
         <div data-slot="slot-share" className="mt-1.5 grid grid-cols-2 items-center gap-1">
           <Button className="px-1 whitespace-nowrap" disabled={busy} title={`Open a ${LAYOUT_FILE_EXTENSION} file, or drop it anywhere on the page`}
             onClick={() => fileInput.current?.click()}>
-            <FolderOpen size={13} /> Open file
+            <FolderOpen size={13} /> Open File
           </Button>
           <Button className="px-1 whitespace-nowrap" disabled={busy || !hasItems} title={`Download this board as a ${LAYOUT_FILE_EXTENSION} file`}
             onClick={() => {
               const layout = saved.boardLayout();
               if (layout) void saved.exportLayout(layout);
             }}>
-            <Share2 size={13} /> Share file
+            <Share2 size={13} /> Share File
           </Button>
           <input ref={fileInput} type="file" accept={LAYOUT_FILE_EXTENSION} hidden aria-label="Board file to open"
             onChange={(event) => {
@@ -255,11 +255,11 @@ function FilledSlot({ slot, disabled, active, modified, unchanged, canSave, rena
               </MenuItem>
             )}
             <MenuItem onClick={() => { focusTaken.current = true; onStartRename(); }}><Pencil size={13} /> Rename</MenuItem>
-            <MenuItem onClick={onExport}><Share2 size={13} /> Share this save as a file</MenuItem>
+            <MenuItem onClick={onExport}><Share2 size={13} /> Share This Save as a File</MenuItem>
             <MenuSeparator />
             {/* Replacing a save with itself would only cost its way back. */}
-            {!unchanged && <MenuItem disabled={!canSave} onClick={onSave}><RefreshCw size={13} /> Replace with current board</MenuItem>}
-            {hasBackup && <MenuItem onClick={onRestore}><History size={13} /> Restore previous save</MenuItem>}
+            {!unchanged && <MenuItem disabled={!canSave} onClick={onSave}><RefreshCw size={13} /> Replace with Current Board</MenuItem>}
+            {hasBackup && <MenuItem onClick={onRestore}><History size={13} /> Restore Previous Save</MenuItem>}
             <MenuItem variant="danger" onClick={() => { focusTaken.current = true; onDelete(); }}><Trash2 size={13} /> Delete</MenuItem>
           </MenuPopup>
         </Menu>

@@ -224,7 +224,7 @@ function mapBranch(
 ): OperationGraphRecipeUnavailable | null {
   const graphNode = findOperationGraphNode(graph, graphNodeId);
   if (!graphNode) return unavailable(targetNodeId, 'missing-node', `Graph node ${graphNodeId} is missing.`);
-  if (graphNode.kind === 'output') return unavailable(targetNodeId, 'output-node', 'The synthetic Paint output has no recipe subtree.');
+  if (graphNode.kind === 'output') return unavailable(targetNodeId, 'output-node', 'The synthetic Paint Output has no recipe subtree.');
   if (state.activeGraphNodes.has(graphNodeId)) {
     return unavailable(targetNodeId, 'recipe-tree-cycle', `The graph contains a cycle at ${graphNode.label}.`);
   }
@@ -287,7 +287,7 @@ export function mapOperationGraphNodeToRecipe(
 ): OperationGraphRecipeResult {
   const targetNode = findOperationGraphNode(graph, nodeId);
   if (!targetNode) return unavailable(nodeId, 'missing-node', `Graph node ${nodeId} is missing.`);
-  if (nodeId === graph.outputId) return unavailable(nodeId, 'output-node', 'The synthetic Paint output has no recipe subtree.');
+  if (nodeId === graph.outputId) return unavailable(nodeId, 'output-node', 'The synthetic Paint Output has no recipe subtree.');
   if (targetNode.kind === 'operation_template') {
     return unavailable(
       nodeId,
@@ -314,7 +314,7 @@ export function mapOperationGraphNodeToRecipe(
     const failure = mapBranch(graph, graph.roots[index]!, roots[index]!, nodeId, state);
     if (failure) return failure;
   }
-  if (!state.targetRecipe) return unavailable(nodeId, 'target-not-reached', `Graph node ${nodeId} is not reachable from Paint output.`);
+  if (!state.targetRecipe) return unavailable(nodeId, 'target-not-reached', `Graph node ${nodeId} is not reachable from Paint Output.`);
   return { ok: true, nodeId, recipe: state.targetRecipe, nodeIds: state.nodeIds };
 }
 

@@ -1,8 +1,14 @@
-:root {
-  /* Dark theme only: the stage backdrop is always dark, so panels follow it in both appearances. */
+/* The themes, all dark. data-theme-preview gives one element a theme's colours, for its swatch in Settings. A theme's --bg and --accent are also in index.html, for before these load. */
+:root,
+[data-theme-preview='default'] {
   --bg: #16181c;
-  /* Behind the 3D view and the board. Matches the default in viewer/lighting/lighting.ts. */
+  /* Behind the 3D view and the board. Viewer.ts reads it for the presets without a background of their own. */
   --stage-bg: #1c1f24;
+  /* The second colour of the checkerboard behind the board. */
+  --stage-check: #23272d;
+  /* The two colours of the checkerboard behind a texture thumbnail. */
+  --texture-check: #23262b;
+  --texture-check-2: #2f333a;
   --panel: #1e2126;
   --panel-2: #24282f;
   --text: #eef0f3;
@@ -11,6 +17,77 @@
   --border-strong: #4d545e;
   --accent: #4c8dff;
   --accent-text: #0b0d10;
+}
+
+:root[data-theme='midnight'],
+[data-theme-preview='midnight'] {
+  --bg: #090c14;
+  --stage-bg: #0d111b;
+  --stage-check: #141926;
+  --texture-check: #141a27;
+  --texture-check-2: #1f2738;
+  --panel: #111622;
+  --panel-2: #19202f;
+  --text: #e9eef8;
+  --text-dim: #8f9cb3;
+  --border: #262f42;
+  --border-strong: #3f4c66;
+  --accent: #8592ff;
+  --accent-text: #090c14;
+}
+
+:root[data-theme='graphite'],
+[data-theme-preview='graphite'] {
+  --bg: #161616;
+  --stage-bg: #1c1c1c;
+  --stage-check: #242424;
+  --texture-check: #252525;
+  --texture-check-2: #313131;
+  --panel: #1f1f1f;
+  --panel-2: #282828;
+  --text: #efefef;
+  --text-dim: #a3a3a3;
+  --border: #393939;
+  --border-strong: #545454;
+  --accent: #2ec4b0;
+  --accent-text: #0c0c0c;
+}
+
+:root[data-theme='ember'],
+[data-theme-preview='ember'] {
+  --bg: #17120e;
+  --stage-bg: #1f1914;
+  --stage-check: #272019;
+  --texture-check: #2a221b;
+  --texture-check-2: #372d24;
+  --panel: #231c16;
+  --panel-2: #2d251d;
+  --text: #f2eadb;
+  --text-dim: #b3a48f;
+  --border: #41362b;
+  --border-strong: #604f3f;
+  --accent: #e27d35;
+  --accent-text: #150d06;
+}
+
+:root[data-theme='gold'],
+[data-theme-preview='gold'] {
+  --bg: #15130c;
+  --stage-bg: #1c1a12;
+  --stage-check: #242116;
+  --texture-check: #272419;
+  --texture-check-2: #342f21;
+  --panel: #201d14;
+  --panel-2: #29261b;
+  --text: #f2eedd;
+  --text-dim: #aea78f;
+  --border: #3e3a2b;
+  --border-strong: #5c5640;
+  --accent: #e3bd45;
+  --accent-text: #141004;
+}
+
+:root {
   --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--panel));
   --red: #d24b4e;
   --blu: #5a8fd0;

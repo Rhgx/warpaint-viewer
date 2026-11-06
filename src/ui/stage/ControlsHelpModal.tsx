@@ -164,7 +164,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
                 <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo</ControlRow>
                 <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo</ControlRow>
               </DialogSection>
-              <DialogSection id="showcase-selected-heading" title="Selected or carried weapons">
+              <DialogSection id="showcase-selected-heading" title="Selected or Carried Weapons">
                 <ControlRow keys={<><Key>Q</Key><Key>E</Key></>}>Turn left or right by the rotation snap</ControlRow>
                 <ControlRow keys={<><Key>R</Key><Key>Shift+R</Key></>}>Turn right or left</ControlRow>
                 <ControlRow keys={<Key>F</Key>}>Show the other side</ControlRow>
@@ -179,12 +179,12 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
             </>
           ) : editingMode === 'lighting' ? (
             <>
-              <DialogSection id="lighting-pointer-heading" title="Light editing">
+              <DialogSection id="lighting-pointer-heading" title="Light Editing">
                 <ControlRow keys={<Key>{TOUCH_ONLY_DEVICE ? 'Tap marker' : 'Click marker'}</Key>}>Select a light</ControlRow>
                 <ControlRow keys={<Key>Drag axis</Key>}>Move selected light</ControlRow>
                 <ControlRow keys={<Key>Drag aim</Key>}>Aim a spot or sun light</ControlRow>
               </DialogSection>
-              <DialogSection id="lighting-keyboard-heading" title="Selected light">
+              <DialogSection id="lighting-keyboard-heading" title="Selected Light">
                 <ControlRow keys={<><Key>Ctrl</Key><Key>D</Key></>}>Duplicate</ControlRow>
                 <ControlRow keys={<><Key>Del</Key><Key>Backspace</Key></>}>Delete</ControlRow>
                 <ControlRow keys={<Key>H</Key>}>Turn on or off</ControlRow>
@@ -209,7 +209,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
           ) : editingMode === 'graph' ? (
             <>
               <div className={COLUMN}>
-              <DialogSection id="graph-canvas-heading" title="Graph canvas">
+              <DialogSection id="graph-canvas-heading" title="Graph Canvas">
                 <ControlRow keys={<Key>Drag</Key>}>Pan the canvas</ControlRow>
                 <ControlRow keys={<Key>Scroll</Key>}>Zoom</ControlRow>
                 <ControlRow keys={<Key>Click a stage</Key>}>Select it and trace its path</ControlRow>
@@ -224,7 +224,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
                   <ControlRow keys={<Key>Drag either end</Key>}>Move an existing connection</ControlRow>
                   <ControlRow keys={<Key>Hover a line</Key>}>Reveal its disconnect button</ControlRow>
                 </ControlGroup>
-                <ControlGroup title="What a line carries">
+                <ControlGroup title="What a Line Carries">
                   <ControlRow keys={<Swatch type="texture" />}>Texture, a painted surface</ControlRow>
                   <ControlRow keys={<Swatch type="mask" />}>Mask, where a surface applies</ControlRow>
                 </ControlGroup>
@@ -232,7 +232,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
               </div>
 
               <div className={COLUMN}>
-              <DialogSection id="graph-selected-heading" title="Selected stage">
+              <DialogSection id="graph-selected-heading" title="Selected Stage">
                 <ControlRow keys={<><GraphControl icon={<Focus size={12} />}>Focus</GraphControl><Key>F</Key></>}>Focus it</ControlRow>
                 <ControlRow keys={<><GraphControl icon={<Copy size={12} />}>Duplicate</GraphControl><Key>Ctrl+D</Key></>}>Duplicate</ControlRow>
                 <ControlRow keys={<><GraphControl icon={<Trash2 size={12} />}>Delete</GraphControl><Key>Del</Key></>}>Remove the stage or connection</ControlRow>
@@ -241,7 +241,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
                 <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo paint edit</ControlRow>
               </DialogSection>
 
-              <DialogSection id="graph-toolbar-heading" title="Graph toolbar">
+              <DialogSection id="graph-toolbar-heading" title="Graph Toolbar">
                 <ControlRow keys={<span className={cn(GRAPH_CHIP, 'min-w-28 justify-start gap-1.5 px-1.75')}><Search size={12} /> Find stages... <small className="ml-auto text-10 text-dim tabular-nums">1 of 4</small><ChevronUp size={11} /><ChevronDown size={11} /></span>}>Step through matches</ControlRow>
                 <ControlRow keys={(
                   <span className={cn(GRAPH_CHIP, 'overflow-hidden')} aria-label="Trace all, inputs, or outputs">
@@ -254,7 +254,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
                 <ControlRow keys={<GraphControl icon={<Download size={12} />}>Export</GraphControl>}>Download a stage</ControlRow>
               </DialogSection>
 
-              <DialogSection id="graph-picker-heading" title="Value pickers">
+              <DialogSection id="graph-picker-heading" title="Value Pickers">
                 <ControlRow keys={<><Key label="Up arrow"><ArrowUp size={12} /></Key><Key label="Down arrow"><ArrowDown size={12} /></Key></>}>Move through the list</ControlRow>
                 <ControlRow keys={<><Key>Home</Key><Key>End</Key></>}>Jump to either end</ControlRow>
                 <ControlRow keys={<><Key>PgUp</Key><Key>PgDn</Key></>}>Move a screen at a time</ControlRow>
@@ -265,7 +265,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
             </>
           ) : editingMode === 'sticker' ? (
             <>
-              <DialogSection id="sticker-weapon-heading" title="On the weapon">
+              <DialogSection id="sticker-weapon-heading" title="On the Weapon">
                 <ControlGroup title="Sticker">
                   <ControlRow keys={<Key>Drag handle</Key>}>Use the selected tool</ControlRow>
                   <ControlRow keys={<Key>Corner handle</Key>}>Scale evenly</ControlRow>
@@ -278,7 +278,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
                   <ControlRow keys={<Key>Wheel</Key>}>Zoom view</ControlRow>
                   <ControlRow keys={<Key>Middle double-click</Key>}>Reset view</ControlRow>
                 </ControlGroup>
-                <ControlGroup title="Model parts (Parts tool)">
+                <ControlGroup title="Model Parts (Parts Tool)">
                   <ControlRow keys={<Key>Hover</Key>}>Preview the part under the pointer</ControlRow>
                   <ControlRow keys={<Key>Click</Key>}>Hide that part</ControlRow>
                   <ControlRow keys={<Key>Click outline</Key>}>Show a hidden part again</ControlRow>
@@ -287,7 +287,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
                 </ControlGroup>
               </DialogSection>
 
-              <DialogSection id="sticker-uv-heading" title="In the UV view">
+              <DialogSection id="sticker-uv-heading" title="In the UV View">
                 <ControlGroup title="Pointer">
                   <ControlRow keys={<Key>Drag handles</Key>}>Move, scale, or turn</ControlRow>
                   <ControlRow keys={<Key>Ctrl</Key>}>Temporarily snap</ControlRow>
@@ -303,7 +303,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
                 </ControlGroup>
               </DialogSection>
 
-              <DialogSection id="sticker-history-heading" title="Edit history" className="col-span-full border-t border-border pt-3 max-[620px]:col-auto">
+              <DialogSection id="sticker-history-heading" title="Edit History" className="col-span-full border-t border-border pt-3 max-[620px]:col-auto">
                 <div className="grid grid-cols-2 gap-x-7 max-[620px]:grid-cols-1">
                   <ControlRow keys={<><Key>Ctrl</Key><Key>S</Key></>}>Save draft now</ControlRow>
                   <ControlRow keys={<><Key>Ctrl</Key><Key>Z</Key></>}>Undo</ControlRow>
@@ -313,7 +313,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
             </>
           ) : (
             <>
-          <DialogSection id="inspect-camera-heading" title="Inspect camera">
+          <DialogSection id="inspect-camera-heading" title="Inspect Camera">
             {TOUCH_ONLY_DEVICE ? (
               <>
                 <ControlRow keys={<Key>Drag</Key>}>Rotate weapon</ControlRow>
@@ -332,7 +332,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
           </DialogSection>
 
           {editingMode === 'paint' ? (
-            <DialogSection id="paint-editing-heading" title="Paint editing">
+            <DialogSection id="paint-editing-heading" title="Paint Editing">
               <ControlRow keys={<><Key>Shift</Key><Key>Click</Key></>}>Add or remove a part</ControlRow>
               <ControlRow keys={<Key>Drag</Key>}>Rotate weapon</ControlRow>
               <ControlRow keys={<><Key>Ctrl</Key><Key>S</Key></>}>Save draft now</ControlRow>
@@ -340,7 +340,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
               <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo paint edit</ControlRow>
             </DialogSection>
           ) : !TOUCH_ONLY_DEVICE && (
-            <DialogSection id="advanced-camera-heading" title="Advanced camera">
+            <DialogSection id="advanced-camera-heading" title="Advanced Camera">
               <ControlRow keys={<Key>Alt</Key>}>Enter or exit</ControlRow>
               <ControlRow keys={<Key>Mouse</Key>}>Look around</ControlRow>
               <ControlRow keys={<><Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key></>}>Fly and strafe</ControlRow>

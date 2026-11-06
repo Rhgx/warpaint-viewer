@@ -37,7 +37,7 @@ export function UpdateToast({
         : 'Saving your editor draft before reloading...';
   const actions = useMemo(() => [
     ...(draftFailed ? [{
-      label: 'Download definitions',
+      label: 'Download Definitions',
       onClick: onDownloadRecovery,
       icon: <Download size={14} strokeWidth={2} aria-hidden="true" />,
     }] : []),

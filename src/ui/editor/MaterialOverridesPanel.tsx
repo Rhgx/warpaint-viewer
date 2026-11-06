@@ -113,7 +113,7 @@ export function MaterialOverridesPanel({
     <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', COMPACT_INPUTS)} data-slot="material-overrides">
       <div className={EDITOR_HEAD}>
         <span className={EDITOR_TITLE}>
-          Material overrides
+          Material Overrides
         </span>
         <span className="flex-1" />
         <Select
@@ -139,7 +139,7 @@ export function MaterialOverridesPanel({
           disabled={disabled || presets.length === 0}
           onClick={onApplyPreset}
         >
-          Apply to {presetTargetCount} {presetTargetCount === 1 ? 'weapon' : 'weapons'}
+          Apply to {presetTargetCount} {presetTargetCount === 1 ? 'Weapon' : 'Weapons'}
         </Button>
       </div>
 
@@ -175,7 +175,7 @@ export function MaterialOverridesPanel({
             className={EDITOR_CHECKBOX}
             checked={allVisibleEnabled}
             disabled={disabled || visibleWeapons.length === 0}
-            aria-label={query ? 'Select all matching weapons' : 'Select all weapons'}
+            aria-label={query ? 'Select All Matching Weapons' : 'Select All Weapons'}
             onChange={(event) => onSetWeapons(
               visibleWeapons.map((weapon) => weapon.key),
               event.target.checked,
@@ -183,7 +183,7 @@ export function MaterialOverridesPanel({
           />
           <span aria-hidden="true" />
           <span className="text-11.5 font-[650] text-text">
-            {query ? 'Select all matches' : 'Select all weapons'}
+            {query ? 'Select All Matches' : 'Select All Weapons'}
           </span>
           <span className="text-11 text-dim tabular-nums">
             {visibleEnabledCount} of {visibleWeapons.length}
@@ -252,7 +252,7 @@ export function MaterialOverridesPanel({
           disabled={disabled || overriddenCount === 0}
           onClick={onClearAll}
         >
-          <RotateCcw size={12} aria-hidden="true" /> Clear all overrides
+          <RotateCcw size={12} aria-hidden="true" /> Clear All Overrides
         </Button>
       </div>
     </div>

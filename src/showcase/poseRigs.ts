@@ -86,7 +86,7 @@ const pumpRig = (travel: number): PoseRig => ({
 });
 
 /** A barrel that tips down on a hinge under its back end, like a break-action launcher. */
-const breakOpenControl = (bone: string): PoseControl => ({ id: 'open', label: 'Break open', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: bone });
+const breakOpenControl = (bone: string): PoseControl => ({ id: 'open', label: 'Break Open', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: bone });
 const breakOpen = (bones: ReadonlyMap<string, RestBone>, bone: string, degrees: number, values: Readonly<Record<string, number>>) => {
   rotateAboutModel(bones.get(bone), AXIS_X, degrees * percent(values, 'open'));
 };
@@ -107,7 +107,7 @@ const breakActionRig = (bone: string, degrees: number): PoseRig => ({
 const flareGunRig: PoseRig = {
   controls: [
     breakOpenControl('weapon_bone_2'),
-    { id: 'hammer', label: 'Drop hammer', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: 'weapon_bone_4' },
+    { id: 'hammer', label: 'Drop Hammer', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: 'weapon_bone_4' },
   ],
   apply(bones, values) {
     breakOpen(bones, 'weapon_bone_2', 45, values);
@@ -133,9 +133,9 @@ const SPIN_RIG: PoseRig = {
 export const POSE_RIGS: Record<string, PoseRig> = {
   c_medigun: {
     controls: [
-      { id: 'drop', label: 'Hose drop', min: -45, max: 90, step: 1, unit: '°', defaultValue: 35, handle: 'joint_hose02' },
-      { id: 'curl', label: 'Hose curl', min: -40, max: 40, step: 1, unit: '°', defaultValue: 18, handle: 'joint_hose05' },
-      { id: 'swing', label: 'Hose swing', min: -30, max: 30, step: 1, unit: '°', defaultValue: 0 },
+      { id: 'drop', label: 'Hose Drop', min: -45, max: 90, step: 1, unit: '°', defaultValue: 35, handle: 'joint_hose02' },
+      { id: 'curl', label: 'Hose Curl', min: -40, max: 40, step: 1, unit: '°', defaultValue: 18, handle: 'joint_hose05' },
+      { id: 'swing', label: 'Hose Swing', min: -30, max: 30, step: 1, unit: '°', defaultValue: 0 },
       // The lever's mesh rides on vm_weapon_bone_L, which hangs off joint_lever at the same hinge.
       // Past -20 it sinks into the rear hose coupling; forward it stays clear up to 90.
       { id: 'lever', label: 'Lever', min: -20, max: 90, step: 1, unit: '°', defaultValue: 0, handle: 'vm_weapon_bone_L' },
@@ -168,7 +168,7 @@ export const POSE_RIGS: Record<string, PoseRig> = {
     controls: [
       breakOpenControl('weapon_bone_1'),
       spinControl('Drum', 6, 'procedural_chamber'),
-      { id: 'sight', label: 'Fold sight', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: 'weapon_bone_3' },
+      { id: 'sight', label: 'Fold Sight', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: 'weapon_bone_3' },
     ],
     apply(bones, values) {
       breakOpen(bones, 'weapon_bone_1', 40, values);
@@ -181,7 +181,7 @@ export const POSE_RIGS: Record<string, PoseRig> = {
   c_demo_cannon: {
     controls: [
       breakOpenControl('weapon_bone_1'),
-      { id: 'sight', label: 'Fold sight', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: 'weapon_bone_3' },
+      { id: 'sight', label: 'Fold Sight', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: 'weapon_bone_3' },
     ],
     apply(bones, values) {
       breakOpen(bones, 'weapon_bone_1', 40, values);
@@ -200,19 +200,19 @@ export const POSE_RIGS: Record<string, PoseRig> = {
     },
   },
   c_riding_crop: {
-    controls: [{ id: 'bend', label: 'Tip bend', min: -60, max: 60, step: 1, unit: '°', defaultValue: 0, handle: 'jb3' }],
+    controls: [{ id: 'bend', label: 'Tip Bend', min: -60, max: 60, step: 1, unit: '°', defaultValue: 0, handle: 'jb3' }],
     apply(bones, values) {
       rotateAboutModel(bones.get('jb3'), AXIS_Z, values.bend ?? 0);
     },
   },
   c_sniperrifle: {
-    controls: [{ id: 'cap', label: 'Close lens cap', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: 'vm_weapon_bone_2' }],
+    controls: [{ id: 'cap', label: 'Close Lens Cap', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: 'vm_weapon_bone_2' }],
     apply(bones, values) {
       rotateAboutModel(bones.get('vm_weapon_bone_2'), AXIS_X, 205 * percent(values, 'cap'));
     },
   },
   c_rocketlauncher: {
-    controls: [{ id: 'sight', label: 'Fold sight', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: 'vm_weapon_bone_2' }],
+    controls: [{ id: 'sight', label: 'Fold Sight', min: 0, max: 100, step: 1, unit: '%', defaultValue: 0, handle: 'vm_weapon_bone_2' }],
     apply(bones, values) {
       rotateAboutModel(bones.get('vm_weapon_bone_1'), AXIS_X, -80 * percent(values, 'sight'));
     },
@@ -220,7 +220,7 @@ export const POSE_RIGS: Record<string, PoseRig> = {
 };
 
 const SHELL: WeaponPart = { id: 'shell', label: 'Shell', bones: ['vm_weapon_bone'] };
-const SPARE_GRENADE: WeaponPart = { id: 'grenade', label: 'Spare grenade', bones: ['weapon_bone_4'], loose: true };
+const SPARE_GRENADE: WeaponPart = { id: 'grenade', label: 'Spare Grenade', bones: ['weapon_bone_4'], loose: true };
 
 /** Pieces allowed past the board's edge, which still keep other weapons apart. `pose` arcs them off the bottom. */
 export const HANGING_PARTS: Record<string, { bones: readonly string[]; pose: Record<string, number> }> = {
@@ -241,8 +241,8 @@ export const WEAPON_PARTS: Record<string, readonly WeaponPart[]> = {
   c_tele_shotgun: [SHELL],
   c_smg: [{ id: 'magazine', label: 'Magazine', bones: ['weapon_bone_1'] }],
   c_soda_popper: [
-    { id: 'can_left', label: 'Left can', bones: ['weapon_bone_4'] },
-    { id: 'can_right', label: 'Right can', bones: ['weapon_bone_3'] },
+    { id: 'can_left', label: 'Left Can', bones: ['weapon_bone_4'] },
+    { id: 'can_right', label: 'Right Can', bones: ['weapon_bone_3'] },
   ],
 };
 

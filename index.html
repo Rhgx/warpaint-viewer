@@ -39,7 +39,34 @@
         background: #16181c;
         color-scheme: dark;
       }
+      html[data-theme='midnight'] {
+        background: #090c14;
+      }
+      html[data-theme='graphite'] {
+        background: #161616;
+      }
+      html[data-theme='ember'] {
+        background: #17120e;
+      }
+      html[data-theme='gold'] {
+        background: #15130c;
+      }
     </style>
+    <!-- Here so that a saved theme is on before anything paints. Same rule as parseTheme in settings.ts; the values are each theme's --accent. -->
+    <script data-theme-boot>
+      (function () {
+        var accents = { midnight: '#8592ff', graphite: '#2ec4b0', ember: '#e27d35', gold: '#e3bd45' };
+        try {
+          var stored = JSON.parse(localStorage.getItem('warpaint-viewer:settings'));
+          var theme = stored && stored.state && stored.state.theme;
+          if (typeof theme !== 'string' || !Object.prototype.hasOwnProperty.call(accents, theme)) return;
+          document.documentElement.setAttribute('data-theme', theme);
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', accents[theme]);
+        } catch (e) {
+          // Storage blocked or its value corrupt: the page stays on Default.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -30,12 +30,12 @@ export interface CreatedOperationGraphNode {
 
 function labelFor(kind: OperationStageKind): string {
   switch (kind) {
-    case 'texture_lookup': return 'Texture lookup';
-    case 'select': return 'Select groups';
-    case 'combine_add': return 'Add textures';
-    case 'combine_multiply': return 'Multiply textures';
-    case 'combine_lerp': return 'Blend textures';
-    case 'apply_sticker': return 'Apply sticker';
+    case 'texture_lookup': return 'Texture Lookup';
+    case 'select': return 'Select Groups';
+    case 'combine_add': return 'Add Textures';
+    case 'combine_multiply': return 'Multiply Textures';
+    case 'combine_lerp': return 'Blend Textures';
+    case 'apply_sticker': return 'Apply Sticker';
   }
 }
 

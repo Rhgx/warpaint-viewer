@@ -23,11 +23,11 @@ const MAX_POSITION = 2000;
 const MAX_SCALE = 10;
 const MAX_WEAR = 64;
 
-/** Append only: a file stores these by position. */
+/** Append only: a file stores these by position. Null is a setting that no longer exists, whose place older files still hold. */
 const SETTINGS_ORDER = [
   'snapToGrid', 'grid', 'keepApart', 'spacing', 'keepInside', 'rotationSnap', 'showFootprints', 'lightAzimuth', 'lightElevation',
-  'shadows', 'shadow', 'background', 'outputWidth', 'exportBackdrop', 'poseHandles', 'weaponSize',
-] as const satisfies readonly (keyof ShowcaseSettings)[];
+  'shadows', 'shadow', 'background', 'outputWidth', null, 'poseHandles', 'weaponSize',
+] as const satisfies readonly (keyof ShowcaseSettings | null)[];
 const PACKINGS: readonly (LayoutPacking | undefined)[] = [undefined, 'size', 'order', 'composed'];
 
 export interface SharedLayout extends SavedBoard {
@@ -220,7 +220,7 @@ function encodeBody(layout: SharedLayout, pictures: ReadonlyMap<string, number>)
   const board = new Writer();
   board.varint(ref(layout.name));
   for (const key of SETTINGS_ORDER) {
-    const value = layout.settings[key];
+    const value = key === null ? true : layout.settings[key];
     if (typeof value === 'boolean') board.byte(value ? 1 : 0);
     else if (typeof value === 'number') {
       board.byte(2);
@@ -347,10 +347,9 @@ function decodeBody(bytes: Uint8Array, pictureCount: number): unknown {
   const settings: Record<string, unknown> = {};
   for (const key of SETTINGS_ORDER) {
     const tag = reader.byte();
-    if (tag <= 1) settings[key] = tag === 1;
-    else if (tag === 2) settings[key] = reader.number();
-    else if (tag === 3) settings[key] = string();
-    else throw damaged();
+    if (tag > 3) throw damaged();
+    const value = tag <= 1 ? tag === 1 : tag === 2 ? reader.number() : string();
+    if (key !== null) settings[key] = value;
   }
   const itemCount = reader.count(10);
   if (itemCount > MAX_ITEMS) throw new LayoutFileError('This .pegboard file holds too many items to open.');

@@ -273,7 +273,7 @@ export function discoverGroupSelectTargets(
         ? textureLabel(textureRef)!
         : variableStem
         ? variableStem.replace(/\b\w/g, (letter) => letter.toUpperCase())
-        : `Paint layer ${targets.length + 1}`,
+        : `Paint Layer ${targets.length + 1}`,
       sourceKey: variableNames.length === selectFields.length
         ? `variables:${variableNames.join('|')}`
         : `literal:${groupsRef}:${occurrence}`,

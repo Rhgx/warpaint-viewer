@@ -487,7 +487,7 @@ export function CustomWarpaintWorkbench({
                       editor.onReset();
                     }}
                   >
-                    <RotateCcw size={13} /> {confirmRevert ? 'Revert all?' : 'Revert'}
+                    <RotateCcw size={13} /> {confirmRevert ? 'Revert All?' : 'Revert'}
                   </Button>
                   <div className="relative inline-flex min-w-0 flex-[1_0_100%] @max-[900px]:flex-none @max-[620px]:ml-auto">
                     <Button
@@ -626,7 +626,7 @@ export function CustomWarpaintWorkbench({
                         onClick={() => team.onToggle(!team.enabled)}
                       >
                         <Users size={13} aria-hidden="true" />
-                        Team colors
+                        Team Colors
                       </Button>
                     </>);
                     // A per-wear scope with no parts still shows the switch; a top-level paint hides it.

@@ -319,7 +319,7 @@ export const Inspector = memo(function Inspector({
       {/* First Person has its own camera, so none of these apply there. */}
       {!firstPersonActive && (
         <InspectorSection title="Camera" icon={Camera} defaultOpen={!compact}>
-          <Control label="View angle">
+          <Control label="View Angle">
             <SelectField
               value={viewAngle}
               onChange={onViewAngle}
@@ -327,14 +327,14 @@ export const Inspector = memo(function Inspector({
             />
           </Control>
 
-          <Control label={<><span className="flex-auto">Field of view</span><span className="text-text tabular-nums">{state.fov}</span></>}>
+          <Control label={<><span className="flex-auto">Field of View</span><span className="text-text tabular-nums">{state.fov}</span></>}>
             <Slider
               value={state.fov}
               onChange={(fov) => onChange({ fov })}
               min={30}
               max={110}
               step={1}
-              ariaLabel="Field of view"
+              ariaLabel="Field of View"
               markers={[54, 70, 90]}
             />
           </Control>
@@ -371,7 +371,7 @@ export const Inspector = memo(function Inspector({
         )}
 
         {captureFormat === 'image' && (
-          <Control label={<span>Image size</span>}>
+          <Control label={<span>Image Size</span>}>
             <SelectField
               value={String(state.screenshotMaxEdge)}
               onChange={(value) => onChange({ screenshotMaxEdge: Number(value) })}
@@ -401,7 +401,7 @@ export const Inspector = memo(function Inspector({
             />
           </Control>
 
-          <Control label={<span>Frame rate</span>}>
+          <Control label={<span>Frame Rate</span>}>
             <SelectField
               value={String(profile.fps)}
               onChange={(value) => patchProfile('fps', Number(value))}
@@ -434,7 +434,7 @@ export const Inspector = memo(function Inspector({
           )}
 
           {(formatInfo.alpha === null || !state.turntableTransparent) && (
-            <Control group label={<span>Background color</span>}>
+            <Control group label={<span>Background Color</span>}>
               <div className="flex items-center gap-1.5">
                 <input
                   className="h-6.5 min-w-0 flex-[0_0_40px] cursor-pointer rounded-sm border border-border bg-panel p-0.5 focus-ring touch:h-control"

@@ -50,11 +50,11 @@ export function EditorDraftBanner({
               recovery.discard();
             }}
           >
-            {confirmDiscard ? 'Discard it?' : 'Discard'}
+            {confirmDiscard ? 'Discard It?' : 'Discard'}
           </Button>
           <Button variant="primary" size="compact" className="gap-1.25" onClick={recovery.restore}>
             <RotateCcw size={14} aria-hidden="true" />
-            Restore draft
+            Restore Draft
           </Button>
         </div>
       </div>
@@ -73,7 +73,7 @@ export function EditorDraftBanner({
       <div className={ACTIONS}>
         <Button variant="primary" size="compact" className="gap-1.25" onClick={onDownloadRecovery}>
           <Download size={14} aria-hidden="true" />
-          Download definitions
+          Download Definitions
         </Button>
       </div>
     </div>

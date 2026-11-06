@@ -19,7 +19,6 @@ export interface ShowcaseSettings {
   shadow: number;
   background: BoardBackground;
   outputWidth: number;
-  exportBackdrop: boolean;
   /** Drag handles on the moving parts of the selected weapon, next to the pose sliders. */
   poseHandles: boolean;
   weaponSize: number;
@@ -39,18 +38,17 @@ const DEFAULT_SETTINGS: ShowcaseSettings = {
   shadow: 60,
   background: 'framed',
   outputWidth: 1920,
-  exportBackdrop: true,
   poseHandles: true,
   weaponSize: 100,
 };
 
 export const PLACEMENT_KEYS = ['snapToGrid', 'grid', 'keepApart', 'spacing', 'keepInside', 'rotationSnap', 'showFootprints'] as const;
 export const LOOK_KEYS = ['lightAzimuth', 'lightElevation', 'shadows', 'shadow', 'background'] as const;
-export const EXPORT_KEYS = ['outputWidth', 'exportBackdrop'] as const;
+export const EXPORT_KEYS = ['outputWidth'] as const;
 type SettingKeys = readonly (keyof ShowcaseSettings)[];
 
 /** How this person likes to work, not what a board looks like: a file from someone else leaves these alone. */
-const PERSONAL_KEYS = ['snapToGrid', 'rotationSnap', 'showFootprints', 'poseHandles', 'outputWidth', 'exportBackdrop'] as const;
+const PERSONAL_KEYS = ['snapToGrid', 'rotationSnap', 'showFootprints', 'poseHandles', 'outputWidth'] as const;
 export const withSharedSettings = (mine: ShowcaseSettings, theirs: ShowcaseSettings): ShowcaseSettings => ({
   ...theirs,
   ...Object.fromEntries(PERSONAL_KEYS.map((key) => [key, mine[key]])),
@@ -94,9 +92,6 @@ export function loadSettings(): ShowcaseSettings {
     return DEFAULT_SETTINGS;
   }
 }
-
-/** A transparent background has no backdrop to leave out, and keeps the shadows set in Look. */
-export const exportsBackdrop = (settings: ShowcaseSettings) => settings.exportBackdrop || settings.background === 'transparent';
 
 export function describeProblem(problem: FitProblem): string {
   if (!problem) return 'Fits on the board';

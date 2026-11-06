@@ -114,7 +114,7 @@ export function StickerVariantList({
           if (file && index !== null) onReplaceVariantImage(index, file);
         }}
       />
-      {/* Add variant and Equal weights share one row, so each gets half the inspector. The picker opens beside this row, so that it clears the list. */}
+      {/* Add Variant and Equal Weights share one row, so each gets half the inspector. The picker opens beside this row, so that it clears the list. */}
       <div ref={actionsRef} className="mt-1 grid grid-cols-2 gap-1.25 border-t border-border pt-2">
         <Button
           size="compact"
@@ -123,7 +123,7 @@ export function StickerVariantList({
           onClick={() => onTogglePicker('variant')}
         >
           <Plus size={13} aria-hidden="true" />
-          Add variant
+          Add Variant
         </Button>
         <Button
           size="compact"
@@ -132,7 +132,7 @@ export function StickerVariantList({
           disabled={weightsEqual}
           onClick={() => sticker.onEqualizeVariantWeights?.()}
         >
-          Equal weights
+          Equal Weights
         </Button>
       </div>
     </div>

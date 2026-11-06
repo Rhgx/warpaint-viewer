@@ -180,7 +180,7 @@ export function VisualWarpaintEditorPanel({
         {headerActions}
         {(groupTextureChoices?.length ?? 0) > 1 && (
           <div className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-            <ControlLabel>Group layout</ControlLabel>
+            <ControlLabel>Group Layout</ControlLabel>
             <Select
               value={activeGroupTextureRef}
               onValueChange={(value) => onGroupTextureChange?.(value as string)}
@@ -225,7 +225,7 @@ export function VisualWarpaintEditorPanel({
           onClick={() => onShowLayerMapChange?.(!(showLayerMap ?? false))}
         >
           <Eye size={13} aria-hidden="true" />
-          Layer map
+          Layer Map
         </Button>
         <Button
           ref={clearButtonRef}
@@ -242,7 +242,7 @@ export function VisualWarpaintEditorPanel({
           title={confirmClear ? 'Click again to clear these parts' : 'Clear included parts'}
         >
           <Trash2 size={12} aria-hidden="true" />
-          {confirmClear ? 'Clear all?' : 'Clear'}
+          {confirmClear ? 'Clear All?' : 'Clear'}
         </Button>
       </div>
 

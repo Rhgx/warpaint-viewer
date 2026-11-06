@@ -97,7 +97,7 @@ export function inputPortsFor(kind: OperationGraphNodeKind, childCount: number):
       return [
         operationGraphPort('input-0', 'Background', 0, 'texture'),
         operationGraphPort('input-1', 'Foreground', 1, 'texture'),
-        operationGraphPort('input-2', 'Blend mask', 2, 'mask'),
+        operationGraphPort('input-2', 'Blend Mask', 2, 'mask'),
       ];
     case 'apply_sticker':
       return [operationGraphPort('input-0', 'Surface', 0, 'texture')];
@@ -117,18 +117,18 @@ export function inputPortsFor(kind: OperationGraphNodeKind, childCount: number):
 
 function labelFor(kind: OperationGraphNodeKind, raw: OperationNodeMsg): string {
   switch (kind) {
-    case 'texture_lookup': return 'Texture lookup';
-    case 'select': return 'Select groups';
-    case 'combine_add': return 'Add textures';
-    case 'combine_multiply': return 'Multiply textures';
-    case 'combine_lerp': return 'Blend textures';
-    case 'apply_sticker': return 'Apply sticker';
+    case 'texture_lookup': return 'Texture Lookup';
+    case 'select': return 'Select Groups';
+    case 'combine_add': return 'Add Textures';
+    case 'combine_multiply': return 'Multiply Textures';
+    case 'combine_lerp': return 'Blend Textures';
+    case 'apply_sticker': return 'Apply Sticker';
     case 'operation_template': {
       const defindex = raw.operation_template?.defindex;
-      return defindex === undefined ? 'Operation template' : `Operation template #${defindex}`;
+      return defindex === undefined ? 'Operation Template' : `Operation Template #${defindex}`;
     }
-    case 'output': return 'Paint output';
-    case 'invalid': return 'Unknown operation';
+    case 'output': return 'Paint Output';
+    case 'invalid': return 'Unknown Operation';
   }
 }
 
@@ -251,7 +251,7 @@ export function operationNodesToGraph(
   nodes.push({
     id: outputId,
     kind: 'output',
-    label: 'Paint output',
+    label: 'Paint Output',
     sourcePath: [...pathPrefix, 'output'],
     outputType: 'none',
     inputPorts: inputPortsFor('output', roots.length),

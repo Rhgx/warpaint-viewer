@@ -30,7 +30,7 @@ export function EditorLayerList({
       // Materials has nothing to list, and when narrow its note only costs a row.
       className={cn('flex min-h-0 flex-1 flex-col overflow-auto [grid-area:list] @max-[900px]:flex-row @max-[900px]:gap-1 @max-[900px]:overflow-x-auto @max-[900px]:overflow-y-hidden @max-[900px]:border-t @max-[900px]:border-border @max-[900px]:px-2 @max-[900px]:py-1.5 @max-[900px]:[scrollbar-width:thin]', materialsActive && '@max-[900px]:hidden')}
       role="listbox"
-      aria-label={materialsActive ? 'Material overrides' : (editor.mode === 'paint' ? 'Paint layers' : 'Stickers')}
+      aria-label={materialsActive ? 'Material Overrides' : (editor.mode === 'paint' ? 'Paint layers' : 'Stickers')}
     >
       {editor.perWearScope && (
         // When narrow the list is a single row, so the note keeps a fixed width and wraps inside it.

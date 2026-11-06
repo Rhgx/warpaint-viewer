@@ -27,7 +27,7 @@ export function ClearWorkspaceDialog({
   return (
     <AlertDialog open={open} onOpenChange={(next) => { if (!clearing) onOpenChange(next); }}>
       {/* Above the toasts, unlike the other dialogs: nothing should compete with this question. */}
-      <DialogPopup title="Clear workspace?" viewportClassName="z-1600">
+      <DialogPopup title="Clear Workspace?" viewportClassName="z-1600">
         <DialogBody>
           <AlertDialogPrimitive.Description className="m-0 text-12 leading-[1.45] text-dim">
             This removes the imported archive, definitions, replaced textures, and drafts for imported paints.
@@ -45,7 +45,7 @@ export function ClearWorkspaceDialog({
             {unsavedWarning && (
               <Button variant="secondary" size="lg" className="mr-auto" onClick={onDownloadRecovery}>
                 <Download size={14} aria-hidden="true" />
-                Download recovery
+                Download Recovery
               </Button>
             )}
             <AlertDialogPrimitive.Close disabled={clearing} render={<Button variant="secondary" size="lg" />}>
@@ -62,7 +62,7 @@ export function ClearWorkspaceDialog({
               {clearing
                 ? <LoaderCircle className="animate-spin motion-reduce:animate-none" size={14} aria-hidden="true" />
                 : <Trash2 size={14} aria-hidden="true" />}
-              {clearing ? 'Clearing...' : 'Clear workspace'}
+              {clearing ? 'Clearing...' : 'Clear Workspace'}
             </Button>
           </div>
         </DialogBody>

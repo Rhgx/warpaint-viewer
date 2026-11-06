@@ -596,7 +596,7 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
     <div ref={canvasRef} className="@container flex h-full min-h-0 min-w-0 flex-1 flex-col bg-panel text-11 text-text outline-none" data-slot="graph-editor" tabIndex={0} onKeyDown={handleCanvasKeyDown}>
       <div className={cn(EDITOR_HEAD, 'bg-panel')} data-slot="graph-toolbar">
         <div className="flex min-w-max items-baseline gap-1.75 @max-[600px]:hidden">
-          <strong className={EDITOR_TITLE}>Operation graph</strong>
+          <strong className={EDITOR_TITLE}>Operation Graph</strong>
           <span className={cn(EDITOR_NOTE, 'font-normal tabular-nums @max-[800px]:hidden')}>{stageCount} stage{stageCount === 1 ? '' : 's'}</span>
           {errorCount > 0 && (
             <span className="inline-flex items-center gap-0.75 self-center text-10 text-fail tabular-nums" title="This draft is not serializable yet">
@@ -656,7 +656,7 @@ function OperationGraphCanvas(props: OperationGraphEditorProps): React.JSX.Eleme
               <Button size="compact" className={EDITOR_BUTTON} title="Duplicate selected stage (Ctrl+D)" onClick={handleDuplicate} disabled={!activeNodeId}><Copy size={14} /><span className={TOOLBAR_LABEL_SECONDARY}>Duplicate</span></Button>
               <Button variant="danger" size="compact" className={EDITOR_BUTTON} title="Delete the selected stage or connection (Delete)" onClick={handleDelete} disabled={!activeNodeId && !selectedEdge}><Trash2 size={14} /><span className={TOOLBAR_LABEL_SECONDARY}>Delete</span></Button>
               <div className="relative" ref={addMenuRef}>
-                <Button variant="accent" size="compact" className={cn(EDITOR_BUTTON, 'aria-expanded:bg-accent aria-expanded:text-accent-text')} data-slot="graph-add-stage" aria-haspopup="menu" aria-expanded={addMenuOpen} onClick={() => setAddMenuOpen((open) => !open)}><Plus size={14} /> <span>Add stage</span><ChevronDown size={12} /></Button>
+                <Button variant="accent" size="compact" className={cn(EDITOR_BUTTON, 'aria-expanded:bg-accent aria-expanded:text-accent-text')} data-slot="graph-add-stage" aria-haspopup="menu" aria-expanded={addMenuOpen} onClick={() => setAddMenuOpen((open) => !open)}><Plus size={14} /> <span>Add Stage</span><ChevronDown size={12} /></Button>
                 {addMenuOpen && (
                   <div className="absolute top-[calc(100%+5px)] right-0 z-1100 grid w-58 rounded-md border border-strong bg-panel p-1 shadow-pop" role="menu">
                     {STAGE_OPTIONS.map((option) => (

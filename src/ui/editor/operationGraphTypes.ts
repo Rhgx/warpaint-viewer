@@ -165,12 +165,12 @@ export const TRACE_OPTIONS: readonly {
 ];
 
 export const STAGE_OPTIONS: readonly { readonly kind: OperationStageKind; readonly label: string; readonly description: string }[] = [
-  { kind: 'texture_lookup', label: 'Texture lookup', description: 'Read a source texture' },
-  { kind: 'select', label: 'Select groups', description: 'Choose paint groups' },
-  { kind: 'combine_add', label: 'Add textures', description: 'Add two or more surfaces' },
-  { kind: 'combine_multiply', label: 'Multiply textures', description: 'Multiply two or more surfaces' },
-  { kind: 'combine_lerp', label: 'Blend textures', description: 'Blend with a mask' },
-  { kind: 'apply_sticker', label: 'Apply sticker', description: 'Place artwork on a surface' },
+  { kind: 'texture_lookup', label: 'Texture Lookup', description: 'Read a source texture' },
+  { kind: 'select', label: 'Select Groups', description: 'Choose paint groups' },
+  { kind: 'combine_add', label: 'Add Textures', description: 'Add two or more surfaces' },
+  { kind: 'combine_multiply', label: 'Multiply Textures', description: 'Multiply two or more surfaces' },
+  { kind: 'combine_lerp', label: 'Blend Textures', description: 'Blend with a mask' },
+  { kind: 'apply_sticker', label: 'Apply Sticker', description: 'Place artwork on a surface' },
 ];
 
 interface ParameterMeta {
@@ -181,12 +181,12 @@ interface ParameterMeta {
 
 /** Most stage fields are "min max" ranges resolved per paint seed, so they get a range control. */
 export const PARAMETER_META: Readonly<Record<OperationGraphParameterField, ParameterMeta>> = {
-  texture: { label: 'Source texture', kind: 'texture' },
-  texture_red: { label: 'RED texture', kind: 'texture' },
-  texture_blue: { label: 'BLU texture', kind: 'texture' },
-  groups: { label: 'Group mask', kind: 'texture' },
-  select: { label: 'Selected groups', kind: 'text' },
-  adjust_black: { label: 'Black point', kind: 'range', step: 1 },
+  texture: { label: 'Source Texture', kind: 'texture' },
+  texture_red: { label: 'RED Texture', kind: 'texture' },
+  texture_blue: { label: 'BLU Texture', kind: 'texture' },
+  groups: { label: 'Group Mask', kind: 'texture' },
+  select: { label: 'Selected Groups', kind: 'text' },
+  adjust_black: { label: 'Black Point', kind: 'range', step: 1 },
   adjust_offset: { label: 'Offset', kind: 'range', step: 1 },
   adjust_gamma: { label: 'Gamma', kind: 'range', step: 0.05 },
   rotation: { label: 'Rotation', kind: 'range', step: 1 },
@@ -195,9 +195,9 @@ export const PARAMETER_META: Readonly<Record<OperationGraphParameterField, Param
   scale_uv: { label: 'Scale', kind: 'range', step: 0.05 },
   flip_u: { label: 'Flip U', kind: 'toggle' },
   flip_v: { label: 'Flip V', kind: 'toggle' },
-  dest_tl: { label: 'Top left', kind: 'vector', step: 0.01 },
-  dest_tr: { label: 'Top right', kind: 'vector', step: 0.01 },
-  dest_bl: { label: 'Bottom left', kind: 'vector', step: 0.01 },
+  dest_tl: { label: 'Top Left', kind: 'vector', step: 0.01 },
+  dest_tr: { label: 'Top Right', kind: 'vector', step: 0.01 },
+  dest_bl: { label: 'Bottom Left', kind: 'vector', step: 0.01 },
 };
 
 export interface EditableParameter {

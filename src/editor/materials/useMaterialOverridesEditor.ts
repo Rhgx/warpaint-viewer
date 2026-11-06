@@ -71,7 +71,7 @@ export function useMaterialOverridesEditor({
         : undefined,
     };
   });
-  const materialPresets = [{ id: 'macaw-metallic', label: 'Macaw metallic' }];
+  const materialPresets = [{ id: 'macaw-metallic', label: 'Macaw Metallic' }];
   return materialWeaponRows.length > 0 ? {
     weapons: materialWeaponRows,
     presets: materialPresets,

@@ -142,7 +142,7 @@ export function useTurntableCapture({
     }
     // Cancelled captures get no retry; interrupted or failed ones do.
     if (turntableStatus?.phase === 'failed' || (turntableStopReason && turntableStopReason !== TURNTABLE_CANCELLED)) {
-      return [{ label: 'Try again', primary: true, onClick: (): void => void startTurntableCapture() }];
+      return [{ label: 'Try Again', primary: true, onClick: (): void => void startTurntableCapture() }];
     }
     return undefined;
   }, [turntableStatus?.phase, turntableStopReason, startTurntableCapture]);

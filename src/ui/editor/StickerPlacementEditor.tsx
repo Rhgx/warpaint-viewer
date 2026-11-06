@@ -758,7 +758,7 @@ export function StickerPlacementEditor({
                       onClick={onRestoreHiddenModelParts}
                     >
                       <Eye size={14} aria-hidden="true" />
-                      <span>Show all</span>
+                      <span>Show All</span>
                     </Button>
                   )}
                 </span>
@@ -1009,7 +1009,7 @@ export function StickerPlacementEditor({
             <div className="absolute inset-0 z-3 flex flex-col items-center justify-center gap-2.25 bg-panel/82 p-3.5 text-center text-10 text-dim">
               <span role="status">{notice ?? 'Sticker artwork unavailable.'}</span>
               {onCreatePlacement ? (
-                <Button variant="primary" size="compact" className={EDITOR_BUTTON} onClick={onCreatePlacement}>Create centered placement</Button>
+                <Button variant="primary" size="compact" className={EDITOR_BUTTON} onClick={onCreatePlacement}>Create Centered Placement</Button>
               ) : null}
             </div>
           )}

@@ -50,14 +50,19 @@ neither that project nor a local game install.
 
 ## Settings
 
-The toolbar's **Settings** button holds the Workshopper tools, all off by
-default:
+The toolbar's **Settings** button holds the theme and the Workshopper Tools.
 
-- **Show paint kit details** adds a details button to the selected or hovered
+**Appearance** picks one of five themes: Default, Midnight, Graphite, Ember or
+Gold. A theme recolors the interface and the viewer's background, and exported
+images stay as they are.
+
+The **Workshopper Tools** are all off by default:
+
+- **Show Paint Kit Details** adds a details button to the selected or hovered
   war paint: its paintkit_proto_def_index, the operation it uses and the other
   stock paints sharing it, and texture paths, bases, and features from Pyxell's
   TF2 Warpaint Texture Directory.
-- **Advanced catalog search** lets the warpaint filter match an exact paint kit
+- **Advanced Catalog Search** lets the warpaint filter match an exact paint kit
   ID (`400` or `#400`) and list every paint that uses an operation
   (`op:<name>`).
 

@@ -91,9 +91,9 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
   }, [active, status, viewer, fov, minimized, activity, paused, fishPhysics, showHands, spinBarrel]);
 
   return <InspectorSection title="Preview" icon={Eye}>
-      <Control group label="View mode">
+      <Control group label="View Mode">
         <ToggleGroup
-          label="View mode"
+          label="View Mode"
           value={active ? 'first-person' : 'inspect'}
           options={[
             { value: 'inspect', label: 'Inspect' },

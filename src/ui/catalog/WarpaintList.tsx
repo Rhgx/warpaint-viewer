@@ -263,7 +263,7 @@ export const WarpaintList = memo(function WarpaintList({
 
   const collectionOptions = useMemo(
     () => [
-      { value: '', label: 'All collections' },
+      { value: '', label: 'All Collections' },
       ...collections.map((c) => ({ value: c.name, label: `${c.name} (${c.count})` })),
     ],
     [collections],
@@ -474,7 +474,7 @@ export const WarpaintList = memo(function WarpaintList({
           <div className="flex flex-col items-center gap-2.5 px-3 py-6 text-center text-dim">
             <p className="m-0">No matches</p>
             <Button className="px-2.5 active:bg-border" onClick={clearFilters}>
-              Clear filters
+              Clear Filters
             </Button>
           </div>
         )}

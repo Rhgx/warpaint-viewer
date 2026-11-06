@@ -1,6 +1,7 @@
 import { AlertDialog as AlertDialogPrimitive } from '@base-ui/react/alert-dialog';
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { Button } from './Button';
@@ -33,31 +34,36 @@ export function DialogBody({ className, ...props }: ComponentProps<'div'>) {
 }
 
 /** A titled group inside a dialog. Sections settle in one after another rather than the whole card sliding as one block. */
-export function DialogSection({ id, title, className, children }: {
+export function DialogSection({ id, title, icon: Icon, className, children }: {
   id: string;
   title: string;
+  icon?: LucideIcon;
   className?: string;
   children: ReactNode;
 }) {
   return (
     <section className={cn('animate-dialog-section first:[animation-delay:40ms] last:[animation-delay:80ms] motion-reduce:animate-none', className)} data-slot="dialog-section" aria-labelledby={id}>
-      <h3 id={id} className={cn('mt-0 mb-0.5', SECTION_TITLE)}>{title}</h3>
+      <h3 id={id} className={cn('mt-0 mb-0.5', SECTION_TITLE, Icon && 'flex items-center gap-1.5')}>
+        {Icon && <Icon size={14} className="flex-none text-dim" aria-hidden="true" />}
+        {title}
+      </h3>
       {children}
     </section>
   );
 }
 
 /** Works under either root: Base UI builds AlertDialog out of these same Dialog parts. */
-export function DialogPopup({ title, closeLabel, viewportClassName, children, ...props }: DialogPrimitive.Popup.Props & {
+export function DialogPopup({ title, closeLabel, viewportClassName, surfaceClassName, children, ...props }: DialogPrimitive.Popup.Props & {
   title: string;
   /** Leave out when the dialog's own buttons include a way out: focus then lands on those first. */
   closeLabel?: string;
   viewportClassName?: string;
+  surfaceClassName?: string;
 }) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Viewport className={cn(DIALOG_VIEWPORT, viewportClassName)}>
-        <DialogPrimitive.Popup className={DIALOG_SURFACE} data-slot="dialog-popup" {...props}>
+        <DialogPrimitive.Popup className={cn(DIALOG_SURFACE, surfaceClassName)} data-slot="dialog-popup" {...props}>
           <DialogHeader>
             <DialogPrimitive.Title className={DIALOG_TITLE}>{title}</DialogPrimitive.Title>
             {closeLabel && <DialogPrimitive.Close aria-label={closeLabel} render={<DialogCloseButton />} />}

@@ -102,6 +102,8 @@ export class Viewer {
   private defaultEnvMap: THREE.CubeTexture;
   private mapEnvMap: THREE.CubeTexture | null = null;
   private backplateTexture: THREE.Texture | null = null;
+  // Changed in place, so that a capture restoring the scene's background cannot bring back an older theme.
+  private readonly stageColor = new THREE.Color(0x1c1f24);
   private backplateLoadToken = 0;
   private environmentLoadToken = 0;
   private envReady: Promise<void>;
@@ -767,7 +769,7 @@ export class Viewer {
     const backplateToken = ++this.backplateLoadToken;
     this.backplateTexture?.dispose();
     this.backplateTexture = null;
-    this.scene.background = new THREE.Color(preset.background);
+    this.scene.background = preset.background === null ? this.stageColor : new THREE.Color(preset.background);
     if (preset.backplate) {
       this.texLoader.loadAsync(preset.backplate).then((texture) => {
         if (this.disposed || backplateToken !== this.backplateLoadToken) {
@@ -791,6 +793,12 @@ export class Viewer {
     this.invalidate();
   }
 
+  /** The theme's stage colour. Lighting with a background of its own keeps that. */
+  setStageColor(color: string): void {
+    this.stageColor.set(color);
+    this.invalidate();
+  }
+
   private applyCustomLighting(): void {
     this.loadPresetEnvMap(undefined);
     this.legacyInspectOpacity.value = 0;
@@ -806,7 +814,7 @@ export class Viewer {
     this.backplateLoadToken++;
     this.backplateTexture?.dispose();
     this.backplateTexture = null;
-    this.scene.background = new THREE.Color(0x1c1f24);
+    this.scene.background = this.stageColor;
     this.scene.backgroundIntensity = 1;
     this.invalidate();
   }

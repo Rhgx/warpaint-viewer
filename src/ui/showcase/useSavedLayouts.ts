@@ -17,7 +17,7 @@ const ACTIVE_SLOT_KEY = 'warpaint-viewer:showcase-active-slot';
 const THUMBNAIL_WIDTH = 240;
 /** A double click on an empty slot saves with its first click; its second must not load what was just saved. */
 const SAVE_CLICK_GUARD_MS = 400;
-const SAVE_FAILED = 'Could not save: this browser\'s storage is full or blocked. Use Share file to keep this board.';
+const SAVE_FAILED = 'Could not save: this browser\'s storage is full or blocked. Use Share File to keep this board.';
 const CHANGE_FAILED = 'Could not change this slot: this browser\'s storage is full or blocked.';
 
 /** Steps the board back over a load or import, while that is still the last thing that happened to it. */
@@ -228,7 +228,7 @@ export function useSavedLayouts({ board, items, settings, featured, pairs, isKno
       });
     } else {
       setNote(`Saved in this browser.${replaced}`, deleted ? {
-        action: { label: 'Restore deleted', ariaLabel: `Restore the deleted save ${deleted.name}`, restores: true, run: () => restore(index, deleted, slot) },
+        action: { label: 'Restore Deleted', ariaLabel: `Restore the deleted save ${deleted.name}`, restores: true, run: () => restore(index, deleted, slot) },
       } : {});
     }
     focusOn('slot', index);

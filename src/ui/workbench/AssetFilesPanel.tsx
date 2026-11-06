@@ -30,15 +30,15 @@ const TEXTURE_ACCEPT = '.png,.jpg,.jpeg,.webp,.tga,.vtf';
 
 const KIND_LABEL: Record<AssetSlot['kind'], string> = {
   texture: 'Texture',
-  mask: 'Region mask',
+  mask: 'Region Mask',
   sticker: 'Sticker',
-  'sticker-mask': 'Sticker specular',
+  'sticker-mask': 'Sticker Specular',
 };
 
 const GROUP_LABEL: Record<SlotGroup, string> = {
   artwork: 'Artwork',
   mask: 'Masks',
-  support: 'Support files',
+  support: 'Support Files',
 };
 
 function shortName(ref: string): string {
@@ -203,7 +203,7 @@ export function AssetFilesPanel({
               onClick={confirmReset ? onResetAll : onConfirmReset}
             >
               <RotateCcw size={12} />
-              {confirmReset ? 'Discard all?' : 'Reset all'}
+              {confirmReset ? 'Discard All?' : 'Reset All'}
             </Button>
           )}
         </div>
@@ -384,7 +384,7 @@ export function AssetFilesPanel({
                               onFiles={([file]) => onUpdateFile(specularRef, file, false)}
                             >
                               <Sparkles className="flex-none" size={12} />
-                              <span className="truncate">{specularAsset?.color ? 'Replace spec' : 'Specular'}</span>
+                              <span className="truncate">{specularAsset?.color ? 'Replace Spec' : 'Specular'}</span>
                             </FileButton>
                           )}
                           {asset && (

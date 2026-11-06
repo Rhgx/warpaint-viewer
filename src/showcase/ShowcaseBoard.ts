@@ -1756,15 +1756,15 @@ export class ShowcaseBoard {
 
   poseHandlePath(id: string, controlId: string): { values: number[]; points: { x: number; y: number }[] } | null { return this.#handles.poseHandlePath(id, controlId); }
 
-  #frameBounds(backdrop = true): { width: number; height: number } {
-    if (backdrop && this.#background === 'framed') {
+  #frameBounds(): { width: number; height: number } {
+    if (this.#background === 'framed') {
       return { width: BOARD_WIDTH + FRAME_SIDE * 2, height: BOARD_HEIGHT + FRAME_SIDE * 2 };
     }
     return { width: BOARD_WIDTH, height: BOARD_HEIGHT };
   }
 
-  #fitCamera(aspect: number, padding: number, backdrop = true): void {
-    const bounds = this.#frameBounds(backdrop);
+  #fitCamera(aspect: number, padding: number): void {
+    const bounds = this.#frameBounds();
     const width = bounds.width * padding;
     const height = bounds.height * padding;
     const halfH = Math.max(height, width / aspect) / 2;
@@ -1860,8 +1860,8 @@ export class ShowcaseBoard {
     return context && url.startsWith('data:image/') ? url : null;
   }
 
-  outputSize(width: number, backdrop = true): { width: number; height: number } {
-    const bounds = this.#frameBounds(backdrop);
+  outputSize(width: number): { width: number; height: number } {
+    const bounds = this.#frameBounds();
     return { width, height: Math.round(width * bounds.height / bounds.width) };
   }
 
@@ -1879,19 +1879,19 @@ export class ShowcaseBoard {
     }
   }
 
-  async exportPng(outputWidth = 1920, backdrop = true): Promise<Blob> {
+  async exportPng(outputWidth = 1920): Promise<Blob> {
     // Paints sized for the screen are sharpened for the export first, and an
     // export taken while they are still streaming in would show them half done.
     this.#sharpenPaints(this.#pixelsPerUnit() * outputWidth / Math.max(1, this.renderer.domElement.width));
     await this.whenPainted();
     this.#flushReshapes();
-    const outputHeight = this.outputSize(outputWidth, backdrop).height;
-    const hidden = [this.#cells, this.#ghost, ...(backdrop ? [] : [this.#board, this.#vignette, this.#frame, this.#shadowBoard])].filter((object) => object.visible);
+    const outputHeight = this.outputSize(outputWidth).height;
+    const hidden = [this.#cells, this.#ghost].filter((object) => object.visible);
     for (const object of hidden) object.visible = false;
     const previousRatio = this.renderer.getPixelRatio();
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(outputWidth, outputHeight, false);
-    this.#fitCamera(outputWidth / outputHeight, 1, backdrop);
+    this.#fitCamera(outputWidth / outputHeight, 1);
     this.renderer.render(this.#scene, this.#camera);
     const blob = await new Promise<Blob | null>((resolve) => this.renderer.domElement.toBlob(resolve, 'image/png'));
     for (const object of hidden) object.visible = true;

@@ -87,7 +87,7 @@ const ISO = 1 / Math.sqrt(3);
 
 export const VIEW_ANGLES: ViewAnglePreset[] = [
   { id: 'default', label: 'Default', dir: null },
-  { id: 'inventory-icon', label: 'Inventory icon (locked)', dir: null, lockedCamera: true },
+  { id: 'inventory-icon', label: 'Inventory Icon (Locked)', dir: null, lockedCamera: true },
   { id: 'front', label: 'Front', dir: [0, 0, 1] },
   { id: 'back', label: 'Back', dir: [0, 0, -1] },
   { id: 'left', label: 'Left', dir: [-1, 0, 0] },

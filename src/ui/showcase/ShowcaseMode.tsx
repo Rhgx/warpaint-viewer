@@ -12,7 +12,7 @@ import { downloadBlob } from '../common/download';
 import { DropHint } from '../primitives/DropHint';
 import { ShowcaseGizmo, ShowcasePoseHandles } from './ShowcaseGizmo';
 import { readLayoutSlots, readSlotBackups, slotImages } from './layoutSlots';
-import { describeProblem, exportsBackdrop, loadSettings, SETTINGS_STORAGE_KEY, type ShowcaseSettings } from './showcaseSettings';
+import { describeProblem, loadSettings, SETTINGS_STORAGE_KEY, type ShowcaseSettings } from './showcaseSettings';
 import { LayersSection } from './ShowcaseLayers';
 import { LayoutsSection, type FeaturePick } from './ShowcaseLayouts';
 import { SavedLayoutsSection } from './ShowcaseSavedLayouts';
@@ -271,15 +271,14 @@ export default function ShowcaseMode(props: ShowcaseModeProps) {
     }
   }, [board]);
   const { outputWidth } = settings;
-  const exportBackdrop = exportsBackdrop(settings);
   const exportPng = useCallback(async () => {
-    if (board) downloadBlob(await board.exportPng(outputWidth, exportBackdrop), 'showcase.png');
-  }, [board, outputWidth, exportBackdrop]);
+    if (board) downloadBlob(await board.exportPng(outputWidth), 'showcase.png');
+  }, [board, outputWidth]);
   const copyPng = useCallback(async () => {
     if (!board) return;
-    const blob = await board.exportPng(outputWidth, exportBackdrop);
+    const blob = await board.exportPng(outputWidth);
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-  }, [board, outputWidth, exportBackdrop]);
+  }, [board, outputWidth]);
   const changeSettings = useCallback((patch: Partial<ShowcaseSettings>) => setSettings((current) => ({ ...current, ...patch })), []);
   // A slot can take seconds to load its models, and nothing may land on the board until it has.
   const [restoring, setRestoring] = useState(false);

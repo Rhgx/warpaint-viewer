@@ -29,7 +29,7 @@ export const TOOLS: readonly { readonly id: StickerTransformTool; readonly label
 export const TOOL_SHORTCUTS: Partial<Record<string, StickerTransformTool>> = { '1': 'move', '2': 'scale', '3': 'turn' };
 
 export const CORNER_ROWS = [
-  { corner: 'tl' as const, label: 'Top left', short: 'TL', x: 'tlX' as const, y: 'tlY' as const, field: 'dest_tl' },
-  { corner: 'tr' as const, label: 'Top right', short: 'TR', x: 'trX' as const, y: 'trY' as const, field: 'dest_tr' },
-  { corner: 'bl' as const, label: 'Bottom left', short: 'BL', x: 'blX' as const, y: 'blY' as const, field: 'dest_bl' },
+  { corner: 'tl' as const, label: 'Top Left', short: 'TL', x: 'tlX' as const, y: 'tlY' as const, field: 'dest_tl' },
+  { corner: 'tr' as const, label: 'Top Right', short: 'TR', x: 'trX' as const, y: 'trY' as const, field: 'dest_tr' },
+  { corner: 'bl' as const, label: 'Bottom Left', short: 'BL', x: 'blX' as const, y: 'blY' as const, field: 'dest_bl' },
 ];

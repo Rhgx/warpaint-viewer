@@ -106,12 +106,12 @@ test('reports missing roots and disconnected authored nodes', () => {
 
 test('summarizes a validation run as one line about the stages that are wrong', () => {
   const summary = summarizeOperationGraphDiagnostics([
-    { severity: 'warning', message: 'Blend textures input 3 crosses the advisory mask/texture role.' },
-    { severity: 'error', message: 'Texture lookup is not connected to a parent or Paint output.', nodeId: 'a' },
-    { severity: 'error', message: 'Texture lookup is not on a path to Paint output.', nodeId: 'a' },
+    { severity: 'warning', message: 'Blend Textures input 3 crosses the advisory mask/texture role.' },
+    { severity: 'error', message: 'Texture Lookup is not connected to a parent or Paint Output.', nodeId: 'a' },
+    { severity: 'error', message: 'Texture Lookup is not on a path to Paint Output.', nodeId: 'a' },
   ]);
   // Advisory warnings stay out of it, and one stage speaks once.
-  assert.equal(summary, 'Texture lookup is not connected to a parent or Paint output.');
+  assert.equal(summary, 'Texture Lookup is not connected to a parent or Paint Output.');
 
   assert.equal(summarizeOperationGraphDiagnostics([]), null);
   assert.equal(

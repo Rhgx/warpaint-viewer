@@ -268,7 +268,7 @@ export function LightingPanel({ store }: LightingPanelProps) {
             onClick={() => setAddOpen((current) => !current)}
           >
             <Plus size={13} />
-            <span>Add light</span>
+            <span>Add Light</span>
           </Button>
           {addOpen && !full && (
             <div className="flex flex-col gap-0.75 rounded-sm border border-border bg-panel-2 p-1.5">

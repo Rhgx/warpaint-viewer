@@ -38,16 +38,16 @@ function plural(count: number, noun: string): string {
 
 // custom_uv is the only stock template without texture layers, so its bare name says little.
 function templateLabel(template: OperationTemplateInfo): string {
-  return template.name === 'custom_uv' ? 'custom_uv (UV paint)' : template.name;
+  return template.name === 'custom_uv' ? 'custom_uv (UV Paint)' : template.name;
 }
 
-const TEMPLATE_GROUPS = ['UV', 'Stickers', 'Team colors', 'Plain'] as const;
+const TEMPLATE_GROUPS = ['UV', 'Stickers', 'Team Colors', 'Plain'] as const;
 type TemplateGroup = (typeof TEMPLATE_GROUPS)[number];
 
 function templateGroup(template: OperationTemplateInfo): TemplateGroup {
   if (template.name === 'custom_uv') return 'UV';
   if (template.stickers > 0) return 'Stickers';
-  if (template.teamTextures) return 'Team colors';
+  if (template.teamTextures) return 'Team Colors';
   return 'Plain';
 }
 
@@ -226,7 +226,7 @@ function DefinitionRow({
               onClick={() => onDeleteKit(kit.defindex)}
             >
               <Trash2 size={12} />
-              {deleteConfirming ? 'Delete it?' : null}
+              {deleteConfirming ? 'Delete It?' : null}
             </Button>
           </>
         )}
@@ -305,7 +305,7 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
         {packageCandidate.path}
       </span>
       <Button variant="primary" size="compact" onClick={packageCandidate.onLoad}>
-        Load from package
+        Load From Package
       </Button>
     </div>
   );
@@ -323,7 +323,7 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
       onClick={() => setCreating((open) => !open)}
     >
       <Plus size={12} />
-      <span>New war paint</span>
+      <span>New War Paint</span>
     </Button>
   );
 
@@ -394,16 +394,16 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
   const createFields = (
     // No card of its own; the tab already frames it.
     <div className={cn('flex w-full max-w-96 flex-none flex-col gap-2 p-3 text-left', COMPACT_INPUTS, status === 'loaded' ? 'max-w-none *:max-w-90' : 'mx-auto')}>
-      <strong className="text-12 font-[650] text-text">New war paint</strong>
+      <strong className="text-12 font-[650] text-text">New War Paint</strong>
       {stockKit && state.exportSelectedStockKit && (
-        <Control label="Start from" group>
+        <Control label="Start From" group>
           <ToggleGroup
             size="compact"
-            label="Start from"
+            label="Start From"
             value={copying ? 'copy' : 'template'}
             onChange={chooseSource}
             options={[
-              { value: 'template', label: <span className="block truncate">Stock template</span> },
+              { value: 'template', label: <span className="block truncate">Stock Template</span> },
               { value: 'copy', label: <span className="block truncate">Copy of {stockKit.name}</span> },
             ]}
           />
@@ -451,7 +451,7 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
 
   // The fields scroll in a short drawer. The actions and any error stay in view below them, as on the Export tab.
   const createForm = (fields: ReactNode, className?: string) => (
-    <div className={cn('flex min-h-0 flex-col', className)} data-slot="definitions-create" role="group" aria-label="New war paint">
+    <div className={cn('flex min-h-0 flex-col', className)} data-slot="definitions-create" role="group" aria-label="New War Paint">
       <div className="scrollbar-slim flex min-h-0 flex-auto flex-col justify-center-safe overflow-auto">{fields}</div>
       <div className={CREATE_ACTIONS} data-slot="definitions-create-actions">
         {canSubmit && creatingError && (
@@ -512,7 +512,7 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
               finds its files for you.
             </span>
             <div className="mt-1 flex items-center justify-center gap-2">
-              <ImportPicker state={state} label="Import definitions" />
+              <ImportPicker state={state} label="Import Definitions" />
               {newPaintButton}
             </div>
           </div>
@@ -548,7 +548,7 @@ export function DefinitionsPanel({ state }: { state: CustomDefinitionsState }) {
           onClick={() => (confirmRemove ? onRemove() : armRemove())}
         >
           <Trash2 size={12} />
-          {confirmRemove ? 'Remove it?' : 'Remove'}
+          {confirmRemove ? 'Remove It?' : 'Remove'}
         </Button>
       </div>
 

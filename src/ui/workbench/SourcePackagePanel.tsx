@@ -80,7 +80,7 @@ export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
             An archive supplies the textures a recipe asks for, in place of the
             viewer's built-ins.
           </span>
-          <ImportPicker state={state} label="Mount an archive" />
+          <ImportPicker state={state} label="Mount an Archive" />
         </div>
       )}
 
@@ -146,7 +146,7 @@ export function SourcePackagePanel({ state }: { state: SourcePackageState }) {
             }
           >
             <Trash2 size={12} />
-            {confirmRemove ? 'Remove it?' : 'Remove'}
+            {confirmRemove ? 'Remove It?' : 'Remove'}
           </Button>
         </div>
       )}

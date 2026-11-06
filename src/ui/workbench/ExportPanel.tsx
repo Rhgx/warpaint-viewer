@@ -46,13 +46,13 @@ const CONTAINER_OPTIONS: { value: 'vpk' | 'zip'; label: string }[] = [
 ];
 
 const COMPRESSION_OPTIONS: { value: ExportCompression; label: string }[] = [
-  { value: 'auto', label: 'Match the game (DXT)' },
-  { value: 'lossless', label: 'Lossless (larger)' },
+  { value: 'auto', label: 'Match the Game (DXT)' },
+  { value: 'lossless', label: 'Lossless (Larger)' },
 ];
 
 const DEFINITIONS_OPTIONS: { value: 'overwrite' | 'append'; label: string }[] = [
-  { value: 'overwrite', label: 'Replace a war paint I own' },
-  { value: 'append', label: 'Add as a new war paint' },
+  { value: 'overwrite', label: 'Replace a War Paint I Own' },
+  { value: 'append', label: 'Add as a New War Paint' },
 ];
 
 // The stage narrows as drawers open, so these query the panel rather than the window.
@@ -280,8 +280,8 @@ export function ExportPanel({
             it something to work with:
           </span>
           <span className="mt-0.5 flex flex-wrap justify-center gap-1.5">
-            <Button variant="outline" size="compact" onClick={() => onGoToTab?.('files')}>Replace a texture</Button>
-            <Button variant="outline" size="compact" onClick={() => onGoToTab?.('package')}>Mount an archive</Button>
+            <Button variant="outline" size="compact" onClick={() => onGoToTab?.('files')}>Replace a Texture</Button>
+            <Button variant="outline" size="compact" onClick={() => onGoToTab?.('package')}>Mount an Archive</Button>
           </span>
         </EmptyState>
       </div>
@@ -353,10 +353,10 @@ export function ExportPanel({
         </section>
 
         {writesDefinitions && definitions && (
-          <section className={COL} aria-label="In game">
-            <h3 className={COL_TITLE}>In game</h3>
+          <section className={COL} aria-label="In Game">
+            <h3 className={COL_TITLE}>In Game</h3>
             <div className={FIELD}>
-              <ControlLabel>Install this paint by</ControlLabel>
+              <ControlLabel>Install This Paint by</ControlLabel>
               <ToggleGroup
                 radio
                 size="compact"
@@ -368,7 +368,7 @@ export function ExportPanel({
             </div>
             {definitionsMode === 'overwrite' ? (
               <div className={FIELD}>
-                <ControlLabel>Paint to replace</ControlLabel>
+                <ControlLabel>Paint to Replace</ControlLabel>
                 <PaintPicker
                   kits={definitions.builtInKits}
                   value={targetDefindex}
@@ -386,7 +386,7 @@ export function ExportPanel({
               </p>
             )}
             <label className={FIELD}>
-              <ControlLabel>Name in game</ControlLabel>
+              <ControlLabel>Name in Game</ControlLabel>
               <TextField
                 value={inGameName}
                 onChange={setInGameName}
@@ -405,16 +405,16 @@ export function ExportPanel({
               </span>
               {baseContainer ? (
                 <button type="button" className={BASE_ACTION} onClick={() => { setBaseContainer(null); setBaseError(''); }}>
-                  Use ours
+                  Use Ours
                 </button>
               ) : (
                 <label className={cn(BASE_ACTION, 'has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent')}>
-                  Use my own
+                  Use My Own
                   <input
                     className="sr-only"
                     type="file"
                     accept=".vpd,.bin"
-                    aria-label="Use my own proto_defs.vpd as the base definitions"
+                    aria-label="Use My Own proto_defs.vpd as the base definitions"
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       event.target.value = '';
@@ -487,7 +487,7 @@ export function ExportPanel({
           onClick={() => void runExport()}
         >
           {busy ? <LoaderCircle className="animate-spin motion-reduce:animate-none" size={12} /> : <Download size={12} />}
-          <span>{busy ? 'Building…' : loading ? 'Resolving assets…' : blocker || 'Export pack'}</span>
+          <span>{busy ? 'Building…' : loading ? 'Resolving assets…' : blocker || 'Export Pack'}</span>
         </Button>
       </div>
     </div>
