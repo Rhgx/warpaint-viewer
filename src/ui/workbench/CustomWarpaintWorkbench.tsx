@@ -46,7 +46,6 @@ import { ToggleGroup } from '../primitives/ToggleGroup';
 import type { CustomWarpaintWorkbenchProps } from './workbenchTypes';
 
 const DROP_OVERLAY = 'pointer-events-none absolute inset-0 z-2 flex items-center justify-center gap-2 text-center text-12 font-[650] outline-2 -outline-offset-2 outline-dashed';
-// Each tab panel fills the height the header leaves.
 const PANEL = 'flex min-h-0 flex-1 flex-col outline-none';
 
 // Secondary panels load lazily so the Files controls show first. Tabs.Panel

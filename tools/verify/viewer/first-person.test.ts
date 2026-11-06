@@ -152,6 +152,29 @@ test.each(['c_minigun', 'c_holymackerel', 'c_knife', 'c_grenadelauncher'])('%s p
   });
   try {
     await preview.load(manifest.arms[weapon.armsKey], weapon, 'red', paint, paint, materialConfig.createTf2Uniforms(), cubemap);
+    assert.equal(preview.weaponKey, weaponKey);
+    const clockBone = preview.statClockBone;
+    assert.ok(clockBone, 'the viewmodel has a bone for the Stat Clock');
+    const scene = new THREE.Scene();
+    scene.add(preview.root);
+    const hanging = new THREE.Group();
+    hanging.position.set(1, 2, 3);
+    clockBone.add(hanging);
+    const followsBone = () => {
+      // What a render does first, which is what places anything hanging from a merged bone.
+      scene.updateMatrixWorld();
+      const expected = clockBone.matrixWorld.clone().multiply(hanging.matrix);
+      assert.ok(hanging.matrixWorld.equals(expected), 'what hangs from the clock bone follows it');
+      return hanging.matrixWorld.clone();
+    };
+    const clockAtStart = followsBone();
+    const animated = weapon.clips.ACT_VM_INSPECT_START;
+    preview.setAnimation(Array.isArray(animated) ? animated[0] : animated);
+    preview.update(0.5);
+    assert.ok(!followsBone().equals(clockAtStart), 'and moves with the animation');
+    hanging.removeFromParent();
+    scene.remove(preview.root);
+    preview.setAnimation(weapon.activity);
     if (weaponKey === 'c_knife') {
       const attachments = JSON.parse(fs.readFileSync('public/data/effects/attachments.json', 'utf8')) as
         Record<string, Record<string, { pos: [number, number, number]; quat: [number, number, number, number]; bone: string }>>;

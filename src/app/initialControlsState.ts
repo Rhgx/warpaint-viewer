@@ -12,6 +12,7 @@ export function createInitialControlsState(): ControlsState {
     preset: 'inspect',
     sheen: 'none',
     unusual: 'none',
+    statClocks: {},
     fov: DEFAULT_VIEWER_FOV,
     projection: 'perspective',
     captureFormat: 'image',

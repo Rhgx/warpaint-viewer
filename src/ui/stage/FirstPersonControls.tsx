@@ -132,7 +132,7 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
               <div className="mb-1 text-10 text-dim">{group.label}</div>
               <div className="grid grid-cols-2 gap-1">
                 {group.options.map(option => <button key={option.id} type="button"
-                  className="min-h-control cursor-pointer rounded-[3px] border border-border bg-transparent px-1.75 py-1.25 text-left text-11 wrap-anywhere text-text focus-ring not-disabled:hover:border-strong not-disabled:hover:bg-panel focus-visible:-outline-offset-2 disabled:cursor-default disabled:opacity-50 aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-accent-text" aria-pressed={option.id === selectedAnimation?.id}
+                  className="min-h-control cursor-pointer rounded-[3px] border border-border bg-transparent px-1.75 py-1.25 text-left text-11 wrap-anywhere text-text focus-ring not-disabled:not-aria-pressed:hover:border-strong not-disabled:not-aria-pressed:hover:bg-panel not-disabled:aria-pressed:hover:brightness-110 focus-visible:-outline-offset-2 disabled:cursor-default disabled:opacity-50 aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-accent-text" aria-pressed={option.id === selectedAnimation?.id}
                   disabled={status !== 'ready'} onClick={() => setAnimation(option.id)}>
                   {option.label}
                 </button>)}

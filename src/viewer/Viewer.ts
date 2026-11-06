@@ -41,6 +41,7 @@ import { TransformIsolation } from './transformIsolation';
 import { SheenOverlay } from './overlays/sheenOverlay';
 import { EmissiveOverlay } from './overlays/emissiveOverlay';
 import { WeaponAttachments } from './weaponAttachments';
+import { StatClock, type WantedClock } from './statClock';
 import { FirstPersonStage } from './firstPersonStage';
 import { MaterialTextures } from './materialTextures';
 import { ViewerCapture, type TurntableOptions, type TurntableSink } from './capture/viewerCapture';
@@ -164,6 +165,9 @@ export class Viewer {
   private sheenOverlay: SheenOverlay;
   private emissiveOverlay: EmissiveOverlay;
   private weaponAttachments: WeaponAttachments;
+  private statClock: StatClock;
+  /** The inspect model's weapon, which the clock goes back to on leaving First Person. */
+  private statClockWeaponKey: string | null = null;
   private firstPersonStage: FirstPersonStage;
   private materialTextures: MaterialTextures;
   private viewerCapture: ViewerCapture;
@@ -316,7 +320,14 @@ export class Viewer {
       modelLoader: this.modelLoader,
       invalidate: () => this.invalidate(),
     });
+    this.statClock = new StatClock({
+      programKey: 'attachment',
+      lighting: this.tf2Uniforms,
+      envMap: this.defaultEnvMap,
+      invalidate: () => this.invalidate(),
+    });
     this.firstPersonStage = new FirstPersonStage({
+      onPreviewChange: () => this.placeStatClock(),
       canvas,
       renderer: this.renderer,
       scene: this.scene,
@@ -345,6 +356,7 @@ export class Viewer {
       sheen: this.sheenOverlay,
       emissive: this.emissiveOverlay,
       weaponAttachments: this.weaponAttachments,
+      statClock: this.statClock,
       getActiveUnusual: () => this.activeUnusual,
       getProjectionMode: () => this.projectionMode,
       getViewInset: () => this.viewInset,
@@ -505,6 +517,7 @@ export class Viewer {
     const controlsAnimating = !this.firstPersonStage.preview && this.controls.update(dt);
     const emissiveAnimating = this.emissiveOverlay.stepEmissive(dt);
     const attachmentsAnimating = !this.firstPersonStage.preview && this.weaponAttachments.stepAttachments(dt);
+    const clockAnimating = !this.firstPersonStage.preview && this.statClock.step(dt);
     if (this.firstPersonStage.preview) {
       this.firstPersonStage.preview.update(dt);
       this.sheenOverlay.updateSheenAnimation();
@@ -550,7 +563,7 @@ export class Viewer {
       this.stickers.updateStickerGizmoOverlay();
       this.renderer.render(this.scene, this.camera);
     }
-    this.scheduleNextFrame(!!controlsAnimating || emissiveAnimating || attachmentsAnimating || !!this.activeUnusual, this.sheenOverlay.meshes);
+    this.scheduleNextFrame(!!controlsAnimating || emissiveAnimating || attachmentsAnimating || clockAnimating || !!this.activeUnusual, this.sheenOverlay.meshes);
   };
 
   /**
@@ -825,6 +838,7 @@ export class Viewer {
 
   private setDefaultEnvMap(texture: THREE.CubeTexture): void {
     this.defaultEnvMap = texture;
+    this.statClock.setEnvMap(texture);
     this.lensMaterial.envMap = texture;
     this.lensMaterial.needsUpdate = true;
     if (!this.materialTextures.customEnvMap) this.setMaterialEnvMap(texture);
@@ -1185,6 +1199,17 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     this.invalidate();
   }
 
+  private placeStatClock(): void {
+    const preview = this.firstPersonStage.preview;
+    if (preview) this.statClock.attachTo(preview.statClockBone, preview.weaponKey, true, true);
+    else this.statClock.attachTo(this.centerGroup, this.statClockWeaponKey);
+  }
+
+  /** It stays out of framing, picking and paint overlays, like an attached model. */
+  setStatClock(wanted: WantedClock | null): void {
+    this.statClock.set(wanted);
+  }
+
   private currentModelUrl: string | null = null;
   private loadToken = 0;
 
@@ -1239,6 +1264,8 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     this.paintableMeshes = [];
     this.cullableGeometries = [];
     this.weaponAttachments.setAttachments([]);
+    this.statClockWeaponKey = null;
+    this.placeStatClock();
     this.stickers.resetStickerUvTopology();
     this.meshIsLens = [];
     this.currentModelUrl = null;
@@ -1252,7 +1279,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
 
   // Load a weapon GLB. Concurrent calls resolve in call order via a token so a
   // stale load never wins; missing models leave the stage empty.
-  async loadModel(url: string | null, initialView?: ViewAnglePreset, attachments: readonly WeaponAttachment[] = []): Promise<void> {
+  async loadModel(url: string | null, initialView?: ViewAnglePreset, attachments: readonly WeaponAttachment[] = [], weaponKey: string | null = null): Promise<void> {
     if (url && url === this.currentModelUrl && this.meshes.length > 0) return;
     const token = ++this.loadToken;
     if (!url) {
@@ -1268,6 +1295,8 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
       }
       this.setMeshGeometries(geometries, initialView);
       this.weaponAttachments.setAttachments(attached);
+      this.statClockWeaponKey = weaponKey;
+      this.placeStatClock();
       this.currentModelUrl = url;
     } catch (err) {
       if (token !== this.loadToken || this.disposed) return;
@@ -1427,6 +1456,7 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
     for (const cullable of this.cullableGeometries) cullable.dispose();
     this.cullableGeometries = [];
     this.weaponAttachments.dispose();
+    this.statClock.dispose();
     this.modelLoader.dispose();
     this.renderer.dispose();
   }

@@ -49,7 +49,6 @@ function ThemePicker() {
           data-slot="theme-card"
           className="group/theme flex min-w-0 cursor-pointer flex-col items-center gap-1.5 rounded-sm text-11.5 focus-ring"
         >
-          {/* That theme's own accent, on a rim of its own background, from tokens.css. */}
           <span
             data-theme-preview={id}
             className="grid size-11 place-items-center rounded-full border border-strong bg-bg p-0.75 transition-fast group-hover/theme:border-text/55"

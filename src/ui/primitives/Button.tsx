@@ -20,7 +20,6 @@ const buttonVariants = cva(
         'icon-sm': 'size-6 p-0',
         'icon-md': 'size-7 p-0',
         'icon-lg': 'size-8 p-0',
-        // A small status control in a header row.
         chip: 'min-w-0 gap-1.25 px-2.25 py-1 text-10 whitespace-nowrap',
         // Sits in a line of text, so it takes that text's size and line height.
         inline: 'px-1.5 py-1 leading-[inherit]',
@@ -39,7 +38,6 @@ const buttonVariants = cva(
         danger: 'border-border bg-panel-2 text-dim not-disabled:hover:border-fail not-disabled:hover:text-fail',
         destructive: 'border-fail bg-fail font-semibold text-white not-disabled:hover:brightness-90',
         ghost: 'border-0 bg-transparent text-dim not-disabled:hover:bg-panel-2 not-disabled:hover:text-text',
-        // Hovering a pressed button must not make it read as unpressed.
         toolbar: 'border-0 bg-transparent text-dim not-disabled:not-aria-pressed:hover:bg-panel-2 not-disabled:not-aria-pressed:hover:text-text aria-expanded:bg-panel-2 aria-expanded:text-text aria-pressed:bg-accent aria-pressed:text-accent-text not-disabled:aria-pressed:hover:brightness-110 data-[feedback=error]:text-fail data-[feedback=success]:text-pass',
         link: 'border-0 bg-transparent font-semibold text-accent not-disabled:hover:underline',
         // Reads as loaded when it holds something. Selected, it is drawn as a selected tab, as it opens a panel just as a tab does.

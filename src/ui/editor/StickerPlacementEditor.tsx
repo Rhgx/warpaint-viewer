@@ -813,7 +813,6 @@ export function StickerPlacementEditor({
         </div>
       </header>
 
-      {/* Values sit beside the surface, never over it. */}
       <div className="relative flex min-h-0 min-w-0 flex-1 items-stretch gap-3 px-3 pt-2 pb-3 max-[620px]:gap-2.5 max-[620px]:px-2.5">
         {valuesOpen ? (
           <aside className="scrollbar-slim flex w-52 flex-none flex-col gap-2 overflow-auto border-r border-border pr-3 max-[620px]:border-t max-[620px]:border-r-0 max-[620px]:pt-2.5 max-[620px]:pr-0" aria-label="Sticker values">

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
 import { test } from 'vitest';
 
+import { MAX_KILLS } from '../../../src/data/statClock';
 import type { ShowcaseItem } from '../../../src/showcase/showcaseTypes';
 import { LayoutFileError, layoutFileName, pictureIndex, readLayoutFile, writeLayoutFile, type SharedLayout } from '../../../src/ui/showcase/layoutFile';
 import { parseSettings } from '../../../src/ui/showcase/showcaseSettings';
@@ -40,6 +41,43 @@ function fileAround(body: Uint8Array): Blob {
 const rejects = async (file: Blob, label: string) => {
   await assert.rejects(readLayoutFile(file), LayoutFileError, label);
 };
+
+/** A real file from before the Stat Clock, written by that version's own writer. */
+const FILE_FROM_BEFORE_THE_CLOCK = 'V1BMWQGPAXic4+D0z0lRSMpPLEphS85PLCpOZUsrSsxNTeFJji9OTiwpSS1KL83jCkYwvTNzclKLFJxSU4XNDU2MTI1NTQxNTc0tLY2MLUxMWQpKcwsYF4iyMjKxMTAyMzIyKTAyHWBnYFogz/SAl5GpgZ+ZianhAUjigCAjMwsDo4bfPrELTAwSjOwTmBmAAAAzHyPz';
+
+test('a file from before the Stat Clock still opens, with every setting in its place and no clock', async () => {
+  const bytes = Uint8Array.from(atob(FILE_FROM_BEFORE_THE_CLOCK), (char) => char.charCodeAt(0));
+  const { layout: read, pictures } = await readLayoutFile(new Blob([bytes]));
+  assert.equal(pictures.length, 0);
+  assert.equal(read.name, 'Old board');
+  assert.deepStrictEqual(read.settings, { ...parseSettings(null), grid: 'coarse', weaponSize: 70 });
+  assert.equal(read.items.length, 1);
+  const [only] = read.items;
+  assert.equal(only.weaponKey, 'c_scattergun');
+  assert.deepEqual(only.paint, paint);
+  assert.deepEqual([only.x, only.y, only.roll, only.tilt, only.scale, only.flipped], [1.25, -2.5, -90, 10.5, 0.75, true]);
+  assert.deepEqual(only.pose, { pump: 12.5 });
+  assert.ok(!only.statClock, 'no clock');
+  assert.equal(only.killCount, undefined);
+});
+
+test('a board without a clock writes exactly what it wrote before the Stat Clock', async () => {
+  const { layout: read } = await readLayoutFile(new Blob([Uint8Array.from(atob(FILE_FROM_BEFORE_THE_CLOCK), (char) => char.charCodeAt(0))]));
+  const { file } = await writeLayoutFile({ ...read, name: 'Old board' }, readPicture);
+  assert.equal(btoa(String.fromCharCode(...await bytesOf(file))), FILE_FROM_BEFORE_THE_CLOCK);
+});
+
+test('a clock and its count come back on the right weapons, and one that is off keeps its count', async () => {
+  const items = [{ ...item, statClock: true, killCount: 1337 }, part, { ...picture, id: 'item-11' }, { ...part, id: 'item-12', weaponName: 'Off', statClock: false, killCount: 42 }, { ...part, id: 'item-13', weaponName: 'Most', statClock: true, killCount: MAX_KILLS }];
+  const { file } = await writeLayoutFile({ ...layout, items }, readPicture);
+  const read = (await readLayoutFile(file)).layout.items;
+  assert.deepEqual(read.map((entry) => [entry.statClock, entry.killCount]), [[true, 1337], [undefined, undefined], [undefined, undefined], [false, 42], [true, MAX_KILLS]]);
+});
+
+test('a clock count the digits cannot show is refused', async () => {
+  const { file } = await writeLayoutFile({ ...layout, items: [{ ...item, statClock: true, killCount: MAX_KILLS + 1 }], layout: null }, readPicture);
+  await rejects(file, 'a seventh digit');
+});
 
 test('a file brings back everything on the board, with each picture stored once', async () => {
   const { file, missing } = await writeLayoutFile(layout, readPicture);

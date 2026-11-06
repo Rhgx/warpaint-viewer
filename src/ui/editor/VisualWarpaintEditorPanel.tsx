@@ -16,7 +16,6 @@ const CLEAR_CONFIRM_MS = 3000;
 const PANEL = 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden';
 const LAYOUT_OPTION = 'flex min-w-0 items-baseline gap-1.25 whitespace-nowrap';
 const LAYOUT_OPTION_FILE = 'min-w-0 overflow-hidden text-9.5 text-ellipsis text-dim group-data-highlighted:text-inherit group-data-highlighted:opacity-72';
-// A label too long for any row wraps rather than truncates.
 const PART_CHIP = 'h-auto min-h-control max-w-full justify-start gap-1.75 bg-transparent py-1 pr-2.75 pl-2.25 text-left text-11.5 text-dim not-aria-pressed:hover:text-text/75';
 
 export interface VisualWarpaintEditorPanelProps {

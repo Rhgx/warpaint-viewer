@@ -292,7 +292,6 @@ export function ExportPanel({
   const hasNotes = plan.warnings.length > 0 || buildNotes.length > 0;
   const notes = (
     <div className="flex flex-col gap-1">
-      {/* Cautions before exporting, then results from the last export. */}
       {plan.warnings.map((warning) => (
         <InlineNotice key={warning}>{warning}</InlineNotice>
       ))}
@@ -311,7 +310,6 @@ export function ExportPanel({
       <div
         className={cn(
           'scrollbar-slim grid min-h-0 flex-auto items-start overflow-y-auto @max-[560px]:grid-cols-1',
-          // A narrow stage cannot hold three columns: drop to two, then to one.
           columnCount === 2
             ? 'grid-cols-[minmax(180px,1fr)_minmax(210px,1fr)]'
             : 'grid-cols-[minmax(180px,1fr)_minmax(240px,1.4fr)_minmax(210px,1fr)] @max-[900px]:grid-cols-2',

@@ -24,7 +24,6 @@ export function SearchField({ value, onChange, placeholder, label, disabled, cla
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  /** The input's accessible name, for when the placeholder alone is too vague. */
   label?: string;
   disabled?: boolean;
 }) {

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { RecipeNode, TextureResolver } from '../compositor/types';
 import type { TextureMetadata, WeaponEntry, WeaponMaterial } from '../data/types';
 import type { Tf2Uniforms } from '../viewer/materialConfig';
+import type { StatClock } from '../viewer/statClock';
 import type { LayoutPacking, LayoutRows } from './layouts';
 import type { RestBone } from './poseRigs';
 
@@ -38,6 +39,10 @@ export interface ShowcaseItem {
   part: string | null;
   /** Pieces of this weapon left out of it, usually because they were taken out. */
   hiddenParts: readonly string[];
+  /** Optional because older saves and files do not have it. */
+  statClock?: boolean;
+  /** Kept while the clock is off, so that turning it back on keeps the count. */
+  killCount?: number;
   /** Set when this item is an imported picture rather than a weapon; it then has no weapon key and a placeholder paint. */
   image?: { assetId: string; aspect: number };
 }
@@ -126,6 +131,9 @@ export interface ItemRuntime {
   emissive: { material: THREE.ShaderMaterial; overlays: THREE.Mesh[] } | null;
   /** The emissive pass leaves these out, as in the viewer. */
   lenses: ReadonlySet<THREE.Mesh>;
+  statClock: StatClock | null;
+  /** On a rigged model this is the weapon's clock bone, so that the clock follows the pose. */
+  clockParent: THREE.Object3D;
   /** The material names its own $envmap rather than reflecting the board's default. */
   customEnvMap?: boolean;
   /** Height of whatever this weapon rests on when overlaps are allowed. */

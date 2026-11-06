@@ -82,7 +82,7 @@ export function resolveWeaponMaterials({
   return overrides;
 }
 
-function readVmtBody(fullPath) {
+export function readVmtBody(fullPath) {
   const parsed = parseKV(fs.readFileSync(fullPath, 'utf8'));
   return parsed[Object.keys(parsed)[0]] || {};
 }
@@ -109,7 +109,7 @@ function scalar(body, key, fallback = null) {
   return parseVector(kvGet(body, key))?.[0] ?? fallback;
 }
 
-function parseMaterialBody(body, textureRefs) {
+export function parseMaterialBody(body, textureRefs) {
   const normalMap = publicTexture(body, '$bumpmap');
   const phongExponentTexture = publicTexture(body, '$phongexponenttexture');
   const lightwarpTexture = publicTexture(body, '$lightwarptexture');

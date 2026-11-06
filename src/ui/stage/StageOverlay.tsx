@@ -6,7 +6,6 @@ import { PaintkitDetailsButton } from '../catalog/PaintkitDetailsButton';
 import { Kbd } from '../primitives/Kbd';
 import { cn } from '../primitives/cn';
 
-// The overlay badges share one shell so the two states read as one family.
 const BADGE = 'pointer-events-auto flex items-center rounded-md border border-strong bg-panel px-2.5 py-1 text-11 shadow-pop';
 
 interface StageOverlayProps {

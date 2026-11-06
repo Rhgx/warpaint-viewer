@@ -66,15 +66,6 @@ export function Section({ title, icon, children, onReset, canReset = false, asid
   );
 }
 
-export function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex min-h-control items-center justify-between gap-2.5">
-      <ControlLabel>{label}</ControlLabel>
-      <div className="flex min-w-0 justify-end">{children}</div>
-    </div>
-  );
-}
-
 /** Opens on hover for a mouse and on tap for touch, like the paint details card. */
 function HintButton({ label, hint }: { label: string; hint: string }) {
   return (
@@ -107,7 +98,6 @@ export function SliderRow({ label, value, children, hint }: { label: string; val
   );
 }
 
-/** A short set of choices as one row of buttons. */
 export function Segmented<T extends string | number>({ label, value, options, onChange }: {
   label: string;
   value: T;

@@ -1,3 +1,4 @@
+import { isValidKills } from '../data/statClock';
 import type { LayoutPacking, LayoutRows } from './layouts';
 import type { AppliedLayout, ShowcaseItem, ShowcasePaint } from './showcaseTypes';
 
@@ -43,6 +44,8 @@ function parseItem(value: unknown): ShowcaseItem | null {
   const { id, weaponKey, weaponName, x, y, roll, tilt, turn, scale, flipped, hidden, part, hiddenParts } = value;
   const image = value.image === undefined ? undefined : parseImage(value.image);
   if (image === null) return null;
+  const { statClock, killCount } = value;
+  if ((statClock !== undefined && typeof statClock !== 'boolean') || (killCount !== undefined && !isValidKills(killCount))) return null;
   if (!paint || !pose
     || typeof id !== 'string' || typeof weaponKey !== 'string' || typeof weaponName !== 'string'
     || !isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(roll) || !isFiniteNumber(tilt) || !isFiniteNumber(turn)
@@ -50,7 +53,7 @@ function parseItem(value: unknown): ShowcaseItem | null {
     || typeof flipped !== 'boolean' || typeof hidden !== 'boolean'
     || (part !== null && typeof part !== 'string')
     || !Array.isArray(hiddenParts) || !hiddenParts.every((entry) => typeof entry === 'string')) return null;
-  return { id, weaponKey, weaponName, paint, x, y, roll, tilt, turn, flipped, scale, hidden, pose, part, hiddenParts, ...(image ? { image } : {}) };
+  return { id, weaponKey, weaponName, paint, x, y, roll, tilt, turn, flipped, scale, hidden, pose, part, hiddenParts, ...(statClock !== undefined ? { statClock } : {}), ...(killCount !== undefined ? { killCount } : {}), ...(image ? { image } : {}) };
 }
 
 /** One bad item drops the whole save, so it never comes back half-restored. */

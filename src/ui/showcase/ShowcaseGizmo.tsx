@@ -12,7 +12,6 @@ const DRAG_DEGREES_PER_PX = 0.35;
 
 const LABELS: Record<Handle, string> = { roll: 'Roll', tilt: 'Tilt', turn: 'Turn' };
 
-// An axis and its readout label draw in the current colour.
 const AXIS_COLOR: Record<Handle, string> = { roll: 'text-accent', tilt: 'text-fail', turn: 'text-pass' };
 const OVERLAY = 'pointer-events-none absolute inset-0 size-full overflow-visible';
 const AXIS_LINE = 'fill-none stroke-current/80 stroke-2 [stroke-linecap:round] [transition:stroke-width_120ms_ease] group-data-state:stroke-current group-data-state:stroke-[3.5]';

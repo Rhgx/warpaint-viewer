@@ -78,7 +78,6 @@ export function ControlLabel({ className, ...props }: ComponentProps<'span'>) {
   return <span className={cn('inline-flex items-center gap-1 text-11 text-dim', className)} {...props} />;
 }
 
-// A labelled control row used throughout the inspector.
 export function Control({ label, children, className, group = false }: { label: ReactNode; children: ReactNode; className?: string; group?: boolean }) {
   const labelId = useId();
   const Container = group ? 'div' : 'label';
@@ -87,6 +86,15 @@ export function Control({ label, children, className, group = false }: { label: 
       <ControlLabel id={labelId}>{label}</ControlLabel>
       {children}
     </Container>
+  );
+}
+
+export function Row({ label, children }: { label: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex min-h-control items-center justify-between gap-2.5">
+      <ControlLabel>{label}</ControlLabel>
+      <div className="flex min-w-0 justify-end">{children}</div>
+    </div>
   );
 }
 
@@ -354,7 +362,6 @@ export function WearSliderField({
 // Inset focus ring, as the toggle clips anything outside it. Unselected matches ToggleGroup. Locked, both sides keep their team colour, greyed out.
 const TEAM_BUTTON = 'flex-[1_1_0] cursor-pointer border-0 bg-panel px-3 py-1.25 font-normal tracking-[0.5px] text-text transition-fast focus-ring focus-visible:-outline-offset-2 not-disabled:not-data-pressed:hover:bg-panel-2 not-disabled:data-pressed:font-semibold not-disabled:data-pressed:text-white disabled:cursor-not-allowed disabled:font-semibold disabled:opacity-66 disabled:saturate-38';
 
-// Finger-sized on touch-only devices.
 const SEED_ACTION = 'size-5.5 touch:size-9';
 
 /** The seed's input with its actions inside the field. Room for both actions is always kept, so that the value sits in the same place with or without undo. */
@@ -392,7 +399,6 @@ export function TeamToggle({
   onChange: (t: 'red' | 'blu') => void;
   disabled?: boolean;
   disabledReason?: string;
-  /** The id of a visible note saying why it is locked. */
   describedBy?: string;
 }) {
   return (

@@ -15,7 +15,6 @@ export function LightIcon({ type, size = 12 }: { type: CustomLightType; size?: n
   return <CircleDot size={size} aria-hidden="true" />;
 }
 
-/** The light's own colour, faded when it is off. */
 export function LightDot({ color, off }: { color: string; off: boolean }) {
   return (
     <span
@@ -99,7 +98,6 @@ function NumberReadout({
   );
 }
 
-/** Label left and exact readout right, over the drag track, like the Inspector's slider rows. */
 export function ScalarRow({
   label,
   title,

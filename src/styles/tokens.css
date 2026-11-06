@@ -4,9 +4,7 @@
   --bg: #16181c;
   /* Behind the 3D view and the board. Viewer.ts reads it for the presets without a background of their own. */
   --stage-bg: #1c1f24;
-  /* The second colour of the checkerboard behind the board. */
   --stage-check: #23272d;
-  /* The two colours of the checkerboard behind a texture thumbnail. */
   --texture-check: #23262b;
   --texture-check-2: #2f333a;
   --panel: #1e2126;

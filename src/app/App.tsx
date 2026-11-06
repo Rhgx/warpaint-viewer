@@ -659,6 +659,7 @@ function MainApp() {
     wearIndex: state.wearIndex,
     seed: state.seed,
     sheen: state.sheen,
+    statClock: state.statClocks[state.weaponKey],
     unusual: state.unusual,
     fov: state.fov,
     projection: state.projection,

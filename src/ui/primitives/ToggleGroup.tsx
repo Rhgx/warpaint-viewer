@@ -30,17 +30,13 @@ const toggleVariants = cva(
     variants: {
       size: {
         default: 'px-2.5 py-1.25',
-        // Three or more choices across a side panel.
         sm: 'min-w-0 px-1.5 py-1 text-12',
-        // Beside the workbench panels' compact buttons.
         compact: 'min-w-0 px-2 py-1 text-11',
-        // Only as wide as its icons, beside other controls in a header.
         icon: 'inline-flex size-6.5 flex-none items-center justify-center bg-panel-2 p-0 text-dim hover:text-text touch:size-9 [&_svg]:size-3 touch:[&_svg]:size-3.5',
         // Icon and label, only as wide as they are, beside other buttons in a header, so selected keeps the regular weight or the row would shift. It can be disabled while holding a choice, which must not read as live.
         inline: 'inline-flex flex-none items-center gap-1.25 px-2.25 text-10.5 whitespace-nowrap text-dim not-disabled:not-data-pressed:hover:text-text disabled:cursor-default disabled:opacity-45 disabled:hover:bg-panel data-pressed:font-normal disabled:data-pressed:bg-panel-2 disabled:data-pressed:text-text',
         // Switches the whole tool below it, so it stays quieter than the choices inside that tool. Narrow, it shrinks to fit a row.
         tool: `min-w-0 p-0 ${TAB} @max-[900px]:flex-none @max-[900px]:px-3`,
-        // Tabs in a header row, only as wide as their labels.
         tab: `flex-none px-3 ${TAB}`,
       },
     },

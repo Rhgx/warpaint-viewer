@@ -1,5 +1,7 @@
 // Compact, versioned share-state codec. The payload lives in #v= so the web server never sees it.
 
+import { MAX_KILLS } from './data/statClock';
+
 export interface ParsedUrlState {
   kitId: number | null;
   weaponKey: string | null;
@@ -11,6 +13,7 @@ export interface ParsedUrlState {
   preset: string | null;
   projection: 'perspective' | 'orthographic' | null;
   fov: number | null;
+  statClock: number | null;
 }
 
 export interface SerializableUrlState {
@@ -24,6 +27,7 @@ export interface SerializableUrlState {
   preset: string;
   projection: 'perspective' | 'orthographic';
   fov: number;
+  statClock: number | null;
 }
 
 export interface SerializedUrlState {
@@ -56,6 +60,8 @@ const FLAG_SHEEN = 1 << 3;
 const FLAG_EFFECT = 1 << 4;
 const FLAG_LIGHT = 1 << 5;
 const FLAG_FOV = 1 << 6;
+// Takes the flags varint to two bytes, for links with a clock only, so links without one stay as they were.
+const FLAG_STAT_CLOCK = 1 << 7;
 
 // Frozen compression dictionaries. Known values use a compact integer; later additions are encoded inline
 // by stableId(). Never reorder or remove entries; their positions are public schema.
@@ -190,6 +196,7 @@ export function encodeShareState(state: SerializableUrlState): string | null {
   if (state.unusual !== URL_STATE_DEFAULTS.unusual) flags |= FLAG_EFFECT;
   if (state.preset !== URL_STATE_DEFAULTS.preset) flags |= FLAG_LIGHT;
   if (state.fov !== URL_STATE_DEFAULTS.fov) flags |= FLAG_FOV;
+  if (state.statClock !== null) flags |= FLAG_STAT_CLOCK;
 
   const writer = new Writer();
   writer.uint(VERSION);
@@ -202,6 +209,7 @@ export function encodeShareState(state: SerializableUrlState): string | null {
   if (flags & FLAG_EFFECT) writer.stableId(state.unusual, EFFECT_DICTIONARY);
   if (flags & FLAG_LIGHT) writer.stableId(state.preset, LIGHT_DICTIONARY);
   if (flags & FLAG_FOV) writer.uint(clamp(state.fov, FOV_MIN, FOV_MAX) - FOV_MIN);
+  if (state.statClock !== null) writer.uint(clamp(Math.trunc(state.statClock), 0, MAX_KILLS));
   return toBase64Url(Uint8Array.from(writer.bytes));
 }
 
@@ -210,7 +218,7 @@ export function decodeShareState(payload: string): ParsedUrlState | null {
     const reader = new Reader(fromBase64Url(payload));
     if (reader.uint() !== VERSION) return null;
     const flags = reader.uint();
-    if (flags & ~0x7f) return null;
+    if (flags & ~0xff) return null;
     const kitId = reader.uint();
     const weaponKey = reader.stableId(WEAPON_DICTIONARY);
     const seed = reader.uint64().toString();
@@ -219,6 +227,7 @@ export function decodeShareState(payload: string): ParsedUrlState | null {
     const unusual = flags & FLAG_EFFECT ? reader.stableId(EFFECT_DICTIONARY) : null;
     const preset = flags & FLAG_LIGHT ? reader.stableId(LIGHT_DICTIONARY) : null;
     const fov = flags & FLAG_FOV ? clamp(reader.uint() + FOV_MIN, FOV_MIN, FOV_MAX) : null;
+    const statClock = flags & FLAG_STAT_CLOCK ? clamp(reader.uint(), 0, MAX_KILLS) : null;
     if (!reader.done) return null;
 
     return {
@@ -232,6 +241,7 @@ export function decodeShareState(payload: string): ParsedUrlState | null {
       preset,
       projection: flags & FLAG_ORTHO ? 'orthographic' : null,
       fov,
+      statClock,
     };
   } catch {
     return null;
@@ -272,7 +282,7 @@ export function parseUrlState(search: string, hash = ''): ParsedUrlState {
   const projection = projRaw === 'ortho' ? 'orthographic' : projRaw === 'perspective' ? 'perspective' : null;
   const fovRaw = params.get('fov');
   const fov = fovRaw !== null && /^\d+$/.test(fovRaw) ? clamp(Number(fovRaw), FOV_MIN, FOV_MAX) : null;
-  return { kitId, weaponKey, seed, wearIndex, team, sheen, unusual, preset, projection, fov };
+  return { kitId, weaponKey, seed, wearIndex, team, sheen, unusual, preset, projection, fov, statClock: null };
 }
 
 export function serializeUrlState(currentSearch: string, state: SerializableUrlState): SerializedUrlState {

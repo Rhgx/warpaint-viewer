@@ -101,7 +101,6 @@ export interface FlowNodeData extends Record<string, unknown> {
   readonly emphasis: 'normal' | 'active' | 'related' | 'dimmed';
   /** Undefined while no search is typed. */
   readonly searchMatch?: boolean;
-  /** The match the search's step buttons are on. */
   readonly searchCurrent?: boolean;
 }
 

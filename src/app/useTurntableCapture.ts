@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { StatClockSetting } from '../data/statClock';
 import type { ControlsState } from '../viewer/controls';
 import type { TurntableFormat } from '../export/turntable.worker';
 import { formatSize } from '../ui/common/formatSize';
@@ -63,6 +64,7 @@ interface UseTurntableCaptureOptions {
   wearIndex: number;
   seed: string;
   sheen: ControlsState['sheen'];
+  statClock: StatClockSetting | undefined;
   unusual: ControlsState['unusual'];
   fov: number;
   projection: ControlsState['projection'];
@@ -88,6 +90,7 @@ export function useTurntableCapture({
   wearIndex,
   seed,
   sheen,
+  statClock,
   unusual,
   fov,
   projection,
@@ -158,6 +161,7 @@ export function useTurntableCapture({
     wearIndex,
     seed,
     sheen,
+    statClock,
     unusual,
     fov,
     projection,

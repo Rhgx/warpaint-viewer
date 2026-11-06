@@ -9,6 +9,8 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 
 import { Compositor } from '../compositor/compositor';
 import { createTf2Uniforms } from '../viewer/materialConfig';
+import { DEFAULT_KILLS, supportsStatClock } from '../data/statClock';
+import { StatClock } from '../viewer/statClock';
 import { loadEditorEnvCube, makeEnvCube } from '../viewer/env';
 import type { WeaponEntry } from '../data/types';
 import type { LayoutPacking, LayoutRows } from './layouts';
@@ -219,6 +221,7 @@ export class ShowcaseBoard {
       this.#envMap = texture;
       for (const runtime of this.#runtimes.values()) {
         if (!runtime.customEnvMap) runtime.material.envMap = texture;
+        runtime.statClock?.setEnvMap(texture);
       }
       fallback.dispose();
       this.#dirty = true;
@@ -624,6 +627,7 @@ export class ShowcaseBoard {
       const change = typeof patch === 'function' ? patch(runtime.item.paint) : patch;
       runtime.item = { ...runtime.item, paint: { ...runtime.item.paint, ...change } };
       void this.#applyPaint(runtime);
+      this.#syncStatClock(runtime);
     }
     const changed = new Map(runtimes.map((runtime) => [runtime.item.id, runtime.item]));
     this.#items = this.#items.map((item) => changed.get(item.id) ?? item);
@@ -810,6 +814,8 @@ export class ShowcaseBoard {
     const runtime = await (source.image ? this.#createImageRuntime(source.image, source.weaponName) : this.#createRuntime(source.weaponKey, source.paint, undefined, source.part));
     if (!runtime) return;
     Object.assign(runtime.item, { roll: source.roll, tilt: source.tilt, turn: source.turn, flipped: source.flipped, scale: source.scale, pose: { ...source.pose }, hiddenParts: [...source.hiddenParts] });
+    if (source.statClock !== undefined) runtime.item.statClock = source.statClock;
+    if (source.killCount !== undefined) runtime.item.killCount = source.killCount;
     this.#reshape(runtime);
     // Pictures may overlap, so a free spot would just be the board's corner; one step along shows there are two.
     const beside = { x: source.x + GRID_CELL[this.#grid] * 2, y: source.y - GRID_CELL[this.#grid] * 2 };
@@ -940,7 +946,7 @@ export class ShowcaseBoard {
     const uniforms = createTf2Uniforms();
     // Never drawn: the runtime's material is for weapons, and the plane has its own.
     const material = new THREE.MeshPhongMaterial();
-    const runtime: ItemRuntime = { item, root: new THREE.Group(), orient: new THREE.Group(), meshes: [mesh], bones: new Map(), footprint: null, material, uniforms, materialKey: '', emissive: null, lenses: new Set(), stackZ: 0, local: null, paintKey: '', materialReady: Promise.resolve(), materialRequest: 0, paintSize: 0, visibility: '', subsets: [] };
+    const runtime: ItemRuntime = { item, root: new THREE.Group(), orient: new THREE.Group(), meshes: [mesh], bones: new Map(), footprint: null, material, uniforms, materialKey: '', emissive: null, lenses: new Set(), statClock: null, clockParent: mesh, stackZ: 0, local: null, paintKey: '', materialReady: Promise.resolve(), materialRequest: 0, paintSize: 0, visibility: '', subsets: [] };
     const flip = new THREE.Group();
     flip.name = 'flip';
     flip.add(mesh);
@@ -1009,8 +1015,42 @@ export class ShowcaseBoard {
     runtime.item = { ...runtime.item, paint: { ...runtime.item.paint, ...patch } };
     this.#items = this.#items.map((item) => (item.id === id ? runtime.item : item));
     void this.#applyPaint(runtime);
+    this.#syncStatClock(runtime);
     this.#checkpoint();
     this.#emit();
+  }
+
+  setStatClockMany(ids: readonly string[], patch: Pick<ShowcaseItem, 'statClock' | 'killCount'>): void {
+    const runtimes = ids.map((id) => this.#runtimes.get(id)).filter((runtime): runtime is ItemRuntime => !!runtime && !runtime.item.image && !runtime.item.part && supportsStatClock(runtime.item.weaponKey));
+    if (!runtimes.length) return;
+    for (const runtime of runtimes) {
+      runtime.item = { ...runtime.item, ...patch };
+      this.#syncStatClock(runtime);
+    }
+    const changed = new Map(runtimes.map((runtime) => [runtime.item.id, runtime.item]));
+    this.#items = this.#items.map((item) => changed.get(item.id) ?? item);
+    this.#checkpoint();
+    this.#emit();
+  }
+
+  /** Runs on every reshape, so it costs nothing until a weapon has had a clock. */
+  #syncStatClock(runtime: ItemRuntime): void {
+    const { item } = runtime;
+    const on = !!item.statClock && !item.image && !item.part;
+    if (!on && !runtime.statClock) return;
+    runtime.statClock ??= new StatClock({
+      programKey: 'showcase',
+      lighting: runtime.uniforms,
+      envMap: this.#envMap,
+      clippingPlanes: this.#clipPlanes,
+      castShadow: true,
+      invalidate: () => {
+        this.#dirty = true;
+        this.#requestFrame();
+      },
+    });
+    runtime.statClock.attachTo(runtime.clockParent, item.weaponKey, runtime.bones.has('c_weapon_stattrack'));
+    runtime.statClock.set(on ? { team: item.paint.team, kills: item.killCount ?? DEFAULT_KILLS } : null);
   }
 
   #replaceItem(runtime: ItemRuntime): void {
@@ -1108,7 +1148,7 @@ export class ShowcaseBoard {
         part: part?.id ?? null,
         hiddenParts: [],
       };
-      const runtime: ItemRuntime = { item, root: new THREE.Group(), orient: new THREE.Group(), meshes, bones, footprint: null, material, uniforms, materialKey: '', emissive: null, lenses, stackZ: 0, local: null, paintKey: '', materialReady: Promise.resolve(), materialRequest: 0, paintSize: 0, visibility: '', subsets: [] };
+      const runtime: ItemRuntime = { item, root: new THREE.Group(), orient: new THREE.Group(), meshes, bones, footprint: null, material, uniforms, materialKey: '', emissive: null, lenses, statClock: null, clockParent: bones.get('c_weapon_stattrack')?.bone ?? model, stackZ: 0, local: null, paintKey: '', materialReady: Promise.resolve(), materialRequest: 0, paintSize: 0, visibility: '', subsets: [] };
       this.#syncVisibility(runtime);
       // Measured on what is drawn, so a loose reload piece beside the weapon does not shift its centre.
       model.updateMatrixWorld(true);
@@ -1255,6 +1295,7 @@ export class ShowcaseBoard {
 
   /** Re-pose and re-measure: the resting height depends on the new footprint's depth. */
   #reshape(runtime: ItemRuntime): void {
+    this.#syncStatClock(runtime);
     this.#syncVisibility(runtime);
     this.#applyTransform(runtime);
     this.#refreshFootprint(runtime);
@@ -1323,6 +1364,7 @@ export class ShowcaseBoard {
   #disposeRuntime(runtime: ItemRuntime): void {
     runtime.root.removeFromParent();
     runtime.material.dispose();
+    runtime.statClock?.dispose();
     this.#boardPaints.removeEmissive(runtime);
     if (runtime.item.image) {
       for (const mesh of runtime.meshes) {
@@ -1875,7 +1917,7 @@ export class ShowcaseBoard {
       // Paints and materials can change while waiting, so wait again until a pass finds nothing new.
       if (state === waitedFor) return;
       waitedFor = state;
-      await Promise.all([...keys.map((key) => this.#boardPaints.pendingPaint(key)), ...runtimes.map((runtime) => runtime.materialReady)]);
+      await Promise.all([...keys.map((key) => this.#boardPaints.pendingPaint(key)), ...runtimes.map((runtime) => runtime.materialReady), ...runtimes.map((runtime) => runtime.statClock?.ready)]);
     }
   }
 

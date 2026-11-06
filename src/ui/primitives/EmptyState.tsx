@@ -2,7 +2,6 @@ import type { ComponentProps, ReactNode } from 'react';
 
 import { cn } from './cn';
 
-/** A panel with nothing to show, centred in whatever room it has. */
 export function EmptyState({ icon, title, className, children, ...props }: Omit<ComponentProps<'div'>, 'title'> & {
   icon: ReactNode;
   title: ReactNode;

@@ -5,7 +5,6 @@ import type { ComponentProps } from 'react';
 import { cn } from './cn';
 import { SECTION_TITLE } from './textStyles';
 
-/** One collapsible group of a side panel, ruled off from the group before it. */
 export function PanelSection({ className, ...props }: ComponentProps<'div'>) {
   return <div className={cn('not-first:mt-1 not-first:border-t not-first:border-border not-first:pt-1', className)} data-slot="panel-section" {...props} />;
 }

@@ -645,7 +645,6 @@ try {
   check('a saved id reused by a new weapon does not get mixed up', !(await evaluate(`window.__showcase.getSnapshot().items.map((i) => i.id)`)).includes(pistolId));
   check('the picture loads after a restart', await evaluate(`(() => { const p = window.__showcase.getSnapshot().items.find((i) => i.image); return !!p && !!window.__showcase.imageUrl(p.image.assetId); })()`));
 
-  // Three distinct boards for the reviewers to see.
   await evaluate(`t.layout('Melee'); t.settle()`);
   await evaluate(`window.__showcase.whenPainted().then(() => t.sleep(500))`);
   await click('[data-slot="slots"] > :nth-child(2) [data-slot="slot-new"]');

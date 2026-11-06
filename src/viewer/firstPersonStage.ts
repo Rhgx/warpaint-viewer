@@ -25,6 +25,7 @@ export interface FirstPersonStageHost {
   readonly getActiveUnusual: () => UnusualEffect | null;
   readonly isDisposed: () => boolean;
   readonly invalidate: () => void;
+  readonly onPreviewChange: () => void;
 }
 
 export class FirstPersonStage {
@@ -53,6 +54,7 @@ export class FirstPersonStage {
       if (token !== this.firstPersonToken || this.host.isDisposed()) { preview.dispose(); return; }
       this.pendingFirstPerson = null;
       this.firstPerson = preview;
+      this.host.onPreviewChange();
       this.host.scene.add(preview.root);
       preview.setOverlay('sheen', this.host.sheen.active ? this.host.sheen.material : null);
       preview.setOverlay('emissive', this.host.emissive.enabled ? this.host.emissive.material : null);
@@ -70,8 +72,11 @@ export class FirstPersonStage {
     this.firstPersonToken++;
     this.pendingFirstPerson?.dispose();
     this.pendingFirstPerson = null;
-    this.firstPerson?.dispose();
+    const preview = this.firstPerson;
     this.firstPerson = null;
+    // Before the dispose, which frees every mesh under the viewmodel: what hangs from its bones may be shared.
+    this.host.onPreviewChange();
+    preview?.dispose();
     this.host.getActiveUnusual()?.notifyTeleport();
     this.host.controls.setPreviewActive(false);
     this.host.invalidate();

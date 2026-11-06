@@ -5,7 +5,8 @@ import { SelectField } from '../common/controls';
 import { Slider } from '../primitives/Slider';
 import { Switch } from '../primitives/Switch';
 import type { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
-import { LightPad, Row, Section, Segmented, SliderRow } from './ShowcaseControls';
+import { Row } from '../common/controls';
+import { LightPad, Section, Segmented, SliderRow } from './ShowcaseControls';
 import {
   EXPORT_KEYS, LOOK_KEYS, OUTPUT_WIDTHS, PLACEMENT_KEYS, ROTATION_SNAPS, defaultsFor, settingsChanged, type ShowcaseSettings,
 } from './showcaseSettings';

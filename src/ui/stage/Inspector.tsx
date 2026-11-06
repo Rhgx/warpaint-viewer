@@ -15,6 +15,8 @@ import { TURNTABLE_SECONDS, type ControlsState, type TurntableFormat, type Turnt
 import type { LightingStore } from '../../viewer/lighting/lightingStore';
 import { CUSTOM_LIGHTING_ID } from '../../viewer/lighting/customLightingModel';
 import { LightingRigSummary } from '../lighting/LightingRigSummary';
+import { DEFAULT_KILLS, supportsStatClock, type StatClockSetting } from '../../data/statClock';
+import { StatClockFields } from '../common/StatClockFields';
 import { TURNTABLE_FORMATS, turntablePlaybackFps } from '../../export/turntableFormats';
 import { matchesMobileLayout, TOUCH_ONLY_DEVICE } from '../../device';
 import { cn } from '../primitives/cn';
@@ -204,6 +206,11 @@ export const Inspector = memo(function Inspector({
     icon: p.id === 'none' ? null : `${import.meta.env.BASE_URL}data/effects/thumbs/${p.id}.png`,
   }));
   const viewAngleOptions = VIEW_ANGLES.map((p) => ({ value: p.id, label: p.label }));
+  const clock = state.statClocks[state.weaponKey];
+  const clockLocked = supportsStatClock(state.weaponKey) ? null : 'Not on this weapon';
+  const setClock = (next: Partial<StatClockSetting>) => onChange({
+    statClocks: { ...state.statClocks, [state.weaponKey]: { on: !!clock?.on, kills: clock?.kills ?? DEFAULT_KILLS, ...next } },
+  });
 
   const sheenOptions: SwatchOption[] = SHEEN_PRESETS.map((p) => ({
     value: p.id,
@@ -231,7 +238,6 @@ export const Inspector = memo(function Inspector({
 
   return (
     <>
-      {firstPersonActive && preview}
       <InspectorSection title="Item" icon={Box}>
         <div className={CONTROL} data-slot="control" role="group" aria-label="Weapon">
           <ControlLabel>Weapon</ControlLabel>
@@ -312,9 +318,17 @@ export const Inspector = memo(function Inspector({
             options={unusualOptions}
           />
         </Control>
+
+        <StatClockFields
+          on={!!clock?.on}
+          kills={clock?.kills ?? DEFAULT_KILLS}
+          lockedReason={clockLocked}
+          onToggle={(on) => setClock({ on })}
+          onKills={(kills) => setClock({ kills })}
+        />
       </InspectorSection>
 
-      {!firstPersonActive && preview}
+      {preview}
 
       {/* First Person has its own camera, so none of these apply there. */}
       {!firstPersonActive && (

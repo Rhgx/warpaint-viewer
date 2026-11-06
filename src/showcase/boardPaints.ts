@@ -34,7 +34,6 @@ export class BoardPaints {
   readonly #cubemaps = new Map<string, Promise<THREE.CubeTexture | null>>();
   /** Composited paints by paint key, shared by every item wearing the same one. */
   readonly #paints = new Map<string, Promise<ComposeResult | null>>();
-  /** Replaced composites a weapon may still be showing. */
   readonly #retiredPaints = new Set<ComposeResult>();
   #paintSweep = 0;
 
@@ -282,7 +281,6 @@ export class BoardPaints {
     this.releaseRetiredPaints();
   }
 
-  /** Put a paint on every weapon wearing it. */
   #wearPaint(key: string, texture: THREE.Texture | null): void {
     if (this.host.isDisposed()) return;
     for (const runtime of this.host.runtimes.values()) if (runtime.paintKey === key) this.#setMap(runtime, texture);

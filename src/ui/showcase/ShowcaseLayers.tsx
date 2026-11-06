@@ -131,7 +131,6 @@ const LayerRow = memo(function LayerRow({ board, item, index, icon, grade, selec
       {icon ? <img className={`${LAYER_ICON} group-data-hidden:opacity-40`} src={icon} alt="" draggable={false} /> : <span className={LAYER_ICON} />}
       <span className="flex min-w-0 flex-1 flex-col leading-[1.2] group-data-hidden:opacity-40">
         <span className="truncate text-12 text-text group-data-problem:text-fail">{item.weaponName}</span>
-        {/* Takes its grade colour, blended toward the text like the catalog list. */}
         <span className="truncate text-10 text-dim" style={grade ? { color: `color-mix(in srgb, var(--grade-${grade}) var(--grade-tint-strength), var(--text))` } : undefined}>{item.paint.kitName}</span>
       </span>
       <Button variant="ghost" size="icon-sm" className="flex-none" title={item.hidden ? 'Show' : 'Hide'}

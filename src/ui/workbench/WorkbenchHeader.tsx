@@ -138,7 +138,6 @@ export function WorkbenchHeader({
               : 'No definitions'}
           </span>
         </Button>
-        {/* The chips before it report state; Import is a command. */}
         <span className="h-4 w-px flex-none bg-border @max-[480px]:hidden" aria-hidden="true" />
         <FileButton
           variant="chip"

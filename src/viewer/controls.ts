@@ -1,3 +1,4 @@
+import type { StatClockSetting } from '../data/statClock';
 import type { Team } from '../data/types';
 import {
   createDefaultCustomLightingRig,
@@ -48,6 +49,8 @@ export interface ControlsState {
   preset: string;
   sheen: string;
   unusual: string;
+  /** Keyed by weapon, because each weapon keeps its own clock as the view moves between them. */
+  statClocks: Readonly<Record<string, StatClockSetting>>;
   fov: number;
   projection: 'perspective' | 'orthographic';
   /** Which export the toolbar's Save button produces; the Capture section shows only its settings. */

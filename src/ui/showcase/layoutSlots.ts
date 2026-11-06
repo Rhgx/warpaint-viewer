@@ -1,3 +1,4 @@
+import { DEFAULT_KILLS } from '../../data/statClock';
 import { boardSaveFields, isRecord, parseSavedBoard, parseSavedLayout } from '../../showcase/boardStorage';
 import type { AppliedLayout, ShowcaseItem, ShowcasePaint } from '../../showcase/showcaseTypes';
 import { parseSettings, sameBoardSettings, type ShowcaseSettings } from './showcaseSettings';
@@ -109,6 +110,7 @@ const itemKey = (item: ShowcaseItem) => [
   item.weaponKey, item.weaponName, item.paint.kitId, item.paint.team, item.paint.wearIndex, item.paint.seed,
   item.x, item.y, item.roll, item.tilt, item.turn, item.flipped, item.scale, item.hidden, item.part, item.hiddenParts,
   Object.entries(item.pose).sort(([a], [b]) => a.localeCompare(b)), item.image?.assetId ?? null,
+  item.statClock === true, item.statClock ? item.killCount ?? DEFAULT_KILLS : null,
 ];
 
 /** Whether a saved board still matches what is on the board now, which is what marks a slot as changed. */

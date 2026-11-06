@@ -49,7 +49,6 @@ export function SelectItem({ className, children, ...props }: SelectPrimitive.It
   );
 }
 
-/** A filter box that stays at the top of a long popup. */
 export function SelectSearch({ placeholder, value, onChange }: {
   placeholder: string;
   value: string;

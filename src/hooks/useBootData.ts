@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadDataSource } from '../data/loader';
+import { supportsStatClock } from '../data/statClock';
 import type { DataSource } from '../data/loader';
 import type { ControlsState } from '../viewer/controls';
 import { parseUrlState, serializeUrlState } from '../urlState';
@@ -75,6 +76,7 @@ export function useBootData({ state, setState, selectedKitId, setSelectedKitId, 
           preset: url.preset ?? s.preset,
           projection: url.projection ?? s.projection,
           fov: url.fov ?? s.fov,
+          statClocks: url.statClock === null ? s.statClocks : { ...s.statClocks, [weaponKey]: { on: true, kills: url.statClock } },
         }));
         bootSelectionAppliedRef.current = true;
       })
@@ -84,6 +86,7 @@ export function useBootData({ state, setState, selectedKitId, setSelectedKitId, 
     };
   }, [advanceBoot, setError, setSelectedKitId, setState]);
 
+  const statClock = state.statClocks[state.weaponKey];
   // Mirror shareable state into the URL (debounced, no navigation) so views can be copied.
   // Waits for boot, or it would overwrite incoming params with defaults.
   useEffect(() => {
@@ -101,6 +104,7 @@ export function useBootData({ state, setState, selectedKitId, setSelectedKitId, 
         preset: state.preset,
         projection: state.projection,
         fov: state.fov,
+        statClock: statClock?.on && supportsStatClock(state.weaponKey) ? statClock.kills : null,
       });
       const url = `${window.location.pathname}${urlState.search}${urlState.hash}`;
       window.history.replaceState(null, '', url);
@@ -108,7 +112,7 @@ export function useBootData({ state, setState, selectedKitId, setSelectedKitId, 
     return () => window.clearTimeout(handle);
   }, [
     selectedKitId, state.weaponKey, state.seed, state.wearIndex, state.team,
-    state.sheen, state.unusual, state.preset, state.projection, state.fov,
+    state.sheen, state.unusual, state.preset, state.projection, state.fov, statClock,
   ]);
 
   return { data, boot, advanceBoot };

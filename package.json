@@ -10,6 +10,7 @@
     "build": "npm run typecheck && vite build",
     "extract:map-lighting": "node tools/extract/map-lighting.mjs",
     "extract:effects": "node tools/extract/effects.mjs",
+    "extract:stat-clock": "node tools/extract/stat-clock.mjs",
     "gen:protodefs": "node tools/generate/protodef-schema.mjs",
     "update:warpaints": "node -e \"require('node:fs').rmSync('staging/items_game.json', { force: true })\" && node tools/extract/warpaints.mjs && node tools/extract/grades.mjs && node tools/extract/warpaint-icons.mjs && node tools/extract/operation-templates.mjs",
     "update:texture-directory": "node tools/extract/texture-directory.mjs",

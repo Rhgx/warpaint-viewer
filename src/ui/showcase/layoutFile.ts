@@ -1,3 +1,4 @@
+import { DEFAULT_KILLS, isValidKills } from '../../data/statClock';
 import { LAYOUT_FILE_EXTENSION } from '../../showcase/boardFileName';
 import { parseLayoutSlot, type SavedBoard } from './layoutSlots';
 import type { ShowcaseSettings } from './showcaseSettings';
@@ -7,6 +8,7 @@ import type { LayoutPacking } from '../../showcase/layouts';
 // .pegboard: "WPLY", u8 version, varint bodyLength, body, then (varint pictureLength, picture bytes)*.
 // The body is zlib, whose checksum catches damage, over a string table and varints that index it.
 // Pictures stay as they are, being compressed already.
+// Append only: new fields go after everything older files hold, and are read only if the body goes on.
 // Files come from other people, so reading caps every size first and ends in the local save's checks.
 
 export { LAYOUT_FILE_EXTENSION };
@@ -267,6 +269,16 @@ function encodeBody(layout: SharedLayout, pictures: ReadonlyMap<string, number>)
   board.varint(layout.featured === null ? 0 : ref(layout.featured) + 1);
   board.varint(layout.pairs.length);
   for (const pair of layout.pairs) board.varint(ref(pair));
+  // A board with no clock writes nothing here, so it stays byte for byte what it was.
+  const clocks = layout.items.flatMap((item, index) => (item.statClock !== undefined || item.killCount !== undefined ? [{ item, index }] : []));
+  if (clocks.length) {
+    board.varint(clocks.length);
+    for (const { item, index } of clocks) {
+      board.varint(index);
+      board.byte(item.statClock ? 1 : 0);
+      board.varint(item.killCount ?? DEFAULT_KILLS);
+    }
+  }
 
   const encoder = new TextEncoder();
   const body = new Writer();
@@ -404,6 +416,17 @@ function decodeBody(bytes: Uint8Array, pictureCount: number): unknown {
   const pairs: string[] = [];
   const pairCount = reader.count();
   for (let pair = 0; pair < pairCount; pair += 1) pairs.push(string());
+  if (!reader.done) {
+    const clockCount = reader.count(3);
+    for (let clock = 0; clock < clockCount; clock += 1) {
+      const item = items[reader.varint()];
+      const on = reader.byte();
+      const kills = reader.varint();
+      if (!item || on > 1 || !isValidKills(kills)) throw damaged();
+      item.statClock = on === 1;
+      item.killCount = kills;
+    }
+  }
   if (!reader.done) throw damaged();
   return { version: 1, savedAt: 0, name, items, settings, layout, featured, pairs };
 }

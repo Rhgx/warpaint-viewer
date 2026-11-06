@@ -339,6 +339,11 @@ export class FirstPersonPreview {
     this.spinBarrel = spinBarrel;
   }
 
+  get weaponKey(): string | null { return this.weapon?.weaponKey ?? null; }
+
+  /** Bone merge has already posed it each frame, so whatever hangs from it follows the animation. */
+  get statClockBone(): THREE.Bone | null { return this.boneMaps[1]?.get('c_weapon_stattrack') ?? null; }
+
   get weaponAnchor(): THREE.Matrix4 { return this.bones[1]?.[0]?.matrixWorld ?? this.root.matrixWorld; }
 
   readonly resolveUnusualAnchor: AttachmentTransformResolver = (index, attachment, target) => {

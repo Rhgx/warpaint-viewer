@@ -20,7 +20,6 @@ function readToken(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-/** Behind the 3D view, as a colour string. */
 export const readStageColor = () => readToken('--stage-bg');
 
 const FAVICON_ACCENT = '#4c8dff';

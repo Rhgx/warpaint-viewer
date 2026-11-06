@@ -8,6 +8,7 @@ import type { UnusualEffect } from '../particles';
 import { setParticlePointScale } from '../particles';
 import type { SheenOverlay } from '../overlays/sheenOverlay';
 import type { WeaponAttachments } from '../weaponAttachments';
+import type { StatClock } from '../statClock';
 import { TOUCH_ONLY_DEVICE } from '../../device';
 import { TurntableStoppedError } from '../../export/turntableFormats';
 import {
@@ -76,6 +77,7 @@ export interface ViewerCaptureHost {
   readonly sheen: Pick<SheenOverlay, 'active' | 'meshes' | 'updateSheenAnimation'>;
   readonly emissive: Pick<EmissiveOverlay, 'stepEmissive'>;
   readonly weaponAttachments: Pick<WeaponAttachments, 'stepAttachments'>;
+  readonly statClock: Pick<StatClock, 'step'>;
   /** The effect is replaced when the unusual changes, so read it on each use. */
   readonly getActiveUnusual: () => UnusualEffect | null;
   /** The projection can change between captures, so read it on each use. */
@@ -199,7 +201,7 @@ export class ViewerCapture {
     const frameCount = Math.max(2, Math.round(seconds * fps));
     const dt = 1 / fps;
     const sheenActive = this.host.sheen.active && this.host.sheen.meshes.length > 0;
-    const animated = !!this.host.getActiveUnusual() || sheenActive || this.host.emissive.stepEmissive(0) || this.host.weaponAttachments.stepAttachments(0);
+    const animated = !!this.host.getActiveUnusual() || sheenActive || this.host.emissive.stepEmissive(0) || this.host.weaponAttachments.stepAttachments(0) || this.host.statClock.step(0);
     const prevTarget = this.host.renderer.getRenderTarget();
     const prevBackground = this.host.scene.background;
     const prevPointerEvents = this.host.canvas.style.pointerEvents;
@@ -291,6 +293,7 @@ export class ViewerCapture {
         this.host.sheen.updateSheenAnimation(dt);
         this.host.emissive.stepEmissive(dt);
         this.host.weaponAttachments.stepAttachments(dt);
+        this.host.statClock.step(dt);
         const unusual = this.host.getActiveUnusual();
         if (unusual) {
           this.host.centerGroup.updateWorldMatrix(true, false);

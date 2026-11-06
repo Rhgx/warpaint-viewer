@@ -7,14 +7,16 @@ import type { FitProblem, ShowcaseItem, ShowcasePaint } from '../../showcase/sho
 import { restingRoll, shownSideFlip } from '../../showcase/weaponGeometry';
 import { POSE_RIGS, WEAPON_PARTS, defaultPose, snapMarks, snapPose, type PoseControl } from '../../showcase/poseRigs';
 import { randomSeed } from '../../hooks/useBootData';
-import { Control, SeedInput, TeamToggle, WearSliderField } from '../common/controls';
+import { Control, Row, SeedInput, TeamToggle, WearSliderField } from '../common/controls';
+import { StatClockFields } from '../common/StatClockFields';
+import { DEFAULT_KILLS, supportsStatClock } from '../../data/statClock';
 import { Slider } from '../primitives/Slider';
 import { Switch } from '../primitives/Switch';
 import { Button } from '../primitives/Button';
 import { cn } from '../primitives/cn';
 import { InlineNotice } from '../primitives/Notice';
 import { SECTION_TITLE } from '../primitives/textStyles';
-import { EYE_ICON, EYE_OFF_ICON, PercentInput, Row, Section, SliderRow, ValueSlider } from './ShowcaseControls';
+import { EYE_ICON, EYE_OFF_ICON, PercentInput, Section, SliderRow, ValueSlider } from './ShowcaseControls';
 import { describeProblem } from './showcaseSettings';
 
 // The selected weapon's controls: paint, transform, pose, parts, and actions.
@@ -32,7 +34,6 @@ const ROTATE_CW_ICON = <RotateCw size={13} />;
 const FLIP_ICON = <FlipHorizontal2 size={13} />;
 const DUPLICATE_ICON = <CopyPlus size={13} />;
 const REMOVE_ICON = <Trash2 size={13} />;
-// The same icons as these fields have in the inspector.
 
 const SUBHEADING = cn('mt-1 border-t border-border pt-2', SECTION_TITLE);
 
@@ -85,6 +86,13 @@ export const WeaponSection = memo(function WeaponSection({ board, item, problem,
     >
       {problem && <InlineNotice tone="error">{describeProblem(problem)}</InlineNotice>}
       <PaintRows board={board} id={id} paint={item.paint} kit={kit} wearNames={wearNames} />
+      <StatClockFields
+        on={!!item.statClock}
+        kills={item.killCount ?? DEFAULT_KILLS}
+        lockedReason={item.part ? 'Not on a part' : supportsStatClock(item.weaponKey) ? null : 'Not on this weapon'}
+        onToggle={(statClock) => board.setStatClockMany([id], { statClock })}
+        onKills={(killCount) => board.setStatClockMany([id], { killCount })}
+      />
       <div className={SUBHEADING}>Transform</div>
       <ValueSlider label="Roll" display={`${item.roll}°`} value={item.roll} min={-180} max={180} step={rotationSnap || 1}
         markers={ZERO_MARK} onChange={setRoll} onCommit={settle} />
@@ -216,6 +224,10 @@ export const MultiSection = memo(function MultiSection({ board, items, paintkits
   const tilt = shared(weapons.map((item) => item.tilt));
   const turn = shared(weapons.map((item) => item.turn));
   const size = shared(items.map((item) => Math.round(item.scale * 100)));
+  const clockable = weapons.filter((item) => !item.part && supportsStatClock(item.weaponKey));
+  const clockableIds = clockable.map((item) => item.id);
+  const clocksOn = shared(clockable.map((item) => !!item.statClock));
+  const kills = shared(clockable.filter((item) => item.statClock).map((item) => item.killCount ?? DEFAULT_KILLS));
   const settle = () => board.settleMany(ids);
   // Esc blurs the input before the cleared draft renders, so the blur has to be told not to commit.
   const seedCancelled = useRef(false);
@@ -260,6 +272,15 @@ export const MultiSection = memo(function MultiSection({ board, items, paintkits
           }}
         />
       </Control>}
+      {clockable.length > 0 && (
+        <StatClockFields
+          on={clocksOn === true}
+          mixedOn={clocksOn === null}
+          kills={kills}
+          onToggle={(statClock) => board.setStatClockMany(clockableIds, { statClock })}
+          onKills={(killCount) => board.setStatClockMany(clockable.filter((item) => item.statClock).map((item) => item.id), { killCount })}
+        />
+      )}
       <div className={SUBHEADING}>Transform</div>
       <ValueSlider label="Roll" display={roll === null ? 'Mixed' : `${roll}°`} value={roll ?? items[0].roll} min={-180} max={180} step={rotationSnap || 1}
         markers={ZERO_MARK} onChange={(value) => board.updateMany(ids, { roll: value })} onCommit={settle} />

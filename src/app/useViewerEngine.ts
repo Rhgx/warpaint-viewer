@@ -191,6 +191,7 @@ export function useViewerEngine({
             ? weaponIconView(weapon)
             : VIEW_ANGLES.find((preset) => preset.id === viewAngleIdRef.current) ?? VIEW_ANGLES[0],
         weapon.attachments,
+        state.weaponKey,
       ),
       applyMaterial,
     ]).then(() => {
@@ -219,6 +220,12 @@ export function useViewerEngine({
   useEffect(() => {
     if (engineReady) viewerRef.current?.setUnusual(state.unusual, state.weaponKey);
   }, [engineReady, state.unusual, state.weaponKey, viewerRef]);
+
+  const statClock = state.statClocks[state.weaponKey];
+  const clockKills = statClock?.on ? statClock.kills : null;
+  useEffect(() => {
+    if (engineReady) viewerRef.current?.setStatClock(clockKills === null ? null : { team: state.team, kills: clockKills });
+  }, [engineReady, clockKills, state.team, viewerRef]);
 
   useEffect(() => {
     if (engineReady) viewerRef.current?.setFov(state.fov);
