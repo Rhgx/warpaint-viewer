@@ -42,7 +42,7 @@ import { SheenOverlay } from './overlays/sheenOverlay';
 import { EmissiveOverlay } from './overlays/emissiveOverlay';
 import { WeaponAttachments } from './weaponAttachments';
 import { StatClock, type WantedClock } from './statClock';
-import { FirstPersonStage } from './firstPersonStage';
+import { FirstPersonStage, type FirstPersonPlaybackListener } from './firstPersonStage';
 import { MaterialTextures } from './materialTextures';
 import { ViewerCapture, type TurntableOptions, type TurntableSink } from './capture/viewerCapture';
 
@@ -62,8 +62,20 @@ export class Viewer {
 
   get firstPersonHasSpinningBarrel(): boolean { return this.firstPersonStage.hasSpinningBarrel; }
 
-  configureFirstPerson(fov: number, minimized: boolean, animation: string, paused = false, fishPhysics = false, showHands = true, spinBarrel = false): void {
-    this.firstPersonStage.configureFirstPerson(fov, minimized, animation, paused, fishPhysics, showHands, spinBarrel);
+  configureFirstPerson(fov: number, minimized: boolean, animation: readonly string[], paused = false, fishPhysics = false, showHands = true, spinBarrel = false, speed = 1, looping = true): void {
+    this.firstPersonStage.configureFirstPerson(fov, minimized, animation, paused, fishPhysics, showHands, spinBarrel, speed, looping);
+  }
+
+  seekFirstPerson(position: number): void {
+    this.firstPersonStage.seek(position);
+  }
+
+  setFirstPersonScrubbing(scrubbing: boolean): void {
+    this.firstPersonStage.setScrubbing(scrubbing);
+  }
+
+  subscribeFirstPersonPlayback(listener: FirstPersonPlaybackListener): () => void {
+    return this.firstPersonStage.subscribePlayback(listener);
   }
 
   readonly renderer: THREE.WebGLRenderer;
@@ -520,6 +532,9 @@ export class Viewer {
     const clockAnimating = !this.firstPersonStage.preview && this.statClock.step(dt);
     if (this.firstPersonStage.preview) {
       this.firstPersonStage.preview.update(dt);
+      // On the animation's clock, as the viewmodel's scrolling materials are, so that a pause holds it and rendering can sleep.
+      this.statClock.step(this.firstPersonStage.preview.animationDelta);
+      this.firstPersonStage.publishPlayback();
       this.sheenOverlay.updateSheenAnimation();
       if (this.activeUnusual) {
         this.activeUnusual.updateAnchor(this.firstPersonStage.preview.weaponAnchor, this.firstPersonStage.preview.resolveUnusualAnchor);

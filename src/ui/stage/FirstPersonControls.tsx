@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Eye, Pause, Play } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Eye } from 'lucide-react';
 
 import type { Viewer } from '../../viewer/Viewer';
 import type { ViewmodelManifest, ViewmodelWeapon } from '../../viewer/firstPerson/firstPerson';
-import { Control, ControlLabel, SelectField } from '../common/controls';
+import { Control, SelectField } from '../common/controls';
+import { FirstPersonBar, type PlaybackSpeed } from './FirstPersonBar';
 import { firstPersonAnimationGroups } from './firstPersonAnimations';
 import { InspectorSection } from './Inspector';
-import { Button } from '../primitives/Button';
 import { Slider } from '../primitives/Slider';
 import { Switch } from '../primitives/Switch';
 import { ToggleGroup } from '../primitives/ToggleGroup';
@@ -20,13 +21,14 @@ function SwitchRow({ label, checked, onChange }: { label: string; checked: boole
   );
 }
 
-export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled, onEnabledChange }: {
+export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled, onEnabledChange, barSlot }: {
   viewer: Viewer;
   weaponKey: string;
   team: 'red' | 'blu';
   disabled: boolean;
   enabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
+  barSlot: HTMLElement | null;
 }) {
   const [manifest, setManifest] = useState<ViewmodelManifest | null>(null);
   const [playerClass, setPlayerClass] = useState('');
@@ -34,19 +36,26 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
   const [fov, setFov] = useState(70);
   const [minimized, setMinimized] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [speed, setSpeed] = useState<PlaybackSpeed>(1);
+  const [looping, setLooping] = useState(true);
   const [fishPhysics, setFishPhysics] = useState(true);
   const [showHands, setShowHands] = useState(true);
   const [spinBarrel, setSpinBarrel] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [shown, setShown] = useState<{ weapon: ViewmodelWeapon; team: 'red' | 'blu'; viewer: Viewer; error: string | null } | null>(null);
   const active = enabled;
-  const choices = manifest?.weapons.filter(weapon => weapon.weaponKey === weaponKey) ?? [];
+  const choices = useMemo(() => manifest?.weapons.filter(weapon => weapon.weaponKey === weaponKey) ?? [], [manifest, weaponKey]);
   const weapon = choices.find(choice => choice.class === playerClass) ?? choices[0];
-  const animationGroups = firstPersonAnimationGroups(weapon?.clips ?? {}, weapon?.weaponKey);
+  const weaponClips = weapon?.clips;
+  const animationGroups = useMemo(() => firstPersonAnimationGroups(weaponClips ?? {}, weaponKey), [weaponClips, weaponKey]);
   const animations = animationGroups.flatMap(group => group.options);
   const selectedAnimation = animations.find(option => option.id === animation)
-    ?? animations.find(option => option.clip === weapon?.activity) ?? animations[0];
-  const activity = selectedAnimation?.clip ?? weapon?.activity ?? '';
+    ?? animations.find(option => option.clips[0] === weapon?.activity) ?? animations[0];
+  const selectedClips = selectedAnimation?.clips;
+  const idleClip = weapon?.activity;
+  const clips = useMemo(() => selectedClips ?? (idleClip ? [idleClip] : []), [selectedClips, idleClip]);
+  const togglePaused = useCallback(() => setPaused(value => !value), []);
+  const pauseAtEnd = useCallback(() => setPaused(true), []);
   let status: 'loading' | 'ready' | 'error' = 'loading';
   let error = '';
   if (!manifest) {
@@ -87,10 +96,11 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
   }, [active, manifest, weapon, team, viewer]);
 
   useEffect(() => {
-    if (active && status === 'ready') viewer.configureFirstPerson(fov, minimized, activity, paused, fishPhysics, showHands, spinBarrel);
-  }, [active, status, viewer, fov, minimized, activity, paused, fishPhysics, showHands, spinBarrel]);
+    if (active && status === 'ready') viewer.configureFirstPerson(fov, minimized, clips, paused, fishPhysics, showHands, spinBarrel, speed, looping);
+  }, [active, status, viewer, fov, minimized, clips, paused, fishPhysics, showHands, spinBarrel, speed, looping]);
 
-  return <InspectorSection title="Preview" icon={Eye}>
+  return <>
+    <InspectorSection title="Preview" icon={Eye}>
       <Control group label="View Mode">
         <ToggleGroup
           label="View Mode"
@@ -114,32 +124,6 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
             label: choice.class === 'demo' ? 'Demoman' : choice.class[0].toUpperCase() + choice.class.slice(1),
           }))} />
         </Control>}
-        {animations.length > 0 && <div data-slot="first-person-animations" role="group" aria-label="Animation">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <ControlLabel>Animation <span className="text-text tabular-nums">{animations.length}</span></ControlLabel>
-            <Button data-slot="first-person-playback" className="text-11 text-text"
-              aria-label={paused ? 'Play Animation' : 'Pause Animation'}
-              title={paused ? 'Play Animation' : 'Pause Animation'}
-              disabled={status !== 'ready'}
-              onClick={() => setPaused(value => !value)}>
-              {paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
-              <span>{paused ? 'Play' : 'Pause'}</span>
-            </Button>
-          </div>
-          {/* On mobile the Controls sheet scrolls as a whole instead of nesting a scroll box. */}
-          <div className="scrollbar-slim max-h-65 overflow-y-auto overscroll-contain rounded-sm border border-border p-2 mobile:max-h-none">
-            {animationGroups.map(group => <div key={group.label} className="not-first:mt-2.5" role="group" aria-label={group.label}>
-              <div className="mb-1 text-10 text-dim">{group.label}</div>
-              <div className="grid grid-cols-2 gap-1">
-                {group.options.map(option => <button key={option.id} type="button"
-                  className="min-h-control cursor-pointer rounded-[3px] border border-border bg-transparent px-1.75 py-1.25 text-left text-11 wrap-anywhere text-text focus-ring not-disabled:not-aria-pressed:hover:border-strong not-disabled:not-aria-pressed:hover:bg-panel not-disabled:aria-pressed:hover:brightness-110 focus-visible:-outline-offset-2 disabled:cursor-default disabled:opacity-50 aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-accent-text" aria-pressed={option.id === selectedAnimation?.id}
-                  disabled={status !== 'ready'} onClick={() => setAnimation(option.id)}>
-                  {option.label}
-                </button>)}
-              </div>
-            </div>)}
-          </div>
-        </div>}
         {weaponKey === 'c_holymackerel' && <SwitchRow label="Fish Bone Physics" checked={fishPhysics} onChange={setFishPhysics} />}
         <Control label={<><span className="flex-auto">Viewmodel FOV</span><span className="text-text tabular-nums">{fov}</span></>}>
           <Slider min={54} max={120} step={1} value={fov} onChange={setFov} ariaLabel="Viewmodel FOV" markers={[54, 70, 90]} />
@@ -150,5 +134,22 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
         {status === 'loading' && <span className="text-11 leading-normal text-dim" role="status">Loading arms and weapon...</span>}
         {status === 'error' && <span className="wrap-anywhere text-fail" role="alert">{error}</span>}
       </>}
-  </InspectorSection>;
+    </InspectorSection>
+    {active && status === 'ready' && barSlot && selectedAnimation && createPortal(
+      <FirstPersonBar
+        viewer={viewer}
+        groups={animationGroups}
+        animation={selectedAnimation.id}
+        onAnimationChange={setAnimation}
+        paused={paused}
+        onTogglePaused={togglePaused}
+        onEnded={pauseAtEnd}
+        looping={looping}
+        onLoopingChange={setLooping}
+        speed={speed}
+        onSpeedChange={setSpeed}
+      />,
+      barSlot,
+    )}
+  </>;
 }

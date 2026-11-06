@@ -28,11 +28,24 @@ export interface FirstPersonStageHost {
   readonly onPreviewChange: () => void;
 }
 
+export interface FirstPersonPlayback {
+  position: number;
+  duration: number;
+  markers: readonly number[];
+  /** Only a sequence has one: a single clip's loop is all of it, which nothing needs to mark. */
+  loopRange: { readonly start: number; readonly end: number } | null;
+  ended: boolean;
+}
+
+export type FirstPersonPlaybackListener = (playback: FirstPersonPlayback) => void;
+
 export class FirstPersonStage {
   private readonly host: FirstPersonStageHost;
   private firstPerson: FirstPersonPreview | null = null;
   private pendingFirstPerson: FirstPersonPreview | null = null;
   private firstPersonToken = 0;
+  private playbackListener: FirstPersonPlaybackListener | null = null;
+  private published: FirstPersonPlayback | null = null;
 
   constructor(host: FirstPersonStageHost) {
     this.host = host;
@@ -84,13 +97,47 @@ export class FirstPersonStage {
 
   get hasSpinningBarrel(): boolean { return this.firstPerson?.hasSpinningBarrel ?? false; }
 
-  configureFirstPerson(fov: number, minimized: boolean, animation: string, paused: boolean, fishPhysics: boolean, showHands: boolean, spinBarrel: boolean): void {
+  configureFirstPerson(fov: number, minimized: boolean, animation: readonly string[], paused: boolean, fishPhysics: boolean, showHands: boolean, spinBarrel: boolean, speed: number, looping: boolean): void {
     this.host.getActiveUnusual()?.notifyTeleport();
-    this.firstPerson?.setPlayback(paused, fishPhysics);
+    this.firstPerson?.setPlayback(paused, fishPhysics, speed, looping);
     this.firstPerson?.setAppearance(showHands, spinBarrel);
     this.firstPerson?.setView(fov, minimized);
-    this.firstPerson?.setAnimation(animation);
+    this.firstPerson?.setAnimation(...animation);
     this.host.invalidate();
+  }
+
+  seek(position: number): void {
+    this.firstPerson?.seek(position);
+    this.host.invalidate();
+  }
+
+  setScrubbing(scrubbing: boolean): void {
+    this.firstPerson?.setScrubbing(scrubbing);
+    this.host.invalidate();
+  }
+
+  /** The player bar's one listener. It hears only frames that moved something, so never while rendering sleeps. */
+  subscribePlayback(listener: FirstPersonPlaybackListener): () => void {
+    this.playbackListener = listener;
+    this.published = null;
+    this.publishPlayback();
+    return () => { if (this.playbackListener === listener) this.playbackListener = null; };
+  }
+
+  publishPlayback(): void {
+    const preview = this.firstPerson;
+    if (!preview || !this.playbackListener) return;
+    const last = this.published;
+    if (last && last.position === preview.playbackPosition && last.duration === preview.playbackDuration
+      && last.markers === preview.playbackMarkers && last.loopRange === preview.playbackLoopRange && last.ended === preview.playbackEnded) return;
+    this.published = {
+      position: preview.playbackPosition,
+      duration: preview.playbackDuration,
+      markers: preview.playbackMarkers,
+      loopRange: preview.playbackLoopRange,
+      ended: preview.playbackEnded,
+    };
+    this.playbackListener(this.published);
   }
 
   // Only the phone portrait layout, where the Controls sheet covers the canvas

@@ -3,6 +3,7 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { WeaponMaterial, Team } from '../../data/types';
 import { configureTf2Material, createTf2Uniforms, type Tf2Uniforms } from '../materialConfig';
 import { installTf2VertexLit, TF2_VERTEXLIT_CACHE_KEY } from '../shaders/vertexlit';
+import { advanceTimeline, createTimeline, locateOnTimeline, timelineBoundaries, type AnimationTimeline } from './animationTimeline';
 import { FishBonePhysics, type FishJiggleSettings } from './fishPhysics';
 import type { AttachmentTransformResolver } from '../particles';
 
@@ -101,8 +102,18 @@ export class FirstPersonPreview {
   private poseDirty = true;
   private disposed = false;
   private weapon: ViewmodelWeapon | null = null;
-  private activity: string | null = null;
+  private animationKey: string | null = null;
+  private timeline: AnimationTimeline = createTimeline([]);
+  private timelineActions: THREE.AnimationAction[] = [];
+  private markers: readonly number[] = [];
+  private loopRange: { readonly start: number; readonly end: number } | null = null;
+  private position = 0;
+  private speed = 1;
+  private looping = true;
   private paused = false;
+  private scrubbing = false;
+  private resuming = false;
+  private lastAnimationDelta = 0;
   private fishPhysicsEnabled = false;
   private fishPhysics: FishBonePhysics | null = null;
   private spinBarrel = false;
@@ -111,11 +122,8 @@ export class FirstPersonPreview {
   private barrelRotation = new THREE.Matrix4();
   private chamberAngle = 0;
   private chamberTarget = 0;
-  private chamberAction: THREE.AnimationAction | null = null;
+  private chamberRotating = false;
   private chamberRotation = new THREE.Matrix4();
-  private readonly onAnimationLoop = (event: THREE.AnimationMixerEventMap['loop']): void => {
-    if (event.action === this.chamberAction) this.chamberTarget += Math.PI / 3 * event.loopDelta;
-  };
 
   constructor() {
     // Source x forward, y left, z up -> Three x right, y up, z back.
@@ -211,7 +219,6 @@ export class FirstPersonPreview {
     this.boneBindings = this.bones.slice(1).map((bones, index) =>
       bindViewmodelBones(bones, index === 0 ? [this.boneMaps[0]] : [this.boneMaps[1], this.boneMaps[0]]));
     this.mixer = new THREE.AnimationMixer(gltfs[0].scene);
-    this.mixer.addEventListener('loop', this.onAnimationLoop);
     const skeleton = this.paintMeshes[0]?.skeleton;
     const rootIndex = skeleton?.bones.indexOf(this.bones[1][0]) ?? -1;
     if (skeleton && rootIndex >= 0) this.weaponBindInverse.copy(skeleton.boneInverses[rootIndex]);
@@ -224,25 +231,47 @@ export class FirstPersonPreview {
     if (textureFailure?.status === 'rejected') throw textureFailure.reason;
   }
 
-  setAnimation(activity: string): void {
-    if (activity === this.activity) return;
-    const clip = this.gltfs.find(gltf => gltf.scene === this.pose.children[0])?.animations.find(entry => entry.name === activity);
-    if (!clip || !this.mixer) return;
-    this.activity = activity;
+  /** Several clips play as one sequence of a start, a loop and an end. */
+  setAnimation(...names: string[]): void {
+    const key = names.join();
+    const mixer = this.mixer;
+    if (key === this.animationKey || !mixer) return;
+    const animations = this.gltfs.find(gltf => gltf.scene === this.pose.children[0])?.animations ?? [];
+    const clips = names.flatMap(name => animations.find(entry => entry.name === name) ?? []);
+    if (!clips.length || clips.length !== names.length) return;
+    this.animationKey = key;
     this.poseDirty = true;
     this.fishPhysics?.reset();
-    this.mixer.stopAllAction();
-    // Loop indefinitely; each cycle length comes from the clip's own duration.
-    const action = this.mixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).reset().play();
+    mixer.stopAllAction();
+    this.timeline = createTimeline(clips.map(clip => clip.duration), clips.length > 1 ? 1 : 0);
+    this.timelineActions = clips.map(clip => mixer.clipAction(clip));
+    this.markers = timelineBoundaries(this.timeline);
+    this.loopRange = clips.length > 1 ? { start: this.timeline.loopStart, end: this.timeline.loopEnd } : null;
+    this.position = 0;
     // CTFGrenadeLauncher advances its procedural chamber from SendWeaponAnim
     // only for ACT_VM_PRIMARYATTACK. Reload bodygroups animate independently.
-    const chamberRotating = this.weapon?.procedural === 'grenadeLauncher'
-      && activity.includes('VM_PRIMARYATTACK');
-    this.chamberAction = chamberRotating ? action : null;
+    this.chamberRotating = this.weapon?.procedural === 'grenadeLauncher'
+      && names.some(name => name.includes('VM_PRIMARYATTACK'));
     // Keep an in-progress primary-attack turn alive when another animation is selected.
     // Source continues UpdateBarrelMovement independently of the current viewmodel sequence.
-    if (chamberRotating) this.chamberTarget = this.chamberAngle + Math.PI / 3;
+    if (this.chamberRotating) this.chamberTarget = this.chamberAngle + Math.PI / 3;
     this.update(0);
+  }
+
+  /** Poses from the position alone, so that a scrub lands on the same pose that playing through it shows. */
+  private poseAtPosition(): void {
+    const { index, local, blend } = locateOnTimeline(this.timeline, this.position);
+    for (const [i, action] of this.timelineActions.entries()) {
+      const weight = i === index ? blend : i === index - 1 ? 1 - blend : 0;
+      if (weight === 0) {
+        if (action.isScheduled()) action.stop();
+        continue;
+      }
+      if (!action.isScheduled()) action.play();
+      action.setEffectiveWeight(weight);
+      action.time = i === index ? local : this.timeline.durations[i];
+    }
+    this.mixer?.update(0);
   }
 
   /**
@@ -284,12 +313,21 @@ export class FirstPersonPreview {
   }
 
   update(delta: number): void {
-    if (this.paused && !this.poseDirty) return;
+    this.lastAnimationDelta = 0;
+    if (!this.animationPlaying && !this.poseDirty) return;
     this.poseDirty = false;
-    const animationDelta = this.paused ? 0 : delta;
+    // Frames sleep while held, so the first delta after one is the time asleep and not a frame's worth.
+    const frameDelta = this.resuming ? Math.min(delta, 1 / 60) : delta;
+    this.resuming = false;
+    const animationDelta = this.animationPlaying ? frameDelta * this.speed : 0;
+    this.lastAnimationDelta = animationDelta;
     this.tf2Time += animationDelta;
     for (const uniforms of this.scrollingMaterials) uniforms.uTf2Time.value = this.tf2Time;
-    this.mixer?.update(animationDelta);
+    const { position, wraps, ended } = advanceTimeline(this.timeline, this.position, animationDelta, this.looping);
+    this.position = position;
+    if (ended) this.paused = true;
+    if (this.chamberRotating) this.chamberTarget += Math.PI / 3 * wraps;
+    this.poseAtPosition();
     this.root.updateMatrixWorld(true);
     if (this.bones.length < 2) return;
     mergeViewmodelBones(this.boneBindings[0]);
@@ -319,8 +357,12 @@ export class FirstPersonPreview {
     for (let i = 1; i < this.boneBindings.length; i++) mergeViewmodelBones(this.boneBindings[i]);
   }
 
-  setPlayback(paused: boolean, fishPhysics: boolean): void {
-    this.paused = paused;
+  setPlayback(paused: boolean, fishPhysics: boolean, speed = 1, looping = true): void {
+    // Playing a finished animation starts it over, from before the loop whichever way Loop is set now.
+    if (this.paused && !paused && this.position >= this.timeline.total) this.position = 0;
+    this.setHeld(paused, this.scrubbing);
+    this.speed = speed;
+    this.looping = looping;
     if (fishPhysics !== this.fishPhysicsEnabled) {
       this.fishPhysics?.reset();
       this.poseDirty = true;
@@ -328,7 +370,35 @@ export class FirstPersonPreview {
     this.fishPhysicsEnabled = fishPhysics;
   }
 
-  get animationPlaying(): boolean { return !this.paused; }
+  private setHeld(paused: boolean, scrubbing: boolean): void {
+    if (!this.animationPlaying && !paused && !scrubbing) this.resuming = true;
+    this.paused = paused;
+    this.scrubbing = scrubbing;
+  }
+
+  /** Holds the animation whether or not it is paused, for as long as a drag lasts. */
+  setScrubbing(scrubbing: boolean): void { this.setHeld(this.paused, scrubbing); }
+
+  seek(position: number): void {
+    this.position = Math.min(Math.max(position, 0), this.timeline.total);
+    this.fishPhysics?.reset();
+    this.poseDirty = true;
+  }
+
+  get animationPlaying(): boolean { return !this.paused && !this.scrubbing; }
+
+  get playbackPosition(): number { return this.position; }
+
+  get playbackDuration(): number { return this.timeline.total; }
+
+  get playbackMarkers(): readonly number[] { return this.markers; }
+
+  get playbackLoopRange(): { readonly start: number; readonly end: number } | null { return this.loopRange; }
+
+  /** Playing with looping off pauses itself here, which the bar has to hear about. */
+  get playbackEnded(): boolean {
+    return !this.looping && this.paused && !this.scrubbing && this.timeline.total > 0 && this.position >= this.timeline.total;
+  }
 
   get hasSpinningBarrel(): boolean { return this.weapon?.class === 'heavy' && !!this.boneMaps[1]?.has('barrel'); }
 
@@ -340,6 +410,9 @@ export class FirstPersonPreview {
   }
 
   get weaponKey(): string | null { return this.weapon?.weaponKey ?? null; }
+
+  /** The time the last update moved the animation by: none while held, and scaled by the speed. */
+  get animationDelta(): number { return this.lastAnimationDelta; }
 
   /** Bone merge has already posed it each frame, so whatever hangs from it follows the animation. */
   get statClockBone(): THREE.Bone | null { return this.boneMaps[1]?.get('c_weapon_stattrack') ?? null; }
@@ -393,7 +466,6 @@ export class FirstPersonPreview {
     this.setOverlay('sheen', null);
     this.setOverlay('emissive', null);
     this.mixer?.stopAllAction();
-    this.mixer?.removeEventListener('loop', this.onAnimationLoop);
     this.mixer?.uncacheRoot(this.mixer.getRoot());
     this.releaseResources();
   }

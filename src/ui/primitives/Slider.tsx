@@ -1,6 +1,6 @@
 import { Slider as SliderPrimitive } from '@base-ui/react/slider';
 
-export function Slider({ value, onChange, onCommit, min, max, step, ariaLabel, markers, disabled }: {
+export function Slider({ value, onChange, onCommit, min, max, step, ariaLabel, markers, markerUnit = '°', stripes, disabled }: {
   value: number;
   onChange: (value: number) => void;
   onCommit?: (value: number) => void;
@@ -9,6 +9,9 @@ export function Slider({ value, onChange, onCommit, min, max, step, ariaLabel, m
   step: number;
   ariaLabel?: string;
   markers?: readonly number[];
+  markerUnit?: string;
+  /** A stretch of the track drawn in stripes. The fill passes over it. */
+  stripes?: { readonly start: number; readonly end: number } | null;
   disabled?: boolean;
 }) {
   return (
@@ -24,10 +27,14 @@ export function Slider({ value, onChange, onCommit, min, max, step, ariaLabel, m
     >
       <SliderPrimitive.Control className="flex h-4.5 w-full items-center data-disabled:opacity-45" data-slot="slider-control">
         <SliderPrimitive.Track className="relative h-1 w-full rounded-xs bg-border">
+          {stripes && (
+            <span className="pointer-events-none absolute inset-y-0 bg-[repeating-linear-gradient(90deg,var(--text-dim)_0_6px,transparent_6px_12px)]" data-slot="slider-stripes" aria-hidden="true"
+              style={{ left: `${(stripes.start - min) / (max - min) * 100}%`, width: `${(stripes.end - stripes.start) / (max - min) * 100}%` }} />
+          )}
           <SliderPrimitive.Indicator className="absolute h-full rounded-xs bg-accent data-disabled:bg-strong" />
           {markers?.map((marker) => (
             <span key={marker} className="pointer-events-none absolute -top-0.5 h-2 w-px -translate-x-1/2 bg-dim" aria-hidden="true"
-              style={{ left: `${(marker - min) / (max - min) * 100}%` }} title={`${marker}°`} />
+              style={{ left: `${(marker - min) / (max - min) * 100}%` }} title={`${marker}${markerUnit}`} />
           ))}
           {/* The input inside the thumb takes the focus. On touch the ::before is a finger-sized grab. */}
           <SliderPrimitive.Thumb className="z-1 size-3.25 data-disabled:hidden rounded-full border border-strong bg-panel outline-accent hover:border-accent has-focus-visible:outline-2 has-focus-visible:outline-offset-2 touch:before:absolute touch:before:-inset-[10.5px]" aria-label={ariaLabel} />

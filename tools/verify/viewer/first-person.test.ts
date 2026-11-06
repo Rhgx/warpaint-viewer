@@ -8,7 +8,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FP_PORTRAIT_FRAME_CENTER, FirstPersonPreview, bindViewmodelBones, mergeViewmodelBones, viewmodelFov, viewmodelFrameTop, type ViewmodelManifest } from '../../../src/viewer/firstPerson/firstPerson';
 import * as materialConfig from '../../../src/viewer/materialConfig';
 import { FishBonePhysics } from '../../../src/viewer/firstPerson/fishPhysics';
-import { firstPersonAnimationGroups } from '../../../src/ui/stage/firstPersonAnimations';
+import { advanceTimeline, createTimeline, locateOnTimeline, timelineBoundaries } from '../../../src/viewer/firstPerson/animationTimeline';
+import { firstPersonAnimationGroups, formatPlaybackTime } from '../../../src/ui/stage/firstPersonAnimations';
 
 interface GlbDocument {
   materials: { name: string }[];
@@ -69,9 +70,9 @@ test('first-person assets cover every paintable weapon, retain UVs, and contain 
       const expectedClips = Object.entries(view.clips)
         .filter(([key]) => key !== 'ACT_VM_PULLBACK' || view.weaponKey === 'c_demo_cannon' || view.weaponKey === 'c_stickybomb_launcher')
         .flatMap(([, value]) => Array.isArray(value) ? value : [value]);
-      assert.deepEqual(options.map(option => option.clip).sort(), expectedClips.sort(), 'every variant is selectable');
+      assert.deepEqual(options.flatMap(option => option.clips).sort(), expectedClips.sort(), 'every variant is selectable');
       assert.equal(new Set(options.map(option => option.id)).size, options.length, 'selection identities are unique');
-      for (const option of options) assert.ok(names.has(option.clip), `${view.weaponKey}/${view.class}: ${option.clip} exists`);
+      for (const clip of options.flatMap(option => option.clips)) assert.ok(names.has(clip), `${view.weaponKey}/${view.class}: ${clip} exists`);
     }
   }
 });
@@ -89,6 +90,120 @@ test('animation groups label alternate takes and retain unfamiliar activities', 
   assert.deepEqual(firstPersonAnimationGroups({ ACT_VM_PULLBACK: 'charge' }, 'c_grenadelauncher'), []);
   assert.equal(firstPersonAnimationGroups({ ACT_VM_PULLBACK: 'charge' }, 'c_demo_cannon')[0]?.options[0]?.label, 'Charge');
   assert.equal(firstPersonAnimationGroups({ ACT_VM_PULLBACK: 'charge' }, 'c_stickybomb_launcher')[0]?.options[0]?.label, 'Charge');
+});
+
+test('start, loop and end clips merge into one entry, and nothing else does', () => {
+  const options = (clips: Record<string, string | string[]>) => firstPersonAnimationGroups(clips).flatMap(group => group.options);
+  const inspect = { ACT_VM_INSPECT_START: 'start', ACT_VM_INSPECT_IDLE: ['loop'], ACT_VM_INSPECT_END: 'end' };
+  assert.deepEqual(options(inspect), [{ id: 'ACT_VM_INSPECT_IDLE:0', clips: ['start', 'loop', 'end'], group: 'Basic', label: 'Inspect' }]);
+  assert.deepEqual(
+    options({ ACT_RELOAD_START: 'a', ACT_VM_RELOAD: 'b', ACT_RELOAD_FINISH: 'c' }),
+    [{ id: 'ACT_VM_RELOAD:0', clips: ['a', 'b', 'c'], group: 'Basic', label: 'Reload' }],
+  );
+  assert.deepEqual(
+    options({ ACT_BACKSTAB_VM_UP: 'a', ACT_BACKSTAB_VM_IDLE: 'b', ACT_BACKSTAB_VM_DOWN: 'c' }),
+    [{ id: 'ACT_BACKSTAB_VM_IDLE:0', clips: ['a', 'b', 'c'], group: 'Special', label: 'Backstab' }],
+  );
+  assert.deepEqual(options({ ACT_VM_RELOAD: 'mag' }), [{ id: 'ACT_VM_RELOAD:0', clips: ['mag'], group: 'Basic', label: 'Reload' }], 'a Reload with no start or end loops on its own');
+  assert.deepEqual(options({ ACT_VM_RELOAD: 'b', ACT_RELOAD_START: 'a' }).map(option => option.label), ['Reload Start', 'Reload'], 'a partial sequence stays apart');
+  assert.deepEqual(
+    options({ ACT_MP_ATTACK_STAND_PREFIRE: 'up', ACT_VM_SECONDARYATTACK: 'spin', ACT_MP_ATTACK_STAND_POSTFIRE: 'down' }).map(option => option.label),
+    ['Secondary Attack', 'Spin Up', 'Spin Down'],
+    'the minigun moves between its loops, so its clips stay apart',
+  );
+
+  const manifest: ViewmodelManifest = JSON.parse(fs.readFileSync('public/data/viewmodels/manifest.json', 'utf8'));
+  const counts = { Inspect: 0, Reload: 0, Backstab: 0, 'plain Reload': 0 };
+  for (const weapon of manifest.weapons) {
+    const groups = firstPersonAnimationGroups(weapon.clips, weapon.weaponKey);
+    for (const group of groups) {
+      assert.ok(group.options.length > 1 || group.options[0].label !== group.label, `${weapon.weaponKey}: no heading only repeats its one entry`);
+    }
+    for (const option of groups.flatMap(group => group.options)) {
+      if (option.clips.length === 3) counts[option.label as 'Inspect' | 'Reload' | 'Backstab'] += 1;
+      if (option.clips.length === 1 && option.label === 'Reload') counts['plain Reload'] += 1;
+    }
+  }
+  assert.deepEqual(counts, { Inspect: manifest.weapons.length, Reload: 21, Backstab: 1, 'plain Reload': 8 });
+});
+
+test('a timeline position maps to a clip, a local time and a blend', () => {
+  const timeline = createTimeline([1, 2, 3]);
+  assert.equal(timeline.total, 6);
+  assert.deepEqual(locateOnTimeline(timeline, 0), { index: 0, local: 0, blend: 1 }, 'the first clip has nothing to fade from');
+  assert.deepEqual(locateOnTimeline(timeline, 0.5), { index: 0, local: 0.5, blend: 1 });
+  assert.deepEqual(locateOnTimeline(timeline, 1), { index: 1, local: 0, blend: 0 }, 'a boundary shows the end of the clip before it');
+  assert.deepEqual(locateOnTimeline(timeline, 1.125), { index: 1, local: 0.125, blend: 0.625 });
+  assert.deepEqual(locateOnTimeline(timeline, 2.5), { index: 1, local: 1.5, blend: 1 });
+  assert.deepEqual(locateOnTimeline(timeline, 3), { index: 2, local: 0, blend: 0 });
+  assert.deepEqual(locateOnTimeline(timeline, 6), { index: 2, local: 3, blend: 1 }, 'the end shows the last pose and does not wrap');
+  assert.deepEqual(locateOnTimeline(timeline, 7), { index: 2, local: 3, blend: 1 }, 'beyond the end clamps');
+  assert.deepEqual(locateOnTimeline(timeline, -1), { index: 0, local: 0, blend: 1 }, 'before the start clamps');
+
+  const single = createTimeline([2]);
+  assert.deepEqual(locateOnTimeline(single, 2), { index: 0, local: 2, blend: 1 });
+  assert.deepEqual(locateOnTimeline(createTimeline([0.1, 1]), 0.1), { index: 1, local: 0, blend: 0 });
+  assert.equal(locateOnTimeline(createTimeline([1, 0.125]), 1.0625).blend, 0.5, 'a clip shorter than the blend still finishes fading in');
+  assert.deepEqual(locateOnTimeline(createTimeline([]), 1), { index: 0, local: 0, blend: 1 });
+  assert.deepEqual(locateOnTimeline(createTimeline([0]), 0), { index: 0, local: 0, blend: 1 }, 'an empty clip does not divide by zero');
+});
+
+test('a timeline knows the stretch that repeats', () => {
+  assert.deepEqual(createTimeline([1, 2, 4], 1), { durations: [1, 2, 4], total: 7, loopStart: 1, loopEnd: 3 });
+  assert.deepEqual(createTimeline([2]), { durations: [2], total: 2, loopStart: 0, loopEnd: 2 }, 'a single clip repeats whole');
+  assert.deepEqual(createTimeline([]), { durations: [], total: 0, loopStart: 0, loopEnd: 0 });
+});
+
+test('a timeline marks where each clip after the first begins', () => {
+  assert.deepEqual(timelineBoundaries(createTimeline([1, 2, 3])), [1, 3]);
+  assert.deepEqual(timelineBoundaries(createTimeline([2])), [], 'a single clip has none');
+  assert.deepEqual(timelineBoundaries(createTimeline([])), []);
+});
+
+test('looping holds the middle of a sequence, and a single clip repeats whole', () => {
+  const sequence = createTimeline([1, 2, 4], 1);
+  const advance = (position: number, delta: number) => advanceTimeline(sequence, position, delta);
+  const moved = (position: number, wraps = 0) => ({ position, wraps, ended: false });
+  assert.deepEqual(advance(0.5, 0.25), moved(0.75), 'the intro plays');
+  assert.deepEqual(advance(0.75, 0.5), moved(1.25), 'and runs on into the loop');
+  assert.deepEqual(advance(2.75, 0.5), moved(1.25, 1), 'the loop turns at its end and skips the outro');
+  assert.deepEqual(advance(2.75, 0.25), moved(1, 1), 'landing exactly on the end of the loop turns too');
+  assert.deepEqual(advance(1, 5.5), moved(2.5, 2), 'a long delta counts each turn');
+  assert.deepEqual(advance(3, 0.25), moved(3.25), 'scrubbed to the outro, it plays');
+  assert.deepEqual(advance(6.75, 0.5), moved(1.25, 1), 'and hands over to the loop at the end');
+  assert.deepEqual(advance(7, 0.25), moved(1.25, 1), 'from the very end too');
+
+  assert.deepEqual(advanceTimeline(createTimeline([2]), 1.75, 0.5), moved(0.25, 1), 'a single clip wraps to its start');
+  assert.deepEqual(advanceTimeline(createTimeline([2]), 2, 0.25), moved(0.25, 1));
+  assert.deepEqual(advanceTimeline(createTimeline([1]), 0.5, 3), moved(0.5, 3));
+  assert.deepEqual(advanceTimeline(createTimeline([0, 1, 0], 2), 1, 0.5), moved(1), 'an empty loop stands still');
+  assert.deepEqual(advanceTimeline(createTimeline([]), 0, 1), moved(0));
+});
+
+test('with looping off a sequence plays through and stops on its last frame', () => {
+  const sequence = createTimeline([1, 2, 4], 1);
+  assert.deepEqual(advanceTimeline(sequence, 2.75, 0.5, false), { position: 3.25, wraps: 0, ended: false }, 'it runs past the loop into the outro');
+  assert.deepEqual(advanceTimeline(sequence, 6.75, 0.5, false), { position: 7, wraps: 0, ended: true });
+  assert.deepEqual(advanceTimeline(sequence, 6.75, 0.25, false), { position: 7, wraps: 0, ended: true }, 'landing exactly on the end stops too');
+  assert.deepEqual(advanceTimeline(createTimeline([2]), 1.75, 0.5, false), { position: 2, wraps: 0, ended: true });
+});
+
+test('standing still changes nothing', () => {
+  const sequence = createTimeline([1, 2, 4], 1);
+  assert.deepEqual(advanceTimeline(sequence, 7, 0), { position: 7, wraps: 0, ended: false }, 'a paused scrub stays on the very end');
+  assert.deepEqual(advanceTimeline(sequence, 7, 0, false), { position: 7, wraps: 0, ended: false });
+  assert.deepEqual(advanceTimeline(sequence, 3, 0), { position: 3, wraps: 0, ended: false });
+});
+
+test('playback time reads as minutes, seconds and tenths, all the same width', () => {
+  assert.equal(formatPlaybackTime(0), '0:00.0');
+  assert.equal(formatPlaybackTime(1.25), '0:01.2');
+  assert.equal(formatPlaybackTime(2.3), '0:02.3', 'binary noise does not round it down');
+  assert.equal(formatPlaybackTime(9.99), '0:09.9');
+  assert.equal(formatPlaybackTime(12.5), '0:12.5');
+  assert.equal(formatPlaybackTime(59.96), '0:59.9');
+  assert.equal(formatPlaybackTime(61), '1:01.0');
+  assert.equal(formatPlaybackTime(-1), '0:00.0');
 });
 
 test('tall canvases frame the whole 4:3 viewmodel view above the sheet', () => {
@@ -171,7 +286,12 @@ test.each(['c_minigun', 'c_holymackerel', 'c_knife', 'c_grenadelauncher'])('%s p
     const animated = weapon.clips.ACT_VM_INSPECT_START;
     preview.setAnimation(Array.isArray(animated) ? animated[0] : animated);
     preview.update(0.5);
+    assert.equal(preview.animationDelta, 0.5, 'the clock face runs on the time the animation moved');
     assert.ok(!followsBone().equals(clockAtStart), 'and moves with the animation');
+    preview.setPlayback(true, false);
+    preview.update(0.5);
+    assert.equal(preview.animationDelta, 0, 'and a pause holds it');
+    preview.setPlayback(false, false);
     hanging.removeFromParent();
     scene.remove(preview.root);
     preview.setAnimation(weapon.activity);
@@ -221,6 +341,22 @@ test.each(['c_minigun', 'c_holymackerel', 'c_knife', 'c_grenadelauncher'])('%s p
     preview.setView(70, false);
     preview.update(0.2);
     assert.deepEqual(matrices(), moving, 'restoring offsets retains the frozen animation');
+    const heldPosition = preview.playbackPosition;
+    preview.seek(preview.playbackDuration / 2);
+    preview.update(0.2);
+    const scrubbed = matrices();
+    assert.notDeepEqual(scrubbed, moving, 'a paused scrub moves the pose');
+    assert.equal(preview.playbackPosition, preview.playbackDuration / 2, 'a paused scrub stays where it was put');
+    updatePose.mockClear();
+    preview.update(0.2);
+    assert.equal(updatePose.mock.calls.length, 0, 'a paused scrub does not keep recalculating');
+    preview.seek(preview.playbackDuration + 5);
+    assert.equal(preview.playbackPosition, preview.playbackDuration, 'a scrub stops at the end');
+    preview.update(0.2);
+    assert.equal(preview.playbackPosition, preview.playbackDuration, 'a paused scrub to the end does not wrap');
+    preview.seek(heldPosition);
+    preview.update(0.2);
+    assert.deepEqual(matrices(), moving, 'scrubbing back lands on the same pose');
     if (weaponKey === 'c_holymackerel') {
       preview.setPlayback(false, true);
       for (let i = 0; i < 20; i++) preview.update(1 / 60);
@@ -233,8 +369,87 @@ test.each(['c_minigun', 'c_holymackerel', 'c_knife', 'c_grenadelauncher'])('%s p
       assert.notDeepEqual(matrices(), bent, 'disabling physics while paused restores the authored bones');
     }
     preview.setPlayback(false, false);
+    assert.equal(preview.animationPlaying, true);
+    preview.setScrubbing(true);
+    assert.equal(preview.animationPlaying, false, 'a drag holds the animation so that frames can sleep');
+    const beforeDrag = preview.playbackPosition;
+    preview.update(0.2);
+    assert.equal(preview.playbackPosition, beforeDrag, 'a drag does not advance');
+    preview.setScrubbing(false);
+    preview.update(0.1);
+    assert.ok(Math.abs(preview.playbackPosition - beforeDrag - 1 / 60) < 1e-9, 'the time asleep does not count on resuming');
+    preview.update(0.05);
+    assert.ok(Math.abs(preview.playbackPosition - beforeDrag - 1 / 60 - 0.05) < 1e-9, 'later frames count in full');
+    preview.setPlayback(false, false, 0.25);
+    const quarterStart = preview.playbackPosition;
+    preview.update(0.04);
+    assert.ok(Math.abs(preview.playbackPosition - quarterStart - 0.01) < 1e-9, 'speed scales the rate');
+    preview.setPlayback(false, false);
     preview.update(0.2);
     assert.notDeepEqual(matrices(), moving, 'resume advances the same animation');
+    const single = preview.playbackDuration;
+    assert.deepEqual(preview.playbackMarkers, [], 'a single clip has no ticks');
+    assert.equal(!preview.playbackLoopRange, true, 'and marks no loop');
+    preview.setPlayback(false, false, 1, false);
+    preview.seek(single - 0.01);
+    preview.update(0.05);
+    assert.equal(preview.playbackPosition, single, 'with looping off it stops on the last frame');
+    assert.equal(preview.animationPlaying, false, 'and stops rendering');
+    assert.equal(preview.playbackEnded, true);
+    preview.update(0.05);
+    assert.equal(preview.playbackPosition, single, 'and stays there');
+    preview.setPlayback(true, false, 1, false);
+    assert.equal(preview.playbackEnded, true, 'the bar hearing of it changes nothing');
+    preview.setPlayback(false, false, 1, false);
+    assert.equal(preview.playbackPosition, 0, 'playing again starts over');
+    assert.equal(preview.playbackEnded, false);
+    preview.update(0.05);
+    assert.ok(preview.playbackPosition > 0);
+    preview.setPlayback(false, false);
+    preview.seek(single - 0.01);
+    preview.update(0.05);
+    assert.ok(preview.playbackPosition < 0.05, 'with looping on it wraps');
+    assert.equal(preview.animationPlaying, true);
+    const [start, loop, end] = ['ACT_VM_INSPECT_START', 'ACT_VM_INSPECT_IDLE', 'ACT_VM_INSPECT_END'].map(key => [weapon.clips[key]].flat()[0]);
+    preview.setAnimation(start, loop, end);
+    assert.equal(preview.playbackPosition, 0, 'a new animation starts at the beginning');
+    assert.ok(preview.playbackDuration > single, 'the timeline spans the whole sequence');
+    assert.equal(preview.playbackMarkers.length, 2, 'a tick where each later clip begins');
+    const range = preview.playbackLoopRange;
+    assert.ok(range, 'a sequence marks the part that repeats');
+    assert.deepEqual([range.start, range.end], [...preview.playbackMarkers], 'and its ticks sit at each end of it');
+    preview.setPlayback(false, false);
+    preview.seek(range.end - 0.01);
+    preview.update(0.05);
+    assert.ok(preview.playbackPosition >= range.start && preview.playbackPosition < range.start + 0.1, 'looping returns to the start of the loop, not the intro');
+    preview.seek(range.end - 0.01);
+    preview.setPlayback(false, false, 1, false);
+    preview.update(0.05);
+    assert.ok(preview.playbackPosition > range.end, 'with Loop off the same moment runs on into the outro');
+    preview.seek(preview.playbackDuration - 0.01);
+    preview.update(0.05);
+    assert.equal(preview.playbackEnded, true, 'and stops at the very end');
+    preview.setPlayback(false, false);
+    assert.equal(preview.playbackPosition, 0, 'playing it again starts before the loop, even with Loop back on');
+    preview.update(0);
+    preview.setPlayback(true, false);
+    const atStart = matrices();
+    const inspectClips = preview as unknown as { timeline: { durations: number[] } };
+    const [startLength, loopLength] = inspectClips.timeline.durations;
+    preview.seek(startLength + loopLength / 2);
+    preview.update(0);
+    const midLoop = matrices();
+    assert.notDeepEqual(midLoop, atStart, 'a scrub reaches into the loop');
+    preview.setAnimation(start);
+    preview.seek(startLength);
+    preview.update(0);
+    const startOnlyEnd = matrices();
+    preview.setAnimation(start, loop, end);
+    preview.seek(startLength);
+    preview.update(0);
+    assert.deepEqual(matrices(), startOnlyEnd, 'a boundary shows the end pose of the clip before it');
+    preview.setPlayback(false, false);
+    preview.setAnimation(weapon.activity);
     const overlay = preview.overlays.sheen[0];
     let source: THREE.SkinnedMesh | undefined;
     preview.root.traverse(object => {

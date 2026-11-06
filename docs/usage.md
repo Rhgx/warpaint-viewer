@@ -30,13 +30,19 @@ at the same speed as animated exports, so it previews the turntable.
 ## First Person
 
 The sidebar's **Preview** section switches between Inspect and **First Person**.
-First Person supports class selection for shared weapons, idle/inspect
-animations, viewmodel FOV, and stock minimized offsets. The play/pause button
-beside Animation holds the current pose while sheen, unusual particles, and
-emissive materials continue animating. The Holy Mackerel also has an optional
-**Fish Bone Physics** switch, on by default; pausing freezes its current bend.
-Paint, wear, seed, team, lighting, effects, and PNG capture use the current
-selection. Close visual editors before entering First Person. Other procedural
+First Person supports class selection for shared weapons, viewmodel FOV, and
+stock minimized offsets. The bar at the bottom of the stage plays the viewmodel's
+animations: pick one, drag the scrubber to any point, and cycle the speed through
+1x, 0.5x and 0.25x. Inspect, Backstab, and Reload on weapons that load shell by
+shell, are a start, a loop and an end, with a tick on the scrubber where each part
+begins and stripes on the part that repeats. With **Loop** on they hold that part,
+as holding the key does in game; turn it off to play the end and stop. Pausing,
+with the button or Space,
+holds the current pose while sheen, unusual particles, and emissive materials
+continue animating. The Holy Mackerel also has an optional **Fish Bone Physics**
+switch, on by default; pausing freezes its current bend.
+Paint, wear, seed, team, Stat Clock, lighting, effects, and PNG capture use the
+current selection. Close visual editors before entering First Person. Other procedural
 weapon motion and animation autolayers are not included. On tall portrait phone
 screens the viewer shows the full 4:3 viewmodel frame, centred in the canvas
 and lifted above the Controls sheet while it is open. On a phone, landscape

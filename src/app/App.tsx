@@ -126,6 +126,7 @@ function MainApp() {
     setInspectorEl(element);
   }, []);
   const [firstPersonEnabled, setFirstPersonEnabled] = useState(false);
+  const [firstPersonBarSlot, setFirstPersonBarSlot] = useState<HTMLElement | null>(null);
   const [autoSpin, setAutoSpin] = useState(false);
   const [environmentReady, setEnvironmentReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -719,8 +720,9 @@ function MainApp() {
     team={state.team}
     enabled={firstPersonActive}
     onEnabledChange={setFirstPersonEnabled}
+    barSlot={firstPersonBarSlot}
     disabled={!hasSelectedKit || !state.weaponKey || editorTabActive || lightingPanelOpen}
-  />, [editorTabActive, engineViewer, firstPersonActive, hasSelectedKit, lightingPanelOpen, state.team, state.weaponKey]);
+  />, [editorTabActive, engineViewer, firstPersonActive, firstPersonBarSlot, hasSelectedKit, lightingPanelOpen, state.team, state.weaponKey]);
 
   if (error) return <div className="fatal">Failed to start: {error}</div>;
   if (!data) return <BootLoader boot={boot} />;
@@ -783,6 +785,7 @@ function MainApp() {
             hintDismissed={hintDismissed}
             setHintDismissed={setHintDismissed}
             firstPersonActive={firstPersonActive}
+            firstPersonBarSlot={setFirstPersonBarSlot}
             selectedKit={selectedKit}
             showStageHeader={showStageHeader}
             weaponName={weaponName}

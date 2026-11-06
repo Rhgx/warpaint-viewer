@@ -29,6 +29,7 @@ interface StageCanvasProps {
   hintDismissed: boolean;
   setHintDismissed: Dispatch<SetStateAction<boolean>>;
   firstPersonActive: boolean;
+  firstPersonBarSlot: (element: HTMLElement | null) => void;
   selectedKit: ComponentProps<typeof StageOverlay>['selectedKit'];
   showStageHeader: ComponentProps<typeof StageOverlay>['showStageHeader'];
   weaponName: ComponentProps<typeof StageOverlay>['weaponName'];
@@ -71,6 +72,7 @@ export function StageCanvas({
   hintDismissed,
   setHintDismissed,
   firstPersonActive,
+  firstPersonBarSlot,
   selectedKit,
   showStageHeader,
   weaponName,
@@ -154,6 +156,15 @@ export function StageCanvas({
         />
       )}
       {!editingMode && <SupportLink />}
+      {firstPersonActive && (
+        // Takes the hint's slot and steps above the definitions prompt the same way. The side padding clears the
+        // Support link, and the bar's contents answer to the width that is left. An open mobile panel covers it.
+        <div
+          ref={firstPersonBarSlot}
+          data-slot="first-person-bar-slot"
+          className="@container pointer-events-none absolute inset-x-0 bottom-2.5 z-2 flex justify-center px-36 in-data-prompt:bottom-15.5 mobile:bottom-1 mobile:in-data-prompt:bottom-15.5 mobile:pr-[calc(10px+env(safe-area-inset-right))] mobile:pl-[calc(10px+env(safe-area-inset-left))] mobile:not-in-data-[mobile-panel=none]:invisible"
+        />
+      )}
       {promptedCandidate && (
         <DefinitionsPrompt
           path={promptedCandidate.path}
