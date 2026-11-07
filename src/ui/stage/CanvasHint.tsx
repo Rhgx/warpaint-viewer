@@ -31,7 +31,7 @@ function hintText({
         : 'Drag the turn handle; Shift places, middle rotates / double-click resets, right pans';
   }
   if (groupAssignActive) return 'Hold Shift to preview and select parts, drag to rotate';
-  if (TOUCH_ONLY_DEVICE) return 'Drag to rotate, pinch to zoom, two fingers to move, double-tap to reset';
+  if (TOUCH_ONLY_DEVICE) return 'Drag to rotate, pinch to zoom, twist to roll, two fingers to move, double-tap to reset';
   return 'Drag to rotate, scroll to zoom, right-drag to pan, double-click to reset';
 }
 

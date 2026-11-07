@@ -8,13 +8,14 @@ import {
   inspectDragForPointer,
   isRapidInspectClickPair,
   touchPairSnapshot,
+  touchPairTwist,
 } from './inspectInput';
 import type { InspectPointerClick, InspectPrimaryDragMode, TouchPairSnapshot, TouchPoint } from './inspectInput';
 
 // Inspect camera modeled on TF2's item inspect panel (tf_item_inspection_panel.cpp): drags
 // rotate the MODEL while the camera stays fixed. Left drag rotates, the wheel dollies, right
-// or middle drag pans, and double-click resets. Touch: one finger rotates, two fingers pan
-// and pinch, and double-tap resets. Rotation inertia decays within a second and never becomes
+// or middle drag pans, and double-click resets. Touch: one finger rotates, two fingers pan,
+// pinch and twist, and double-tap resets. Rotation inertia decays within a second and never becomes
 // a spin; auto-spin is opt-in (setAutoSpin). Advanced Camera freezes this pose for a bounded
 // free-fly view. It needs a keyboard and mouse, so touch-only devices never enter it.
 
@@ -36,6 +37,10 @@ const SPIN_RAMP_SECONDS = 2;
 const SPIN_RAMP_EXPONENT = Math.log(0.75) / Math.log(0.5);
 // Below this finger spread a pinch has no usable ratio, so it only pans.
 const MIN_PINCH_SPREAD_PX = 1;
+// Fingers drift a few degrees during any pinch, so a twist must clear this before it rolls the model.
+const TWIST_ENGAGE_ANGLE = THREE.MathUtils.degToRad(10);
+// Close fingertips report a noisy angle, and can swap sides and read as a half turn.
+const MIN_TWIST_SPREAD_PX = 24;
 
 export type CameraMode = 'inspect' | 'advanced';
 
@@ -57,14 +62,18 @@ export class InspectControls {
   private targetDist = 5;
   private yaw = 0;
   private pitch = 0;
+  private roll = 0; // radians about the view axis, clockwise on screen; only a touch twist sets it
+  private readonly rollQuaternion = new THREE.Quaternion();
   private pan = new THREE.Vector2(); // view-plane offset in world units
 
   // One gesture owns the camera at a time: a single mouse/pen pointer (`dragPointerId`) or up to
-  // two touches. `pinch` is the two-finger gesture (pan plus zoom, never inertia).
+  // two touches. `pinch` is the two-finger gesture (pan, zoom and twist, never inertia).
   private mode: 'none' | 'rotate' | 'pan' | 'pinch' = 'none';
   private dragPointerId: number | null = null;
   private touches = new Map<number, TouchPoint>();
   private pinchBaseline: TouchPairSnapshot | null = null;
+  // Twist gathered toward TWIST_ENGAGE_ANGLE, or null once this finger pair is rolling the model.
+  private pendingTwist: number | null = 0;
   // Set when a higher-level editor took the first finger, so later fingers of
   // the same touch session do not start a camera gesture underneath it.
   private touchSessionForeign = false;
@@ -273,6 +282,7 @@ export class InspectControls {
   private resetInspect() {
     this.yaw = 0;
     this.pitch = 0;
+    this.roll = 0;
     this.pan.copy(this.defaultPan);
     this.dist = this.baseDist;
     this.targetDist = this.baseDist;
@@ -330,7 +340,7 @@ export class InspectControls {
     this.velYaw = 0;
     this.velPitch = 0;
     this.yaw = (this.yaw + radians) % (Math.PI * 2);
-    this.model.rotation.set(this.pitch, this.yaw, 0);
+    this.applyModelRotation();
   }
 
   /** Current inspect zoom distance, and the framed default it resets to. */
@@ -468,8 +478,12 @@ export class InspectControls {
     const dt = Math.max(1, now - this.lastMoveTime) / 1000;
     this.lastMoveTime = now;
     if (this.mode === 'rotate') {
-      const dYaw = dx * ROTATE_SPEED;
-      const dPitch = dy * ROTATE_SPEED;
+      // Roll is applied after yaw and pitch, so undo it here. The model then still follows the
+      // pointer across the screen, whichever way a twist left it.
+      const cos = Math.cos(this.roll);
+      const sin = Math.sin(this.roll);
+      const dYaw = (dx * cos + dy * sin) * ROTATE_SPEED;
+      const dPitch = (dy * cos - dx * sin) * ROTATE_SPEED;
       this.yaw += dYaw;
       this.pitch = THREE.MathUtils.clamp(this.pitch + dPitch, -PITCH_LIMIT, PITCH_LIMIT);
       // Track release velocity for the inertia tail.
@@ -587,7 +601,18 @@ export class InspectControls {
     const usable = from.distance >= MIN_PINCH_SPREAD_PX && next.distance >= MIN_PINCH_SPREAD_PX;
     this.dist = this.targetDist = THREE.MathUtils.clamp(
       this.dist * (usable ? from.distance / next.distance : 1), this.minDist(), this.maxDist());
+    if (from.distance >= MIN_TWIST_SPREAD_PX && next.distance >= MIN_TWIST_SPREAD_PX) this.twistBy(touchPairTwist(from, next));
     this.applyInspect();
+  }
+
+  /** The turn that clears the dead zone is not applied, so engaging never jumps the pose. */
+  private twistBy(radians: number) {
+    if (this.pendingTwist === null) {
+      this.roll += radians;
+      return;
+    }
+    this.pendingTwist += radians;
+    if (Math.abs(this.pendingTwist) >= TWIST_ENGAGE_ANGLE) this.pendingTwist = null;
   }
 
   private endTouch(e: PointerEvent) {
@@ -634,6 +659,7 @@ export class InspectControls {
     this.velPitch = 0;
     this.lastMoveTime = performance.now();
     this.pinchBaseline = null;
+    this.pendingTwist = 0;
     if (points.length === 2) {
       this.mode = 'pinch';
       this.pinchBaseline = touchPairSnapshot(points[0], points[1]);
@@ -867,11 +893,17 @@ export class InspectControls {
     this.camera.lookAt(0, 0, 0);
     this.camera.updateMatrixWorld();
     // Model carries rotation and view-plane pan.
-    this.model.rotation.set(this.pitch, this.yaw, 0);
+    this.applyModelRotation();
     const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
     const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
     this.model.position.copy(right.multiplyScalar(this.pan.x)).add(up.multiplyScalar(this.pan.y));
     this.onChange?.();
+  }
+
+  private applyModelRotation() {
+    this.model.rotation.set(this.pitch, this.yaw, 0);
+    // viewDir points at the camera, so a clockwise turn on screen is a negative angle about it.
+    if (this.roll !== 0) this.model.quaternion.premultiply(this.rollQuaternion.setFromAxisAngle(this.viewDir, -this.roll));
   }
 
   dispose() {

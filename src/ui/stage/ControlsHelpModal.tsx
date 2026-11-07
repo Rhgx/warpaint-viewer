@@ -318,6 +318,7 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
               <>
                 <ControlRow keys={<Key>Drag</Key>}>Rotate weapon</ControlRow>
                 <ControlRow keys={<Key>Pinch</Key>}>Zoom</ControlRow>
+                <ControlRow keys={<Key>Two-finger twist</Key>}>Roll weapon</ControlRow>
                 <ControlRow keys={<Key>Two-finger drag</Key>}>Move weapon</ControlRow>
                 <ControlRow keys={<Key>Double-tap</Key>}>Reset view</ControlRow>
               </>

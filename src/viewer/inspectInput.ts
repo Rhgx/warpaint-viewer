@@ -48,13 +48,21 @@ export interface TouchPoint {
   y: number;
 }
 
-/** Centroid and spread of a two-finger touch, the baseline for pan and pinch. */
+/** Centroid, spread and screen angle of a two-finger touch, the baseline for pan, pinch and twist. */
 export interface TouchPairSnapshot {
   readonly x: number;
   readonly y: number;
   readonly distance: number;
+  /** Radians, growing clockwise on screen because client Y points down. */
+  readonly angle: number;
 }
 
 export function touchPairSnapshot(a: TouchPoint, b: TouchPoint): TouchPairSnapshot {
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, distance: Math.hypot(b.x - a.x, b.y - a.y) };
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, distance: Math.hypot(b.x - a.x, b.y - a.y), angle: Math.atan2(b.y - a.y, b.x - a.x) };
+}
+
+/** The shorter way from one finger-pair angle to another, so crossing the atan2 seam is not a full turn. */
+export function touchPairTwist(from: TouchPairSnapshot, to: TouchPairSnapshot): number {
+  const delta = to.angle - from.angle;
+  return Math.atan2(Math.sin(delta), Math.cos(delta));
 }

@@ -8,13 +8,14 @@ custom war paint workbench.
 
 ## Camera controls
 
-| Action       | Touch           | Result                          |
-| ------------ | --------------- | ------------------------------- |
-| Drag         | Drag            | Rotate the weapon               |
-| Scroll       | Pinch           | Zoom in or out                  |
-| Right-drag   | Two-finger drag | Move the weapon within the view |
-| Double-click | Double-tap      | Reset the view                  |
-| `Alt`        |                 | Toggle Advanced Camera          |
+| Action       | Touch            | Result                          |
+| ------------ | ---------------- | ------------------------------- |
+| Drag         | Drag             | Rotate the weapon               |
+| Scroll       | Pinch            | Zoom in or out                  |
+|              | Two-finger twist | Roll the weapon                 |
+| Right-drag   | Two-finger drag  | Move the weapon within the view |
+| Double-click | Double-tap       | Reset the view                  |
+| `Alt`        |                  | Toggle Advanced Camera          |
 
 Preset angles, projection options, and field-of-view settings are under
 **Camera**.

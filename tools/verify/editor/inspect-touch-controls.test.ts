@@ -179,3 +179,103 @@ test('a fling wakes the idle frame loop, and its first step excludes the pause b
   assert.equal(controls.update(0.06), true);
   assert.ok(Math.abs(model.rotation.y - before - velocity / 60) < 1e-9, 'one display frame of motion, not the pause');
 });
+
+// Looking straight down Z, a model point maps directly to the screen: +X is right and +Y is up.
+function worldPoint(x: number, y: number, z: number) {
+  return new THREE.Vector3(x, y, z).applyQuaternion(model.quaternion);
+}
+
+/** Puts finger 2 at a clockwise screen angle around finger 1, 100px away. */
+function turnTo(degrees: number) {
+  const radians = THREE.MathUtils.degToRad(degrees);
+  move(2, 100 + 100 * Math.cos(radians), 100 + 100 * Math.sin(radians));
+}
+
+function twoFingers() {
+  controls.setViewDirection(new THREE.Vector3(0, 0, 1));
+  down(1, 100, 100);
+  down(2, 200, 100);
+}
+
+test('a twist rolls the model with the fingers, once past its dead zone', () => {
+  twoFingers();
+  turnTo(8);
+  assert.ok(worldPoint(1, 0, 0).distanceTo(new THREE.Vector3(1, 0, 0)) < 1e-9, 'pinch drift does not roll');
+
+  turnTo(15);
+  assert.ok(worldPoint(1, 0, 0).distanceTo(new THREE.Vector3(1, 0, 0)) < 1e-9, 'engaging does not jump');
+
+  turnTo(45);
+  const expected = THREE.MathUtils.degToRad(30);
+  assert.ok(worldPoint(1, 0, 0).distanceTo(new THREE.Vector3(Math.cos(expected), -Math.sin(expected), 0)) < 1e-9, 'a clockwise twist turns clockwise on screen');
+  assert.ok(worldPoint(0, 0, 1).distanceTo(new THREE.Vector3(0, 0, 1)) < 1e-9, 'the view axis stays still');
+
+  now += 16;
+  up(2, 100, 200);
+  up(1, 100, 100);
+  assert.equal(controls.update(0.016), false, 'a twist leaves no inertia');
+});
+
+test('a twist across the atan2 seam keeps turning the short way', () => {
+  twoFingers();
+  turnTo(170);
+  turnTo(175);
+  const before = worldPoint(1, 0, 0);
+  turnTo(185);
+  const expected = before.clone().applyAxisAngle(new THREE.Vector3(0, 0, 1), -THREE.MathUtils.degToRad(10));
+  assert.ok(worldPoint(1, 0, 0).distanceTo(expected) < 1e-9);
+});
+
+test('close fingers never roll, and a new finger pair must clear the dead zone again', () => {
+  controls.setViewDirection(new THREE.Vector3(0, 0, 1));
+  down(1, 100, 100);
+  down(2, 110, 100);
+  move(2, 100, 110);
+  move(2, 90, 100);
+  assert.ok(worldPoint(1, 0, 0).distanceTo(new THREE.Vector3(1, 0, 0)) < 1e-9, 'a 10px spread is too noisy to read');
+  up(2, 90, 100);
+
+  down(2, 200, 100);
+  turnTo(20);
+  turnTo(25);
+  const engaged = worldPoint(1, 0, 0);
+  assert.ok(engaged.distanceTo(new THREE.Vector3(1, 0, 0)) > 1e-3, 'this pair engaged');
+  up(2, 100, 200);
+  down(2, 100, 200);
+  move(2, 110, 199.5);
+  assert.ok(worldPoint(1, 0, 0).distanceTo(engaged) < 1e-9, 'lifting a finger starts a new dead zone');
+});
+
+test('after a roll a drag still follows the finger, and double-tap clears the roll', () => {
+  twoFingers();
+  turnTo(15);
+  turnTo(105);
+  up(2, 100, 200);
+  now += 16;
+  move(1, 110, 100);
+  const front = worldPoint(0, 0, 1);
+  assert.ok(front.x > 0.05 && Math.abs(front.y) < 1e-9, 'a rightward drag moves the front of the model right');
+
+  now += 200;
+  up(1, 110, 100);
+  now += 1000;
+  down(1, 50, 50);
+  up(1, 50, 50);
+  now += 100;
+  down(1, 50, 50);
+  up(1, 50, 50);
+  assert.ok(Math.abs(model.quaternion.angleTo(new THREE.Quaternion())) < 1e-9, 'double-tap restores the pose');
+});
+
+test('a turntable keeps the roll', () => {
+  twoFingers();
+  turnTo(15);
+  turnTo(105);
+  up(2, 100, 200);
+  up(1, 100, 100);
+  const rolled = model.quaternion.clone();
+  controls.rotateYaw(Math.PI * 2);
+  assert.ok(model.quaternion.angleTo(rolled) < 1e-6, 'a full turn returns to the rolled pose');
+  controls.rotateYaw(Math.PI / 2);
+  assert.ok(model.quaternion.angleTo(rolled) > 0.5, 'and the turn did move it');
+});
