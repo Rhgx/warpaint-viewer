@@ -44,7 +44,7 @@ export function CanvasHint(props: CanvasHintProps) {
       data-slot="canvas-hint"
       className={cn(
         // The definitions prompt takes the bottom-center slot, so the hint steps above it. An open mobile panel covers the hint's slot.
-        'pointer-events-none absolute bottom-2.5 left-1/2 z-2 -translate-x-1/2 rounded-sm border border-border bg-panel/88 px-3.5 py-1 text-10.5 tracking-[0.2px] whitespace-nowrap text-dim shadow-pop backdrop-blur-[6px] transition-opacity duration-200 ease-[ease] select-none in-data-prompt:bottom-15.5 mobile:w-max mobile:max-w-[calc(100%-24px)] mobile:text-center mobile:text-12 mobile:whitespace-normal mobile:not-in-data-[mobile-panel=none]:invisible mobile:not-in-data-[mobile-panel=none]:opacity-0',
+        'pointer-events-none absolute bottom-2.5 left-1/2 z-2 -translate-x-1/2 rounded-sm border border-border bg-panel/88 px-3.5 py-1 text-10.5 tracking-[0.2px] whitespace-nowrap text-dim shadow-pop backdrop-blur-[6px] touch:backdrop-blur-none transition-opacity duration-200 ease-[ease] select-none in-data-prompt:bottom-15.5 mobile:w-max mobile:max-w-[calc(100%-24px)] mobile:text-center mobile:text-12 mobile:whitespace-normal mobile:not-in-data-[mobile-panel=none]:invisible mobile:not-in-data-[mobile-panel=none]:opacity-0',
         dismissed && !editorInteractionActive && !stickerEditorPreparing && !stickerPartPickingActive && 'opacity-0',
       )}
     >

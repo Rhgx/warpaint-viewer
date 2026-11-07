@@ -142,3 +142,40 @@ test('mouse behavior is unchanged', () => {
   emit('dblclick', { button: 0 });
   assertPoseEqual(pose(), { yaw: 0, pitch: 0, panX: 0, panY: 0, dist: 5 }, 'left double-click resets');
 });
+
+test('touchstart is consumed, so the browser delivers moves inside its slop region', () => {
+  const event = new Event('touchstart', { cancelable: true });
+  canvas.dispatchEvent(event);
+  assert.equal(event.defaultPrevented, true);
+});
+
+test('a resting finger asks for no frames, while a held mouse keeps its frame loop', () => {
+  down(1, 100, 100);
+  assert.equal(controls.update(0.016), false);
+  up(1, 100, 100);
+
+  mouse('pointerdown', 100, 100);
+  assert.equal(controls.update(0.016), true);
+  mouse('pointerup', 100, 100);
+});
+
+test('a fling wakes the idle frame loop, and its first step excludes the pause before release', () => {
+  controls.dispose();
+  let frameRequests = 0;
+  controls = new InspectControls(new THREE.PerspectiveCamera(50, 1, 0.01, 100), model, canvas as unknown as HTMLElement, () => { frameRequests += 1; });
+  controls.setFraming(5, 1);
+
+  down(1, 100, 100);
+  now += 16;
+  move(1, 120, 100);
+  const velocity = (20 * 0.0085) / 0.016;
+  now += 60;
+  frameRequests = 0;
+  up(1, 120, 100);
+  assert.equal(frameRequests, 1, 'the release requests the first inertia frame');
+
+  // The frame clock last ticked at the final move, so it reports the whole pause.
+  const before = model.rotation.y;
+  assert.equal(controls.update(0.06), true);
+  assert.ok(Math.abs(model.rotation.y - before - velocity / 60) < 1e-9, 'one display frame of motion, not the pause');
+});

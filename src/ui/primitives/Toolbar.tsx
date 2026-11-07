@@ -3,7 +3,8 @@ import type { ComponentProps } from 'react';
 import { Button } from './Button';
 import { cn } from './cn';
 
-export const STAGE_PANEL = 'flex gap-1 rounded-md border border-strong bg-panel/82 p-1 shadow-pop backdrop-blur-[6px] touch:gap-1.5';
+// A blur over the live canvas is redone on every frame, which a phone's GPU pays for during gestures.
+export const STAGE_PANEL = 'flex gap-1 rounded-md border border-strong bg-panel/82 p-1 shadow-pop backdrop-blur-[6px] touch:gap-1.5 touch:bg-panel/92 touch:backdrop-blur-none';
 
 /** The icon row floating over a stage. Its button size is what overlays under it offset by. */
 export function Toolbar({ className, ...props }: ComponentProps<'div'>) {

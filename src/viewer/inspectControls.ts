@@ -83,6 +83,9 @@ export class InspectControls {
   private lastMoveTime = 0;
   private velYaw = 0; // rad/s inertia
   private velPitch = 0;
+  // Set by a touch release that flings. No frames run under a resting finger, so the frame
+  // clock's first delta after it can span that pause and must not count as fling time.
+  private flingJustReleased = false;
   private pendingStickerMiddleClick: (InspectPointerClick & { readonly pointerId: number; moved: boolean }) | null = null;
   private lastStickerMiddleClick: InspectPointerClick | null = null;
 
@@ -136,6 +139,7 @@ export class InspectControls {
     });
     model.rotation.order = 'YXZ';
 
+    dom.addEventListener('touchstart', this.onTouchStart, { passive: false });
     dom.addEventListener('pointerdown', this.onPointerDown);
     dom.addEventListener('pointermove', this.onPointerMove);
     dom.addEventListener('pointerup', this.onPointerUp);
@@ -358,6 +362,13 @@ export class InspectControls {
   }
 
   private onContextMenu = (e: Event) => e.preventDefault();
+
+  // Chromium holds back moves inside its touch slop region unless touchstart is consumed, and
+  // cancelling pointerdown does not consume it. The model would stick, then jump, on every drag.
+  // Pointer events still arrive, and double-tap has its own tracker, so nothing here needs the click.
+  private onTouchStart = (e: Event) => {
+    if (e.cancelable) e.preventDefault();
+  };
 
   private onPointerDown = (e: PointerEvent) => {
     this.lastPointerDownWasTouch = e.pointerType === 'touch';
@@ -593,6 +604,10 @@ export class InspectControls {
       this.velPitch = 0;
     }
     this.mode = 'none';
+    if (this.velYaw !== 0 || this.velPitch !== 0) {
+      this.flingJustReleased = true;
+      this.onChange?.();
+    }
     const start = this.tapStart;
     this.tapStart = null;
     if (!start || start.pointerId !== e.pointerId
@@ -808,10 +823,12 @@ export class InspectControls {
     if (this.cameraMode === 'advanced') return this.flyCamera.updateAdvanced(dt);
     let dirty = false;
     if (this.mode !== 'rotate' && (this.velYaw !== 0 || this.velPitch !== 0)) {
-      this.yaw += this.velYaw * dt;
-      this.pitch = THREE.MathUtils.clamp(this.pitch + this.velPitch * dt, -PITCH_LIMIT, PITCH_LIMIT);
+      const step = this.flingJustReleased ? Math.min(dt, 1 / 60) : dt;
+      this.flingJustReleased = false;
+      this.yaw += this.velYaw * step;
+      this.pitch = THREE.MathUtils.clamp(this.pitch + this.velPitch * step, -PITCH_LIMIT, PITCH_LIMIT);
       // Exponential decay with a fixed half-life; fully gone in a few hundred ms.
-      const decay = Math.pow(0.5, dt / INERTIA_HALF_LIFE);
+      const decay = Math.pow(0.5, step / INERTIA_HALF_LIFE);
       this.velYaw *= decay;
       this.velPitch *= decay;
       if (Math.abs(this.velYaw) < INERTIA_CUTOFF && Math.abs(this.velPitch) < INERTIA_CUTOFF) this.velYaw = this.velPitch = 0;
@@ -838,9 +855,10 @@ export class InspectControls {
       dirty = true;
     }
     if (dirty) this.applyInspect();
-    // Keep a frame pending while a pointer is held, so controls stay responsive on displays that
-    // refresh faster than input events. Otherwise the viewer can stay fully idle.
-    return dirty || this.mode !== 'none' || this.spinRate > 0;
+    // Keep a frame pending while a mouse or pen is held, so controls stay responsive on displays that
+    // refresh faster than input events. Touch draws only when a finger moves the pose: on a phone,
+    // redrawing an unchanged scene costs GPU time that the next real frame then waits behind.
+    return dirty || this.dragPointerId !== null || this.spinRate > 0;
   }
 
   private applyInspect() {
@@ -860,6 +878,7 @@ export class InspectControls {
     this.disposed = true;
     this.cancelGesture();
     if (document.pointerLockElement === this.dom) document.exitPointerLock?.();
+    this.dom.removeEventListener('touchstart', this.onTouchStart);
     this.dom.removeEventListener('pointerdown', this.onPointerDown);
     this.dom.removeEventListener('pointermove', this.onPointerMove);
     this.dom.removeEventListener('pointerup', this.onPointerUp);
