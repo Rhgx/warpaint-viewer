@@ -12,6 +12,7 @@ import {
   resolveKitRecipe,
   resolveKitRecipeWithProvenance,
 } from './kitQueries';
+import { AppError } from '../errors';
 import type { DecodedContainer } from './decoderShared';
 import type { Team } from '../data/types';
 import type { ProtoDefJsonFragment, ProtoDefOpenOptions } from './types';
@@ -84,7 +85,11 @@ function reply(id: number, result: unknown): void {
 
 function fail(id: number, cause: unknown): void {
   const message = cause instanceof Error ? cause.message : 'Failed to process the proto_defs container.';
-  self.postMessage({ id, ok: false, message });
+  // An AppError's code and location do not survive postMessage as a class, so its fields travel as plain data.
+  const appError = cause instanceof AppError
+    ? { code: cause.code, userMessage: cause.userMessage, technicalDetail: cause.technicalDetail, path: cause.path, location: cause.location }
+    : undefined;
+  self.postMessage({ id, ok: false, message, appError });
 }
 
 self.onmessage = (event: MessageEvent<Request>) => {

@@ -50,6 +50,7 @@ import {
   activeOperationIndex,
   applyBundleEdit,
   operationMessages,
+  sameBundleContent,
   selectActiveScope,
   snapshotBundle,
   type KitViewerScope,
@@ -443,7 +444,10 @@ export function useProtoDefEditorSession({
       return false;
     }
     try {
-      const next = snapshotBundle(applyBundleEdit(prior, activeOperationIndex(prior, viewerRef.current), mutate));
+      const edited = applyBundleEdit(prior, activeOperationIndex(prior, viewerRef.current), mutate);
+      // Writing the value a field already holds is not an edit: no undo step, and the paint stays clean.
+      if (sameBundleContent(prior, edited)) return false;
+      const next = snapshotBundle(edited);
       const gesture = transformGestureRef.current;
       if (gesture) {
         if (!gesture.recorded) {

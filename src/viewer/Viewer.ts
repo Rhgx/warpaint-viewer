@@ -1295,8 +1295,9 @@ gl_FragColor.a = uTf2LegacyInspectOpacity > 0.5
   // Load a weapon GLB. Concurrent calls resolve in call order via a token so a
   // stale load never wins; missing models leave the stage empty.
   async loadModel(url: string | null, initialView?: ViewAnglePreset, attachments: readonly WeaponAttachment[] = [], weaponKey: string | null = null): Promise<void> {
-    if (url && url === this.currentModelUrl && this.meshes.length > 0) return;
+    // Counted before the same-model return, so going back to the displayed weapon also drops a slower load still in flight.
     const token = ++this.loadToken;
+    if (url && url === this.currentModelUrl && this.meshes.length > 0) return;
     if (!url) {
       this.clearModel();
       return;

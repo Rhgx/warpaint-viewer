@@ -212,6 +212,13 @@ export class ViewerCapture {
       disposables.push(target);
       return target;
     };
+    // Every turn goes through here so the finally block can undo the total. The overrun frames that
+    // hide the loop seam, or a capture stopped partway, would otherwise leave the model off the user's pose.
+    let turned = 0;
+    const turn = (radians: number) => {
+      turned += radians;
+      this.host.controls.rotateYaw(radians);
+    };
     this.host.setTurntableCapturing(true);
     this.host.canvas.style.pointerEvents = 'none';
     this.host.lightEditor.setCaptureMode(true);
@@ -234,7 +241,7 @@ export class ViewerCapture {
         setParticlePointScale(viewH * probeScale);
         this.host.renderer.setRenderTarget(probe);
         for (let i = 0; i < TURNTABLE_PROBE_STEPS; i++) {
-          this.host.controls.rotateYaw((Math.PI * 2) / TURNTABLE_PROBE_STEPS);
+          turn((Math.PI * 2) / TURNTABLE_PROBE_STEPS);
           this.host.renderer.render(this.host.scene, camera);
           this.host.renderer.readRenderTargetPixels(probe, 0, 0, probeW, probeH, probeRaw);
           unionContentBounds(probeRaw, probeW, probeH, box);
@@ -289,7 +296,7 @@ export class ViewerCapture {
       };
 
       const advance = () => {
-        this.host.controls.rotateYaw((Math.PI * 2) / frameCount);
+        turn((Math.PI * 2) / frameCount);
         this.host.sheen.updateSheenAnimation(dt);
         this.host.emissive.stepEmissive(dt);
         this.host.weaponAttachments.stepAttachments(dt);
@@ -339,6 +346,7 @@ export class ViewerCapture {
       setParticlePointScale(viewH * this.host.renderer.getPixelRatio());
       for (const disposable of disposables) disposable.dispose();
       this.host.canvas.style.pointerEvents = prevPointerEvents;
+      this.host.controls.rotateYaw(-turned);
       this.host.setTurntableCapturing(false);
       this.host.invalidate();
     }

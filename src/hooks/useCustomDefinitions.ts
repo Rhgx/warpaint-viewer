@@ -51,6 +51,7 @@ import {
 
 // Stock containers are under 10 MB; this only stops a mis-picked file being read whole.
 const MAX_DEFINITION_BYTES = 64 * 1024 * 1024;
+const DEFINITION_TOO_LARGE = 'Definition files must be 64 MB or smaller.';
 // Community packs ship two JSON fragments beside the textures; these bounds stop
 // a scan from reading a whole archive.
 const MAX_FRAGMENT_BYTES = 8 * 1024 * 1024;
@@ -296,7 +297,7 @@ export function useCustomDefinitions({
 
   const openContainer = useCallback((name: string, bytes: Uint8Array) => openWith(name, (source, options) => {
     if (bytes.byteLength > MAX_DEFINITION_BYTES) {
-      throw new Error('Definition files must be 64 MB or smaller.');
+      throw new Error(DEFINITION_TOO_LARGE);
     }
     return source.open(bytes, options);
   }), [openWith]);
@@ -452,6 +453,8 @@ export function useCustomDefinitions({
         let sourceFiles: File[];
         if (container) {
           sourceFiles = [container];
+          // Refused on the File's size: reading it is the step a mis-picked multi-gigabyte file must not reach.
+          if (container.size > MAX_DEFINITION_BYTES) throw new Error(DEFINITION_TOO_LARGE);
           opened = await openContainer(container.name, new Uint8Array(await container.arrayBuffer()));
         } else {
           sourceFiles = jsonFiles;

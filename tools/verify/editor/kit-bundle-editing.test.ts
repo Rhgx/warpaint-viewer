@@ -10,10 +10,11 @@ import {
   activeOperationIndex,
   applyBundleEdit,
   operationMessages,
+  sameBundleContent,
   selectActiveScope,
   topLevelMessages,
 } from '../../../src/editor/kitBundle';
-import { setTextureTransformFlip } from '../../../src/editor/transform/transformMutations';
+import { setTextureTransformFlip, setTextureTransformRange } from '../../../src/editor/transform/transformMutations';
 import { discoverLayerTransforms } from '../../../src/editor/transform/transformTargets';
 import { decodeProtoDefsFromJson } from '../../../src/protodefs/decoder';
 import { resolveKitRecipe } from '../../../src/protodefs/kitQueries';
@@ -105,4 +106,24 @@ test('a Killer Bee wear 0 edit changes and previews only that wear', () => {
   for (let wear = 1; wear < 5; wear += 1) {
     assert.deepEqual(recipe(rebuilt, wear), recipe(full, wear), `wear ${wear} should keep its stock operation`);
   }
+});
+
+test('writing a transform value that is already there leaves the bundle content the same', () => {
+  const bundle = bundleOf(KILLER_BEE);
+  const index = activeOperationIndex(bundle, { weaponKey: SCATTERGUN, wear: 0 });
+  const layer = firstLayer(bundle, index);
+  const flip = (from: ProtoDefKitBundle) => applyBundleEdit(from, index, (messages) => setTextureTransformFlip(messages, layer.target, 'u', true));
+  const rotate = (from: ProtoDefKitBundle) => applyBundleEdit(from, index, (messages) => (
+    setTextureTransformRange(messages, layer.target, 'rotation', { mode: 'fixed', min: 45, max: 45 })
+  ));
+
+  const flipped = flip(bundle);
+  assert.equal(sameBundleContent(bundle, flipped), false, 'a real edit differs');
+  const flippedAgain = flip(flipped);
+  assert.notEqual(flippedAgain, flipped, 'the mutation still hands back a new bundle');
+  assert.equal(sameBundleContent(flipped, flippedAgain), true);
+
+  const rotated = rotate(flipped);
+  assert.equal(sameBundleContent(flipped, rotated), false);
+  assert.equal(sameBundleContent(rotated, rotate(rotated)), true);
 });

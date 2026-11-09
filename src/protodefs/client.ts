@@ -1,6 +1,8 @@
 // Main-thread ProtoDefSource. Decoding runs in protodefs.worker.ts to keep the container
-// off the main thread; decoder.ts runs in-process when Workers are unavailable or fail.
+// off the main thread; decoder.ts runs in-process when Workers are unavailable or the worker
+// dies. An error the worker reports for one request goes back to the caller instead.
 
+import { AppError, type AppErrorCode } from '../errors';
 import type { DecodedContainer } from './decoderShared';
 import type { Team } from '../data/types';
 import type {
@@ -18,6 +20,34 @@ interface WorkerFailure {
   id: number;
   ok: false;
   message: string;
+  /** Present when the worker threw an AppError; see fail() in protodefs.worker.ts. */
+  appError?: {
+    code: AppErrorCode;
+    userMessage: string;
+    technicalDetail?: string;
+    path?: string;
+    location?: { line: number; column: number };
+  };
+}
+
+/** A failure the worker reported for one request. The worker itself is healthy, so nothing falls back. */
+class WorkerRequestFailure {
+  readonly error: Error;
+
+  constructor(failure: WorkerFailure) {
+    const { appError } = failure;
+    this.error = appError
+      ? new AppError(appError.code, appError.userMessage, {
+        technicalDetail: appError.technicalDetail,
+        path: appError.path,
+        location: appError.location,
+      })
+      : new Error(failure.message);
+  }
+}
+
+function rethrowRequestFailure(cause: unknown): void {
+  if (cause instanceof WorkerRequestFailure) throw cause.error;
 }
 
 interface PendingRequest {
@@ -111,7 +141,7 @@ class ProtoDefClient implements ProtoDefSource {
         if (!request) return;
         this.pending.delete(message.id);
         if (message.ok) request.resolve(message.result);
-        else request.reject(new Error(message.message));
+        else request.reject(new WorkerRequestFailure(message));
       };
       worker.onerror = () => this.disableWorkerAndFallBack();
       worker.onmessageerror = () => this.disableWorkerAndFallBack();
@@ -160,7 +190,8 @@ class ProtoDefClient implements ProtoDefSource {
       // Copy so the caller's bytes survive a failed postMessage and the in-process fallback.
       const transferable = bytes.slice().buffer;
       return (await this.post({ kind: 'open', bytes: transferable, options }, [transferable])) as ProtoDefIndex;
-    } catch {
+    } catch (cause) {
+      rethrowRequestFailure(cause);
       return (await this.ensureFallback()).open(bytes, options);
     }
   }
@@ -177,13 +208,15 @@ class ProtoDefClient implements ProtoDefSource {
       // Same copy as open().
       const transferable = baseBytes.slice().buffer;
       return (await this.post({ kind: 'openJson', baseBytes: transferable, fragments, options }, [transferable])) as ProtoDefIndex;
-    } catch {
+    } catch (cause) {
+      rethrowRequestFailure(cause);
       return (await this.ensureFallback()).openJsonFragments(baseBytes, fragments, options);
     }
   }
 
   // Once the in-process fallback is active it serves every call. Otherwise the
-  // worker runs the request, and a failed or missing worker falls back for it.
+  // worker runs the request, and a dead or missing worker falls back for it. A request
+  // the worker itself rejects is not a dead worker, so its error is thrown as it is.
   private async dispatch<T>(
     message: Record<string, unknown>,
     inProcess: (source: InProcessSource) => Promise<T>,
@@ -192,7 +225,8 @@ class ProtoDefClient implements ProtoDefSource {
     if (!this.worker) return inProcess(await this.ensureFallback());
     try {
       return (await this.post(message)) as T;
-    } catch {
+    } catch (cause) {
+      rethrowRequestFailure(cause);
       return inProcess(await this.ensureFallback());
     }
   }

@@ -467,12 +467,15 @@ export class ShowcaseBoard {
   /** Start dragging a new weapon from the tray; it follows the pointer until dropped. */
   async beginExternalDrag(weaponKey: string, paint: ShowcasePaint, clientX: number, clientY: number): Promise<void> {
     this.#cancelExternalDrag();
+    this.#externalRequest += 1;
+    const request = this.#externalRequest;
     window.addEventListener('pointermove', this.#onWindowMove);
     window.addEventListener('pointerup', this.#onWindowUp);
+    window.addEventListener('pointercancel', this.#onWindowCancel);
     this.#lastPointer = { x: clientX, y: clientY };
     this.#pendingExternal = true;
     const runtime = await this.#createRuntime(weaponKey, paint);
-    if (!this.#pendingExternal || !runtime) {
+    if (request !== this.#externalRequest || !this.#pendingExternal || !runtime) {
       if (runtime) this.#disposeRuntime(runtime);
       return;
     }
@@ -491,6 +494,8 @@ export class ShowcaseBoard {
   }
 
   #pendingExternal = false;
+  /** Counts tray drags, so one whose model arrives late cannot take over a newer drag. */
+  #externalRequest = 0;
   #releasedWhileLoading = false;
   #past: HistoryEntry[] = [];
   #future: HistoryEntry[] = [];
@@ -506,6 +511,7 @@ export class ShowcaseBoard {
     this.#releasedWhileLoading = false;
     window.removeEventListener('pointermove', this.#onWindowMove);
     window.removeEventListener('pointerup', this.#onWindowUp);
+    window.removeEventListener('pointercancel', this.#onWindowCancel);
   }
 
   /** Resolves once the board is back. */
@@ -1636,6 +1642,7 @@ export class ShowcaseBoard {
     this.#options.canvas.style.cursor = 'grabbing';
     window.addEventListener('pointermove', this.#onWindowMove);
     window.addEventListener('pointerup', this.#onWindowUp);
+    window.addEventListener('pointercancel', this.#onWindowCancel);
   };
 
   #onWindowMove = (event: PointerEvent): void => {
@@ -1691,12 +1698,24 @@ export class ShowcaseBoard {
     this.#emit();
   }
 
+  /** A cancelled pointer (system gesture, palm rejection) never sends pointerup: nothing is dropped, and carried weapons go back. */
+  #onWindowCancel = (): void => {
+    this.#queuedPointer = null;
+    if (!this.#drag) {
+      this.#cancelExternalDrag();
+      return;
+    }
+    this.#drag.candidate = null;
+    this.#onWindowUp();
+  };
+
   #onWindowUp = (): void => {
     if (this.#pendingExternal && !this.#drag) {
       // Let go before the weapon finished loading: it drops here once it arrives.
       this.#releasedWhileLoading = true;
       window.removeEventListener('pointermove', this.#onWindowMove);
       window.removeEventListener('pointerup', this.#onWindowUp);
+      window.removeEventListener('pointercancel', this.#onWindowCancel);
       return;
     }
     // Land where the pointer actually let go, even if that move never got a frame.
@@ -1951,6 +1970,7 @@ export class ShowcaseBoard {
     this.#cancelExternalDrag();
     window.removeEventListener('pointermove', this.#onWindowMove);
     window.removeEventListener('pointerup', this.#onWindowUp);
+    window.removeEventListener('pointercancel', this.#onWindowCancel);
     this.#options.canvas.removeEventListener('pointerdown', this.#onPointerDown);
     this.#options.canvas.removeEventListener('pointermove', this.#onCanvasHover);
     this.#resizeObserver.disconnect();

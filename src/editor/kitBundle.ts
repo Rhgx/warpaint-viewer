@@ -54,6 +54,14 @@ export function applyBundleEdit(
   };
 }
 
+/**
+ * Whether two bundles hold the same definition and operations: the only parts an edit rewrites.
+ * Some mutations clone before they write, so a new object does not always mean a change.
+ */
+export function sameBundleContent(a: ProtoDefKitBundle, b: ProtoDefKitBundle): boolean {
+  return a === b || JSON.stringify([a.definition, a.operations]) === JSON.stringify([b.definition, b.operations]);
+}
+
 // Deep-frozen objects; a frozen snapshot can be reused by reference instead of cloned again.
 const frozenSnapshots = new WeakSet<object>();
 

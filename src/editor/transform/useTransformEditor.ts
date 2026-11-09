@@ -570,19 +570,18 @@ export function useTransformEditor({
     weaponWritableFields === null || weaponWritableFields.includes(field)
   );
   const sharedTransformFields = weaponWritableFields ? sharedTransformPanelFields(weaponWritableFields) : undefined;
-  const commitTransformField = (key: keyof TextureTransformFields, value: SeedRangeValue) => {
-    if (!activeTransformTarget || transformDisabled) return;
+  const commitTransformField = (key: keyof TextureTransformFields, value: SeedRangeValue): boolean => {
+    if (!activeTransformTarget || transformDisabled) return false;
     if (transformScope === 'all') {
-      pushSessionTransformRangeToAll(
+      return pushSessionTransformRangeToAll(
         activeTransformTarget,
         TRANSFORM_FIELD_TO_PROTO[key],
         value,
         weaponSlots.map((slot) => [...slot.path, 'data', 'variable']),
       );
-      return;
     }
-    if (!canEditTransformField(TRANSFORM_FIELD_TO_PROTO[key])) return;
-    setSessionTransformRange(transformTargetForScope(activeTransformTarget, transformScope), TRANSFORM_FIELD_TO_PROTO[key], value);
+    if (!canEditTransformField(TRANSFORM_FIELD_TO_PROTO[key])) return false;
+    return setSessionTransformRange(transformTargetForScope(activeTransformTarget, transformScope), TRANSFORM_FIELD_TO_PROTO[key], value);
   };
   const handleTransformFieldChange = (key: keyof TextureTransformFields, value: SeedRangeValue) => {
     if (!transformGestureActiveRef.current) {
@@ -676,7 +675,11 @@ export function useTransformEditor({
       transformDraftRef.current = null;
       if (draft) {
         transformDraftCommitGenerationRef.current = editorDefinitionGeneration;
-        commitTransformField(draft.key, draft.value);
+        if (!commitTransformField(draft.key, draft.value)) {
+          // Nothing was published, so no new generation will arrive to clear the draft.
+          transformDraftCommitGenerationRef.current = null;
+          setTransformDraft(null);
+        }
       }
       setTransformGestureActive(false);
     },
