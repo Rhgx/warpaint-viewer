@@ -16124,6 +16124,532 @@
     20
    ],
    "modelGlowColor": true
+  },
+  "models\\paintkits\\c_grenadelauncher\\c_grenadelauncher_sheen": {
+   "phongExponent": 255,
+   "phongBoost": 4,
+   "envmapTint": [
+    0.1,
+    0.1,
+    0.1
+   ],
+   "normalMap": null,
+   "phong": true,
+   "phongExponentFactor": null,
+   "phongExponentTexture": null,
+   "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+   "halfLambert": true,
+   "baseMapAlphaPhongMask": true,
+   "baseMapAlphaEnvmapMask": false,
+   "normalMapAlphaEnvmapMask": false,
+   "phongAlbedoTint": true,
+   "phongTint": [
+    0.5,
+    0.4,
+    0.3
+   ],
+   "phongFresnelRanges": [
+    0.3,
+    0.5,
+    3
+   ],
+   "rimLight": true,
+   "rimLightExponent": 2,
+   "rimLightBoost": 2.5,
+   "rimMask": true,
+   "selfIllum": true,
+   "selfIllumMask": null,
+   "selfIllumTint": [
+    5,
+    3,
+    0.7
+   ],
+   "selfIllumFresnel": true,
+   "selfIllumFresnelMinMaxExp": [
+    0,
+    10,
+    20
+   ],
+   "modelGlowColor": true
+  },
+  "models\\paintkits\\workshop\\demo_cannon\\c_demo_cannon_sheen": {
+   "phongExponent": 255,
+   "phongBoost": 4,
+   "envmapTint": [
+    0.1,
+    0.1,
+    0.1
+   ],
+   "normalMap": null,
+   "phong": true,
+   "phongExponentFactor": null,
+   "phongExponentTexture": null,
+   "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+   "halfLambert": true,
+   "baseMapAlphaPhongMask": true,
+   "baseMapAlphaEnvmapMask": false,
+   "normalMapAlphaEnvmapMask": false,
+   "phongAlbedoTint": true,
+   "phongTint": [
+    0.5,
+    0.4,
+    0.3
+   ],
+   "phongFresnelRanges": [
+    0.3,
+    0.5,
+    3
+   ],
+   "rimLight": true,
+   "rimLightExponent": 2,
+   "rimLightBoost": 2.5,
+   "rimMask": true,
+   "selfIllum": true,
+   "selfIllumMask": null,
+   "selfIllumTint": [
+    5,
+    3,
+    0.7
+   ],
+   "selfIllumFresnel": true,
+   "selfIllumFresnelMinMaxExp": [
+    0,
+    10,
+    20
+   ],
+   "modelGlowColor": true
+  },
+  "models\\paintkits\\c_dragons_fury\\c_grenadelauncher_gold": {
+   "phongExponent": 255,
+   "phongBoost": 0.3,
+   "envmapTint": [
+    0.5,
+    0.2,
+    0.06
+   ],
+   "normalMap": null,
+   "phong": true,
+   "phongExponentFactor": null,
+   "phongExponentTexture": null,
+   "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+   "halfLambert": true,
+   "baseMapAlphaPhongMask": true,
+   "baseMapAlphaEnvmapMask": false,
+   "normalMapAlphaEnvmapMask": false,
+   "phongAlbedoTint": true,
+   "phongTint": [
+    0.9,
+    0.7,
+    0.5
+   ],
+   "phongFresnelRanges": [
+    0.3,
+    0.5,
+    3
+   ],
+   "rimLight": true,
+   "rimLightExponent": 80,
+   "rimLightBoost": 0.4,
+   "rimMask": false,
+   "envmapTexture": "textures/cubemaps/cubemap_specular001.webp",
+   "selfIllum": true,
+   "selfIllumMask": null,
+   "selfIllumTint": [
+    1,
+    0.8,
+    0.3
+   ],
+   "selfIllumFresnel": true,
+   "selfIllumFresnelMinMaxExp": [
+    0,
+    10,
+    20
+   ],
+   "modelGlowColor": true
+  },
+  "models\\paintkits\\c_dragons_fury\\c_knife_gold": {
+   "phongExponent": 255,
+   "phongBoost": 0.3,
+   "envmapTint": [
+    0.5,
+    0.2,
+    0.06
+   ],
+   "normalMap": null,
+   "phong": true,
+   "phongExponentFactor": null,
+   "phongExponentTexture": null,
+   "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+   "halfLambert": true,
+   "baseMapAlphaPhongMask": true,
+   "baseMapAlphaEnvmapMask": false,
+   "normalMapAlphaEnvmapMask": false,
+   "phongAlbedoTint": true,
+   "phongTint": [
+    0.9,
+    0.7,
+    0.5
+   ],
+   "phongFresnelRanges": [
+    0.3,
+    0.5,
+    3
+   ],
+   "rimLight": true,
+   "rimLightExponent": 80,
+   "rimLightBoost": 0.4,
+   "rimMask": false,
+   "envmapTexture": "textures/cubemaps/cubemap_specular001.webp",
+   "selfIllum": true,
+   "selfIllumMask": null,
+   "selfIllumTint": [
+    1,
+    0.8,
+    0.3
+   ],
+   "selfIllumFresnel": true,
+   "selfIllumFresnelMinMaxExp": [
+    0,
+    10,
+    20
+   ],
+   "modelGlowColor": true
+  },
+  "models\\paintkits\\c_dragons_fury\\c_medigun_gold": {
+   "phongExponent": 255,
+   "phongBoost": 0.3,
+   "envmapTint": [
+    0.5,
+    0.2,
+    0.06
+   ],
+   "normalMap": null,
+   "phong": true,
+   "phongExponentFactor": null,
+   "phongExponentTexture": null,
+   "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+   "halfLambert": true,
+   "baseMapAlphaPhongMask": true,
+   "baseMapAlphaEnvmapMask": false,
+   "normalMapAlphaEnvmapMask": false,
+   "phongAlbedoTint": true,
+   "phongTint": [
+    0.9,
+    0.7,
+    0.5
+   ],
+   "phongFresnelRanges": [
+    0.3,
+    0.5,
+    3
+   ],
+   "rimLight": true,
+   "rimLightExponent": 80,
+   "rimLightBoost": 0.4,
+   "rimMask": false,
+   "envmapTexture": "textures/cubemaps/cubemap_specular001.webp",
+   "selfIllum": true,
+   "selfIllumMask": null,
+   "selfIllumTint": [
+    1,
+    0.8,
+    0.3
+   ],
+   "selfIllumFresnel": true,
+   "selfIllumFresnelMinMaxExp": [
+    0,
+    10,
+    20
+   ],
+   "modelGlowColor": true
+  },
+  "models\\paintkits\\c_dragons_fury\\c_minigun_gold": {
+   "phongExponent": 255,
+   "phongBoost": 0.3,
+   "envmapTint": [
+    0.5,
+    0.2,
+    0.06
+   ],
+   "normalMap": null,
+   "phong": true,
+   "phongExponentFactor": null,
+   "phongExponentTexture": null,
+   "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+   "halfLambert": true,
+   "baseMapAlphaPhongMask": true,
+   "baseMapAlphaEnvmapMask": false,
+   "normalMapAlphaEnvmapMask": false,
+   "phongAlbedoTint": true,
+   "phongTint": [
+    0.9,
+    0.7,
+    0.5
+   ],
+   "phongFresnelRanges": [
+    0.3,
+    0.5,
+    3
+   ],
+   "rimLight": true,
+   "rimLightExponent": 80,
+   "rimLightBoost": 0.4,
+   "rimMask": false,
+   "envmapTexture": "textures/cubemaps/cubemap_specular001.webp",
+   "selfIllum": true,
+   "selfIllumMask": null,
+   "selfIllumTint": [
+    1,
+    0.8,
+    0.3
+   ],
+   "selfIllumFresnel": true,
+   "selfIllumFresnelMinMaxExp": [
+    0,
+    10,
+    20
+   ],
+   "modelGlowColor": true
+  },
+  "models\\paintkits\\c_dragons_fury\\c_rocketlauncher_gold": {
+   "phongExponent": 255,
+   "phongBoost": 0.3,
+   "envmapTint": [
+    0.5,
+    0.2,
+    0.06
+   ],
+   "normalMap": null,
+   "phong": true,
+   "phongExponentFactor": null,
+   "phongExponentTexture": null,
+   "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+   "halfLambert": true,
+   "baseMapAlphaPhongMask": true,
+   "baseMapAlphaEnvmapMask": false,
+   "normalMapAlphaEnvmapMask": false,
+   "phongAlbedoTint": true,
+   "phongTint": [
+    0.9,
+    0.7,
+    0.5
+   ],
+   "phongFresnelRanges": [
+    0.3,
+    0.5,
+    3
+   ],
+   "rimLight": true,
+   "rimLightExponent": 80,
+   "rimLightBoost": 0.4,
+   "rimMask": false,
+   "envmapTexture": "textures/cubemaps/cubemap_specular001.webp",
+   "selfIllum": true,
+   "selfIllumMask": null,
+   "selfIllumTint": [
+    1,
+    0.8,
+    0.3
+   ],
+   "selfIllumFresnel": true,
+   "selfIllumFresnelMinMaxExp": [
+    0,
+    10,
+    20
+   ],
+   "modelGlowColor": true
+  },
+  "models\\paintkits\\c_dragons_fury\\c_scattergun_gold": {
+   "phongExponent": 255,
+   "phongBoost": 0.3,
+   "envmapTint": [
+    0.5,
+    0.2,
+    0.06
+   ],
+   "normalMap": null,
+   "phong": true,
+   "phongExponentFactor": null,
+   "phongExponentTexture": null,
+   "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+   "halfLambert": true,
+   "baseMapAlphaPhongMask": true,
+   "baseMapAlphaEnvmapMask": false,
+   "normalMapAlphaEnvmapMask": false,
+   "phongAlbedoTint": true,
+   "phongTint": [
+    0.9,
+    0.7,
+    0.5
+   ],
+   "phongFresnelRanges": [
+    0.3,
+    0.5,
+    3
+   ],
+   "rimLight": true,
+   "rimLightExponent": 80,
+   "rimLightBoost": 0.4,
+   "rimMask": false,
+   "envmapTexture": "textures/cubemaps/cubemap_specular001.webp",
+   "selfIllum": true,
+   "selfIllumMask": null,
+   "selfIllumTint": [
+    1,
+    0.8,
+    0.3
+   ],
+   "selfIllumFresnel": true,
+   "selfIllumFresnelMinMaxExp": [
+    0,
+    10,
+    20
+   ],
+   "modelGlowColor": true
+  },
+  "models\\paintkits\\c_dragons_fury\\c_shotgun_gold": {
+   "phongExponent": 255,
+   "phongBoost": 0.3,
+   "envmapTint": [
+    0.5,
+    0.2,
+    0.06
+   ],
+   "normalMap": null,
+   "phong": true,
+   "phongExponentFactor": null,
+   "phongExponentTexture": null,
+   "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+   "halfLambert": true,
+   "baseMapAlphaPhongMask": true,
+   "baseMapAlphaEnvmapMask": false,
+   "normalMapAlphaEnvmapMask": false,
+   "phongAlbedoTint": true,
+   "phongTint": [
+    0.9,
+    0.7,
+    0.5
+   ],
+   "phongFresnelRanges": [
+    0.3,
+    0.5,
+    3
+   ],
+   "rimLight": true,
+   "rimLightExponent": 80,
+   "rimLightBoost": 0.4,
+   "rimMask": false,
+   "envmapTexture": "textures/cubemaps/cubemap_specular001.webp",
+   "selfIllum": true,
+   "selfIllumMask": null,
+   "selfIllumTint": [
+    1,
+    0.8,
+    0.3
+   ],
+   "selfIllumFresnel": true,
+   "selfIllumFresnelMinMaxExp": [
+    0,
+    10,
+    20
+   ],
+   "modelGlowColor": true
+  },
+  "models\\paintkits\\c_dragons_fury\\c_sniperrifle_gold": {
+   "phongExponent": 255,
+   "phongBoost": 0.3,
+   "envmapTint": [
+    0.5,
+    0.2,
+    0.06
+   ],
+   "normalMap": null,
+   "phong": true,
+   "phongExponentFactor": null,
+   "phongExponentTexture": null,
+   "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+   "halfLambert": true,
+   "baseMapAlphaPhongMask": true,
+   "baseMapAlphaEnvmapMask": false,
+   "normalMapAlphaEnvmapMask": false,
+   "phongAlbedoTint": true,
+   "phongTint": [
+    0.9,
+    0.7,
+    0.5
+   ],
+   "phongFresnelRanges": [
+    0.3,
+    0.5,
+    3
+   ],
+   "rimLight": true,
+   "rimLightExponent": 80,
+   "rimLightBoost": 0.4,
+   "rimMask": false,
+   "envmapTexture": "textures/cubemaps/cubemap_specular001.webp",
+   "selfIllum": true,
+   "selfIllumMask": null,
+   "selfIllumTint": [
+    1,
+    0.8,
+    0.3
+   ],
+   "selfIllumFresnel": true,
+   "selfIllumFresnelMinMaxExp": [
+    0,
+    10,
+    20
+   ],
+   "modelGlowColor": true
+  },
+  "models\\paintkits\\c_dragons_fury\\c_flameball_gold": {
+   "phongExponent": 255,
+   "phongBoost": 0.3,
+   "envmapTint": [
+    0.5,
+    0.2,
+    0.06
+   ],
+   "normalMap": null,
+   "phong": true,
+   "phongExponentFactor": null,
+   "phongExponentTexture": null,
+   "lightwarpTexture": "textures/models/lightwarps/softened_weapon_lightwarp.webp",
+   "halfLambert": true,
+   "baseMapAlphaPhongMask": true,
+   "baseMapAlphaEnvmapMask": false,
+   "normalMapAlphaEnvmapMask": false,
+   "phongAlbedoTint": true,
+   "phongTint": [
+    0.9,
+    0.7,
+    0.5
+   ],
+   "phongFresnelRanges": [
+    0.3,
+    0.5,
+    3
+   ],
+   "rimLight": true,
+   "rimLightExponent": 80,
+   "rimLightBoost": 0.4,
+   "rimMask": false,
+   "envmapTexture": "textures/cubemaps/cubemap_specular001.webp",
+   "selfIllum": true,
+   "selfIllumMask": null,
+   "selfIllumTint": [
+    1,
+    0.8,
+    0.3
+   ],
+   "selfIllumFresnel": true,
+   "selfIllumFresnelMinMaxExp": [
+    0,
+    10,
+    20
+   ],
+   "modelGlowColor": true
   }
  },
  "textures": {

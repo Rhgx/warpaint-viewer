@@ -46,7 +46,8 @@ export function resolveWeaponMaterials({
 
   for (const paintkit of manifestPaintkits) {
     for (const materialId of Object.values(paintkit.materialOverrides || {})) {
-      const vmtPath = `materials/${materialId.replace(/\.vmt$/i, '')}.vmt`.toLowerCase();
+      // items_game writes some overrides with backslashes (Dragon Slayer's gold finish), but the VPK listing uses forward slashes.
+      const vmtPath = `materials/${materialId.replace(/\\/g, '/').replace(/\.vmt$/i, '')}.vmt`.toLowerCase();
       if (!misc.has(vmtPath)) continue;
       overrideVmts.set(materialId, vmtPath);
       toExtract.push(vmtPath);
@@ -114,6 +115,9 @@ export function parseMaterialBody(body, textureRefs) {
   const phongExponentTexture = publicTexture(body, '$phongexponenttexture');
   const lightwarpTexture = publicTexture(body, '$lightwarptexture');
   for (const ref of [normalMap, phongExponentTexture, lightwarpTexture]) if (ref) textureRefs.add(ref);
+  // env_cubemap is the map's own probe, which the viewer already supplies, so only a named cubemap is kept.
+  const envmap = kvGet(body, '$envmap');
+  const envmapTexture = envmap && String(envmap).trim().toLowerCase() !== 'env_cubemap' ? texturePublicPath(envmap) : null;
 
   const material = {
     phongExponent: scalar(body, '$phongexponent'),
@@ -135,6 +139,7 @@ export function parseMaterialBody(body, textureRefs) {
     rimLightExponent: scalar(body, '$rimlightexponent', 4),
     rimLightBoost: scalar(body, '$rimlightboost', 1),
     rimMask: bool(body, '$rimmask'),
+    ...(envmapTexture ? { envmapTexture } : {}),
   };
   if (!bool(body, '$selfillum')) return material;
   const selfIllumMask = publicTexture(body, '$selfillummask');

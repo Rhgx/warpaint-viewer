@@ -6,7 +6,7 @@ export interface WeaponMaterial {
   phongExponent: number | null;
   phongBoost: number;
   envmapTint: [number, number, number];
-  /** Source cubemap named by $envmap. Imported package materials may supply it. */
+  /** Source cubemap named by $envmap, when it is not env_cubemap (Dragon Slayer's gold finish, imported packages). */
   envmapTexture?: string | null;
   normalMap: string | null;
   phong: boolean;
