@@ -73,7 +73,7 @@ test('new war paints built on every stock template resolve as new and only name 
   }
 
   assert.deepEqual(failures, []);
-});
+}, 60_000); // Resolves every stock template, which outruns the default on a CI runner under parallel load.
 
 test('a new war paint on a sticker template exposes its stages as editor targets', async () => {
   const { baseBytes, weaponsByItemDef, builtInIds, operationIds, templates, isShipped } = await loadFixtures();

@@ -128,7 +128,7 @@ test('every shipped paint exposes its effective unmasked base layer', () => {
   }
   assert.ok(auditedRecipes >= 14_000, 'the audit should cover every team variant of the shipped editable recipes');
   assert.deepEqual(missing, []);
-}, 15_000);
+}, 60_000); // Audits over 14,000 recipes, which took more than 15 seconds on a CI runner under parallel load.
 
 test('team-texture and weapon-albedo bases use the intended transform policy', () => {
   const baseFor = (kitId: number) => {
