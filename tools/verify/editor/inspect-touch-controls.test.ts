@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 import { InspectControls } from '../../../src/viewer/inspectControls';
+import { isRapidInspectClickPair } from '../../../src/viewer/inspectInput';
 
 // Just enough of a canvas for the camera: listeners, size and pointer capture.
 class FakeCanvas extends EventTarget {
@@ -278,4 +279,12 @@ test('a turntable keeps the roll', () => {
   assert.ok(model.quaternion.angleTo(rolled) < 1e-6, 'a full turn returns to the rolled pose');
   controls.rotateYaw(Math.PI / 2);
   assert.ok(model.quaternion.angleTo(rolled) > 0.5, 'and the turn did move it');
+});
+
+test('rapid click pairs reset inspect only within the window and slop', () => {
+  const first = { clientX: 50, clientY: 80, time: 1_000 };
+  assert.equal(isRapidInspectClickPair(first, { clientX: 54, clientY: 83, time: 1_250 }), true);
+  assert.equal(isRapidInspectClickPair(first, { clientX: 65, clientY: 83, time: 1_250 }), false, 'a moved click is not a reset');
+  assert.equal(isRapidInspectClickPair(first, { clientX: 65, clientY: 83, time: 1_250 }, 40), true, 'touch slop accepts it');
+  assert.equal(isRapidInspectClickPair(first, { clientX: 50, clientY: 80, time: 1_400 }, 40), false, 'outside the window');
 });

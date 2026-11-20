@@ -41,7 +41,7 @@ export function useWarpaintExport(inputs: WarpaintExportInputs) {
           import('../../export/snapshot'),
         ]);
         const [baseContainer, localization] = await Promise.all([
-          loadSnapshotContainer(),
+          inputs.baseContainer ? Promise.resolve(inputs.baseContainer) : loadSnapshotContainer(),
           inputs.inGameName.trim()
             ? loadSnapshotLocalizations()
             : Promise.resolve(new Map<string, Uint8Array>()),

@@ -23,6 +23,25 @@ const DATA_ROOT = `${import.meta.env.BASE_URL}data`;
 // at 1 GB. Unset (local dev, forks), they load from DATA_ROOT like the rest.
 const TEXTURE_ROOT = import.meta.env.VITE_TEXTURE_URL?.replace(/\/+$/, '') || DATA_ROOT;
 const RECIPE_BUNDLE_CACHE_LIMIT = 8;
+const FETCH_RETRY_DELAYS_MS = [250, 750] as const;
+
+async function fetchWithRetry(url: string): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= FETCH_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      const response = await fetch(url);
+      if (response.ok || (response.status >= 400 && response.status < 500)) return response;
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (cause) {
+      lastError = cause;
+    }
+    const delay = FETCH_RETRY_DELAYS_MS[attempt];
+    if (delay !== undefined) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
 
 export function joinData(rel: string): string {
   if (rel.startsWith('data:') || rel.startsWith('http')) return rel;
@@ -64,18 +83,20 @@ class RealDataSource implements DataSource {
       return cached;
     }
 
-    const p = (async () => {
-      try {
-        const res = await fetch(`${DATA_ROOT}/recipes/${kitId}.json`);
-        if (!res.ok) return null;
-        return (await res.json()) as RecipeBundle;
-      } catch {
-        return null;
-      }
-    })().then((bundle) => {
-      if (!bundle && this.bundleCache.get(kitId) === p) this.bundleCache.delete(kitId);
-      return bundle;
-    });
+    const p = (async (): Promise<RecipeBundle | null> => {
+      const res = await fetchWithRetry(`${DATA_ROOT}/recipes/${kitId}.json`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`Failed to load warpaint recipe (${res.status}).`);
+      return (await res.json()) as RecipeBundle;
+    })();
+    p.then(
+      (bundle) => {
+        if (!bundle && this.bundleCache.get(kitId) === p) this.bundleCache.delete(kitId);
+      },
+      () => {
+        if (this.bundleCache.get(kitId) === p) this.bundleCache.delete(kitId);
+      },
+    );
     this.bundleCache.set(kitId, p);
     while (this.bundleCache.size > RECIPE_BUNDLE_CACHE_LIMIT) {
       const oldestKitId = this.bundleCache.keys().next().value;

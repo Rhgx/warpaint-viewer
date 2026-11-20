@@ -124,7 +124,7 @@ export function StageCanvas({
       />
       <StageToolbar
         workbenchOpen={workbenchOpen}
-        editingMode={editingMode}
+        editingMode={editingMode ?? (firstPersonActive ? 'first-person' : null)}
         onPreloadWorkbench={preloadWorkbench}
         onToggleWorkbench={toggleWorkbench}
         captureFormat={captureFormat}

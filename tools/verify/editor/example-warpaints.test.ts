@@ -1,5 +1,5 @@
-// Edit compatibility check for every local example war paint (skipped when
-// .tmp/example-warpaints holds no archives).
+// Edit compatibility check for every local example war paint. Opt in via
+// `npm run verify:examples` (VERIFY_EXAMPLES=1) so everyday `npm test` stays fast.
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -14,6 +14,10 @@ import { fixtureFragments, ROOT, shippedProtoDefs } from '../fixtures';
 const EXAMPLES = path.join(ROOT, '.tmp', 'example-warpaints');
 
 test('every example recipe resolves and target discovery never throws', async (context) => {
+  if (!process.env.VERIFY_EXAMPLES) {
+    context.skip('Set VERIFY_EXAMPLES=1 (or run npm run verify:examples) to audit local example archives');
+    return;
+  }
   const archives = fs.existsSync(EXAMPLES)
     ? fs.readdirSync(EXAMPLES).filter((name) => name.toLowerCase().endsWith('.zip')).sort()
     : [];

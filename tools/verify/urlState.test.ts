@@ -75,23 +75,29 @@ describe('share-state compression dictionaries', () => {
     expect(decodeShareState(encodeShareState({ ...state, statClock: MAX_KILLS + 5 })!)?.statClock).toBe(MAX_KILLS);
   });
 
-  it('rejects invalid serializable boundaries without throwing', () => {
-    const valid = {
-      kitId: 123,
-      weaponKey: 'c_knife',
-      seed: '42',
-      wearIndex: 0,
-      team: 'red' as const,
-      sheen: 'none',
-      unusual: 'none',
-      preset: 'inspect',
-      projection: 'perspective' as const,
-      fov: 75,
-      statClock: null,
-    };
+  const defaultState = {
+    kitId: 123,
+    weaponKey: 'c_knife',
+    seed: '42',
+    wearIndex: 0,
+    team: 'red' as const,
+    sheen: 'none',
+    unusual: 'none',
+    preset: 'inspect',
+    projection: 'perspective' as const,
+    fov: 75,
+    statClock: null,
+  };
 
-    expect(encodeShareState({ ...valid, seed: 'not-a-number' })).toBeNull();
-    expect(encodeShareState({ ...valid, kitId: -1 })).toBeNull();
-    expect(encodeShareState({ ...valid, kitId: Number.MAX_SAFE_INTEGER + 1 })).toBeNull();
+  it('round-trips default-valued v1 share links at FOV 75', () => {
+    const payload = encodeShareState(defaultState);
+    expect(payload).not.toBeNull();
+    expect(decodeShareState(payload!)).toEqual(defaultState);
+  });
+
+  it('rejects invalid serializable boundaries without throwing', () => {
+    expect(encodeShareState({ ...defaultState, seed: 'not-a-number' })).toBeNull();
+    expect(encodeShareState({ ...defaultState, kitId: -1 })).toBeNull();
+    expect(encodeShareState({ ...defaultState, kitId: Number.MAX_SAFE_INTEGER + 1 })).toBeNull();
   });
 });

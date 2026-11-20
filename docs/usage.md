@@ -4,7 +4,19 @@ Select a war paint, choose a supported weapon, and adjust its appearance in the
 right sidebar.
 
 On phones and tablets without a mouse or trackpad, the viewer runs without the
-custom war paint workbench.
+custom war paint workbench or Showcase Board.
+
+## Catalog and search
+
+The left sidebar lists every stock war paint grouped by collection, sorted from
+newest to oldest by default. Click the sort button to switch between **Newest**
+and **Oldest**, or append `?sortdesc=0` to the URL to open oldest first
+(`?sortdesc=1` forces newest first).
+
+Use the view toggle to switch between **List** and **Grid** views. Search
+matches war paint names and collections while ignoring punctuation and accent
+marks (for example, `high rollers` matches `High Roller's`, and `uber` matches
+`Übersaw` in weapon pickers).
 
 ## Camera controls
 
@@ -28,26 +40,56 @@ The toolbar's **Auto spin** button turns the weapon like TF2's inspect panel:
 it stops while you drag and eases back in two seconds after you let go. It spins
 at the same speed as animated exports, so it previews the turntable.
 
+## Item, Finish, and Custom Lighting
+
+- **Weapon, Wear, Team, and Seed** sit under **Item**. Team switches to BLU on
+  any war paint whose BLU textures differ, as it does in game, whether or not
+  its definition sets `has_team_textures` (and also stays selectable when the
+  `Team Shine` sheen is active). The **Seed** control accepts any 64-bit decimal
+  seed and includes **Randomize**, **Previous seed**, **Next seed**, and
+  **Copy seed** actions.
+- **Lighting, Sheen, Effect, and Stat Clock** sit under **Finish**.
+  - **Lighting** chooses between TF2 map presets (`Inspect`, `Daylight`,
+    `Overcast`, `Indoors`, `Night`, `Inspect (Legacy)`) and **Custom**. Selecting
+    **Custom** opens a custom lighting rig editor where you can add, toggle,
+    reposition, aim, color, and duplicate up to 8 lights directly around the
+    weapon. Your custom rig is saved in browser storage.
+  - **Stat Clock** attaches TF2's kill counter module to supported weapons with
+    an editable kill count (`0` to `999999`) and RED/BLU team styling.
+
+## Share links
+
+As you change the war paint, weapon, wear, team, seed, sheen, unusual effect,
+lighting preset, projection, field of view, or Stat Clock, the viewer encodes
+the current selection into the URL fragment (`#v=...`). Copying the address bar
+produces a shareable link, and pasting a `#v=` link into an already-open tab
+updates the viewer immediately without reloading the page. Imported custom war
+paints live only in memory and are excluded from share links.
+
 ## First Person
 
 The sidebar's **Preview** section switches between Inspect and **First Person**.
-First Person supports class selection for shared weapons, viewmodel FOV, and
-stock minimized offsets. The bar at the bottom of the stage plays the viewmodel's
-animations: pick one, drag the scrubber to any point, and cycle the speed through
-1x, 0.5x and 0.25x. Inspect, Backstab, and Reload on weapons that load shell by
-shell, are a start, a loop and an end, with a tick on the scrubber where each part
-begins and stripes on the part that repeats. With **Loop** on they hold that part,
-as holding the key does in game; turn it off to play the end and stop. Pausing,
-with the button or Space,
-holds the current pose while sheen, unusual particles, and emissive materials
-continue animating. The Holy Mackerel also has an optional **Fish Bone Physics**
-switch, on by default; pausing freezes its current bend.
+First Person supports class selection for shared weapons, viewmodel FOV, stock
+minimized offsets, a **Show Hands** toggle, and a **Spin Barrel** toggle on
+weapons with a spinning barrel. The bar at the bottom of the stage plays the
+viewmodel's animations: pick one, drag the scrubber to any point (or use the
+Left and Right arrow keys on the scrubber to step one frame at a time), and
+cycle the speed through 1x, 0.5x and 0.25x. Inspect, Backstab, and Reload on
+weapons that load shell by shell, are a start, a loop and an end, with a tick on
+the scrubber where each part begins and stripes on the part that repeats. With
+**Loop** on they hold that part, as holding the key does in game; turn it off to
+play the end and stop. Pausing, with the button or `Space`, holds the current
+pose while sheen, unusual particles, and emissive materials continue animating.
+The Holy Mackerel also has an optional **Fish Bone Physics** switch, on by
+default; pausing freezes its current bend.
+
 Paint, wear, seed, team, Stat Clock, lighting, effects, and PNG capture use the
-current selection. Close visual editors before entering First Person. Other procedural
-weapon motion and animation autolayers are not included. On tall portrait phone
-screens the viewer shows the full 4:3 viewmodel frame, centred in the canvas
-and lifted above the Controls sheet while it is open. On a phone, landscape
-(fullscreen) gives First Person the most room.
+current selection. Close visual editors before entering First Person. First
+Person is not available for the War Paint item (`paintkit_tool`). Other
+procedural weapon motion and animation autolayers are not included. On tall
+portrait phone screens the viewer shows the full 4:3 viewmodel frame, centred in
+the canvas and lifted above the Controls sheet while it is open. On a phone,
+landscape (fullscreen) gives First Person the most room.
 
 First-person assets load on demand. To refresh them from an extracted sibling
 viewmodel-editor project, run `node tools/models/import-viewmodels.mjs`,
@@ -65,16 +107,30 @@ images stay as they are.
 
 The **Workshopper Tools** are all off by default:
 
-- **Show Paint Kit Details** adds a details button to the selected or hovered
-  war paint: its paintkit_proto_def_index, the operation it uses and the other
-  stock paints sharing it, and texture paths, bases, and features from Pyxell's
-  TF2 Warpaint Texture Directory.
+- **Show Paint Kit Details** adds a details button to the selected, hovered, or
+  focused war paint (in both List and Grid views) and beside the stage title:
+  its `paintkit_proto_def_index`, the operation it uses and the other stock
+  paints sharing it, and texture paths, bases, and features from Pyxell's TF2
+  Warpaint Texture Directory.
 - **Advanced Catalog Search** lets the warpaint filter match an exact paint kit
   ID (`400` or `#400`) and list every paint that uses an operation
   (`op:<name>`).
+- **Showcase Board** (desktop only) adds a toolbar button that opens a 2D
+  pegboard workspace for arranging multiple painted weapons and custom images
+  into a single image.
 
-Team switches to BLU on any war paint whose BLU textures differ, as it does in
-game, whether or not its definition sets `has_team_textures`.
+## Showcase Board
+
+When **Showcase Board** is enabled in Settings (or when a `.pegboard` file is
+dropped onto the viewer), you can arrange weapons from the bottom tray or start
+from built-in layouts (`Stock`, `Wears`, `RED and BLU`, and others). Each placed
+weapon can be moved, scaled, rotated, flipped, posed via weapon handles, split
+into detachable parts, given its own wear, team, seed, or Stat Clock, and
+exported or copied as a high-resolution PNG.
+
+Boards autosave locally, can be stored in three quick slots, and can be exported
+and shared as `.pegboard` files (which also support drag-and-drop onto the
+viewer or board).
 
 ## Capture
 

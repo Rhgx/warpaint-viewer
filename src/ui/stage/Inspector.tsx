@@ -1,9 +1,10 @@
 import { Fragment, memo, useId, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Aperture, Box, Camera, Paintbrush } from 'lucide-react';
+import { Aperture, Box, Camera, Check, Copy, Paintbrush, Redo2, Undo2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { PreloadIntent } from '../../hooks/useIntentPreload';
+import { useCopyText } from '../catalog/useCopyText';
 import {
   Control, CONTROL, ControlLabel, IconSelectField, SeedInput, SelectField, SwatchSelectField, TeamToggle, WearSliderField,
 } from '../common/controls';
@@ -19,6 +20,7 @@ import { DEFAULT_KILLS, supportsStatClock, type StatClockSetting } from '../../d
 import { StatClockFields } from '../common/StatClockFields';
 import { TURNTABLE_FORMATS, turntablePlaybackFps } from '../../export/turntableFormats';
 import { matchesMobileLayout, TOUCH_ONLY_DEVICE } from '../../device';
+import { Button } from '../primitives/Button';
 import { cn } from '../primitives/cn';
 import { Input } from '../primitives/Input';
 import { InlineNotice } from '../primitives/Notice';
@@ -71,6 +73,8 @@ export function InspectorSection({ title, icon, children, defaultOpen = true }: 
   );
 }
 
+const SEED_HEADER_ACTION = 'size-6 touch:size-7.5';
+
 // The seed is a 64-bit decimal. While focused, the field holds a free-typed draft that
 // commits on Enter or a non-empty blur; an invalid draft reverts to the last committed seed.
 function SeedField({
@@ -79,15 +83,22 @@ function SeedField({
   onRandomize,
   onUndo,
   canUndo,
+  onRedo,
+  canRedo,
 }: {
   seed: string;
   onCommit: (v: string) => void;
   onRandomize: () => void;
   onUndo: () => void;
   canUndo: boolean;
+  onRedo: () => void;
+  canRedo: boolean;
 }) {
+  const labelId = useId();
   const [draft, setDraft] = useState(seed);
   const [focused, setFocused] = useState(false);
+  const { notice, copy } = useCopyText();
+  const copyTitle = notice === 'Copied' ? 'Seed copied' : notice === 'Copy failed' ? 'Copy failed' : 'Copy seed';
 
   const commit = () => {
     const digits = draft.replace(/\D/g, '').slice(0, 20);
@@ -101,29 +112,68 @@ function SeedField({
   };
 
   return (
-    <SeedInput
-      aria-label="Paint seed"
-      randomizeLabel="Randomize seed"
-      onRandomize={onRandomize}
-      onUndo={onUndo}
-      canUndo={canUndo}
-      value={focused ? draft : seed}
-      onFocus={() => {
-        setDraft(seed);
-        setFocused(true);
-      }}
-      onChange={(event) => setDraft(event.currentTarget.value.replace(/\D/g, '').slice(0, 20))}
-      onBlur={() => {
-        commit();
-        setFocused(false);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
+    <div className={CONTROL} data-slot="control" role="group" aria-labelledby={labelId}>
+      <div className="flex items-center justify-between gap-2">
+        <ControlLabel id={labelId}>Seed</ControlLabel>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={SEED_HEADER_ACTION}
+            title="Previous seed"
+            aria-label="Previous seed"
+            disabled={!canUndo}
+            onClick={onUndo}
+          >
+            <Undo2 size={14} aria-hidden="true" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={SEED_HEADER_ACTION}
+            title="Next seed"
+            aria-label="Next seed"
+            disabled={!canRedo}
+            onClick={onRedo}
+          >
+            <Redo2 size={14} aria-hidden="true" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={SEED_HEADER_ACTION}
+            title={copyTitle}
+            aria-label={copyTitle}
+            disabled={!seed}
+            onClick={() => void copy(seed)}
+          >
+            {notice === 'Copied' ? <Check size={14} className="text-pass" aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+          </Button>
+        </div>
+      </div>
+      <SeedInput
+        aria-label="Paint seed"
+        randomizeLabel="Randomize seed"
+        onRandomize={onRandomize}
+        showCopy={false}
+        value={focused ? draft : seed}
+        onFocus={() => {
+          setDraft(seed);
+          setFocused(true);
+        }}
+        onChange={(event) => setDraft(event.currentTarget.value.replace(/\D/g, '').slice(0, 20))}
+        onBlur={() => {
           commit();
-        }
-      }}
-    />
+          setFocused(false);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            commit();
+          }
+        }}
+      />
+    </div>
   );
 }
 
@@ -169,6 +219,8 @@ export const Inspector = memo(function Inspector({
   onRandomizeSeed,
   onUndoSeed,
   canUndoSeed,
+  onRedoSeed,
+  canRedoSeed,
   onViewAngle,
   lightingStore,
   onToggleLightingPanel,
@@ -187,6 +239,8 @@ export const Inspector = memo(function Inspector({
   onRandomizeSeed: () => void;
   onUndoSeed: () => void;
   canUndoSeed: boolean;
+  onRedoSeed: () => void;
+  canRedoSeed: boolean;
   onViewAngle: (id: string) => void;
   lightingStore: LightingStore;
   onToggleLightingPanel: () => void;
@@ -271,15 +325,15 @@ export const Inspector = memo(function Inspector({
           />
         </Control>
 
-        <Control group label="Seed">
-          <SeedField
-            seed={state.seed}
-            onCommit={(seed) => onChange({ seed })}
-            onRandomize={onRandomizeSeed}
-            onUndo={onUndoSeed}
-            canUndo={canUndoSeed}
-          />
-        </Control>
+        <SeedField
+          seed={state.seed}
+          onCommit={(seed) => onChange({ seed })}
+          onRandomize={onRandomizeSeed}
+          onUndo={onUndoSeed}
+          canUndo={canUndoSeed}
+          onRedo={onRedoSeed}
+          canRedo={canRedoSeed}
+        />
       </InspectorSection>
 
       <InspectorSection title="Finish" icon={Paintbrush}>

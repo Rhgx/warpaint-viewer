@@ -33,6 +33,7 @@ export interface CompositorOptions {
   size?: number; // square, default 1024
   textureMetadata?: Record<string, TextureMetadata>;
   textureMetadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined;
+  onTransientTextureError?: (ref: string, cause: unknown) => void;
 }
 
 export interface ComposeDimensions {
@@ -102,6 +103,7 @@ export class Compositor {
       opts.textureMetadataResolver,
       this.renderer.capabilities.getMaxAnisotropy(),
       this.renderer,
+      opts.onTransientTextureError,
     );
     this.latestCompose = new LatestComposeScheduler({
       enqueue: (work) => this.enqueue(work),

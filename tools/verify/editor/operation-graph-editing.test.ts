@@ -11,6 +11,9 @@ import {
   type OperationGraph,
 } from '../../../src/editor/graph';
 import { graphToOperation } from '../../../src/editor/graph/operationGraph';
+import type { RecipeNode } from '../../../src/compositor/types';
+import { protoTextureReference } from '../../../src/editor/sticker/stickerTargets';
+import { collectTextureRefs } from '../../../src/export/plan';
 import type { OperationNodeMsg } from '../../../src/protodefs/messages';
 import { addNode as add, dig, textureNode as texture } from '../fixtures';
 
@@ -164,4 +167,19 @@ test('variadic stages accept one input past their authored ports', () => {
   assert.ok(lerpNode);
   const refused = connectOperationGraph(lerp.graph, 'spare', 'lerp', lerpNode.inputPorts.length);
   assert.equal(refused.ok, false);
+});
+
+// A stage from the graph's Add menu has no texture yet, which carries an empty ref.
+test('an unset texture ref names nothing to export or compare', () => {
+  const recipe: RecipeNode = {
+    type: 'combine_multiply',
+    nodes: [
+      { type: 'texture_lookup', texture: '' },
+      { type: 'texture_lookup', texture: 'textures/patterns/surface.webp' },
+      { type: 'select', groups: '', select: [1] },
+    ],
+  };
+  assert.deepEqual(collectTextureRefs([recipe]), ['textures/patterns/surface.webp']);
+  assert.equal(protoTextureReference(''), '');
+  assert.equal(protoTextureReference('textures/patterns/surface.webp'), 'patterns/surface');
 });

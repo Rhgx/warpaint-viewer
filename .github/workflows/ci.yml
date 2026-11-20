@@ -46,3 +46,9 @@ jobs:
 
       - name: Check for unused code
         run: npm run knip
+
+      - name: Build
+        run: npx vite build
+
+      - name: Run compositor selftest
+        run: npm run verify:selftest -- --preview

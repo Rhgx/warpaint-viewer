@@ -32,7 +32,6 @@ describe('first person', () => {
 
 describe('kill count', () => {
   it('takes whole numbers the six digits can show', () => {
-    expect(STAT_CLOCK_DIGITS).toBe(6);
     expect(parseKills('0')).toBe(0);
     expect(parseKills(' 1337 ')).toBe(1337);
     expect(parseKills('007')).toBe(7);

@@ -94,6 +94,8 @@ export function useWorkbenchRecipes({
       if (cancelled) return;
       const recipes = resolved.flatMap(({ wearIndex, recipe }) => recipe ? [{ wearIndex, recipe }] : []);
       setLoaded({ recipes, scope: recipeScope, variant: recipeVariant, complete: completeRecipeMatrix });
+    }).catch((cause: unknown) => {
+      if (!cancelled) console.warn('[warpaint-viewer] workbench recipe load failed:', cause);
     }).finally(() => {
       if (!cancelled) setSettledKey(requestKey);
     });

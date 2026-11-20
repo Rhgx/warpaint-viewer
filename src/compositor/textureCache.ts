@@ -18,6 +18,8 @@ interface Entry {
   bytes: number; // 0 until the image is decoded
   settled: boolean;
   failed: boolean;
+  /** Network or 5xx failure that should be retried instead of sticking for the whole session. */
+  transientFailure: boolean;
   // Decoded by this entry alone (THREE.Cache is off), so it is the bitmap's only owner.
   bitmap?: ImageBitmap;
   /** The downloaded file, kept until the full texture is up so smaller copies decode from it. */
@@ -136,6 +138,47 @@ export interface TextureCacheBudgetHints {
 }
 
 const MIB = 1024 * 1024;
+const TEXTURE_RETRY_DELAYS_MS = [250, 750] as const;
+
+class TextureFetchError extends Error {
+  readonly transient: boolean;
+  constructor(message: string, transient: boolean) {
+    super(message);
+    this.transient = transient;
+  }
+}
+
+async function fetchTextureBlob(url: string): Promise<Blob> {
+  const inline = url.startsWith('data:') || url.startsWith('blob:');
+  const delays = inline ? [] : TEXTURE_RETRY_DELAYS_MS;
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= delays.length; attempt += 1) {
+    try {
+      const response = await fetch(url);
+      if (response.ok === false) {
+        const status = response.status ?? 0;
+        const transient = status === 0 || status >= 500 || status === 429;
+        const err = new TextureFetchError(`HTTP ${status}`, transient);
+        if (!transient) throw err;
+        lastError = err;
+      } else {
+        return await response.blob();
+      }
+    } catch (cause) {
+      if (cause instanceof TextureFetchError && !cause.transient) throw cause;
+      lastError = cause instanceof TextureFetchError
+        ? cause
+        : new TextureFetchError(cause instanceof Error ? cause.message : String(cause), !inline);
+    }
+    const delay = delays[attempt];
+    if (delay !== undefined) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError instanceof TextureFetchError
+    ? lastError
+    : new TextureFetchError(String(lastError), !inline);
+}
 
 // One console warning per ref for the whole session, not one per composite.
 const reportedMissing = new Set<string>();
@@ -213,8 +256,9 @@ export class TextureCache {
   private maxAnisotropy: number;
   /** Streams large uploads when present; without one, textures upload on first use. */
   private renderer: THREE.WebGLRenderer | null;
+  private onTransientError: ((ref: string, cause: unknown) => void) | undefined;
 
-  constructor(resolve: TextureResolver, budgetBytes = textureCacheBudgetBytes(), metadata: Record<string, TextureMetadata> = {}, metadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined, maxAnisotropy = 1, renderer: THREE.WebGLRenderer | null = null) {
+  constructor(resolve: TextureResolver, budgetBytes = textureCacheBudgetBytes(), metadata: Record<string, TextureMetadata> = {}, metadataResolver?: (ref: string) => Partial<TextureMetadata> | undefined, maxAnisotropy = 1, renderer: THREE.WebGLRenderer | null = null, onTransientError?: (ref: string, cause: unknown) => void) {
     this.renderer = renderer;
     this.resolve = resolve;
     this.budget = budgetBytes;
@@ -222,6 +266,7 @@ export class TextureCache {
     this.metadataResolver = metadataResolver;
     // Cap anisotropy at 8, and never above what the renderer supports.
     this.maxAnisotropy = Math.max(1, Math.min(8, maxAnisotropy));
+    this.onTransientError = onTransientError;
   }
 
   keyFor(ref: string, opts: LoadOpts = {}): string {
@@ -246,7 +291,7 @@ export class TextureCache {
     for (const [k, entry] of this.cache) {
       if (this.totalBytes <= this.budget) break;
       // Skip entries still loading a full texture; a copy-only entry has no in-flight work.
-      if (this.pinned.has(k) || (entry.fullStarted && !entry.settled) || entry.failed) continue;
+      if (this.pinned.has(k) || (entry.fullStarted && !entry.settled) || (entry.failed && !entry.transientFailure)) continue;
       this.cache.delete(k);
       this.totalBytes -= entry.bytes;
       this.discard(entry, true);
@@ -343,22 +388,29 @@ export class TextureCache {
     const key = this.keyFor(ref, opts);
     const existing = this.cache.get(key);
     if (existing) {
-      // LRU touch: move to the end of the Map's insertion order.
-      this.cache.delete(key);
-      this.cache.set(key, existing);
-      return existing;
+      if (existing.transientFailure && !this.pinned.has(key)) {
+        this.cache.delete(key);
+        this.totalBytes -= existing.bytes;
+        this.discard(existing, true);
+      } else {
+        // LRU touch: move to the end of the Map's insertion order.
+        this.cache.delete(key);
+        this.cache.set(key, existing);
+        return existing;
+      }
     }
     const entry: Entry = {
       fullStarted: false,
       bytes: 0,
       settled: false,
       failed: false,
+      transientFailure: false,
       tiers: new Map(),
       tierBitmaps: [],
     };
     // An empty ref is a stage with no texture picked yet: it stays white, with no fetch
     // or warning. The file is fetched up front so smaller copies can decode from it.
-    entry.file = ref && this.decodesBitmaps ? Promise.resolve(this.resolve(ref)).then((url) => fetch(url)).then((response) => response.blob()) : undefined;
+    entry.file = ref && this.decodesBitmaps ? Promise.resolve(this.resolve(ref)).then((url) => fetchTextureBlob(url)) : undefined;
     this.cache.set(key, entry);
     return entry;
   }
@@ -377,12 +429,17 @@ export class TextureCache {
         this.totalBytes += bytes;
         resolve(tex);
       };
-      const onError = () => {
+      const onError = (cause?: unknown) => {
+        const isTransient = cause instanceof TextureFetchError && cause.transient;
         entry.settled = true;
         entry.failed = true;
+        entry.transientFailure = isTransient;
         // A texture the import names but never shipped must not sink the composite. Stand
         // in white, the neutral element of multiply chains, so the rest of the paint draws.
-        if (ref && !reportedMissing.has(ref)) {
+        if (isTransient) {
+          console.warn(`[warpaint-viewer] failed to load texture, substituting white: ${ref} (${url})`, cause);
+          this.onTransientError?.(ref, cause);
+        } else if (ref && !reportedMissing.has(ref)) {
           reportedMissing.add(ref);
           console.warn(`[warpaint-viewer] missing texture, substituting white: ${ref} (${url})`);
         }
@@ -404,7 +461,7 @@ export class TextureCache {
             onLoad(new THREE.Texture(bitmap));
           }, onError);
       } else {
-        this.fallbackLoader.load(url, onLoad, undefined, onError);
+        this.fallbackLoader.load(url, onLoad, undefined, (err) => onError(new TextureFetchError(String(err), true)));
       }
     }));
     entry.promise = decoded.then((tex) => {

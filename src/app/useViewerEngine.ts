@@ -32,6 +32,8 @@ interface UseViewerEngineOptions {
   editingMode: string | null;
   engineReady: boolean;
   environmentReady: boolean;
+  bootComplete: boolean;
+  retryToken: number;
   advanceBoot: (progress: number, label: string) => void;
   disposeCache: () => void;
   resetComposeKey: () => void;
@@ -43,6 +45,9 @@ interface UseViewerEngineOptions {
   setCameraMode: (mode: 'inspect' | 'advanced') => void;
   setLoadedAssetKey: (key: string) => void;
   setError: (message: string) => void;
+  onLoadProblem: (message: string) => void;
+  onLoadRecovered: () => void;
+  onTransientTextureError: () => void;
 }
 
 const WEBGL2_UNAVAILABLE_MESSAGE = 'This browser cannot use WebGL 2, which the 3D viewer needs. Turn on hardware acceleration in the browser settings, update the graphics driver, or try another browser.';
@@ -66,6 +71,8 @@ export function useViewerEngine({
   editingMode,
   engineReady,
   environmentReady,
+  bootComplete,
+  retryToken,
   advanceBoot,
   disposeCache,
   resetComposeKey,
@@ -75,9 +82,20 @@ export function useViewerEngine({
   setCameraMode,
   setLoadedAssetKey,
   setError,
+  onLoadProblem,
+  onLoadRecovered,
+  onTransientTextureError,
 }: UseViewerEngineOptions) {
   const [viewAngleId, setViewAngleId] = useState('default');
   const viewAngleIdRef = useRef(viewAngleId);
+  const bootCompleteRef = useRef(bootComplete);
+  useEffect(() => {
+    bootCompleteRef.current = bootComplete;
+  }, [bootComplete]);
+  const onTransientTextureErrorRef = useRef(onTransientTextureError);
+  useEffect(() => {
+    onTransientTextureErrorRef.current = onTransientTextureError;
+  }, [onTransientTextureError]);
 
   // Fetch the renderer chunks on mount, alongside the manifest. The viewer is still built only once data is ready.
   // A failed prefetch is reported by the awaited import that builds the viewer, so these swallow it.
@@ -118,6 +136,7 @@ export function useViewerEngine({
           size: 1024,
           textureMetadata: data.manifest.textures,
           textureMetadataResolver: (ref) => sourceProvider.metadataFor(ref),
+          onTransientTextureError: () => onTransientTextureErrorRef.current(),
         });
         viewerRef.current = viewer;
         compositorRef.current = compositor;
@@ -159,8 +178,8 @@ export function useViewerEngine({
   // Start the recipe request at once, in parallel with the lazy renderer import.
   useEffect(() => {
     if (!data || !selectedKit || !state.weaponKey || !selectedKit.weapons.includes(state.weaponKey)) return;
-    void resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
-  }, [data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex]);
+    void resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex).catch(() => undefined);
+  }, [data, resolveRecipe, selectedKit, state.weaponKey, state.team, state.wearIndex, retryToken]);
 
   useEffect(() => {
     if (!engineReady || !data || !viewerRef.current || !state.weaponKey) return;
@@ -198,12 +217,16 @@ export function useViewerEngine({
       if (cancelled) return;
       if (import.meta.env.VITE_PERF_MARKS) performance.mark('wpv:assets-ready');
       setLoadedAssetKey(selectedAssetKey);
+      onLoadRecovered();
       advanceBoot(62, 'Weapon and material maps ready');
     }).catch((e) => {
-      if (!cancelled) setError(`Failed to load weapon assets: ${String(e)}`);
+      if (cancelled) return;
+      const message = `Failed to load weapon assets: ${String(e)}`;
+      if (bootCompleteRef.current) onLoadProblem(message);
+      else setError(message);
     });
     return () => { cancelled = true; };
-  }, [engineReady, data, selectedAssetKey, state.weaponKey, packageGeneration, advanceBoot, sourceProvider, selectedMaterialOverrideId, viewerRef, setLoadedAssetKey, setError]);
+  }, [engineReady, data, selectedAssetKey, state.weaponKey, packageGeneration, retryToken, advanceBoot, sourceProvider, selectedMaterialOverrideId, viewerRef, setLoadedAssetKey, setError, onLoadProblem, onLoadRecovered]);
 
   // Archive and definition changes reuse paths and catalog ids, so release old uploads
   // and the compose cache first or an edited paint would render stale.

@@ -130,6 +130,14 @@ function MainApp() {
   const [autoSpin, setAutoSpin] = useState(false);
   const [environmentReady, setEnvironmentReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadProblem, setLoadProblem] = useState<string | null>(null);
+  const [loadRetryToken, setLoadRetryToken] = useState(0);
+  const transientTextureErrorCountRef = useRef(0);
+  const reportLoadProblem = useCallback((message: string) => setLoadProblem(message), []);
+  const clearLoadProblem = useCallback(() => setLoadProblem(null), []);
+  const noteTransientTextureError = useCallback(() => {
+    transientTextureErrorCountRef.current += 1;
+  }, []);
   const [selectedKitId, setSelectedKitId] = useState<number | null>(null);
   const {
     workbenchOpen,
@@ -166,7 +174,7 @@ function MainApp() {
   const [loadedAssetKey, setLoadedAssetKey] = useState('');
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('none');
   const [state, setState] = useState<ControlsState>(createInitialControlsState);
-  const { patch, undoSeed, canUndoSeed, randomizeSeed } = useSeedHistory({ state, setState });
+  const { patch, undoSeed, redoSeed, canUndoSeed, canRedoSeed, randomizeSeed } = useSeedHistory({ state, setState });
   const { lightingStore, lightingPanelOpen, selectLight, toggleLightingPanel } = useLightingRig({
     presetId: state.preset,
     weaponKey: state.weaponKey,
@@ -217,6 +225,11 @@ function MainApp() {
   } = definitions;
   const composeCache = useComposeCache(compositorRef);
   const { resetComposeKey, disposeCache } = composeCache;
+  const retryLoad = useCallback(() => {
+    setLoadProblem(null);
+    disposeCache();
+    setLoadRetryToken((token) => token + 1);
+  }, [disposeCache]);
   const contextRestores = useContextRestores(canvasRef, engineReady, disposeCache);
 
   // Imported definitions join the catalog; everything downstream reads this merged list.
@@ -531,11 +544,15 @@ function MainApp() {
     assetOverrides,
     packageGeneration,
     definitionGeneration: editorDefinitionGeneration,
+    retryToken: loadRetryToken,
     activeTextureOverrides,
     viewerRef,
     compositorRef,
+    transientTextureErrorCountRef,
     advanceBoot,
     setError,
+    onLoadProblem: reportLoadProblem,
+    onLoadRecovered: clearLoadProblem,
     setState,
   });
   const viewport = useEditorViewport({
@@ -603,6 +620,8 @@ function MainApp() {
     editingMode,
     engineReady,
     environmentReady,
+    bootComplete: boot.progress >= 100,
+    retryToken: loadRetryToken,
     advanceBoot,
     disposeCache,
     resetComposeKey,
@@ -612,6 +631,9 @@ function MainApp() {
     setCameraMode,
     setLoadedAssetKey,
     setError,
+    onLoadProblem: reportLoadProblem,
+    onLoadRecovered: clearLoadProblem,
+    onTransientTextureError: noteTransientTextureError,
   });
 
   const definitionsState = useGuardedDefinitionsState({
@@ -946,6 +968,8 @@ function MainApp() {
           onRandomizeSeed={randomizeSeed}
           onUndoSeed={undoSeed}
           canUndoSeed={canUndoSeed}
+          onRedoSeed={redoSeed}
+          canRedoSeed={canRedoSeed}
           onViewAngle={onViewAngle}
           lightingStore={lightingStore}
           onToggleLightingPanel={toggleLightingPanel}
@@ -964,6 +988,9 @@ function MainApp() {
         onWorkspaceClearedClose={() => setWorkspaceCleared(null)}
         droppedFileProblem={boardDrop.problem}
         onDroppedFileProblemClose={boardDrop.clearProblem}
+        loadProblem={loadProblem}
+        onLoadProblemRetry={retryLoad}
+        onLoadProblemClose={clearLoadProblem}
       />
       <ClearWorkspaceDialog
         open={clearWorkspaceOpen}

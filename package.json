@@ -5,6 +5,9 @@
   "version": "1.0.0",
   "license": "GPL-3.0-only",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite",
     "build": "npm run typecheck && vite build",
@@ -21,6 +24,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b && npm run typecheck:test",
     "verify:editor": "vitest run tools/verify/editor",
+    "verify:examples": "node -e \"const { spawnSync } = require('node:child_process'); process.exit(spawnSync('npx', ['vitest', 'run', 'tools/verify/editor/example-warpaints.test.ts'], { stdio: 'inherit', shell: true, env: { ...process.env, VERIFY_EXAMPLES: '1' } }).status ?? 1)\"",
     "verify:editor-history": "vitest run tools/verify/editor/editor-history.test.ts",
     "typecheck:test": "tsc -p tools/verify/tsconfig.json",
     "verify:vmt": "vitest run tools/verify/source/vmt-parity.test.mjs",
@@ -28,6 +32,7 @@
     "verify:vpk-interop": "vitest run tools/verify/source/vpk-interop.test.mjs",
     "verify:vtf": "vitest run tools/verify/export/vtf-export.test.ts",
     "verify:e2e": "node tools/verify/e2e/showcase-boards.mjs",
+    "verify:selftest": "node tools/verify/selftest.mjs",
     "verify:perf": "node tools/verify/perf/measure.mjs",
     "verify:perf:compare": "node tools/verify/perf/compare.mjs",
     "lint": "oxlint",

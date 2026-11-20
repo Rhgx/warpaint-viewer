@@ -4,12 +4,14 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
+
 import type { RecipeNode } from '../../../src/compositor/types';
 import {
   assignSelectGroupExclusively,
   toggleSelectGroupId,
 } from '../../../src/editor/layers/groupMutations';
 import { EditorMutationAmbiguityError } from '../../../src/editor/mutationCore';
+import { provenanceRecipeKey, provenanceStatus } from '../../../src/editor/provenanceStatus';
 import { resolveKitRecipeWithProvenance } from '../../../src/protodefs/kitQueries';
 import type { ItemDefinitionMsg, OperationNodeMsg, VarDefMsg, VarFieldMsg } from '../../../src/protodefs/messages';
 import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
@@ -216,4 +218,14 @@ test('a full inherited prefix activates shared literal padding through a weapon-
   ]);
   assert.equal(dig(added.definition, 'header', 'variables', INHERITED_VARIABLES.length, 'inherit'), true, 'the padding variable now inherits');
   assert.deepEqual(resolvedSelect(added), [16, 224, 192]);
+});
+
+test('provenance keys change on re-import so replaced provenance is never reused', () => {
+  const selection = { kitId: 442, sourceGeneration: 1 as number | 'stock', weaponKey: 'c_rocketlauncher', team: 'red', wearIndex: 0 };
+  const before = provenanceRecipeKey(selection);
+  const afterReimport = provenanceRecipeKey({ ...selection, sourceGeneration: 2 });
+  assert.notEqual(before, afterReimport);
+  assert.notEqual(before, provenanceRecipeKey({ ...selection, sourceGeneration: 'stock' }));
+  assert.equal(provenanceStatus({ key: before, recipe: { tree: 'resolved' } }, before), 'ready');
+  assert.equal(provenanceStatus({ key: before, recipe: { tree: 'resolved' } }, afterReimport), 'pending');
 });

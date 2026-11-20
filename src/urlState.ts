@@ -222,11 +222,11 @@ export function decodeShareState(payload: string): ParsedUrlState | null {
     const kitId = reader.uint();
     const weaponKey = reader.stableId(WEAPON_DICTIONARY);
     const seed = reader.uint64().toString();
-    const wearIndex = flags & FLAG_WEAR ? clamp(reader.uint(), 0, 4) : null;
-    const sheen = flags & FLAG_SHEEN ? reader.stableId(SHEEN_DICTIONARY) : null;
-    const unusual = flags & FLAG_EFFECT ? reader.stableId(EFFECT_DICTIONARY) : null;
-    const preset = flags & FLAG_LIGHT ? reader.stableId(LIGHT_DICTIONARY) : null;
-    const fov = flags & FLAG_FOV ? clamp(reader.uint() + FOV_MIN, FOV_MIN, FOV_MAX) : null;
+    const wearIndex = flags & FLAG_WEAR ? clamp(reader.uint(), 0, 4) : URL_STATE_DEFAULTS.wearIndex;
+    const sheen = flags & FLAG_SHEEN ? reader.stableId(SHEEN_DICTIONARY) : URL_STATE_DEFAULTS.sheen;
+    const unusual = flags & FLAG_EFFECT ? reader.stableId(EFFECT_DICTIONARY) : URL_STATE_DEFAULTS.unusual;
+    const preset = flags & FLAG_LIGHT ? reader.stableId(LIGHT_DICTIONARY) : URL_STATE_DEFAULTS.preset;
+    const fov = flags & FLAG_FOV ? clamp(reader.uint() + FOV_MIN, FOV_MIN, FOV_MAX) : URL_STATE_DEFAULTS.fov;
     const statClock = flags & FLAG_STAT_CLOCK ? clamp(reader.uint(), 0, MAX_KILLS) : null;
     if (!reader.done) return null;
 
@@ -235,11 +235,11 @@ export function decodeShareState(payload: string): ParsedUrlState | null {
       weaponKey,
       seed,
       wearIndex,
-      team: flags & FLAG_BLU ? 'blu' : null,
+      team: flags & FLAG_BLU ? 'blu' : URL_STATE_DEFAULTS.team,
       sheen,
       unusual,
       preset,
-      projection: flags & FLAG_ORTHO ? 'orthographic' : null,
+      projection: flags & FLAG_ORTHO ? 'orthographic' : URL_STATE_DEFAULTS.projection,
       fov,
       statClock,
     };

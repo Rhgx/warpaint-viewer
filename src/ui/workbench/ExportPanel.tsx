@@ -17,6 +17,7 @@ import type {
 } from '../../workbench/exportTypes';
 import { ControlLabel, TextField } from '../common/controls';
 import { formatSize } from '../common/formatSize';
+import { matchesSearch } from '../common/searchText';
 import { Button } from '../primitives/Button';
 import { cn } from '../primitives/cn';
 import { EmptyState } from '../primitives/EmptyState';
@@ -77,10 +78,10 @@ function PaintPicker({
   onChange: (value: string) => void;
 }) {
   const [query, setQuery] = useState('');
-  const trimmed = query.trim().toLowerCase();
+  const trimmed = query.trim();
   const matches = useMemo(
     () => (trimmed
-      ? kits.filter((kit) => kit.name.toLowerCase().includes(trimmed))
+      ? kits.filter((kit) => matchesSearch(kit.name, trimmed))
       : kits),
     [kits, trimmed],
   );
@@ -187,6 +188,7 @@ export function ExportPanel({
     items,
     textureMetadata,
     definitions,
+    baseContainer: baseContainer?.bytes ?? null,
     writesDefinitions,
     definitionsMode,
     targetDefindex,

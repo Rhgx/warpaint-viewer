@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react';
+import { useMemo, type ComponentProps } from 'react';
 import type { EditorDraftState } from '../../editor/useEditorDraft';
 import { DraftToast } from './DraftToast';
 import { ManagedToast, ToastViewport } from './Toast';
@@ -15,6 +15,9 @@ interface AppToastsProps {
   onWorkspaceClearedClose: () => void;
   droppedFileProblem: string | null;
   onDroppedFileProblemClose: () => void;
+  loadProblem: string | null;
+  onLoadProblemRetry: () => void;
+  onLoadProblemClose: () => void;
 }
 
 export function AppToasts({
@@ -28,7 +31,14 @@ export function AppToasts({
   onWorkspaceClearedClose,
   droppedFileProblem,
   onDroppedFileProblemClose,
+  loadProblem,
+  onLoadProblemRetry,
+  onLoadProblemClose,
 }: AppToastsProps) {
+  const loadProblemActions = useMemo(
+    () => [{ label: 'Retry', onClick: onLoadProblemRetry, primary: true }],
+    [onLoadProblemRetry],
+  );
   return (
     <ToastViewport>
       <DraftToast
@@ -54,6 +64,16 @@ export function AppToasts({
         tone="error"
         timeout={6000}
         onClose={onDroppedFileProblemClose}
+      />
+      <ManagedToast
+        id="load-problem"
+        open={loadProblem !== null}
+        title="Could not load asset"
+        description={loadProblem ?? ''}
+        actions={loadProblemActions}
+        dismissible
+        tone="error"
+        onClose={onLoadProblemClose}
       />
       <ManagedToast
         id="workspace-cleared"

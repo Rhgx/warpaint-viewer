@@ -9,6 +9,7 @@ import type { ShowcaseBoard } from '../../showcase/ShowcaseBoard';
 import type { ShowcasePaint } from '../../showcase/showcaseTypes';
 import { SearchField } from '../primitives/Input';
 import { Button } from '../primitives/Button';
+import { matchesSearch } from '../common/searchText';
 
 // The weapon tray under the board: search, then drag a card onto the board or click to add it.
 
@@ -25,8 +26,8 @@ export const ShowcaseTray = memo(function ShowcaseTray({ board, paint, weapons, 
   const rowRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState('');
   const shown = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return needle ? weapons.filter((weapon) => weapon.name.toLowerCase().includes(needle)) : weapons;
+    const needle = query.trim();
+    return needle ? weapons.filter((weapon) => matchesSearch(weapon.name, needle)) : weapons;
   }, [query, weapons]);
 
   const onCardPointerDown = (weapon: WeaponEntry) => (event: ReactPointerEvent<HTMLButtonElement>) => {

@@ -28,6 +28,7 @@ export interface WarpaintExportInputs {
   items: ExportItem[];
   textureMetadata?: Record<string, TextureMetadata>;
   definitions?: ExportDefinitionsContext;
+  baseContainer?: Uint8Array | null;
   writesDefinitions: boolean;
   definitionsMode: 'overwrite' | 'append';
   targetDefindex: string;

@@ -1,14 +1,16 @@
 import { Slider } from '@base-ui/react/slider';
 import { Toggle } from '@base-ui/react/toggle';
-import { ChevronLeft, ChevronRight, Dices, Undo2 } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy, Dices } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { ComponentProps, CSSProperties, KeyboardEvent, ReactNode } from 'react';
 
 import { preloadIntent, type PreloadIntent } from '../../hooks/useIntentPreload';
+import { useCopyText } from '../catalog/useCopyText';
 import { Button } from '../primitives/Button';
 import { cn } from '../primitives/cn';
 import { Input } from '../primitives/Input';
 import { Select, SelectItem, SelectItemText, SelectPopup, SelectSearch, SelectTrigger, SelectValue } from '../primitives/Select';
+import { matchesSearch } from './searchText';
 
 export interface Option {
   value: string;
@@ -162,8 +164,8 @@ export function IconSelectField({
   const selected = options.find((o) => o.value === value);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const needle = query.trim().toLowerCase();
-  const matchesQuery = (option: IconOption) => !needle || option.label.toLowerCase().includes(needle);
+  const needle = query.trim();
+  const matchesQuery = (option: IconOption) => !needle || matchesSearch(option.label, needle);
   const visibleCount = options.filter(matchesQuery).length;
 
   const stepValue = (delta: number) => {
@@ -362,28 +364,57 @@ export function WearSliderField({
 // Inset focus ring, as the toggle clips anything outside it. Unselected matches ToggleGroup. Locked, both sides keep their team colour, greyed out.
 const TEAM_BUTTON = 'flex-[1_1_0] cursor-pointer border-0 bg-panel px-3 py-1.25 font-normal tracking-[0.5px] text-text transition-fast focus-ring focus-visible:-outline-offset-2 not-disabled:not-data-pressed:hover:bg-panel-2 not-disabled:data-pressed:font-semibold not-disabled:data-pressed:text-white disabled:cursor-not-allowed disabled:font-semibold disabled:opacity-66 disabled:saturate-38';
 
-const SEED_ACTION = 'size-5.5 touch:size-9';
-
-/** The seed's input with its actions inside the field. Room for both actions is always kept, so that the value sits in the same place with or without undo. */
-export function SeedInput({ className, randomizeLabel, onRandomize, onUndo, canUndo = false, ...props }: ComponentProps<typeof Input> & {
+/**
+ * Single-line seed input with an adjacent Randomize button (and optional Copy button).
+ * Keeps the numeric field unobstructed while giving each action a full-size hit target.
+ */
+export function SeedInput({
+  className,
+  randomizeLabel,
+  onRandomize,
+  showCopy = true,
+  copyValue,
+  ...props
+}: ComponentProps<typeof Input> & {
   randomizeLabel: string;
   onRandomize: () => void;
-  onUndo?: () => void;
-  canUndo?: boolean;
+  /** Shows a Copy button beside Randomize; disable when Copy lives in a surrounding label row. */
+  showCopy?: boolean;
+  /** Seed string copied by the Copy action; defaults to `value` when string. */
+  copyValue?: string;
 }) {
+  const { notice, copy } = useCopyText();
+  const seedText = copyValue ?? (typeof props.value === 'string' ? props.value : '');
+  const copyTitle = notice === 'Copied' ? 'Seed copied' : notice === 'Copy failed' ? 'Copy failed' : 'Copy seed';
+
   return (
-    <div className="relative flex items-center">
-      <Input className={cn('pr-13 text-center touch:pr-19', className)} inputMode="numeric" {...props} />
-      <div className="absolute right-0.75 flex gap-0.5 touch:right-0">
-        <Button variant="ghost" size="icon-sm" className={SEED_ACTION} title={randomizeLabel} aria-label={randomizeLabel} onClick={onRandomize}>
-          <Dices size={15} />
+    <div className="flex min-w-0 items-center gap-1">
+      <Input
+        className={cn('min-w-0 flex-1 text-center tabular-nums', className)}
+        inputMode="numeric"
+        {...props}
+      />
+      <Button
+        size="icon"
+        className="flex-none bg-panel"
+        title={randomizeLabel}
+        aria-label={randomizeLabel}
+        onClick={onRandomize}
+      >
+        <Dices size={15} aria-hidden="true" />
+      </Button>
+      {showCopy && (
+        <Button
+          size="icon"
+          className="flex-none bg-panel"
+          title={copyTitle}
+          aria-label={copyTitle}
+          disabled={!seedText}
+          onClick={() => void copy(seedText)}
+        >
+          {notice === 'Copied' ? <Check size={14} className="text-pass" aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
         </Button>
-        {onUndo && (
-          <Button variant="ghost" size="icon-sm" className={SEED_ACTION} title="Previous seed" aria-label="Previous seed" disabled={!canUndo} onClick={onUndo}>
-            <Undo2 size={15} />
-          </Button>
-        )}
-      </div>
+      )}
     </div>
   );
 }

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, test } from 'vitest';
+import { beforeAll, describe, test } from 'vitest';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const oxlintBin = join(repoRoot, 'node_modules', 'oxlint', 'bin', 'oxlint');
@@ -13,40 +13,6 @@ const pluginPath = join(repoRoot, 'tools', 'lint', 'oxlint-plugin.mjs');
 // Built from code points so this file contains no literal dashes for no-dashes to flag.
 const EM = String.fromCharCode(0x2014);
 const EN = String.fromCharCode(0x2013);
-
-// Runs oxlint with only `rule` enabled over `files` and maps each file name to its messages.
-function lintWith(rule, files) {
-  const dir = mkdtempSync(join(tmpdir(), 'warpaint-lint-'));
-  try {
-    for (const [name, source] of Object.entries(files)) {
-      writeFileSync(join(dir, name), source);
-    }
-    const configPath = join(dir, 'oxlintrc.json');
-    writeFileSync(
-      configPath,
-      JSON.stringify({
-        plugins: [],
-        categories: { correctness: 'off' },
-        jsPlugins: [pluginPath],
-        rules: { [rule]: 'error' },
-      }),
-    );
-    const run = spawnSync(process.execPath, [oxlintBin, '-c', configPath, '--format=json', dir], {
-      cwd: dir,
-      encoding: 'utf8',
-    });
-    // oxlint exits 1 when it reports errors, so the exit status is not the signal here.
-    const report = JSON.parse(run.stdout);
-    const messages = new Map();
-    for (const diagnostic of report.diagnostics) {
-      const name = basename(diagnostic.filename);
-      messages.set(name, [...(messages.get(name) ?? []), diagnostic.message]);
-    }
-    return messages;
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
 
 const commentFixtures = {
   'divider.ts': '// ---- helpers ----\nexport const helper = 1;\n',
@@ -100,6 +66,16 @@ const commentFixtures = {
   ].join('\n'),
 };
 
+// Each raw value is split across two strings, so that this file does not trip the rule it tests.
+const rawClassFixtures = {
+  'hex.ts': "export const a = 'flex bg-" + "[#123456] p-1';\n",
+  'rgb.ts': "export const a = 'hover:border-" + "[rgb(0_0_0/30%)]';\n",
+  'size.ts': "export const a = 'text-" + "[8px] text-dim';\n",
+  'template.ts': "const b = 'x';\nexport const a = `${b} fill-" + "[#fff]`;\n",
+  'theme.ts': "export const a = 'bg-panel text-11 border-black/30 w-[310px] shadow-[0_1px_2px_var(--panel)]';\n",
+  'data.ts': "export const a = '#1c1f24';\nexport const c = 'rgb(0 0 0)';\n",
+};
+
 const dashFixtures = {
   'em-comment.ts': `// Retry later ${EM} the server is busy\nexport const retry = 1;\n`,
   'em-string.ts': `export const label = 'Ready ${EM} waiting';\n`,
@@ -145,11 +121,65 @@ const importGroupFixtures = {
   ]),
 };
 
+const SUITES = {
+  comments: { rule: 'warpaint/no-low-value-comments', files: commentFixtures },
+  raw: { rule: 'warpaint/no-raw-class-values', files: rawClassFixtures },
+  dashes: { rule: 'warpaint/no-dashes', files: dashFixtures },
+  newline: { rule: 'warpaint/newline-after-imports', files: importFixtures },
+  groups: { rule: 'warpaint/import-groups', files: importGroupFixtures },
+};
+
+// One oxlint run for the whole file: each rule applies only to its own fixture directory.
+const results = new Map();
+
+beforeAll(() => {
+  const dir = mkdtempSync(join(tmpdir(), 'warpaint-lint-'));
+  try {
+    const overrides = [];
+    for (const [suite, { rule, files }] of Object.entries(SUITES)) {
+      const suiteDir = join(dir, suite);
+      mkdirSync(suiteDir, { recursive: true });
+      for (const [name, source] of Object.entries(files)) {
+        writeFileSync(join(suiteDir, name), source);
+      }
+      overrides.push({ files: [`${suite}/**/*`], rules: { [rule]: 'error' } });
+      results.set(suite, new Map());
+    }
+    const configPath = join(dir, 'oxlintrc.json');
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        plugins: [],
+        categories: { correctness: 'off' },
+        jsPlugins: [pluginPath],
+        overrides,
+      }),
+    );
+    const run = spawnSync(process.execPath, [oxlintBin, '-c', configPath, '--format=json', dir], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    // oxlint exits 1 when it reports errors, so the exit status is not the signal here.
+    const report = JSON.parse(run.stdout);
+    for (const diagnostic of report.diagnostics) {
+      const rel = (isAbsolute(diagnostic.filename) ? relative(dir, diagnostic.filename) : diagnostic.filename).replaceAll('\\', '/');
+      const suite = rel.split('/')[0];
+      const bucket = results.get(suite);
+      if (!bucket) continue;
+      const name = basename(rel);
+      bucket.set(name, [...(bucket.get(name) ?? []), diagnostic.message]);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const messagesFor = (suite) => results.get(suite);
 const flaggedNames = (messages) => [...messages.keys()].sort();
 
 describe('warpaint/no-low-value-comments', () => {
   test('flags dividers, restated names, long blocks, commented-out code, JSDoc types and empty tags', () => {
-    const messages = lintWith('warpaint/no-low-value-comments', commentFixtures);
+    const messages = messagesFor('comments');
     assert.deepEqual(flaggedNames(messages), [
       'commented-out.ts',
       'divider.ts',
@@ -171,7 +201,7 @@ describe('warpaint/no-low-value-comments', () => {
   });
 
   test('keeps why-notes, directives, linked TODOs, license headers and @public tags', () => {
-    const messages = lintWith('warpaint/no-low-value-comments', commentFixtures);
+    const messages = messagesFor('comments');
     for (const name of [
       'six-lines.ts',
       'one-line.ts',
@@ -188,22 +218,14 @@ describe('warpaint/no-low-value-comments', () => {
 
 describe('warpaint/no-raw-class-values', () => {
   test('flags raw colours and font sizes in class strings, and leaves theme values and plain data alone', () => {
-    // Each raw value is split across two strings, so that this file does not trip the rule it tests.
-    const messages = lintWith('warpaint/no-raw-class-values', {
-      'hex.ts': "export const a = 'flex bg-" + "[#123456] p-1';\n",
-      'rgb.ts': "export const a = 'hover:border-" + "[rgb(0_0_0/30%)]';\n",
-      'size.ts': "export const a = 'text-" + "[8px] text-dim';\n",
-      'template.ts': "const b = 'x';\nexport const a = `${b} fill-" + "[#fff]`;\n",
-      'theme.ts': "export const a = 'bg-panel text-11 border-black/30 w-[310px] shadow-[0_1px_2px_var(--panel)]';\n",
-      'data.ts': "export const a = '#1c1f24';\nexport const c = 'rgb(0 0 0)';\n",
-    });
+    const messages = messagesFor('raw');
     assert.deepEqual(flaggedNames(messages), ['hex.ts', 'rgb.ts', 'size.ts', 'template.ts']);
   });
 });
 
 describe('warpaint/no-dashes', () => {
   test('flags em and en dashes in comments, string literals, template text and JSX text', () => {
-    const messages = lintWith('warpaint/no-dashes', dashFixtures);
+    const messages = messagesFor('dashes');
     assert.deepEqual(flaggedNames(messages), [
       'em-comment.ts',
       'em-string.ts',
@@ -214,21 +236,20 @@ describe('warpaint/no-dashes', () => {
   });
 
   test('leaves hyphens and other punctuation alone', () => {
-    const messages = lintWith('warpaint/no-dashes', dashFixtures);
-    assert.equal(messages.has('plain-hyphen.ts'), false);
+    assert.equal(messagesFor('dashes').has('plain-hyphen.ts'), false);
   });
 });
 
 describe('warpaint/newline-after-imports', () => {
   test('flags code or a comment that starts on the line directly after the imports', () => {
-    const messages = lintWith('warpaint/newline-after-imports', importFixtures);
+    const messages = messagesFor('newline');
     assert.deepEqual(flaggedNames(messages), ['comment-after-imports.ts', 'const-after-imports.ts']);
     assert.match(messages.get('const-after-imports.ts')[0], /blank line after the imports/u);
     assert.match(messages.get('comment-after-imports.ts')[0], /blank line after the imports/u);
   });
 
   test('leaves files with a blank line, no imports, or only imports alone', () => {
-    const messages = lintWith('warpaint/newline-after-imports', importFixtures);
+    const messages = messagesFor('newline');
     assert.equal(messages.has('blank-after-imports.ts'), false);
     assert.equal(messages.has('no-imports.ts'), false);
     assert.equal(messages.has('imports-only.ts'), false);
@@ -237,7 +258,7 @@ describe('warpaint/newline-after-imports', () => {
 
 describe('warpaint/import-groups', () => {
   test('flags a missing blank line and a package import after a local one in files with 10 or more imports', () => {
-    const messages = lintWith('warpaint/import-groups', importGroupFixtures);
+    const messages = messagesFor('groups');
     assert.deepEqual(flaggedNames(messages), [
       'comment-no-blank.ts',
       'missing-blank.ts',
@@ -249,7 +270,7 @@ describe('warpaint/import-groups', () => {
   });
 
   test('passes files under 10 imports, one blank line between groups, and a comment with a blank line', () => {
-    const messages = lintWith('warpaint/import-groups', importGroupFixtures);
+    const messages = messagesFor('groups');
     for (const name of ['ten-imports.ts', 'nine-imports.ts', 'comment-between.ts']) {
       assert.equal(messages.has(name), false, `${name} should not be flagged`);
     }

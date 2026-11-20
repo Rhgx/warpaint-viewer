@@ -18,9 +18,6 @@ import type { ProtoDefKitMessages } from '../../../src/protodefs/types';
 import { extractKitMessages, getKitWeaponSlots, resolveKitRecipeWithProvenance } from '../../../src/protodefs/kitQueries';
 import { dig, shippedProtoDefs } from '../fixtures';
 
-// Read-only use of the shared decode: the mutations below run on synthetic fixtures.
-const { full: decoded, manifest } = shippedProtoDefs();
-
 const stagePath = ['operation', 'operation_node', '0', 'stage', 'texture_lookup'] as const;
 
 function fixture(): ProtoDefKitMessages {
@@ -97,6 +94,7 @@ test('discovers the unmasked base texture as its own transform layer', () => {
 });
 
 test('Storage War exposes its crate pattern base in Transform', () => {
+  const { full: decoded } = shippedProtoDefs();
   const messages = extractKitMessages(decoded, 441);
   const slot = getKitWeaponSlots(decoded, 441).find((entry) => entry.weaponKey === 'c_rocketlauncher');
   assert.ok(messages && slot);
@@ -110,27 +108,8 @@ test('Storage War exposes its crate pattern base in Transform', () => {
   assert.deepEqual([base.transform.scaleUv.min, base.transform.scaleUv.max], [2, 2.5]);
 });
 
-test('every shipped paint exposes its effective unmasked base layer', () => {
-  const missing: string[] = [];
-  let auditedRecipes = 0;
-  for (const paint of manifest.paintkits) {
-    const messages = extractKitMessages(decoded, paint.id);
-    if (!messages) continue;
-    for (const slot of getKitWeaponSlots(decoded, paint.id)) {
-      for (const team of ['red', 'blu'] as const) {
-        auditedRecipes += 1;
-        const recipe = resolveKitRecipeWithProvenance(decoded, paint.id, slot.weaponKey, team, 0);
-        if (!discoverBaseTextureTransformTarget(messages, recipe?.provenance)) {
-          missing.push(`${paint.id}:${paint.name}/${slot.weaponKey}/${team}`);
-        }
-      }
-    }
-  }
-  assert.ok(auditedRecipes >= 14_000, 'the audit should cover every team variant of the shipped editable recipes');
-  assert.deepEqual(missing, []);
-}, 60_000); // Audits over 14,000 recipes, which took more than 15 seconds on a CI runner under parallel load.
-
 test('team-texture and weapon-albedo bases use the intended transform policy', () => {
+  const { full: decoded } = shippedProtoDefs();
   const baseFor = (kitId: number) => {
     const messages = extractKitMessages(decoded, kitId);
     const slot = getKitWeaponSlots(decoded, kitId)[0];

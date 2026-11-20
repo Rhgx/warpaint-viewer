@@ -1,11 +1,12 @@
-// End-to-end check of saved layouts, sharing and replaced textures on the board, in real Edge
-// against the dev server, with real mouse input. Run from the project root.
-// Starts its own Vite and Edge and stops exactly those two.
-import { spawn, spawnSync } from 'node:child_process';
+// End-to-end check of saved layouts, sharing and replaced textures on the board, in a real
+// Chromium-based browser against the dev server, with real mouse input. Run from the project root.
+// Starts its own Vite and browser and stops exactly those two. Set BROWSER_PATH to override the binary.
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+
+import { browserGpuFlags, findBrowser, spawnManaged, stopProcessTree } from '../browser.mjs';
 
 const REVIEW = resolve('.tmp/slots-review');
 const FIXTURES = resolve(process.argv[2] ?? '.tmp/e2e-fixtures');
@@ -25,13 +26,30 @@ await sharp(gradient(512), { raw: { width: 512, height: 512, channels: 4 } }).pn
 await sharp(noise(2048), { raw: { width: 2048, height: 2048, channels: 3 } }).png({ compressionLevel: 1 }).toFile(join(FIXTURES, 'huge.png'));
 writeFileSync(join(FIXTURES, 'garbage.pegboard'), 'this is not a layout at all');
 
-const vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--port', String(APP_PORT), '--strictPort'], { stdio: 'ignore' });
+const vite = spawnManaged(process.execPath, ['node_modules/vite/bin/vite.js', '--port', String(APP_PORT), '--strictPort']);
 const profile = mkdtempSync(join(tmpdir(), 'wpv-slots-'));
-spawn('C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', [`--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--headless=new', '--disable-extensions', '--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', '--no-first-run', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-features=CalculateNativeWinOcclusion', 'about:blank'], { stdio: 'ignore' });
+const browser = spawnManaged(findBrowser(), [
+  `--remote-debugging-port=${port}`,
+  `--user-data-dir=${profile}`,
+  '--headless=new',
+  '--disable-extensions',
+  '--no-first-run',
+  '--disable-backgrounding-occluded-windows',
+  '--disable-renderer-backgrounding',
+  '--disable-background-timer-throttling',
+  '--disable-features=CalculateNativeWinOcclusion',
+  ...browserGpuFlags(),
+  'about:blank',
+]);
 const stopAll = () => {
-  const leaf = profile.split(/[\\/]/).pop();
-  spawnSync('powershell.exe', ['-NoProfile', '-Command', `Get-CimInstance Win32_Process -Filter "Name = 'msedge.exe'" | Where-Object { $_.CommandLine -like '*${leaf}*' -and $_.CommandLine -notlike '*--type=*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`], { stdio: 'ignore' });
-  spawnSync('taskkill', ['/PID', String(vite.pid), '/T', '/F'], { stdio: 'ignore' });
+  stopProcessTree(browser);
+  stopProcessTree(vite);
+  try {
+    rmSync(profile, { recursive: true, force: true });
+    rmSync(DOWNLOADS, { recursive: true, force: true });
+  } catch {
+    // Best-effort temp cleanup.
+  }
 };
 
 let failures = 0;

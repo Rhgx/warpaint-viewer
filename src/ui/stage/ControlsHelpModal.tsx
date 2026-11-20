@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import {
   ArrowDown,
+  ArrowLeft,
+  ArrowRight,
   ArrowUp,
   ChevronDown,
   ChevronUp,
@@ -18,7 +20,7 @@ import { cn } from '../primitives/cn';
 import { DIALOG_SURFACE, DIALOG_TITLE, DIALOG_VIEWPORT, DialogBody, DialogCloseButton, DialogHeader, DialogSection } from '../primitives/Dialog';
 import { Kbd } from '../primitives/Kbd';
 
-export type ControlsEditingMode = 'paint' | 'sticker' | 'lighting' | 'graph' | 'showcase' | null;
+export type ControlsEditingMode = 'paint' | 'sticker' | 'lighting' | 'graph' | 'showcase' | 'first-person' | null;
 
 type ControlsHelpModalProps = {
   open: boolean;
@@ -310,6 +312,18 @@ export function ControlsHelpModal({ open, editingMode = null, onClose, returnFoc
                   <ControlRow keys={<><Key>Ctrl</Key><Key>Y</Key></>}>Redo</ControlRow>
                 </div>
               </DialogSection>
+            </>
+          ) : editingMode === 'first-person' ? (
+            <>
+              <DialogSection id="first-person-playback-heading" title="First Person Playback">
+                <ControlRow keys={<Key>Space</Key>}>Play or pause animation</ControlRow>
+                <ControlRow keys={<Key>Drag scrubber</Key>}>Seek animation timeline</ControlRow>
+                <ControlRow keys={<><Key label="Left arrow"><ArrowLeft size={12} /></Key><Key label="Right arrow"><ArrowRight size={12} /></Key></>}>Step one frame (on scrubber)</ControlRow>
+                <ControlRow keys={<><Key>Home</Key><Key>End</Key></>}>Jump to start or end (on scrubber)</ControlRow>
+              </DialogSection>
+              <p className="m-0 text-11 leading-[1.4] text-dim">
+                Orbit and Advanced Camera are unavailable in First Person. Adjust class, viewmodel FOV, minimized offset, hands, and animations from the sidebar and bottom bar.
+              </p>
             </>
           ) : (
             <>

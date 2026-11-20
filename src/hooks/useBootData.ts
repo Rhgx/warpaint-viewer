@@ -3,7 +3,7 @@ import { loadDataSource } from '../data/loader';
 import { supportsStatClock } from '../data/statClock';
 import type { DataSource } from '../data/loader';
 import type { ControlsState } from '../viewer/controls';
-import { parseUrlState, serializeUrlState } from '../urlState';
+import { decodeShareState, parseUrlState, serializeUrlState, type ParsedUrlState } from '../urlState';
 import { isCustomKitId } from '../protodefs/types';
 
 export interface BootState {
@@ -44,6 +44,34 @@ export function useBootData({ state, setState, selectedKitId, setSelectedKitId, 
     setBoot((current) => progress > current.progress ? { progress, label } : current);
   }, []);
 
+  const applyUrlSelection = useCallback((ds: DataSource, url: ParsedUrlState, resetMissingStatClock: boolean) => {
+    // Empty unless a valid shared link asked for a kit; unknown ids stay empty too.
+    const kit = url.kitId != null ? ds.manifest.paintkits.find((p) => p.id === url.kitId) ?? null : null;
+    if (resetMissingStatClock && !kit) return;
+
+    let weaponKey = kit?.weapons.includes(DEFAULT_WEAPON_KEY)
+      ? DEFAULT_WEAPON_KEY
+      : kit?.weapons[0] ?? '';
+    if (url.weaponKey && kit?.weapons.includes(url.weaponKey)) weaponKey = url.weaponKey;
+
+    setSelectedKitId(kit?.id ?? null);
+    setState((s) => ({
+      ...s,
+      weaponKey,
+      seed: url.seed ?? s.seed,
+      wearIndex: url.wearIndex ?? s.wearIndex,
+      team: url.team ?? s.team,
+      sheen: url.sheen ?? s.sheen,
+      unusual: url.unusual ?? s.unusual,
+      preset: url.preset ?? s.preset,
+      projection: url.projection ?? s.projection,
+      fov: url.fov ?? s.fov,
+      statClocks: url.statClock === null
+        ? (resetMissingStatClock ? {} : s.statClocks)
+        : { ...(resetMissingStatClock ? {} : s.statClocks), [weaponKey]: { on: true, kills: url.statClock } },
+    }));
+  }, [setSelectedKitId, setState]);
+
   // Load data source once (manifest only; recipes/textures load on demand).
   useEffect(() => {
     let cancelled = false;
@@ -55,36 +83,29 @@ export function useBootData({ state, setState, selectedKitId, setSelectedKitId, 
 
         // The URL applies only on top of catalog defaults; each param is optional and falls back if invalid.
         const url = parseUrlState(window.location.search, window.location.hash);
-
-        // Empty unless a valid shared link asked for a kit; unknown ids stay empty too.
-        const kit = url.kitId != null ? ds.manifest.paintkits.find((p) => p.id === url.kitId) ?? null : null;
-
-        let weaponKey = kit?.weapons.includes(DEFAULT_WEAPON_KEY)
-          ? DEFAULT_WEAPON_KEY
-          : kit?.weapons[0] ?? '';
-        if (url.weaponKey && kit?.weapons.includes(url.weaponKey)) weaponKey = url.weaponKey;
-
-        setSelectedKitId(kit?.id ?? null);
-        setState((s) => ({
-          ...s,
-          weaponKey,
-          seed: url.seed ?? s.seed,
-          wearIndex: url.wearIndex ?? s.wearIndex,
-          team: url.team ?? s.team,
-          sheen: url.sheen ?? s.sheen,
-          unusual: url.unusual ?? s.unusual,
-          preset: url.preset ?? s.preset,
-          projection: url.projection ?? s.projection,
-          fov: url.fov ?? s.fov,
-          statClocks: url.statClock === null ? s.statClocks : { ...s.statClocks, [weaponKey]: { on: true, kills: url.statClock } },
-        }));
+        applyUrlSelection(ds, url, false);
         bootSelectionAppliedRef.current = true;
       })
       .catch((e) => setError(String(e)));
     return () => {
       cancelled = true;
     };
-  }, [advanceBoot, setError, setSelectedKitId, setState]);
+  }, [advanceBoot, applyUrlSelection, setError]);
+
+  // Apply a newly pasted or navigated #v= share link in an already-open tab.
+  useEffect(() => {
+    if (!data) return;
+    const onHashChange = () => {
+      const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const shared = fragment.get('v');
+      if (!shared) return;
+      const decoded = decodeShareState(shared);
+      if (!decoded) return;
+      applyUrlSelection(data, decoded, true);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [data, applyUrlSelection]);
 
   const statClock = state.statClocks[state.weaponKey];
   // Mirror shareable state into the URL (debounced, no navigation) so views can be copied.
@@ -107,7 +128,8 @@ export function useBootData({ state, setState, selectedKitId, setSelectedKitId, 
         statClock: statClock?.on && supportsStatClock(state.weaponKey) ? statClock.kills : null,
       });
       const url = `${window.location.pathname}${urlState.search}${urlState.hash}`;
-      window.history.replaceState(null, '', url);
+      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (url !== currentUrl) window.history.replaceState(null, '', url);
     }, URL_SYNC_DEBOUNCE_MS);
     return () => window.clearTimeout(handle);
   }, [

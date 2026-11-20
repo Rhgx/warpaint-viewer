@@ -201,11 +201,15 @@ interface UseComposedPaintOptions {
   assetOverrides: WarpaintAssetOverrides;
   packageGeneration: number;
   definitionGeneration: number;
+  retryToken?: number;
   activeTextureOverrides: Record<string, string>;
   viewerRef: React.RefObject<Viewer | null>;
   compositorRef: React.RefObject<Compositor | null>;
+  transientTextureErrorCountRef?: React.RefObject<number>;
   advanceBoot: (progress: number, label: string) => void;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
+  onLoadProblem?: (message: string) => void;
+  onLoadRecovered?: () => void;
   setState: React.Dispatch<React.SetStateAction<ControlsState>>;
 }
 
@@ -227,11 +231,15 @@ export function useComposedPaint({
   assetOverrides,
   packageGeneration,
   definitionGeneration,
+  retryToken = 0,
   activeTextureOverrides,
   viewerRef,
   compositorRef,
+  transientTextureErrorCountRef,
   advanceBoot,
   setError,
+  onLoadProblem,
+  onLoadRecovered,
   setState,
 }: UseComposedPaintOptions) {
   const {
@@ -360,6 +368,13 @@ export function useComposedPaint({
           ?? await resolveRecipe(selectedKit, state.weaponKey, state.team, state.wearIndex);
       } catch (cause) {
         console.error('[warpaint-viewer] recipe resolution failed:', cause);
+        if (!cancelled) {
+          if (!firstPaintLoggedRef.current && !isCustomKitId(selectedKit.id)) {
+            setError(`Failed to load initial warpaint recipe: ${String(cause)}`);
+          } else {
+            onLoadProblem?.('Could not load the warpaint recipe. Check your connection and try again.');
+          }
+        }
         return;
       }
       if (cancelled) return;
@@ -400,6 +415,7 @@ export function useComposedPaint({
       badgeTimer = window.setTimeout(() => {
         if (!cancelled) setComposing(true);
       }, COMPOSE_BADGE_DELAY_MS);
+      const transientErrorsBefore = transientTextureErrorCountRef?.current ?? 0;
       try {
         // Load only the textures this seed selects; do not block first paint on every alternative.
         if (!firstPaintLoggedRef.current) advanceBoot(70, 'Composing initial warpaint…');
@@ -410,6 +426,7 @@ export function useComposedPaint({
           comp.releaseResult(result);
           return;
         }
+        const hadTransientTextureError = (transientTextureErrorCountRef?.current ?? 0) !== transientErrorsBefore;
         viewer.setMap(result.texture);
         if (import.meta.env.VITE_PERF_MARKS) {
           performance.mark('wpv:paint-final');
@@ -424,11 +441,16 @@ export function useComposedPaint({
         interactiveResultRef.current = interactive ? result : null;
         if (priorInteractive && priorInteractive !== result) comp.releaseResult(priorInteractive);
         setVisibleDefinitionGeneration(definitionGeneration);
-        // Pointer previews are transient; caching every slider sample would waste render targets.
-        if (!interactive) cacheResult(composeKey, result, comp);
+        // Pointer previews and degraded transient-error renders stay out of the cache so retry recomposes fresh.
+        if (!interactive && !hadTransientTextureError) cacheResult(composeKey, result, comp);
         lastResultRef.current = result;
-        lastComposeKeyRef.current = composeKey;
-        lastRequestKeyRef.current = requestKey;
+        lastComposeKeyRef.current = hadTransientTextureError ? '' : composeKey;
+        lastRequestKeyRef.current = hadTransientTextureError ? '' : requestKey;
+        if (hadTransientTextureError) {
+          onLoadProblem?.('Some warpaint textures failed to load. Click Retry to try again.');
+        } else {
+          onLoadRecovered?.();
+        }
         if (!firstPaintLoggedRef.current) {
           firstPaintLoggedRef.current = true;
           advanceBoot(100, 'Ready');
@@ -480,6 +502,8 @@ export function useComposedPaint({
         // An imported paint is user input: keep the previous paint and let the drawer report it.
         if (!firstPaintLoggedRef.current && !isCustomKitId(selectedKit.id)) {
           setError(`Failed to prepare initial warpaint: ${String(e)}`);
+        } else if (!cancelled && !isCustomKitId(selectedKit.id)) {
+          onLoadProblem?.('Could not compose the warpaint. Check your connection and try again.');
         }
       } finally {
         window.clearTimeout(badgeTimer);
@@ -493,7 +517,7 @@ export function useComposedPaint({
       window.clearTimeout(badgeTimer);
       cancelPendingIdle?.();
     };
-  }, [suspended, interactive, interactiveRecipe, interactiveKey, onVisibleResult, engineReady, contextRestores, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, setError, setState, lastResultRef, interactiveResultRef, composeCacheRef, lastComposeKeyRef, lastRequestKeyRef, firstPaintLoggedRef]);
+  }, [suspended, interactive, interactiveRecipe, interactiveKey, onVisibleResult, engineReady, contextRestores, data, selectedKit, resolveRecipe, selectedAssetKey, loadedAssetKey, state.weaponKey, state.team, state.wearIndex, state.seed, assetOverrides, packageGeneration, definitionGeneration, retryToken, activeTextureOverrides, advanceBoot, compositorRef, viewerRef, transientTextureErrorCountRef, setError, onLoadProblem, onLoadRecovered, setState, lastResultRef, interactiveResultRef, composeCacheRef, lastComposeKeyRef, lastRequestKeyRef, firstPaintLoggedRef]);
 
   return { composing, visibleDefinitionGeneration };
 }

@@ -1,8 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
+import type { FocusEvent, KeyboardEvent } from 'react';
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, Check, LayoutGrid, List } from 'lucide-react';
 
 import { AssetIcon, SelectField } from '../common/controls';
+import { matchesSearch } from '../common/searchText';
 import { Button } from '../primitives/Button';
 import { SearchField } from '../primitives/Input';
 import { ToggleGroup } from '../primitives/ToggleGroup';
@@ -12,6 +13,7 @@ import { isCustomKitId, paintkitDefindex } from '../../protodefs/types';
 import { useTextureDirectory } from '../../hooks/useTextureDirectory';
 import { useOperationTemplates } from '../../hooks/useOperationTemplates';
 import { PaintkitDetailsButton } from './PaintkitDetailsButton';
+import { stepGridVertical } from './gridNavigation';
 import { operationFilterKits } from './operationFilter';
 import { useSettings } from '../../settings';
 import { matchesMobileLayout } from '../../device';
@@ -69,6 +71,8 @@ const PaintTile = memo(function PaintTile({
   onSelect,
   onPreload,
   showDetails,
+  directory,
+  paintkits,
 }: {
   kit: PaintkitEntry;
   selected: boolean;
@@ -77,15 +81,26 @@ const PaintTile = memo(function PaintTile({
   onSelect: (id: number) => void;
   onPreload?: PreloadIntent;
   showDetails: boolean;
+  directory: TextureDirectory | null;
+  paintkits: readonly PaintkitEntry[];
 }) {
   const select = useCallback(() => onSelect(kit.id), [kit.id, onSelect]);
-  return (
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const entry: TextureDirectoryEntry | undefined = directory && !isCustomKitId(kit.id)
+    ? directory.entries[kit.id]
+    : undefined;
+  const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
+  };
+  const tile = (
     <button
       type="button"
       data-kit-id={kit.id}
       data-slot="catalog-tile"
       data-selected={selected || undefined}
-      className="grade-tint relative flex aspect-square cursor-pointer items-center justify-center rounded-sm border-2 border-(--item-grade-border) bg-panel-2 p-1 [transition:var(--transition-fast),outline-color_140ms_ease] focus-ring scroll-mt-9 hover:border-strong data-selected:bg-accent-soft data-selected:shadow-[inset_0_0_0_1px_var(--accent)]"
+      className="grade-tint relative flex h-full w-full cursor-pointer flex-col items-center justify-start gap-1 rounded-sm border-2 border-(--item-grade-border) bg-panel-2 px-1 pt-1.5 pb-1.25 [transition:var(--transition-fast),outline-color_140ms_ease] focus-ring scroll-mt-9 hover:border-strong data-selected:bg-accent-soft data-selected:shadow-[inset_0_0_0_1px_var(--accent)]"
       {...preloadIntent(`kit:${kit.id}`, onPreload)}
       onClick={select}
       data-grade={kit.grade}
@@ -94,10 +109,13 @@ const PaintTile = memo(function PaintTile({
     >
       <AssetIcon
         src={icon}
-        size={48}
+        size={44}
         loading={prioritizeIcon ? 'eager' : 'lazy'}
         fetchPriority={prioritizeIcon ? 'high' : 'auto'}
       />
+      <span className="line-clamp-2 w-full text-center text-10 leading-tight text-(--item-grade-text) in-data-selected:font-semibold in-data-selected:text-text">
+        {kit.name}
+      </span>
       {/* A corner mark, since the border belongs to the rarity and blue rarities would hide an accent outline. */}
       {selected && (
         <span className="absolute top-0 right-0 grid size-4 place-items-center rounded-bl-sm bg-accent text-accent-text" data-slot="catalog-tile-selected" aria-hidden="true">
@@ -105,6 +123,33 @@ const PaintTile = memo(function PaintTile({
         </span>
       )}
     </button>
+  );
+  if (!showDetails) return tile;
+  return (
+    <div
+      className="relative"
+      data-slot="catalog-tile-wrap"
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={handleBlur}
+    >
+      {tile}
+      {(selected || hovered || focused || detailsOpen) && (
+        <PaintkitDetailsButton
+          defindex={paintkitDefindex(kit.id)}
+          kitName={kit.name}
+          entry={entry}
+          directory={directory}
+          paintkits={paintkits}
+          onSelectKit={onSelect}
+          side="right"
+          className="absolute top-1 left-1 bg-panel/85"
+          onOpenChange={setDetailsOpen}
+          stockKit={!isCustomKitId(kit.id)}
+        />
+      )}
+    </div>
   );
 });
 
@@ -131,7 +176,11 @@ const PaintListItem = memo(function PaintListItem({
 }) {
   const select = useCallback(() => onSelect(kit.id), [kit.id, onSelect]);
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
+  };
   // Imported kits are excluded: Pyxell's entry describes the stock paint.
   const entry: TextureDirectoryEntry | undefined = directory && !isCustomKitId(kit.id)
     ? directory.entries[kit.id]
@@ -159,13 +208,20 @@ const PaintListItem = memo(function PaintListItem({
     </button>
   );
   if (!showDetails) return row;
-  // The details button is a sibling (buttons cannot nest). It mounts only for the selected
-  // or hovered row, since a popover on every row made remounting about four times slower.
+  // The details button is a sibling (buttons cannot nest). It mounts only for the selected,
+  // hovered, or focused row, since a popover on every row made remounting about four times slower.
   // It stays while its card is open, since the card sits outside the row.
   return (
-    <div className="relative" data-slot="catalog-row-wrap" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
+    <div
+      className="relative"
+      data-slot="catalog-row-wrap"
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={handleBlur}
+    >
       {row}
-      {(selected || hovered || detailsOpen) && (
+      {(selected || hovered || focused || detailsOpen) && (
         <PaintkitDetailsButton
           defindex={paintkitDefindex(kit.id)}
           kitName={kit.name}
@@ -183,11 +239,17 @@ const PaintListItem = memo(function PaintListItem({
   );
 });
 
-// Counts the grid tiles in the first tile's row, so ArrowUp/ArrowDown jump a whole row.
-// Falls back to 1 when the DOM does not cooperate.
-function countGridColumns(group: Element | null): number {
-  if (!group) return 1;
-  const tiles = group.querySelectorAll<HTMLElement>('[data-slot="catalog-tile"]');
+// Reads the rendered CSS grid track count so ArrowUp/ArrowDown stay accurate even when the
+// first group has fewer tiles than a full row. Falls back to measuring tile positions.
+function countGridColumns(container: Element | null): number {
+  const grid = container?.querySelector<HTMLElement>('[data-slot="catalog-tile-grid"]');
+  if (!grid) return 1;
+  const template = window.getComputedStyle(grid).gridTemplateColumns;
+  if (template && template !== 'none') {
+    const tracks = template.trim().split(/\s+/).filter(Boolean);
+    if (tracks.length > 0) return tracks.length;
+  }
+  const tiles = grid.querySelectorAll<HTMLElement>('[data-slot="catalog-tile"]');
   if (tiles.length === 0) return 1;
   const firstTop = tiles[0].offsetTop;
   let count = 0;
@@ -296,8 +358,8 @@ export const WarpaintList = memo(function WarpaintList({
         ? paintkits.filter(
             (p) =>
               paintkitDefindex(p.id) === idQuery
-              || p.name.toLowerCase().includes(q)
-              || (p.collection ?? 'Uncategorized').toLowerCase().includes(q),
+              || matchesSearch(p.name, q)
+              || matchesSearch(p.collection ?? 'Uncategorized', q),
           )
         : activeCollection
           ? paintkits.filter((p) => (p.collection ?? 'Uncategorized') === activeCollection)
@@ -411,11 +473,13 @@ export const WarpaintList = memo(function WarpaintList({
       return;
     }
 
-    const columns = countGridColumns(containerRef.current?.querySelector('[data-slot="catalog-group"]') ?? null);
+    const columns = countGridColumns(containerRef.current);
     if (event.key === 'ArrowRight') moveSelection(currentIndex < 0 ? 0 : Math.min(currentIndex + 1, last));
     else if (event.key === 'ArrowLeft') moveSelection(currentIndex < 0 ? 0 : Math.max(currentIndex - 1, 0));
-    else if (event.key === 'ArrowDown') moveSelection(currentIndex < 0 ? 0 : Math.min(currentIndex + columns, last));
-    else if (event.key === 'ArrowUp') moveSelection(currentIndex < 0 ? 0 : Math.max(currentIndex - columns, 0));
+    else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      const nextId = stepGridVertical(groups, selectedId, columns, event.key === 'ArrowDown' ? 'down' : 'up');
+      if (nextId !== null) onSelect(nextId);
+    }
   };
 
   return (
@@ -488,7 +552,7 @@ export const WarpaintList = memo(function WarpaintList({
               </div>
             )}
             {view === 'grid' ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(56px,1fr))] gap-1.5 pt-1.5 pr-3 pb-2 pl-2 touch:grid-cols-[repeat(auto-fill,minmax(72px,1fr))]" data-slot="catalog-tile-grid">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-1.5 pt-1.5 pr-3 pb-2 pl-2 touch:grid-cols-[repeat(auto-fill,minmax(84px,1fr))]" data-slot="catalog-tile-grid">
                 {kits.map((kit) => (
                   <PaintTile
                     key={kit.id}
@@ -499,6 +563,8 @@ export const WarpaintList = memo(function WarpaintList({
                     onSelect={onSelect}
                     onPreload={onPreload}
                     showDetails={showDetails}
+                    directory={directory}
+                    paintkits={paintkits}
                   />
                 ))}
               </div>

@@ -111,7 +111,11 @@ export function FirstPersonControls({ viewer, weaponKey, team, disabled, enabled
               value: 'first-person',
               label: 'First Person',
               disabled: disabled || weaponKey === 'paintkit_tool',
-              title: disabled ? 'Select a weapon and close visual editors to use first-person preview' : 'Preview the painted weapon with class arms',
+              title: disabled
+                ? 'Select a weapon and close visual editors to use first-person preview'
+                : weaponKey === 'paintkit_tool'
+                  ? 'First-person preview is not available for the War Paint item'
+                  : 'Preview the painted weapon with class arms',
             },
           ]}
           onChange={(mode) => onEnabledChange(mode === 'first-person')}
